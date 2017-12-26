@@ -1,0 +1,7 @@
+package pmmpost
+
+import "testing"
+
+func TestVarDecl1(t *testing.T) {
+	d := VarDecl
+}

@@ -1,0 +1,6 @@
+Cobra CLI               github.com/spf13/cobra/cobra
+Viper Configuration     github.com
+Afero File System       github.com
+decimal
+gods
+terminal colors         github.com/mitchellh/colorstring
