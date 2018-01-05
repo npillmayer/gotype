@@ -10,6 +10,8 @@ import (
 )
 
 /*
+----------------------------------------------------------------------
+
 BSD License
 Copyright (c) 2017, Norbert Pillmayer
 
@@ -22,7 +24,7 @@ are met:
 2. Redistributions in binary form must reproduce the above copyright
    notice, this list of conditions and the following disclaimer in the
    documentation and/or other materials provided with the distribution.
-3. Neither the name of Tom Everett nor the names of its contributors
+3. Neither the name of Norbert Pillmayer or the names of its contributors
    may be used to endorse or promote products derived from this software
    without specific prior written permission.
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
@@ -68,7 +70,7 @@ type Assignable interface {
 
 // === Expressions ===========================================================
 
-/* Interace for expressions: will contain linear polynomials, possibly
+/* Interface for expressions: will contain linear polynomials, possibly
  * containing variables with unknown value. Expressions are either of type
  * pair or type numeric. Numeric expressions are modelled as pair values,
  * with the y-part set to 0.

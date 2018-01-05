@@ -4,8 +4,45 @@ import (
 	"fmt"
 )
 
-// --- Memory Frames (Call Stack) ---------------------------------------
+/*
+----------------------------------------------------------------------
 
+BSD License
+Copyright (c) 2017, Norbert Pillmayer
+
+All rights reserved.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+3. Neither the name of Norbert Pillmayer or the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+----------------------------------------------------------------------
+
+ * This module implements a stack of memory frames.
+ * Memory frames are used by an interpreter to allocate local storage
+ * for active scopes.
+
+*/
+
+// A memory frame, representing a piece of memory for a scope
 type DynamicMemoryFrame struct {
 	Name        string
 	Scope       *Scope
@@ -13,6 +50,7 @@ type DynamicMemoryFrame struct {
 	Parent      *DynamicMemoryFrame
 }
 
+// Create a new memory frame
 func NewDynamicMemoryFrame(nm string, scope *Scope) *DynamicMemoryFrame {
 	mf := &DynamicMemoryFrame{
 		Name:  nm,
@@ -27,28 +65,33 @@ func (mf *DynamicMemoryFrame) String() string {
 	return fmt.Sprintf("<mem %s -> %v>", mf.Name, mf.Scope)
 }
 
+/* Return the name of the memory frame.
+ */
 func (mf *DynamicMemoryFrame) GetName() string {
 	return mf.Name
 }
 
-func (mf *DynamicMemoryFrame) GetParent() *DynamicMemoryFrame {
-	return mf.Parent
-}
-
+/* Access to the memory frame's symbol table.
+ */
 func (mf *DynamicMemoryFrame) Symbols() *SymbolTable {
 	return mf.SymbolTable
 }
 
+/* Return the corresponding scope for this frame.
+ */
 func (mf *DynamicMemoryFrame) GetScope() *Scope {
 	return mf.Scope
 }
 
+/* Is this a root frame?
+ */
 func (mf *DynamicMemoryFrame) IsRoot() bool {
 	return (mf.Parent == nil)
 }
 
 // ---------------------------------------------------------------------------
 
+// A (call-)stack of memory frames
 type MemoryFrameStack struct {
 	memoryFrameBase *DynamicMemoryFrame
 	memoryFrameTOS  *DynamicMemoryFrame
