@@ -2,12 +2,15 @@ package arithmetic
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	numeric "github.com/shopspring/decimal"
+	dec "github.com/shopspring/decimal"
 )
 
 /*
+----------------------------------------------------------------------
+
 BSD License
 Copyright (c) 2017, Norbert Pillmayer
 
@@ -20,7 +23,7 @@ are met:
 2. Redistributions in binary form must reproduce the above copyright
    notice, this list of conditions and the following disclaimer in the
    documentation and/or other materials provided with the distribution.
-3. Neither the name of Tom Everett nor the names of its contributors
+3. Neither the name of Norbert Pillmayer nor the names of its contributors
    may be used to endorse or promote products derived from this software
    without specific prior written permission.
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
@@ -37,81 +40,102 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----------------------------------------------------------------------
 
- * Basic arithmetic objects and interface.
+ * Basic arithmetic objects.
 
 */
 
-// === Tracing ==========================================================
-
 var T tracing.Trace = tracing.EquationsTracer
 
-// --- Numeric data type ------------------------------------------------
+// === Numeric Data Type =====================================================
 
-var ConstZero = numeric.Zero      // often used constant 0
-var ConstOne = numeric.New(1, 0)  // often used constant 1.0
-var MinusOne = numeric.New(-1, 0) // often used constant -1.0
+// Often used constant 0
+var ConstZero = dec.Zero
 
-var Deg2Rad, _ = numeric.NewFromString("0.01745329251")
+// Often used constant 1.0
+var ConstOne = dec.New(1, 0)
 
-var epsilon numeric.Decimal = numeric.New(1, -6) // numerics below epsilon are considered Zero
+// Often used constant -1.0
+var MinusOne = dec.New(-1, 0)
 
-// is n Zero ?
-func Zero(n numeric.Decimal) bool {
+// constant for converting from DEG to RAD or vice versa
+var Deg2Rad, _ = dec.NewFromString("0.01745329251")
+
+// numerics below epsilon are considered Zero
+var epsilon dec.Decimal = dec.New(1, -6)
+
+/* Predicate: is n Zero ?
+ */
+func Zero(n dec.Decimal) bool {
 	return n.Abs().LessThanOrEqual(epsilon)
 }
 
-// is n = 1.0 ?
-func One(n numeric.Decimal) bool {
+/* Predicate: is n = 1.0 ?
+ */
+func One(n dec.Decimal) bool {
 	return n.Sub(ConstOne).Abs().LessThanOrEqual(epsilon)
 }
 
-// Make n = 0 if n "means" to be Zero
-func Zap(n numeric.Decimal) numeric.Decimal {
+/* Make n = 0 if n "means" to be Zero
+ */
+func Zap(n dec.Decimal) dec.Decimal {
 	if Zero(n) {
 		n = ConstZero
 	}
 	return n
 }
 
-// Round to epsilon
-func Round(n numeric.Decimal) numeric.Decimal {
+/* Round to epsilon.
+ */
+func Round(n dec.Decimal) dec.Decimal {
 	return n.Round(7)
 }
 
-// --- Pair data type ---------------------------------------------------
+// === Pair Data Type ========================================================
 
+// Interface for pairs / 2D-points
 type Pair interface {
 	fmt.Stringer
-	XPart() numeric.Decimal
-	YPart() numeric.Decimal
+	XPart() dec.Decimal
+	YPart() dec.Decimal
 }
 
+// A concrete implementation of interface Pair
 type SimplePair struct {
-	X numeric.Decimal
-	Y numeric.Decimal
+	X dec.Decimal
+	Y dec.Decimal
 }
 
-func MakePair(x, y numeric.Decimal) Pair {
+// Constructor for simple pairs
+func MakePair(x, y dec.Decimal) Pair {
 	return SimplePair{
 		X: x,
 		Y: y,
 	}
 }
 
-var Origin Pair = MakePair(ConstZero, ConstZero) // often used constant
+// Often used constant
+var Origin Pair = MakePair(ConstZero, ConstZero)
 
+/* Pretty Stringer for simple pairs.
+ */
 func (p SimplePair) String() string {
 	return fmt.Sprintf("(%s,%s)", p.X.Round(3).String(), p.Y.Round(3).String())
 }
 
-func (p SimplePair) XPart() numeric.Decimal {
+/* Interface Pair.
+ */
+func (p SimplePair) XPart() dec.Decimal {
 	return p.X
 }
 
-func (p SimplePair) YPart() numeric.Decimal {
+/* Interface Pair.
+ */
+func (p SimplePair) YPart() dec.Decimal {
 	return p.Y
 }
 
+/* Round x-part and y-part to epsilon.
+ */
 func (p SimplePair) Zap() Pair {
 	p = SimplePair{
 		X: Zap(p.X),
@@ -120,15 +144,21 @@ func (p SimplePair) Zap() Pair {
 	return p
 }
 
+/* Predicate: is this pair origin?
+ */
 func (p SimplePair) Zero() bool {
 	return p.Equal(Origin)
 }
 
+/* Compare 2 pairs.
+ */
 func (p SimplePair) Equal(p2 Pair) bool {
 	p = p.Zap().(SimplePair)
 	return p.X.Equal(p2.XPart()) && p.Y.Equal(p2.YPart())
 }
 
+/* Compare 2 pairs.
+ */
 func (p SimplePair) Add(p2 Pair) Pair {
 	p = SimplePair{
 		X: Zap(p.X.Add(p2.XPart())),
@@ -137,6 +167,8 @@ func (p SimplePair) Add(p2 Pair) Pair {
 	return p.Zap()
 }
 
+/* Subtract 2 pairs.
+ */
 func (p SimplePair) Subtract(p2 Pair) Pair {
 	p = SimplePair{
 		X: Zap(p.X.Sub(p2.XPart())),
@@ -145,7 +177,9 @@ func (p SimplePair) Subtract(p2 Pair) Pair {
 	return p.Zap()
 }
 
-func (p SimplePair) Multiply(n numeric.Decimal) Pair {
+/* Multiply 2 pairs.
+ */
+func (p SimplePair) Multiply(n dec.Decimal) Pair {
 	p = SimplePair{
 		X: Zap(p.X.Mul(n)),
 		Y: Zap(p.Y.Mul(n)),
@@ -153,10 +187,131 @@ func (p SimplePair) Multiply(n numeric.Decimal) Pair {
 	return p
 }
 
-func (p SimplePair) Divide(n numeric.Decimal) Pair {
+/* Divide 2 pairs.
+ */
+func (p SimplePair) Divide(n dec.Decimal) Pair {
 	p = SimplePair{
 		X: Zap(p.X.Div(n)),
 		Y: Zap(p.Y.Div(n)),
 	}
 	return p
+}
+
+// === Affine Transformations ================================================
+
+// A matrix type, used for transforming vectors
+type AffineTransform struct {
+	matrix []dec.Decimal // a 3x3 matrix, flattened by rows
+}
+
+/* Internal constructor. Clients can use this as a starting point for
+ * transform combinations.
+ */
+func newAffineTransform() *AffineTransform {
+	m := &AffineTransform{}
+	m.matrix = make([]dec.Decimal, 9)
+	return m
+}
+
+/* Identity transform. Will transform a point onto itself.
+ */
+func Identity() *AffineTransform {
+	m := newAffineTransform()
+	m.set(0, 0, ConstOne)
+	m.set(1, 1, ConstOne)
+	m.set(2, 2, ConstOne)
+	return m
+}
+
+/* Translation transform. Translate a point by (dx,dy).
+ */
+func Translation(pr Pair) *AffineTransform {
+	m := Identity()
+	m.set(0, 2, pr.XPart())
+	m.set(1, 2, pr.YPart())
+	return m
+}
+
+/* Rotation transform. Rotate a point counter-clockwise around the origin.
+ * Argument is in radians.
+ */
+func Rotation(theta dec.Decimal) *AffineTransform {
+	m := newAffineTransform()
+	f, _ := theta.Float64()
+	sin := math.Sin(f)
+	cos := math.Cos(f)
+	m.set(0, 0, dec.NewFromFloat(cos))
+	m.set(0, 1, dec.NewFromFloat(-sin))
+	m.set(1, 0, dec.NewFromFloat(sin))
+	m.set(1, 1, dec.NewFromFloat(cos))
+	m.set(2, 2, ConstOne)
+	return m
+}
+
+/* Debug Stringer for an affine transform.
+ */
+func (m *AffineTransform) String() string {
+	s := fmt.Sprintf("[%s,%s,%s|%s,%s,%s|%s,%s,%s]", m.matrix[0], m.matrix[1],
+		m.matrix[2], m.matrix[3], m.matrix[4], m.matrix[5], m.matrix[6],
+		m.matrix[7], m.matrix[8])
+	return s
+}
+
+func (m *AffineTransform) get(row, col int) dec.Decimal {
+	return m.matrix[row*3+col]
+}
+
+func (m *AffineTransform) set(row, col int, value dec.Decimal) {
+	m.matrix[row*3+col] = value
+}
+
+func (m *AffineTransform) row(row int) []dec.Decimal {
+	return m.matrix[row*3 : (row+1)*3]
+}
+
+func (m *AffineTransform) col(col int) []dec.Decimal {
+	c := make([]dec.Decimal, 3)
+	c[0] = m.matrix[col]
+	c[1] = m.matrix[3+col]
+	c[2] = m.matrix[6+col]
+	return c
+}
+
+func dotProd(vec1, vec2 []dec.Decimal) dec.Decimal {
+	p1 := vec1[0].Mul(vec2[0])
+	p2 := vec1[1].Mul(vec2[1])
+	p3 := vec1[2].Mul(vec2[2])
+	return p1.Add(p2.Add(p3))
+}
+
+/* Combine 2 affine transformation to a new one. Returns a new transformation
+ * without changing the argument(s).
+ */
+func (m *AffineTransform) Combine(n *AffineTransform) *AffineTransform {
+	o := newAffineTransform()
+	for row := 0; row < 3; row++ {
+		for col := 0; col < 3; col++ {
+			o.set(row, col, dotProd(n.row(row), m.col(col)))
+		}
+	}
+	return o
+}
+
+func (m *AffineTransform) multiplyVector(v []dec.Decimal) []dec.Decimal {
+	c := make([]dec.Decimal, 3)
+	c[0] = dotProd(m.row(0), v)
+	c[1] = dotProd(m.row(1), v)
+	c[2] = dotProd(m.row(2), v)
+	return c
+}
+
+/* Transform a 2D-point. The argument is unchanged and a new pair is returned.
+ */
+func (m *AffineTransform) Transform(pr Pair) Pair {
+	c := make([]dec.Decimal, 3)
+	c[0] = pr.XPart()
+	c[1] = pr.YPart()
+	c[2] = ConstOne
+	c = m.multiplyVector(c)
+	return MakePair(c[0], c[1])
 }
