@@ -347,9 +347,10 @@ type PairPartRef struct {
 /* Create a variable reference. Low level method.
  */
 func CreatePMMPVarRef(decl *PMMPVarDecl, value interface{}, indices []dec.Decimal) *PMMPVarRef {
-	if decl.GetType() == pmmp.PairType {
+	if decl.GetBaseType() == pmmp.PairType {
 		return CreatePMMPPairTypeVarRef(decl, value, indices)
 	} else {
+		T.Debugf("creating num var for %v", decl)
 		v := &PMMPVarRef{
 			decl:       decl,
 			subscripts: indices,
@@ -365,6 +366,7 @@ func CreatePMMPVarRef(decl *PMMPVarDecl, value interface{}, indices []dec.Decima
 /* Create a pair variable reference. Low level method.
  */
 func CreatePMMPPairTypeVarRef(decl *PMMPVarDecl, value interface{}, indices []dec.Decimal) *PMMPVarRef {
+	T.Debugf("creating pair var for %v", decl)
 	v := &PMMPVarRef{
 		decl:       decl,
 		subscripts: indices,

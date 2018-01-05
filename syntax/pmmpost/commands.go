@@ -37,7 +37,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import (
 	"bytes"
 	"fmt"
+	"image/color"
 
+	"github.com/npillmayer/gotype/gtbackend/gfx"
 	"github.com/npillmayer/gotype/gtcore/arithmetic"
 	"github.com/npillmayer/gotype/syntax"
 	pmmp "github.com/npillmayer/gotype/syntax/pmmpost/statements"
@@ -243,7 +245,6 @@ func (intp *PMMPostInterpreter) declare(tag string, tp int) *PMMPVarDecl {
 		// Erase all existing variables and re-define symbol
 		sym, _ = scope.DefineSymbol(tag)
 		sym.(*PMMPVarDecl).SetType(tp)
-		T.P("decl", tag).Errorf("TODO: retract variables (LEQ)")
 	} else { // enter new symbol in global scope
 		scope = intp.scopeTree.Globals()
 		sym, _ = scope.DefineSymbol(tag)
@@ -287,6 +288,44 @@ func (intp *PMMPostInterpreter) mathfunc(n dec.Decimal, fun string) dec.Decimal 
 		T.P("mathf", fun).Error("function not yet implemented")
 	}
 	return n
+}
+
+/* MetaFont begingroup command: push a new scope and memory frame.
+ * Clients may supply a name for the group, otherwise it will be set
+ * to "group".
+ */
+func (intp *PMMPostInterpreter) begingroup(name string) (*syntax.Scope, *syntax.DynamicMemoryFrame) {
+	if name == "" {
+		name = "group"
+	}
+	groupscope := intp.scopeTree.PushNewScope(name, NewPMMPVarDecl)
+	groupmf := intp.memFrameStack.PushNewMemoryFrame(name, groupscope)
+	return groupscope, groupmf
+}
+
+/* MetaFont endgroup command: pop scope and memory frame of group.
+ */
+func (intp *PMMPostInterpreter) endgroup() {
+	mf := intp.popScopeAndMemory()
+	intp.encapsulateVarsInMemory(mf)
+}
+
+/* Pickup a drawing pen. The pen is set as current pen for the current picture.
+ */
+func (intp *PMMPostInterpreter) pickupPen(pentype string, diam dec.Decimal,
+	color color.Color) *gfx.Pen {
+	//
+	var pen *gfx.Pen
+	if pentype == "pencircle" {
+		pen = gfx.NewPencircle(diam)
+	} else {
+		pen = gfx.NewPensquare(diam)
+	}
+	if intp.picture != nil {
+		intp.picture.SetPen(pen)
+		intp.picture.SetColor(color)
+	}
+	return pen
 }
 
 // === Show Commands =========================================================

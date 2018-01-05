@@ -130,12 +130,10 @@ SCALED   : 'scaled' ;
 SHIFTED  : 'shifted' ;
 ROTATED  : 'rotated' ;
 
-//NULLPATH : 'nullpath' ;
+NULLPATH : 'nullpath' ;
 SUBPATH  : 'subpath' ;
 REVERSE  : 'reverse' ;
 CYCLE    : 'cycle' ;
-
-PATHCLIPOP : 'union' | 'intersection' | 'difference' ;
 
 INTERSECTIONPOINT : 'intersectionpoint' ;
 
@@ -143,27 +141,30 @@ PEN      : 'pencircle' | 'pensquare' ;
 
 COLOR    : '#' [0-9a-f][0-9a-f][0-9a-f] ( [0-9a-f][0-9a-f][0-9a-f] )? ;
 
+PATHCLIPOP : 'union' | 'intersection' | 'difference' ;
+
 BEGINGROUP : 'begingroup' ;
 ENDGROUP   : 'endgroup' ;
 
+
 PTAG
-    : [a-z]+  { ispair(p.GetText()) }?
+    : [pqz][a-z]*
     ;
 
 TAG
-    : [a-z]+
-    ;
-
-PATHTAG
-    : [A-Z][a-zA-Z]*
+    : [a-or-y][a-z]*
     ;
 
 MIXEDPTAG
-    : ('.' [a-z] | [a-z]) ('.' | [a-z0-9])*  { ispair(p.GetText()) }?
+    : ('.' [a-z] | [pqz]) ('.' | [a-z0-9])*
     ;
 
 MIXEDTAG
-    : ('.' [a-z] | [a-z]) ('.' | [a-z0-9])*
+    : ('.' [a-z] | [a-or-y]) ('.' | [a-z0-9])*
+    ;
+
+PATHTAG
+    : [A-Z][.a-zA-Z0-9]*
     ;
 
 

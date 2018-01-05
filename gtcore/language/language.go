@@ -1,0 +1,6 @@
+package gtcore
+
+// Language setting
+
+/*
+ */

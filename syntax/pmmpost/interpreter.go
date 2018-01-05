@@ -153,6 +153,9 @@ func (intp *PMMPostInterpreter) loadBuiltinSymbols(scope *syntax.Scope) {
 	leftDef := intp.declare("left", pmmp.PairType)
 	left := arithm.MakePair(arithm.MinusOne, arithm.ConstZero)
 	_ = intp.variable(leftDef, left, nil, true)
+	_ = intp.declare("p", pmmp.PairType)
+	_ = intp.declare("q", pmmp.PairType)
+	_ = intp.declare("z", pmmp.PairType)
 }
 
 /* Set an output routine. Default is nil.
@@ -227,8 +230,8 @@ func NewParseListener(globalScope *syntax.Scope) *ParseListener {
  */
 func (pl *ParseListener) ParseStatements(input antlr.CharStream) {
 	pl.LazyCreateParser(input)
-	tree := pl.statemParser.Figure() // start at top level rule: figure  TODO
-	//tree := pl.statemParser.Statement()
+	//tree := pl.statemParser.Figure() // start at top level rule: figure  TODO
+	tree := pl.statemParser.Statement()
 	sexpr := antlr.TreesStringTree(tree, nil, pl.statemParser)
 	T.Debugf("### STATEMENT = %s", sexpr)
 	antlr.ParseTreeWalkerDefault.Walk(pl, tree)
@@ -346,8 +349,21 @@ func (pl *ParseListener) ExitBeginfig(ctx *pmmp.BeginfigContext) {
 		name := strings.Trim(ctx.LABEL().GetText(), "\"")
 		T.P("figure", name).Debugf("dimension %s x %s", w, h)
 		pl.interpreter.picture = gfx.NewPicture(name, fw, fh)
+		pl.interpreter.begingroup("figure")
+		wdecl := pl.interpreter.declare("w", pmmp.NumericType)
+		_ = pl.interpreter.variable(wdecl, w, nil, true)
+		hdecl := pl.interpreter.declare("h", pmmp.NumericType)
+		_ = pl.interpreter.variable(hdecl, h, nil, true)
 	} else {
 		T.Error("parse error, no figure completed")
+	}
+}
+
+/* End a figure.
+ */
+func (pl *ParseListener) ExitEndfig(ctx *pmmp.EndfigContext) {
+	if pl.interpreter.picture != nil {
+		pl.interpreter.endgroup()
 	}
 }
 
@@ -377,31 +393,35 @@ func (pl *ParseListener) ExitFillCmd(ctx *pmmp.FillCmdContext) {
 	}
 }
 
-/* Pickup a pen.
+/* Pickup a pen. Example: "pickup pencircle scaled 3 withcolor #f080cc".
  *
  * 'pickup' PEN ( 'scaled' DECIMALTOKEN )? ( 'withcolor' COLOR )?
  *
+ * The pen is used for subsequent drawing and filling commands.
  */
 func (pl *ParseListener) ExitPickupCmd(ctx *pmmp.PickupCmdContext) {
 	diam := arithm.ConstOne
 	if ctx.DECIMALTOKEN() != nil {
 		diam, _ = dec.NewFromString(ctx.DECIMALTOKEN().GetText())
 	}
-	pentype := ctx.PEN().GetText()
-	var pen *gfx.Pen
-	if pentype == "pencircle" {
-		pen = gfx.NewPencircle(diam)
-	} else {
-		pen = gfx.NewPensquare(diam)
-	}
 	var color color.Color = color.Black
 	if ctx.COLOR() != nil {
 		color = colorFromHex(ctx.COLOR().GetText())
 	}
-	if pl.interpreter.picture != nil {
-		pl.interpreter.picture.SetPen(pen)
-		pl.interpreter.picture.SetColor(color)
-	}
+	pentype := ctx.PEN().GetText()
+	pl.interpreter.pickupPen(pentype, diam, color)
+	/*
+		var pen *gfx.Pen
+		if pentype == "pencircle" {
+			pen = gfx.NewPencircle(diam)
+		} else {
+			pen = gfx.NewPensquare(diam)
+		}
+		if pl.interpreter.picture != nil {
+			pl.interpreter.picture.SetPen(pen)
+			pl.interpreter.picture.SetColor(color)
+		}
+	*/
 }
 
 /* Read an equation and put it into the LEQ solver.
@@ -418,7 +438,9 @@ func (pl *ParseListener) ExitMultiequation(ctx *pmmp.MultiequationContext) {
 	for ; i > 0; i-- {                        // invariant: prev is LHS of equation to the right
 		tos := pl.interpreter.exprStack.Top() // LHS of current equation
 		pl.interpreter.exprStack.Push(prev)   // LHS of equation to the right
-		prev = tos                            // advance prev
+		v := pl.interpreter.getVariableFromExpression(prev)
+		T.Debugf("var for equation = TOS: %v", v)
+		prev = tos // advance prev
 		pl.interpreter.exprStack.EquateTOS2OS()
 	}
 }
@@ -509,9 +531,8 @@ func (pl *ParseListener) ExitAssignment(ctx *pmmp.AssignmentContext) {
  * definitions (a.k.a. macros) and/or functions.
  */
 func (pl *ParseListener) EnterCompound(ctx *pmmp.CompoundContext) {
-	groupscope := pl.interpreter.scopeTree.PushNewScope("compound-group", NewPMMPVarDecl)
+	groupscope, _ := pl.interpreter.begingroup("compound-group")
 	pl.annotate(ctx, groupscope, "") // Annotate the AST node with this scope
-	pl.interpreter.memFrameStack.PushNewMemoryFrame("compound-group", groupscope)
 }
 
 /* End a scope: "endgroup". Restores all 'save'd variables and declarations.
@@ -523,8 +544,7 @@ func (pl *ParseListener) EnterCompound(ctx *pmmp.CompoundContext) {
  * (a different kind of group).
  */
 func (pl *ParseListener) ExitCompound(ctx *pmmp.CompoundContext) {
-	mf := pl.interpreter.popScopeAndMemory()
-	pl.interpreter.encapsulateVarsInMemory(mf)
+	pl.interpreter.endgroup()
 	pl.Summary()
 }
 
@@ -537,9 +557,8 @@ func (pl *ParseListener) ExitCompound(ctx *pmmp.CompoundContext) {
  * expression.
  */
 func (pl *ParseListener) EnterExprgroup(ctx *pmmp.ExprgroupContext) {
-	groupscope := pl.interpreter.scopeTree.PushNewScope("expr-group", NewPMMPVarDecl)
+	groupscope, _ := pl.interpreter.begingroup("expr-group")
 	pl.annotate(ctx, groupscope, "") // Annotate the AST node with this scope
-	pl.interpreter.memFrameStack.PushNewMemoryFrame("expr-group", groupscope)
 }
 
 /* See rule ExitCompound.
@@ -549,8 +568,7 @@ func (pl *ParseListener) EnterExprgroup(ctx *pmmp.ExprgroupContext) {
  * Additionally leave the return expression on the stack.
  */
 func (pl *ParseListener) ExitExprgroup(ctx *pmmp.ExprgroupContext) {
-	mf := pl.interpreter.popScopeAndMemory()
-	pl.interpreter.encapsulateVarsInMemory(mf)
+	pl.interpreter.endgroup()
 	// the return expression is already on the stack
 	pl.Summary()
 }
@@ -564,9 +582,8 @@ func (pl *ParseListener) ExitExprgroup(ctx *pmmp.ExprgroupContext) {
  * (a different kind of group).
  */
 func (pl *ParseListener) EnterPairexprgroup(ctx *pmmp.PairexprgroupContext) {
-	groupscope := pl.interpreter.scopeTree.PushNewScope("expr-group", NewPMMPVarDecl)
+	groupscope, _ := pl.interpreter.begingroup("expr-group")
 	pl.annotate(ctx, groupscope, "") // Annotate the AST node with this scope
-	pl.interpreter.memFrameStack.PushNewMemoryFrame("expr-group", groupscope)
 }
 
 /* See rule ExitCompound.
@@ -576,8 +593,7 @@ func (pl *ParseListener) EnterPairexprgroup(ctx *pmmp.PairexprgroupContext) {
  * Additionally leave the return expression (type pair) on the stack.
  */
 func (pl *ParseListener) ExitPairexprgroup(ctx *pmmp.PairexprgroupContext) {
-	mf := pl.interpreter.popScopeAndMemory()
-	pl.interpreter.encapsulateVarsInMemory(mf)
+	pl.interpreter.endgroup()
 	// the return expression is already on the stack
 	pl.Summary()
 }
@@ -805,7 +821,7 @@ func (pl *ParseListener) ExitPathtertiary(ctx *pmmp.PathtertiaryContext) {
 	if path.Length() > 1 && isCycle {
 		path.Cycle()
 	}
-	//T.Debugf("new path = %s", path.String())
+	T.Debugf("new path = %s", path.String())
 	pl.interpreter.pathBuilder.PushPath(nil, path) // push anonymous path
 }
 
@@ -970,12 +986,14 @@ func (pl *ParseListener) ExitPointdistance(ctx *pmmp.PointdistanceContext) {
  */
 func (pl *ParseListener) ExitPairpart(ctx *pmmp.PairpartContext) {
 	e := pl.interpreter.exprStack.Top()
+	//T.Infof("pairpart of: %v", e)
 	if e.IsPair() { // otherwise just leave numeric expression on stack
 		e, _ = pl.interpreter.exprStack.Pop()
 		if c, isconst := e.GetXPolyn().IsConstant(); isconst {
 			pl.interpreter.exprStack.PushConstant(c) // just push the value
 		} else {
 			if v := pl.interpreter.getVariableFromExpression(e); v != nil {
+				//T.Infof("pair on the stack: %v", v)
 				part := ctx.PAIRPART().GetText() // xpart or ypart
 				if v.IsPair() {
 					if part == "xpart" {
@@ -1234,7 +1252,8 @@ func scaleDimension(dimen dec.Decimal, unit string) dec.Decimal {
 	return dimen.Mul(u)
 }
 
-/* Create a color from a hex string.
+/* Create a color from a hex string. Returns black if the string cannot
+ * be interpreted as a color hex code.
  */
 func colorFromHex(hex string) color.Color {
 	c, err := colorful.Hex(hex)

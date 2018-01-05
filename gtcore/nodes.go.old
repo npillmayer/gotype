@@ -1,0 +1,346 @@
+package gtcore
+
+import (
+	"bytes"
+	"fmt"
+)
+
+/* Nodes implement items for typesetting paragraphs. The various node
+ * types more or less implement the corresponding types from the TeX
+ * typesetting system.
+ */
+
+// --- Dimensions ------------------------------------------------------------
+
+// A dimension type. Values are in scaled big points (different from TeX)
+type Dimen int32
+
+var SP Dimen = 1     // scaled point = BP / 65536
+var BP Dimen = 65536 // big point = 1/72 inch
+var PT Dimen         // printers point
+var MM Dimen         // millimeters
+var CM Dimen         // centimeters
+var PC Dimen         // pica
+var CC Dimen         // cicero
+var IN Dimen         // inch
+
+/* Stringer implementation.
+ */
+func (d Dimen) String() string {
+	return fmt.Sprintf("%dsp", int32(d))
+}
+
+// A node has a width and may be discardable
+type Node interface {
+	fmt.Stringer
+	W() Dimen            // width
+	MinW() Dimen         // minimum width
+	MaxW() Dimen         // maximum width
+	IsDiscardable() bool // is this node discardable?
+	Next() Node          // next in list
+	Prev() Node          // previous in list
+}
+
+// Nodes are linked items within a nodelist
+type NodelistElement struct {
+	Nxt Node // next in list or nil
+	Prv Node // previous in list or nil
+}
+
+/* Interface NodelistElement.
+ */
+func (n *NodelistElement) Next() Node {
+	return n.Nxt
+}
+
+/* Interface NodelistElement.
+ */
+func (n *NodelistElement) Prev() Node {
+	return n.Prv
+}
+
+// We handle text/paragraphcs as a list of nodes
+type Nodelist struct {
+	Node Node // first node or nil
+	Last Node // last node or nil
+}
+
+// --- Kern ------------------------------------------------------------------
+
+// A kern is an unshrinkable space
+type Kern struct {
+	NodelistElement
+	w Dimen // fixed width
+}
+
+/* Interface Node. Prints the dimension (width) of the kern.
+ */
+func (k *Kern) String() string {
+	return fmt.Sprintf("[kern %s]", k.W().String())
+}
+
+/* Interface Node. Width of the kern.
+ */
+func (k *Kern) W() Dimen {
+	return k.w
+}
+
+/* Interface Node. Kerns do not shrink.
+ */
+func (k *Kern) MinW() Dimen {
+	return k.w
+}
+
+/* Interface Node. Kerns do not stretch.
+ */
+func (k *Kern) MaxW() Dimen {
+	return k.w
+}
+
+/* Interface Node. Kerns are discardable.
+ */
+func (k *Kern) IsDiscardable() bool {
+	return true
+}
+
+/* Interface Node. Reference to next in list.
+ *
+func (k *Kern) Next() *Node {
+	return k.next
+}
+
+/* Interface Node. Reference to previous in list.
+ *
+func (k *Kern) Prev() *Node {
+	return k.prev
+}
+*/
+
+// --- Glue ------------------------------------------------------------------
+
+// A glue is a space which can shrink and expand
+type Glue struct {
+	NodelistElement
+	w   Dimen // natural width
+	max Dimen // maximum width
+	min Dimen // minimum width
+}
+
+/* Interface Node.
+ */
+func (g Glue) String() string {
+	return fmt.Sprintf("[glue %s +%s -%s]", g.W().String(), g.MaxW().String(),
+		g.MinW().String())
+}
+
+/* Interface Node. Natural width of the glue.
+ */
+func (g Glue) W() Dimen {
+	return g.w
+}
+
+/* Interface Node. Minimum width of the glue.
+ */
+func (g Glue) MinW() Dimen {
+	return g.min
+}
+
+/* Interface Node. Maximum width of the glue.
+ */
+func (g Glue) MaxW() Dimen {
+	return g.max
+}
+
+/* Interface Node. Glue is discardable.
+ */
+func (g Glue) IsDiscardable() bool {
+	return true
+}
+
+/* Interface Node. Reference to next in list.
+ *
+func (g *Glue) Next() *Node {
+	return k.next
+}
+
+/* Interface Node. Reference to previous in list.
+ *
+func (g *Glue) Prev() *Node {
+	return k.prev
+}
+*/
+
+// --- Discretionary ---------------------------------------------------------
+
+// A discretionary is a hyphenation opportunity
+type Discretionary struct {
+	NodelistElement
+	nobreak Box // text if not hyphenated
+	pre     Box // pre-hyphen text
+	post    Box // post-hyphen text
+}
+
+/* Interface Node. Prints the dimension (width) of the kern.
+ */
+func (d *Discretionary) String() string {
+	return fmt.Sprintf("\\discretionary{%s}{%s}{%s}", d.nobreak.text,
+		d.pre.text, d.post.text)
+}
+
+/* Interface Node. Returns the width of the un-hyphenated text.
+ */
+func (d *Discretionary) W() Dimen {
+	return d.nobreak.W()
+}
+
+/* Interface Node. Returns the width of the pre-hyphen text.
+ */
+func (d *Discretionary) MinW() Dimen {
+	return d.pre.W()
+}
+
+/* Interface Node. Returns the width of the post-hyphen text.
+ */
+func (d *Discretionary) MaxW() Dimen {
+	return d.post.W()
+}
+
+/* Interface Node. Discretionaries are not discardable.
+ */
+func (d *Discretionary) IsDiscardable() bool {
+	return false
+}
+
+/* Interface Node. Reference to next in list.
+ *
+func (d *Discretionary) Next() *Node {
+	return d.next
+}
+
+/* Interface Node. Reference to previous in list.
+ *
+func (d *Discretionary) Prev() *Node {
+	return d.prev
+}
+*/
+
+// --- Boxes -----------------------------------------------------------------
+
+// A Box is a fixed unit of text
+type Box struct {
+	NodelistElement
+	w        Dimen    // width
+	h        Dimen    // height
+	d        Dimen    // depth
+	text     string   // text, if available
+	nodelist Nodelist // content, if available
+}
+
+/* Interface Node.
+ */
+func (b *Box) String() string {
+	return fmt.Sprintf("\\box{%s}", b.text)
+}
+
+/* Interface Node. Width of the glue.
+ */
+func (b *Box) W() Dimen {
+	return b.w
+}
+
+/* Interface Node. Width of the glue.
+ */
+func (b *Box) MinW() Dimen {
+	return b.w
+}
+
+/* Interface Node. Width of the glue.
+ */
+func (b *Box) MaxW() Dimen {
+	return b.w
+}
+
+/* Interface Node. Glue is discardable.
+ */
+func (b *Box) IsDiscardable() bool {
+	return false
+}
+
+/* Interface Node. Reference to next in list.
+ *
+func (b *Box) Next() *Node {
+	return b.next
+}
+
+/* Interface Node. Reference to previous in list.
+ *
+func (b *Box) Prev() *Node {
+	return b.prev
+}
+*/
+
+// --- Penalty ---------------------------------------------------------------
+
+// A penalty contributes to demerits, i.e. the quality index of paragraphs
+type Penalty struct {
+	NodelistElement
+	penalty int
+}
+
+/* Interface Node.
+ */
+func (p *Penalty) String() string {
+	return fmt.Sprintf("[penalty %d]", p.penalty)
+}
+
+/* Interface Node. Returns 0.
+ */
+func (p *Penalty) W() Dimen {
+	return 0
+}
+
+/* Interface Node. Returns 0.
+ */
+func (p *Penalty) MinW() Dimen {
+	return 0
+}
+
+/* Interface Node. Returns 0.
+ */
+func (p *Penalty) MaxW() Dimen {
+	return 0
+}
+
+/* Interface Node. Penalties are discardable.
+ */
+func (p *Penalty) IsDiscardable() bool {
+	return true
+}
+
+/* Interface Node. Reference to next in list.
+ *
+func (p *Penalty) Next() *Node {
+	return p.next
+}
+
+/* Interface Node. Reference to previous in list.
+ *
+func (k *Penalty) Prev() *Node {
+	return p.prev
+}
+*/
+
+// ---------------------------------------------------------------------------
+
+/* Debug representation of a node list.
+ */
+func (nl *Nodelist) String() string {
+	buf := make([]byte, 30)
+	w := bytes.NewBuffer(buf)
+	node := nl.Node
+	for node != nil {
+		w.WriteString(node.String())
+		node = node.Next()
+	}
+	return w.String()
+}

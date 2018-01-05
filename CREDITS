@@ -1,0 +1,77 @@
+CREDITS
+=======
+
+--- General --------------------------------------------------------------------
+
+github.com/huandu/xstrings
+
+    Go package xstrings is a collection of string functions, which are widely
+    used in other languages but absent in Go package strings.
+
+    MIT License (MIT), Copyright (c) 2015 Huan Du
+
+github.com/emirpasic/gods
+
+    GoDS (Go Data Structures). Implementation of various data structures
+    and algorithms in Go.
+
+    This library is distributed under the BSD-style license found in the
+    LICENSE file.
+    Copyright (c) 2015, Emir Pasic. All rights reserved.
+
+
+--- Mathematics ----------------------------------------------------------------
+
+github.com/shopspring/decimal
+
+    Arbitrary-precision fixed-point decimal numbers in go.
+
+    MIT License (MIT), Copyright (c) 2015 Spring, Inc.,
+                       Copyright (c) 2013 Oguz Bilgic
+
+
+github.com/akavel/polyclip-go
+
+    Library polyclip-go is a pure Go, MIT-licensed implementation of an
+    [algorithm for Boolean operations on 2D polygons] fmartin (invented by
+    F. Martínez, A.J. Rueda, F.R. Feito) -- that is, for calculation of
+    polygon intersection, union, difference and xor.
+
+    Mateusz Czapliński
+
+
+Linear equations algorithm
+
+    Inspired by Donald E. Knuth's MetaFont, John Hobby's MetaPost and by
+    a Lua project by John D. Ramsdell: http://luaforge.net/projects/lineqpp/
+
+
+--- Hyphenation ----------------------------------------------------------------
+
+github.com/derekparker/trie
+
+    Data structure and relevant algorithms for extremely fast prefix/fuzzy
+    string searching.
+
+    MIT License (MIT), Copyright (c) 2014 Derek Parker
+
+
+ftp://ftp.rrzn.uni-hannover.de/pub/mirror/tex-archive/language/hyph-utf8/tex/
+    generic/hyph-utf8/patterns/tex/hyph-de-1996.tex
+
+    German Hyphenation Patterns (Reformed Orthography, 2006)
+
+    MIT License, Copyright (c) 2013-2017
+    Stephan Hennig, Werner Lemberg, Guenter Milde, Sander van Geloven,
+    Georg Pfeiffer, Gisbert W. Selke, Tobias Wendorf
+
+
+http://ctan.space-pro.be/tex-archive/language/hyph-utf8/tex/generic/hyph-utf8/
+    patterns/tex/hyph-en-us.tex
+
+    The Plain TeX hyphenation tables.
+
+    Copyright (C) 1990, 2004, 2005 Gerard D.C. Kuiken.
+    Copying and distribution of this file, with or without modification,
+    are permitted in any medium without royalty provided the copyright
+    notice and this notice are preserved.
