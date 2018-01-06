@@ -1,6 +1,8 @@
 package cmd
 
 /*
+----------------------------------------------------------------------
+
 BSD License
 Copyright (c) 2017, Norbert Pillmayer <norbert@pillmayer.com>
 
