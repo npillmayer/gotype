@@ -1,67 +1,7 @@
-/*
-----------------------------------------------------------------------
-
-BSD License
-Copyright (c) 2017, Norbert Pillmayer
-
-All rights reserved.
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions
-are met:
-1. Redistributions of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
-2. Redistributions in binary form must reproduce the above copyright
-   notice, this list of conditions and the following disclaimer in the
-   documentation and/or other materials provided with the distribution.
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
-   may be used to endorse or promote products derived from this software
-   without specific prior written permission.
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-----------------------------------------------------------------------
-
- * This is the implementation of an interpreter for "Poor Man's MetaPost",
- * my variant of the MetaPost graphical language. There is an accompanying
- * ANTLR grammar file, which describes the features and limitations of PMMPost.
- * I will sometimes refer to MetaFont, the original language underlying
- * MetaPost, as the grammar definitions are taken from Don Knuth's grammar
- * description in "The METAFONTBook".
+/* This package implements variables for programming languages similar
+ * to those in MetaFont and MetaPost.
  *
- * The implementation is tightly coupled to the ANTLR V4 parser generator.
- * ANTLR is a great tool and I see no use in being independent from it.
-
-*/
-
-package pmmpost
-
-import (
-	"bytes"
-	"fmt"
-	"strings"
-
-	"github.com/antlr/antlr4/runtime/Go/antlr"
-	sll "github.com/emirpasic/gods/lists/singlylinkedlist"
-	"github.com/npillmayer/gotype/gtcore/arithmetic"
-	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	"github.com/npillmayer/gotype/syntax"
-	pmmp "github.com/npillmayer/gotype/syntax/pmmpost/statements"
-	"github.com/npillmayer/gotype/syntax/pmmpost/variables"
-	dec "github.com/shopspring/decimal"
-)
-
-var T tracing.Trace = tracing.InterpreterTracer
-
-/* Variables are complex things in MetaFont/MetaPost. These are legal:
+ * Variables are complex things in MetaFont/MetaPost. These are legal:
 
    metafont> showvariable x;
    x=1
@@ -96,48 +36,124 @@ var T tracing.Trace = tracing.InterpreterTracer
 * of type numeric, too. This is different from MetaFont, where x2r may be of a
 * different type than x2. Nevertheless, I'll stick to my interpretation,
 * which I find less confusing.
+ *
+ * The implementation is tightly coupled to the ANTLR V4 parser generator.
+ * ANTLR is a great tool and I see no use in being independent from it.
 */
+
+package variables
+
+/*
+   ----------------------------------------------------------------------
+
+   BSD License
+   Copyright (c) 2017, Norbert Pillmayer
+
+   All rights reserved.
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions
+   are met:
+   1. Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+   2. Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+   3. Neither the name of Norbert Pillmayer nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+   HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+   ----------------------------------------------------------------------
+*/
+
+import (
+	"bytes"
+	"fmt"
+	"strings"
+
+	"github.com/antlr/antlr4/runtime/Go/antlr"
+	sll "github.com/emirpasic/gods/lists/singlylinkedlist"
+	"github.com/npillmayer/gotype/gtcore/arithmetic"
+	"github.com/npillmayer/gotype/gtcore/config/tracing"
+	"github.com/npillmayer/gotype/syntax"
+	"github.com/npillmayer/gotype/syntax/variables/grammar"
+	dec "github.com/shopspring/decimal"
+)
+
+var T tracing.Trace = tracing.InterpreterTracer
 
 // === Variable Type Declarations ============================================
 
+// Variable types
+const (
+	Undefined = iota
+	NumericType
+	PairType
+	PathType
+	ColorType
+	PenType
+	BoxType
+	FrameType
+	ComplexArray
+	ComplexSuffix
+)
+
 // Helper: get a type as string
-func typeString(vt int) string {
+func TypeString(vt int) string {
 	switch vt {
-	case pmmp.Undefined:
+	case Undefined:
 		return "<undefined>"
-	case pmmp.NumericType:
+	case NumericType:
 		return "numeric"
-	case pmmp.PairType:
+	case PairType:
 		return "pair"
-	case pmmp.PathType:
+	case PathType:
 		return "path"
-	case pmmp.ColorType:
+	case ColorType:
 		return "color"
-	case pmmp.PenType:
+	case PenType:
 		return "pen"
-	case pmmp.ComplexArray:
+	case BoxType:
+		return "box"
+	case FrameType:
+		return "frame"
+	case ComplexArray:
 		return "[]"
-	case pmmp.ComplexSuffix:
+	case ComplexSuffix:
 		return "<suffix>"
 	}
 	return fmt.Sprintf("<illegal type: %d>", vt)
 }
 
 // Helper: get a type from a string
-func typeFromString(str string) int {
+func TypeFromString(str string) int {
 	switch str {
 	case "numeric":
-		return pmmp.NumericType
+		return NumericType
 	case "pair":
-		return pmmp.PairType
+		return PairType
 	case "path":
-		return pmmp.PathType
+		return PathType
 	case "color":
-		return pmmp.ColorType
+		return ColorType
 	case "pen":
-		return pmmp.PenType
+		return PenType
+	case "box":
+		return BoxType
+	case "frame":
+		return FrameType
 	}
-	return pmmp.Undefined
+	return Undefined
 }
 
 /* MetaFont declares variables explicitly ("numeric x;") or dynamically
@@ -153,10 +169,10 @@ func typeFromString(str string) int {
  *
  * Example:  numeric x; x2r := 7; x.b := 77;
  * Result:
- *   tag = "x"  of type pmmp.NumericType => into symbol table of a scope
- *    +-- suffix ".b" of type pmmp.ComplexSuffix         "x.b"
- *    +-- subscript "[]" of type pmmp.ComplexArray:      "x[]"
- *         +--- suffix ".r" of type pmmp.ComplexSuffix:  "x[].r"
+ *   tag = "x"  of type NumericType => into symbol table of a scope
+ *    +-- suffix ".b" of type ComplexSuffix         "x.b"
+ *    +-- subscript "[]" of type ComplexArray:      "x[]"
+ *         +--- suffix ".r" of type ComplexSuffix:  "x[].r"
  */
 type PMMPVarDecl struct { // this is a tag, an array-subtype, or a suffix
 	syntax.StdSymbol              // to use this we will have to override getName()
@@ -167,15 +183,15 @@ type PMMPVarDecl struct { // this is a tag, an array-subtype, or a suffix
 /* Expressive Stringer implementation.
  */
 func (d *PMMPVarDecl) String() string {
-	return fmt.Sprintf("<decl %s/%s>", d.GetFullName(), typeString(d.GetBaseType()))
+	return fmt.Sprintf("<decl %s/%s>", d.GetFullName(), TypeString(d.GetBaseType()))
 }
 
 /* Get isolated name of declaration partial (tag, array or suffix).
  */
 func (d *PMMPVarDecl) GetName() string {
-	if d.GetType() == pmmp.ComplexArray {
+	if d.GetType() == ComplexArray {
 		return "[]"
-	} else if d.GetType() == pmmp.ComplexSuffix {
+	} else if d.GetType() == ComplexSuffix {
 		return "." + d.StdSymbol.GetName()
 	} else {
 		return d.StdSymbol.GetName()
@@ -193,9 +209,9 @@ func (d *PMMPVarDecl) GetFullName() string {
 		var s bytes.Buffer
 		s.WriteString(d.Parent.GetFullName()) // recursive
 		t := d.StdSymbol.GetType()
-		if t == pmmp.ComplexArray {
+		if t == ComplexArray {
 			s.WriteString("[]")
-		} else if t == pmmp.ComplexSuffix {
+		} else if t == ComplexSuffix {
 			s.WriteString(".") // MetaFont suppresses this if following an array partial
 			s.WriteString(d.StdSymbol.GetName())
 		} else {
@@ -217,7 +233,7 @@ func (d *PMMPVarDecl) GetBaseType() int {
 func NewPMMPVarDecl(nm string) syntax.Symbol {
 	sym := &PMMPVarDecl{}
 	sym.Name = nm
-	sym.Symtype = pmmp.Undefined
+	sym.Symtype = Undefined
 	sym.BaseTag = sym // this pointer should never be nil
 	T.P("decl", sym.GetFullName()).Debug("atomic variable type declaration created")
 	return sym
@@ -234,8 +250,8 @@ func CreatePMMPVarDecl(nm string, tp int, parent *PMMPVarDecl) *PMMPVarDecl {
 		if parent.GetFirstChild() != nil {
 			ch := parent.GetFirstChild().(*PMMPVarDecl)
 			for ch != nil { // as long as there are children, i.e. partials
-				if (tp == pmmp.ComplexSuffix && ch.GetName() == nm) ||
-					(ch.GetType() == pmmp.ComplexArray && tp == pmmp.ComplexArray) {
+				if (tp == ComplexSuffix && ch.GetName() == nm) ||
+					(ch.GetType() == ComplexArray && tp == ComplexArray) {
 					T.P("decl", ch.GetFullName()).Debug("variable type already declared")
 					return ch // we're done
 				}
@@ -265,7 +281,7 @@ func (d *PMMPVarDecl) AppendToVarDecl(v *PMMPVarDecl) *PMMPVarDecl {
 		panic("attempt to append type declaration to nil-tag")
 	}
 	t := d.StdSymbol.GetType()
-	if t != pmmp.ComplexSuffix && t != pmmp.ComplexArray {
+	if t != ComplexSuffix && t != ComplexArray {
 		panic(fmt.Sprintf("attempt to append simple type (%d) to tag", t))
 	}
 	d.BaseTag = v.BaseTag
@@ -277,14 +293,14 @@ func (d *PMMPVarDecl) AppendToVarDecl(v *PMMPVarDecl) *PMMPVarDecl {
 
 /* Show the variable declarations for a tag.
  */
-func (d *PMMPVarDecl) showDeclarations(s *bytes.Buffer) *bytes.Buffer {
+func (d *PMMPVarDecl) ShowDeclarations(s *bytes.Buffer) *bytes.Buffer {
 	if s == nil {
 		s = new(bytes.Buffer)
 	}
-	s.WriteString(fmt.Sprintf("%s : %s\n", d.GetFullName(), typeString(d.BaseTag.GetBaseType())))
+	s.WriteString(fmt.Sprintf("%s : %s\n", d.GetFullName(), TypeString(d.BaseTag.GetBaseType())))
 	ch := d.GetFirstChild()
 	for ; ch != nil; ch = ch.GetSibling() {
-		s = ch.(*PMMPVarDecl).showDeclarations(s)
+		s = ch.(*PMMPVarDecl).ShowDeclarations(s)
 	}
 	return s
 }
@@ -311,9 +327,9 @@ var _ syntax.TreeNode = &PMMPVarDecl{}
 type PMMPVarRef struct {
 	syntax.StdSymbol               // store by normalized name
 	cachedName       string        // store full name
-	decl             *PMMPVarDecl  // type declaration for this variable
+	Decl             *PMMPVarDecl  // type declaration for this variable
 	subscripts       []dec.Decimal // list of subscripts, first to last
-	value            interface{}   // if known: has a value (numeric or pair)
+	Value            interface{}   // if known: has a value (numeric or pair)
 }
 
 /* Variables of type pair will use two sub-symbols for the x-part and
@@ -326,21 +342,21 @@ type PMMPVarRef struct {
  */
 type PairPartRef struct {
 	Id      int         // serial ID
-	pairvar *PMMPVarRef // pair parent
-	value   interface{} // if known: has a value (numeric)
+	Pairvar *PMMPVarRef // pair parent
+	Value   interface{} // if known: has a value (numeric)
 }
 
 /* Create a variable reference. Low level method.
  */
 func CreatePMMPVarRef(decl *PMMPVarDecl, value interface{}, indices []dec.Decimal) *PMMPVarRef {
-	if decl.GetBaseType() == pmmp.PairType {
+	if decl.GetBaseType() == PairType {
 		return CreatePMMPPairTypeVarRef(decl, value, indices)
 	} else {
 		T.Debugf("creating num var for %v", decl)
 		v := &PMMPVarRef{
-			decl:       decl,
+			Decl:       decl,
 			subscripts: indices,
-			value:      value,
+			Value:      value,
 		}
 		v.SetType(decl.GetType())
 		v.Id = newVarSerial() // TODO: check, when this is needed (now: id leak)
@@ -354,27 +370,27 @@ func CreatePMMPVarRef(decl *PMMPVarDecl, value interface{}, indices []dec.Decima
 func CreatePMMPPairTypeVarRef(decl *PMMPVarDecl, value interface{}, indices []dec.Decimal) *PMMPVarRef {
 	T.Debugf("creating pair var for %v", decl)
 	v := &PMMPVarRef{
-		decl:       decl,
+		Decl:       decl,
 		subscripts: indices,
-		value:      value,
+		Value:      value,
 	}
-	v.SetType(pmmp.PairType)
+	v.SetType(PairType)
 	v.Id = newVarSerial() // TODO: check, when this is needed (now: id leak)
 	var pair arithmetic.Pair
 	var ok bool
 	ypart := &PairPartRef{
 		Id:      newVarSerial(),
-		pairvar: v,
+		Pairvar: v,
 	}
 	xpart := &PairPartRef{
 		Id:      v.Id,
-		pairvar: v,
+		Pairvar: v,
 	}
 	v.SetSibling(xpart)
 	v.SetFirstChild(ypart)
 	if pair, ok = value.(arithmetic.Pair); ok {
-		xpart.value = pair.XPart()
-		ypart.value = pair.YPart()
+		xpart.Value = pair.XPart()
+		ypart.Value = pair.YPart()
 	}
 	return v
 }
@@ -392,7 +408,7 @@ func NewPMMPVarRef(tagName string) syntax.Symbol {
 /* Expressive Stringer implementation.
  */
 func (v *PMMPVarRef) String() string {
-	return fmt.Sprintf("<var %s=%v w/ %s>", v.GetFullName(), v.value, v.decl)
+	return fmt.Sprintf("<var %s=%v w/ %s>", v.GetFullName(), v.Value, v.Decl)
 }
 
 /* This method returns the full nomalized name, i.e. "x[2].r".
@@ -413,10 +429,10 @@ func (v *PMMPVarRef) GetName() string {
  * may be used to store the pair part in a symbol table.
  */
 func (ppart *PairPartRef) GetName() string {
-	if ppart.pairvar.GetID() == ppart.GetID() {
-		return "xpart " + ppart.pairvar.GetName()
+	if ppart.Pairvar.GetID() == ppart.GetID() {
+		return "xpart " + ppart.Pairvar.GetName()
 	} else {
-		return "ypart " + ppart.pairvar.GetName()
+		return "ypart " + ppart.Pairvar.GetName()
 	}
 }
 
@@ -429,7 +445,7 @@ func (ppart *PairPartRef) GetID() int {
 /* Predicate: is this variable of type pair?
  */
 func (v *PMMPVarRef) IsPair() bool {
-	return v.GetType() == pmmp.PairType
+	return v.GetType() == PairType
 }
 
 /* Get the x-part of a pair variable
@@ -457,21 +473,21 @@ func (v *PMMPVarRef) YPart() *PairPartRef {
  * Interface syntax.Assignable
  */
 func (ppart *PairPartRef) GetValue() interface{} {
-	return ppart.value
+	return ppart.Value
 }
 
 /* Interface syntax.Assignable
  */
 func (ppart *PairPartRef) SetValue(val interface{}) {
 	T.P("var", ppart.GetName()).Debugf("new value: %v", val)
-	ppart.value = val
-	ppart.pairvar.PullValue()
+	ppart.Value = val
+	ppart.Pairvar.PullValue()
 }
 
 /* Interface syntax.Assignable
  */
 func (ppart *PairPartRef) IsKnown() bool {
-	return (ppart.value != nil)
+	return (ppart.Value != nil)
 }
 
 /* Filler for interface TreeNode. Never called.
@@ -500,14 +516,14 @@ func (ppart *PairPartRef) SetFirstChild(tn syntax.TreeNode) {
  */
 func (v *PMMPVarRef) GetFullName() string {
 	var suffixes []string
-	d := v.decl
+	d := v.Decl
 	if d == nil {
 		return fmt.Sprintf("<undeclared variable: %s>", v.GetName())
 	}
 	subscriptcount := len(v.subscripts) - 1
-	for sfx := v.decl; sfx != nil; sfx = sfx.Parent { // iterate backwards
+	for sfx := v.Decl; sfx != nil; sfx = sfx.Parent { // iterate backwards
 		//T.Printf("sfx = %v", sfx)
-		if sfx.GetType() == pmmp.ComplexArray {
+		if sfx.GetType() == ComplexArray {
 			s := "[" + v.subscripts[subscriptcount].String() + "]"
 			suffixes = append(suffixes, s)
 			subscriptcount -= 1
@@ -526,24 +542,24 @@ func (v *PMMPVarRef) GetFullName() string {
 /* Interface syntax.Assignable
  */
 func (v *PMMPVarRef) GetValue() interface{} {
-	return v.value
+	return v.Value
 }
 
 /* Interface syntax.Assignable
  */
 func (v *PMMPVarRef) SetValue(val interface{}) {
 	T.P("var", v.GetName()).Debugf("new value: %v", val)
-	v.value = val
+	v.Value = val
 	if v.IsPair() {
 		var xpart *PairPartRef = v.GetSibling().(*PairPartRef)
 		var ypart *PairPartRef = v.GetFirstChild().(*PairPartRef)
 		if val == nil {
-			xpart.value = nil
-			ypart.value = nil
+			xpart.Value = nil
+			ypart.Value = nil
 		} else {
 			var pairval arithmetic.Pair = val.(arithmetic.Pair)
-			xpart.value = pairval.XPart()
-			ypart.value = pairval.YPart()
+			xpart.Value = pairval.XPart()
+			ypart.Value = pairval.YPart()
 		}
 	}
 }
@@ -559,12 +575,12 @@ func (v *PMMPVarRef) PullValue() {
 		ppart2 = v.GetFirstChild().(*PairPartRef)
 		if ppart1 != nil && ppart2 != nil {
 			if ppart1.GetValue() != nil && ppart2.GetValue() != nil {
-				v.value = &arithmetic.SimplePair{
+				v.Value = &arithmetic.SimplePair{
 					X: ppart1.GetValue().(dec.Decimal),
 					Y: ppart2.GetValue().(dec.Decimal),
 				}
 				T.P("var", v.GetName()).Debugf("pair value = %s",
-					v.value.(arithmetic.Pair).String())
+					v.Value.(arithmetic.Pair).String())
 			}
 		}
 	}
@@ -576,13 +592,13 @@ func (v *PMMPVarRef) PullValue() {
 func (v *PMMPVarRef) ValueString() string {
 	if v.IsPair() {
 		var xvalue, yvalue string
-		xpart := v.XPart().value
+		xpart := v.XPart().Value
 		if xpart == nil {
 			xvalue = fmt.Sprintf("xpart %s", v.GetName())
 		} else {
 			xvalue = xpart.(dec.Decimal).String()
 		}
-		ypart := v.YPart().value
+		ypart := v.YPart().Value
 		if ypart == nil {
 			yvalue = fmt.Sprintf("ypart %s", v.GetName())
 		} else {
@@ -591,7 +607,7 @@ func (v *PMMPVarRef) ValueString() string {
 		return fmt.Sprintf("(%s,%s)", xvalue, yvalue)
 	} else {
 		if v.IsKnown() {
-			return v.value.(dec.Decimal).String()
+			return v.Value.(dec.Decimal).String()
 		} else {
 			return "<numeric>"
 		}
@@ -602,7 +618,7 @@ func (v *PMMPVarRef) ValueString() string {
 /* Interface syntax.Assignable
  */
 func (v *PMMPVarRef) IsKnown() bool {
-	return (v.value != nil)
+	return (v.Value != nil)
 }
 
 /* Set a new ID for a variable reference. Whenever variables become
@@ -613,7 +629,7 @@ func (v *PMMPVarRef) IsKnown() bool {
  *
  * Returns the old serial ID.
  */
-func (v *PMMPVarRef) reincarnate() int {
+func (v *PMMPVarRef) Reincarnate() int {
 	oldserial := v.GetID()
 	v.Id = newVarSerial()
 	if v.IsPair() {
@@ -651,11 +667,11 @@ var _ syntax.Assignable = &PairPartRef{}
  * We'll attach a listener to ANTLR's AST walker.
  */
 type VarParseListener struct {
-	*variables.BasePMMPVarListener // build on top of ANTLR's base 'class'
-	scopeTree                      *syntax.ScopeTree
-	def                            *PMMPVarDecl
-	ref                            *PMMPVarRef
-	suffixes                       *sll.List
+	*grammar.BasePMMPVarListener // build on top of ANTLR's base 'class'
+	scopeTree                    *syntax.ScopeTree
+	def                          *PMMPVarDecl
+	ref                          *PMMPVarRef
+	suffixes                     *sll.List
 }
 
 /* Construct a new variable parse listener.
@@ -675,21 +691,48 @@ func NewVarParseListener() *VarParseListener {
  * brackets for subscripts and dots for suffixes.
  *
  * Examples:  x => x, x3 => x[3], z4r => z[4].r, hello.world => hello.world
- */
+ *
 func (pl *ParseListener) ParseVarFromString(vstr string) antlr.RuleContext {
 	// We let ANTLR to the heavy lifting. This may change in the future,
 	// as it would be fairly straightforward to implement this by hand.
 	input := antlr.NewInputStream(vstr + "@")
 	T.Debugf("parsing variable ref = %s", vstr)
-	varlexer := variables.NewPMMPVarLexer(input)
+	varlexer := grammar.NewPMMPVarLexer(input)
 	stream := antlr.NewCommonTokenStream(varlexer, 0)
 	// TODO: make the parser re-usable....!
 	// TODO: We can re-use the parser, but not the lexer (see ANTLR book, chapter 10).
-	pl.varParser = variables.NewPMMPVarParser(stream)
+	pl.varParser = grammar.NewPMMPVarParser(stream)
 	pl.varParser.AddErrorListener(antlr.NewDiagnosticErrorListener(true))
 	pl.varParser.BuildParseTrees = true
 	tree := pl.varParser.Variable()
 	sexpr := antlr.TreesStringTree(tree, nil, pl.varParser)
+	T.Debugf("### VAR = %s", sexpr)
+	return tree
+}
+*/
+
+func ParseVariableFromString(vstr string, err antlr.ErrorListener) antlr.RuleContext {
+	// We let ANTLR to the heavy lifting. This may change in the future,
+	// as it would be fairly straightforward to implement this by hand.
+	input := antlr.NewInputStream(vstr + "@")
+	T.Debugf("parsing variable ref = %s", vstr)
+	varlexer := grammar.NewPMMPVarLexer(input)
+	stream := antlr.NewCommonTokenStream(varlexer, 0)
+	// TODO: make the parser re-usable....!
+	// TODO: We can re-use the parser, but not the lexer (see ANTLR book, chapter 10).
+	varParser := grammar.NewPMMPVarParser(stream)
+	if err == nil {
+		err = antlr.NewDiagnosticErrorListener(true)
+	} else {
+		T.Debugf("setting error listener")
+	}
+	varParser.RemoveErrorListeners()
+	varParser.AddErrorListener(err)
+	varlexer.RemoveErrorListeners()
+	varlexer.AddErrorListener(err)
+	varParser.BuildParseTrees = true
+	tree := varParser.Variable()
+	sexpr := antlr.TreesStringTree(tree, nil, varParser)
 	T.Debugf("### VAR = %s", sexpr)
 	return tree
 }
@@ -701,10 +744,19 @@ func (pl *ParseListener) ParseVarFromString(vstr string) antlr.RuleContext {
  * in the memory (see method FindVariableReferenceInMemory).
  *
  * We walk the ANTLR parse tree using a listener (VarParseListener).
- */
+ *
 func (pl *ParseListener) GetPMMPVarRefFromVarSyntax(vtree antlr.RuleContext) *PMMPVarRef {
 	listener := NewVarParseListener()
 	listener.scopeTree = pl.interpreter.scopeTree      // variables declarations have to be found
+	listener.suffixes = sll.New()                      // list to collect suffixes
+	antlr.ParseTreeWalkerDefault.Walk(listener, vtree) // fills listener.ref
+	return listener.ref
+}
+*/
+
+func GetVarRefFromVarSyntax(vtree antlr.RuleContext, scopes *syntax.ScopeTree) *PMMPVarRef {
+	listener := NewVarParseListener()
+	listener.scopeTree = scopes                        // where variables declarations have to be found
 	listener.suffixes = sll.New()                      // list to collect suffixes
 	antlr.ParseTreeWalkerDefault.Walk(listener, vtree) // fills listener.ref
 	return listener.ref
@@ -736,7 +788,7 @@ type varsuffix struct {
  *
  * The MARKER will be ignored.
  */
-func (vl *VarParseListener) ExitVariable(ctx *variables.VariableContext) {
+func (vl *VarParseListener) ExitVariable(ctx *grammar.VariableContext) {
 	tag := ctx.Tag().GetText()
 	T.P("tag", tag).Debugf("looking for declaration for tag")
 	sym, scope := vl.scopeTree.Current().ResolveSymbol(tag)
@@ -745,8 +797,8 @@ func (vl *VarParseListener) ExitVariable(ctx *variables.VariableContext) {
 		T.P("decl", vl.def.GetFullName()).Debugf("found %v in scope %s", vl.def, scope.GetName())
 	} else { // variable declaration for tag not found => create it
 		sym, _ = vl.scopeTree.Globals().DefineSymbol(tag)
-		vl.def = sym.(*PMMPVarDecl)      // scopes are assumed to create these
-		vl.def.SetType(pmmp.NumericType) // un-declared variables default to type numeric
+		vl.def = sym.(*PMMPVarDecl) // scopes are assumed to create these
+		vl.def.SetType(NumericType) // un-declared variables default to type numeric
 		T.P("decl", vl.def.GetName()).Debugf("created %v in global scope", vl.def)
 	} // now def declaration of <tag> is in vl.def
 	// produce declarations for suffixes, if necessary
@@ -756,10 +808,10 @@ func (vl *VarParseListener) ExitVariable(ctx *variables.VariableContext) {
 		i, vs := it.Index(), it.Value().(varsuffix)
 		T.P("decl", vl.def.GetFullName()).Debugf("appending suffix #%d: %s", i, vs)
 		if vs.number { // subscript
-			vl.def = CreatePMMPVarDecl("<array>", pmmp.ComplexArray, vl.def)
+			vl.def = CreatePMMPVarDecl("<array>", ComplexArray, vl.def)
 			subscrCount += 1
 		} else { // tag suffix
-			vl.def = CreatePMMPVarDecl(vs.text, pmmp.ComplexSuffix, vl.def)
+			vl.def = CreatePMMPVarDecl(vs.text, ComplexSuffix, vl.def)
 		}
 	}
 	T.P("decl", vl.def.GetFullName()).Debugf("full declared type: %v", vl.def)
@@ -779,7 +831,7 @@ func (vl *VarParseListener) ExitVariable(ctx *variables.VariableContext) {
 
 /* Variable parsing: Collect a suffix.
  */
-func (vl *VarParseListener) ExitSuffix(ctx *variables.SuffixContext) {
+func (vl *VarParseListener) ExitSuffix(ctx *grammar.SuffixContext) {
 	tag := ctx.TAG().GetText()
 	T.Debugf("suffix tag: %s", tag)
 	vl.suffixes.Add(varsuffix{tag, false})
@@ -787,7 +839,7 @@ func (vl *VarParseListener) ExitSuffix(ctx *variables.SuffixContext) {
 
 /* Variable parsing: Collect a numeric subscript.
  */
-func (vl *VarParseListener) ExitSubscript(ctx *variables.SubscriptContext) {
+func (vl *VarParseListener) ExitSubscript(ctx *grammar.SubscriptContext) {
 	d := ctx.DECIMAL().GetText()
 	T.Debugf("subscript: %s", d)
 	vl.suffixes.Add(varsuffix{d, true})
