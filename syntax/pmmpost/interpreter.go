@@ -1,6 +1,8 @@
 package pmmpost
 
 /*
+----------------------------------------------------------------------
+
 BSD License
 Copyright (c) 2017, Norbert Pillmayer <norbert@pillmayer.com>
 
@@ -55,8 +57,8 @@ import (
 	"github.com/npillmayer/gotype/gtbackend/gfx"
 	arithm "github.com/npillmayer/gotype/gtcore/arithmetic"
 	"github.com/npillmayer/gotype/syntax"
-	pmmp "github.com/npillmayer/gotype/syntax/pmmpost/statements"
-	"github.com/npillmayer/gotype/syntax/pmmpost/variables"
+	pmmp "github.com/npillmayer/gotype/syntax/pmmpost/grammar"
+	"github.com/npillmayer/gotype/syntax/variables"
 	dec "github.com/shopspring/decimal"
 )
 
@@ -112,12 +114,12 @@ type PMMPostInterpreter struct {
  */
 func NewPMMPostInterpreter() *PMMPostInterpreter {
 	intp := &PMMPostInterpreter{}
-	intp.scopeTree = new(syntax.ScopeTree)                     // scopes for groups and functions
-	intp.scopeTree.PushNewScope("globals", NewPMMPVarDecl)     // push global scope first
-	intp.memFrameStack = new(syntax.MemoryFrameStack)          // initialize memory frame stack
-	mf := intp.memFrameStack.PushNewMemoryFrame("global", nil) // global memory
-	mf.Scope = intp.scopeTree.Globals()                        // connect the global frame with the global scope
-	intp.memFrameStack.Globals().SymbolTable = syntax.NewSymbolTable(NewPMMPVarRef)
+	intp.scopeTree = new(syntax.ScopeTree)                           // scopes for groups and functions
+	intp.scopeTree.PushNewScope("globals", variables.NewPMMPVarDecl) // push global scope first
+	intp.memFrameStack = new(syntax.MemoryFrameStack)                // initialize memory frame stack
+	mf := intp.memFrameStack.PushNewMemoryFrame("global", nil)       // global memory
+	mf.Scope = intp.scopeTree.Globals()                              // connect the global frame with the global scope
+	intp.memFrameStack.Globals().SymbolTable = syntax.NewSymbolTable(variables.NewPMMPVarRef)
 	intp.exprStack = syntax.NewExprStack()
 	intp.pathBuilder = syntax.NewPathStack()
 	pmmp.ScopeStack = intp.scopeTree
@@ -179,7 +181,7 @@ func (intp *PMMPostInterpreter) popScopeAndMemory() *syntax.DynamicMemoryFrame {
 	return mf
 }
 
-/* Parse and interprete a statement list.
+/* Parse and interpret a statement list.
  */
 func (intp *PMMPostInterpreter) ParseStatements(input antlr.CharStream) {
 	intp.ASTListener.ParseStatements(input)
@@ -194,10 +196,10 @@ func (intp *PMMPostInterpreter) ParseStatements(input antlr.CharStream) {
 type ParseListener struct {
 	*pmmp.BasePMMPStatemListener // build on top of ANTLR's base 'class'
 	statemParser                 *pmmp.PMMPStatemParser
-	varParser                    *variables.PMMPVarParser   // sub-parser for variables
 	annotations                  map[interface{}]Annotation // node annotations
 	expectingLvalue              bool                       // do not evaluate variable
 	interpreter                  *PMMPostInterpreter        // backlink to the interpreter
+	//varParser                    *variables.PMMPVarParser   // sub-parser for variables
 }
 
 /* We will annotate the AST. Functions and groups will get a scope, filled with
@@ -260,6 +262,8 @@ func (c *TracingErrorListener) SyntaxError(r antlr.Recognizer, sym interface{},
 func (pl *ParseListener) LazyCreateParser(input antlr.CharStream) {
 	// We let ANTLR to the heavy lifting.
 	lexer := pmmp.NewPMMPStatemLexer(input)
+	lexer.RemoveErrorListeners()
+	lexer.AddErrorListener(&TracingErrorListener{})
 	stream := antlr.NewCommonTokenStream(lexer, 0)
 	if pl.statemParser == nil {
 		pl.statemParser = pmmp.NewPMMPStatemParser(stream)
@@ -455,7 +459,7 @@ func (pl *ParseListener) ExitPathequation(ctx *pmmp.PathequationContext) {
 	pe, ok := pl.interpreter.pathBuilder.Pop()
 	pv := pl.interpreter.pathBuilder.Top()
 	if ok {
-		vref := pv.Symbol.(*PMMPVarRef)
+		vref := pv.Symbol.(*variables.PMMPVarRef)
 		//T.P("var", vref.GetName()).Debugf("set value = %s", pe.Path.String())
 		vref.SetValue(pe.Path)
 	} else {
@@ -485,7 +489,7 @@ func (pl *ParseListener) ExitAssignment(ctx *pmmp.AssignmentContext) {
 			//varname := lvalue.GetXPolyn().TraceString(pl.exprStack)
 			varname := v.GetName()
 			t := v.GetType()
-			T.P("var", varname).Debugf("lvalue type is %s", typeString(t))
+			T.P("var", varname).Debugf("lvalue type is %s", variables.TypeString(t))
 			if !pl.interpreter.exprStack.CheckTypeMatch(lvalue, e) {
 				T.P("var", varname).Errorf("type mismatch")
 				panic("type mismatch in assignment")
@@ -620,7 +624,7 @@ func (pl *ParseListener) ExitSaveStmt(ctx *pmmp.SaveStmtContext) {
  */
 func (pl *ParseListener) ExitDeclaration(ctx *pmmp.DeclarationContext) {
 	T.P("type", ctx.Mptype().GetText()).Infof("declaration of %d tags", len(ctx.AllTag()))
-	mftype := typeFromString(ctx.Mptype().GetText())
+	mftype := variables.TypeFromString(ctx.Mptype().GetText())
 	if mftype == pmmp.Undefined {
 		T.Error("unknown type: %s", ctx.Mptype().GetText())
 		T.Error("assuming type numeric")
@@ -645,7 +649,7 @@ func (pl *ParseListener) ExitDeclaration(ctx *pmmp.DeclarationContext) {
 			T.P("decl", sym.GetName()).Debugf("declared symbol in %s", scope.GetName())
 		*/
 		var s *bytes.Buffer
-		s = sym.showDeclarations(s)
+		s = sym.ShowDeclarations(s)
 		T.Infof("%s", s.String())
 	}
 }
@@ -688,7 +692,7 @@ func (pl *ParseListener) ExitPathvariable(ctx *pmmp.PathvariableContext) {
 	vref := pl.makeCanonicalAndResolve(s, false)
 	if vref.GetType() != pmmp.PathType { // automacically created as numeric
 		T.P("var", t).Debug("setting type to path")
-		vref.decl.SetType(pmmp.PathType) // change type of declaration
+		vref.Decl.SetType(pmmp.PathType) // change type of declaration
 		vref.SetType(pmmp.PathType)      // change type live variable
 	}
 	T.P("var", vref.GetName()).Debugf("pushing path = %.28v", vref.GetValue())
@@ -720,7 +724,7 @@ func (pl *ParseListener) ExitLvalue(ctx *pmmp.LvalueContext) {
 	s := pl.collectVarRefParts(t, ctx.GetChildren())
 	vref := pl.makeCanonicalAndResolve(s, pl.expectingLvalue)
 	pl.interpreter.PushVariable(vref, pl.expectingLvalue)
-	T.P("var", vref.GetName()).Debugf("lvalue type is %s", typeString(vref.GetType()))
+	T.P("var", vref.GetName()).Debugf("lvalue type is %s", variables.TypeString(vref.GetType()))
 	pl.expectingLvalue = false
 }
 
@@ -1225,9 +1229,9 @@ func (pl *ParseListener) ExitSubscript(ctx *pmmp.SubscriptContext) {
  * it on the expression stack. If the variable has a known value, we will
  * put the value onto the stack (otherwise the variable reference).
  */
-func (pl *ParseListener) makeCanonicalAndResolve(v string, expectLvalue bool) *PMMPVarRef {
-	vtree := pl.ParseVarFromString(v)
-	vref := pl.GetPMMPVarRefFromVarSyntax(vtree)
+func (pl *ParseListener) makeCanonicalAndResolve(v string, expectLvalue bool) *variables.PMMPVarRef {
+	vtree := variables.ParseVariableFromString(v, &TracingErrorListener{})
+	vref := variables.GetVarRefFromVarSyntax(vtree, pl.interpreter.scopeTree)
 	vref, _ = pl.interpreter.FindVariableReferenceInMemory(vref, true) // allocate if not found
 	return vref
 }

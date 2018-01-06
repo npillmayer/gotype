@@ -42,7 +42,8 @@ import (
 	"github.com/npillmayer/gotype/gtbackend/gfx"
 	"github.com/npillmayer/gotype/gtcore/arithmetic"
 	"github.com/npillmayer/gotype/syntax"
-	pmmp "github.com/npillmayer/gotype/syntax/pmmpost/statements"
+	pmmp "github.com/npillmayer/gotype/syntax/pmmpost/grammar"
+	"github.com/npillmayer/gotype/syntax/variables"
 	dec "github.com/shopspring/decimal"
 )
 
@@ -52,8 +53,8 @@ import (
  * this memory frame will be overwritten !
  * Clients should probably first call FindVariableReferenceInMemory(vref).
  */
-func (intp *PMMPostInterpreter) AllocateVariableInMemory(vref *PMMPVarRef,
-	mf *syntax.DynamicMemoryFrame) *PMMPVarRef {
+func (intp *PMMPostInterpreter) AllocateVariableInMemory(vref *variables.PMMPVarRef,
+	mf *syntax.DynamicMemoryFrame) *variables.PMMPVarRef {
 	//
 	mf.Symbols().InsertSymbol(vref)
 	T.P("var", vref.GetFullName()).Debugf("allocating variable in %s", mf.GetName())
@@ -74,16 +75,16 @@ func (intp *PMMPostInterpreter) AllocateVariableInMemory(vref *PMMPVarRef,
  *
  * Parameter doAlloc: should step (4) be performed ?
  */
-func (intp *PMMPostInterpreter) FindVariableReferenceInMemory(vref *PMMPVarRef, doAlloc bool) (
-	*PMMPVarRef, *syntax.DynamicMemoryFrame) {
+func (intp *PMMPostInterpreter) FindVariableReferenceInMemory(vref *variables.PMMPVarRef, doAlloc bool) (
+	*variables.PMMPVarRef, *syntax.DynamicMemoryFrame) {
 	//
-	if vref.decl == nil {
+	if vref.Decl == nil {
 		T.P("var", vref.GetFullName()).Error("attempt to store variable without decl. in memory")
 		return vref, nil
 	}
-	var sym *PMMPVarRef
+	var sym *variables.PMMPVarRef
 	var memframe *syntax.DynamicMemoryFrame
-	tagname := vref.decl.BaseTag.GetName()
+	tagname := vref.Decl.BaseTag.GetName()
 	tag, scope := intp.scopeTree.Current().ResolveSymbol(tagname)
 	if tag != nil { // found tag declaration in scope
 		memframe = intp.memFrameStack.FindMemoryFrameWithScope(scope)
@@ -97,7 +98,7 @@ func (intp *PMMPostInterpreter) FindVariableReferenceInMemory(vref *PMMPVarRef, 
 			}
 		} else { // already present, return this on
 			T.P("var", varname).Debug("variable already present in memory")
-			sym = s.(*PMMPVarRef)
+			sym = s.(*variables.PMMPVarRef)
 		}
 	} else {
 		// this should never happen: we could neither find nor construct a var decl
@@ -112,7 +113,7 @@ func (intp *PMMPostInterpreter) FindVariableReferenceInMemory(vref *PMMPVarRef, 
  *
  * Push a variable (numeric or pair type) onto the expression stack.
  */
-func (intp *PMMPostInterpreter) PushVariable(vref *PMMPVarRef, asLValue bool) {
+func (intp *PMMPostInterpreter) PushVariable(vref *variables.PMMPVarRef, asLValue bool) {
 	if vref.IsPair() {
 		if vref.IsKnown() && !asLValue {
 			intp.PushConstant(vref) // put constant on expression stack
@@ -131,14 +132,14 @@ func (intp *PMMPostInterpreter) PushVariable(vref *PMMPVarRef, asLValue bool) {
 
 /* Push a constant (numeric or pair type) onto the expression stack.
  */
-func (intp *PMMPostInterpreter) PushConstant(vref *PMMPVarRef) {
+func (intp *PMMPostInterpreter) PushConstant(vref *variables.PMMPVarRef) {
 	if vref.IsPair() {
 		x := vref.XPart().GetValue()
 		y := vref.YPart().GetValue()
 		pair := arithmetic.MakePair(x.(dec.Decimal), y.(dec.Decimal))
 		intp.exprStack.PushPairConstant(pair)
 	} else {
-		intp.exprStack.PushConstant(vref.value.(dec.Decimal))
+		intp.exprStack.PushConstant(vref.Value.(dec.Decimal))
 	}
 }
 
@@ -150,16 +151,16 @@ func (intp *PMMPostInterpreter) PushConstant(vref *PMMPVarRef) {
  * or y-part). Parts point to their parent symbol, thus giving us the
  * variable reference.
  */
-func (intp *PMMPostInterpreter) getVariableFromExpression(e syntax.Expression) *PMMPVarRef {
-	var v *PMMPVarRef
+func (intp *PMMPostInterpreter) getVariableFromExpression(e syntax.Expression) *variables.PMMPVarRef {
+	var v *variables.PMMPVarRef
 	if sym := intp.exprStack.GetVariable(e); sym != nil {
-		var part *PairPartRef
+		var part *variables.PairPartRef
 		var ok bool
-		if part, ok = sym.(*PairPartRef); ok {
-			sym = part.pairvar
+		if part, ok = sym.(*variables.PairPartRef); ok {
+			sym = part.Pairvar
 		}
-		v = sym.(*PMMPVarRef)
-		T.P("var", v.GetName()).Debugf("variable of type %s", typeString(v.GetType()))
+		v = sym.(*variables.PMMPVarRef)
+		T.P("var", v.GetName()).Debugf("variable of type %s", variables.TypeString(v.GetType()))
 	}
 	return v
 }
@@ -168,10 +169,10 @@ func (intp *PMMPostInterpreter) getVariableFromExpression(e syntax.Expression) *
  * to the expression stack to forget the Symbol(s) for the ID(s) of a
  * variable. Variables are of type numeric or pair.
  */
-func (intp *PMMPostInterpreter) encapsulateVariable(v *PMMPVarRef) {
+func (intp *PMMPostInterpreter) encapsulateVariable(v *variables.PMMPVarRef) {
 	intp.exprStack.EncapsuleVariable(v.GetID())
 	if v.IsPair() {
-		var ypart *PairPartRef = v.GetFirstChild().(*PairPartRef)
+		var ypart *variables.PairPartRef = v.GetFirstChild().(*variables.PairPartRef)
 		intp.exprStack.EncapsuleVariable(ypart.GetID())
 	}
 }
@@ -184,7 +185,7 @@ func (intp *PMMPostInterpreter) encapsulateVariable(v *PMMPVarRef) {
  */
 func (intp *PMMPostInterpreter) encapsulateVarsInMemory(mf *syntax.DynamicMemoryFrame) {
 	mf.Symbols().Each(func(name string, sym syntax.Symbol) {
-		vref := sym.(*PMMPVarRef)
+		vref := sym.(*variables.PMMPVarRef)
 		T.P("var", vref.GetFullName()).Debug("encapsule")
 		intp.exprStack.EncapsuleVariable(vref.GetID()) // vref is now capsule
 	})
@@ -201,7 +202,7 @@ func (intp *PMMPostInterpreter) encapsulateVarsInMemory(mf *syntax.DynamicMemory
  * (3) Re-incarnate lvalue (get a new ID for it)
  * (4) Create equation on expression stack
  */
-func (intp *PMMPostInterpreter) assign(lvalue *PMMPVarRef, e syntax.Expression) {
+func (intp *PMMPostInterpreter) assign(lvalue *variables.PMMPVarRef, e syntax.Expression) {
 	varname := lvalue.GetName()
 	oldserial := lvalue.GetID()
 	T.P("var", varname).Debugf("assignment of lvalue #%d", oldserial)
@@ -209,7 +210,7 @@ func (intp *PMMPostInterpreter) assign(lvalue *PMMPVarRef, e syntax.Expression) 
 	vref, mf := intp.FindVariableReferenceInMemory(lvalue, false)
 	vref.SetValue(nil) // now lvalue is unset / unsolved
 	T.P("var", varname).Debugf("unset in %v", mf)
-	vref.reincarnate()
+	vref.Reincarnate()
 	T.P("var", vref.GetName()).Debugf("new lvalue incarnation #%d", vref.GetID())
 	intp.PushVariable(vref, false) // push LHS on stack
 	intp.exprStack.Push(e)         // push RHS on stack
@@ -237,21 +238,21 @@ func (intp *PMMPostInterpreter) save(tag string) {
  * semantics). If var decl has been "saved" in the current or in an outer scope,
  * make this tag a new undefined symbol.
  */
-func (intp *PMMPostInterpreter) declare(tag string, tp int) *PMMPVarDecl {
+func (intp *PMMPostInterpreter) declare(tag string, tp int) *variables.PMMPVarDecl {
 	sym, scope := intp.scopeTree.Current().ResolveSymbol(tag)
 	if sym != nil { // already found in scope stack
 		T.P("tag", tag).Debug("declare: found tag in scope %s", scope.GetName())
 		T.P("decl", tag).Debug("variable already declared - re-declaring")
 		// Erase all existing variables and re-define symbol
 		sym, _ = scope.DefineSymbol(tag)
-		sym.(*PMMPVarDecl).SetType(tp)
+		sym.(*variables.PMMPVarDecl).SetType(tp)
 	} else { // enter new symbol in global scope
 		scope = intp.scopeTree.Globals()
 		sym, _ = scope.DefineSymbol(tag)
-		sym.(*PMMPVarDecl).SetType(tp)
+		sym.(*variables.PMMPVarDecl).SetType(tp)
 	}
 	T.P("decl", sym.GetName()).Debugf("declared symbol in %s", scope.GetName())
-	return sym.(*PMMPVarDecl)
+	return sym.(*variables.PMMPVarDecl)
 }
 
 /* Create a variable reference. Parameters are the declaration for the variable,
@@ -259,14 +260,14 @@ func (intp *PMMPostInterpreter) declare(tag string, tp int) *PMMPVarDecl {
  * The subscripts parameter is a slice of array-subscripts, if the variable
  * declaration is of array (complex) type.
  */
-func (intp *PMMPostInterpreter) variable(decl *PMMPVarDecl, value interface{},
-	subscripts []dec.Decimal, global bool) *PMMPVarRef {
+func (intp *PMMPostInterpreter) variable(decl *variables.PMMPVarDecl, value interface{},
+	subscripts []dec.Decimal, global bool) *variables.PMMPVarRef {
 	//
-	var v *PMMPVarRef
+	var v *variables.PMMPVarRef
 	if decl.GetType() == pmmp.NumericType {
-		v = CreatePMMPVarRef(decl, value, subscripts)
+		v = variables.CreatePMMPVarRef(decl, value, subscripts)
 	} else {
-		v = CreatePMMPPairTypeVarRef(decl, value, subscripts)
+		v = variables.CreatePMMPPairTypeVarRef(decl, value, subscripts)
 	}
 	if global {
 		intp.memFrameStack.Globals().Symbols().InsertSymbol(v)
@@ -298,7 +299,7 @@ func (intp *PMMPostInterpreter) begingroup(name string) (*syntax.Scope, *syntax.
 	if name == "" {
 		name = "group"
 	}
-	groupscope := intp.scopeTree.PushNewScope(name, NewPMMPVarDecl)
+	groupscope := intp.scopeTree.PushNewScope(name, variables.NewPMMPVarDecl)
 	groupmf := intp.memFrameStack.PushNewMemoryFrame(name, groupscope)
 	return groupscope, groupmf
 }
@@ -338,16 +339,16 @@ func (intp *PMMPostInterpreter) Showvariable(tag string) string {
 		//T.P("symbol", tag).Debug("no declaration found for symbol")
 		return fmt.Sprintf("%s : tag\n", tag)
 	} else {
-		v := sym.(*PMMPVarDecl)
+		v := sym.(*variables.PMMPVarDecl)
 		var b *bytes.Buffer
-		b = v.showDeclarations(b)
+		b = v.ShowDeclarations(b)
 		//vname := v.BaseTag.GetName()
 		//fmt.Print(b.String())
 		// now find all incarnations in top memory-frame(scope)
 		if mf := intp.memFrameStack.FindMemoryFrameWithScope(scope); mf != nil {
 			for _, v := range mf.Symbols().Table {
-				vref := v.(*PMMPVarRef)
-				if vref.decl.BaseTag == sym {
+				vref := v.(*variables.PMMPVarRef)
+				if vref.Decl.BaseTag == sym {
 					s := fmt.Sprintf("%s = %s\n", vref.GetFullName(), vref.ValueString())
 					b.WriteString(s)
 				}
