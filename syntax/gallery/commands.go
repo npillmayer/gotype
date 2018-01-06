@@ -39,12 +39,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import (
 	"bytes"
 	"fmt"
-	"image/color"
 
-	"github.com/npillmayer/gotype/gtbackend/gfx"
 	"github.com/npillmayer/gotype/gtcore/arithmetic"
 	"github.com/npillmayer/gotype/syntax"
-	pmmp "github.com/npillmayer/gotype/syntax/pmmpost/grammar"
 	"github.com/npillmayer/gotype/syntax/variables"
 	dec "github.com/shopspring/decimal"
 )
@@ -55,7 +52,7 @@ import (
  * this memory frame will be overwritten !
  * Clients should probably first call FindVariableReferenceInMemory(vref).
  */
-func (intp *PMMPostInterpreter) AllocateVariableInMemory(vref *variables.PMMPVarRef,
+func (intp *GalleryInterpreter) AllocateVariableInMemory(vref *variables.PMMPVarRef,
 	mf *syntax.DynamicMemoryFrame) *variables.PMMPVarRef {
 	//
 	mf.Symbols().InsertSymbol(vref)
@@ -77,7 +74,7 @@ func (intp *PMMPostInterpreter) AllocateVariableInMemory(vref *variables.PMMPVar
  *
  * Parameter doAlloc: should step (4) be performed ?
  */
-func (intp *PMMPostInterpreter) FindVariableReferenceInMemory(vref *variables.PMMPVarRef, doAlloc bool) (
+func (intp *GalleryInterpreter) FindVariableReferenceInMemory(vref *variables.PMMPVarRef, doAlloc bool) (
 	*variables.PMMPVarRef, *syntax.DynamicMemoryFrame) {
 	//
 	if vref.Decl == nil {
@@ -115,7 +112,7 @@ func (intp *PMMPostInterpreter) FindVariableReferenceInMemory(vref *variables.PM
  *
  * Push a variable (numeric or pair type) onto the expression stack.
  */
-func (intp *PMMPostInterpreter) PushVariable(vref *variables.PMMPVarRef, asLValue bool) {
+func (intp *GalleryInterpreter) PushVariable(vref *variables.PMMPVarRef, asLValue bool) {
 	if vref.IsPair() {
 		if vref.IsKnown() && !asLValue {
 			intp.PushConstant(vref) // put constant on expression stack
@@ -134,7 +131,7 @@ func (intp *PMMPostInterpreter) PushVariable(vref *variables.PMMPVarRef, asLValu
 
 /* Push a constant (numeric or pair type) onto the expression stack.
  */
-func (intp *PMMPostInterpreter) PushConstant(vref *variables.PMMPVarRef) {
+func (intp *GalleryInterpreter) PushConstant(vref *variables.PMMPVarRef) {
 	if vref.IsPair() {
 		x := vref.XPart().GetValue()
 		y := vref.YPart().GetValue()
@@ -153,7 +150,7 @@ func (intp *PMMPostInterpreter) PushConstant(vref *variables.PMMPVarRef) {
  * or y-part). Parts point to their parent symbol, thus giving us the
  * variable reference.
  */
-func (intp *PMMPostInterpreter) getVariableFromExpression(e syntax.Expression) *variables.PMMPVarRef {
+func (intp *GalleryInterpreter) getVariableFromExpression(e syntax.Expression) *variables.PMMPVarRef {
 	var v *variables.PMMPVarRef
 	if sym := intp.exprStack.GetVariable(e); sym != nil {
 		var part *variables.PairPartRef
@@ -171,7 +168,7 @@ func (intp *PMMPostInterpreter) getVariableFromExpression(e syntax.Expression) *
  * to the expression stack to forget the Symbol(s) for the ID(s) of a
  * variable. Variables are of type numeric or pair.
  */
-func (intp *PMMPostInterpreter) encapsulateVariable(v *variables.PMMPVarRef) {
+func (intp *GalleryInterpreter) encapsulateVariable(v *variables.PMMPVarRef) {
 	intp.exprStack.EncapsuleVariable(v.GetID())
 	if v.IsPair() {
 		var ypart *variables.PairPartRef = v.GetFirstChild().(*variables.PairPartRef)
@@ -185,7 +182,7 @@ func (intp *PMMPostInterpreter) encapsulateVariable(v *variables.PMMPVarRef) {
  * may still be relevant to the LEQ-solver. The LEQ will finally decide
  * when to abondon the "zombie" variable.
  */
-func (intp *PMMPostInterpreter) encapsulateVarsInMemory(mf *syntax.DynamicMemoryFrame) {
+func (intp *GalleryInterpreter) encapsulateVarsInMemory(mf *syntax.DynamicMemoryFrame) {
 	mf.Symbols().Each(func(name string, sym syntax.Symbol) {
 		vref := sym.(*variables.PMMPVarRef)
 		T.P("var", vref.GetFullName()).Debug("encapsule")
@@ -204,7 +201,7 @@ func (intp *PMMPostInterpreter) encapsulateVarsInMemory(mf *syntax.DynamicMemory
  * (3) Re-incarnate lvalue (get a new ID for it)
  * (4) Create equation on expression stack
  */
-func (intp *PMMPostInterpreter) assign(lvalue *variables.PMMPVarRef, e syntax.Expression) {
+func (intp *GalleryInterpreter) assign(lvalue *variables.PMMPVarRef, e syntax.Expression) {
 	varname := lvalue.GetName()
 	oldserial := lvalue.GetID()
 	T.P("var", varname).Debugf("assignment of lvalue #%d", oldserial)
@@ -223,7 +220,7 @@ func (intp *PMMPostInterpreter) assign(lvalue *variables.PMMPVarRef, e syntax.Ex
  * group. Save-commands within global scope will be ignored.
  * This method simply creates a var decl for the tag in the current scope.
  */
-func (intp *PMMPostInterpreter) save(tag string) {
+func (intp *GalleryInterpreter) save(tag string) {
 	sym, scope := intp.scopeTree.Current().ResolveSymbol(tag)
 	if sym != nil { // already found in scope stack
 		T.P("tag", tag).Debugf("save: found tag in scope %s",
@@ -240,7 +237,7 @@ func (intp *PMMPostInterpreter) save(tag string) {
  * semantics). If var decl has been "saved" in the current or in an outer scope,
  * make this tag a new undefined symbol.
  */
-func (intp *PMMPostInterpreter) declare(tag string, tp int) *variables.PMMPVarDecl {
+func (intp *GalleryInterpreter) declare(tag string, tp int) *variables.PMMPVarDecl {
 	sym, scope := intp.scopeTree.Current().ResolveSymbol(tag)
 	if sym != nil { // already found in scope stack
 		T.P("tag", tag).Debug("declare: found tag in scope %s", scope.GetName())
@@ -262,11 +259,11 @@ func (intp *PMMPostInterpreter) declare(tag string, tp int) *variables.PMMPVarDe
  * The subscripts parameter is a slice of array-subscripts, if the variable
  * declaration is of array (complex) type.
  */
-func (intp *PMMPostInterpreter) variable(decl *variables.PMMPVarDecl, value interface{},
+func (intp *GalleryInterpreter) variable(decl *variables.PMMPVarDecl, value interface{},
 	subscripts []dec.Decimal, global bool) *variables.PMMPVarRef {
 	//
 	var v *variables.PMMPVarRef
-	if decl.GetType() == pmmp.NumericType {
+	if decl.GetType() == variables.NumericType {
 		v = variables.CreatePMMPVarRef(decl, value, subscripts)
 	} else {
 		v = variables.CreatePMMPPairTypeVarRef(decl, value, subscripts)
@@ -281,7 +278,7 @@ func (intp *PMMPostInterpreter) variable(decl *variables.PMMPVarDecl, value inte
 
 /* Apply a numeric math function, given by name, to a numeric argument.
  */
-func (intp *PMMPostInterpreter) mathfunc(n dec.Decimal, fun string) dec.Decimal {
+func (intp *GalleryInterpreter) mathfunc(n dec.Decimal, fun string) dec.Decimal {
 	switch fun {
 	case "floor":
 		n = n.Floor()
@@ -297,7 +294,7 @@ func (intp *PMMPostInterpreter) mathfunc(n dec.Decimal, fun string) dec.Decimal 
  * Clients may supply a name for the group, otherwise it will be set
  * to "group".
  */
-func (intp *PMMPostInterpreter) begingroup(name string) (*syntax.Scope, *syntax.DynamicMemoryFrame) {
+func (intp *GalleryInterpreter) begingroup(name string) (*syntax.Scope, *syntax.DynamicMemoryFrame) {
 	if name == "" {
 		name = "group"
 	}
@@ -308,34 +305,16 @@ func (intp *PMMPostInterpreter) begingroup(name string) (*syntax.Scope, *syntax.
 
 /* MetaFont endgroup command: pop scope and memory frame of group.
  */
-func (intp *PMMPostInterpreter) endgroup() {
+func (intp *GalleryInterpreter) endgroup() {
 	mf := intp.popScopeAndMemory()
 	intp.encapsulateVarsInMemory(mf)
-}
-
-/* Pickup a drawing pen. The pen is set as current pen for the current picture.
- */
-func (intp *PMMPostInterpreter) pickupPen(pentype string, diam dec.Decimal,
-	color color.Color) *gfx.Pen {
-	//
-	var pen *gfx.Pen
-	if pentype == "pencircle" {
-		pen = gfx.NewPencircle(diam)
-	} else {
-		pen = gfx.NewPensquare(diam)
-	}
-	if intp.picture != nil {
-		intp.picture.SetPen(pen)
-		intp.picture.SetColor(color)
-	}
-	return pen
 }
 
 // === Show Commands =========================================================
 
 /* Show all declarations and references for a tag.
  */
-func (intp *PMMPostInterpreter) Showvariable(tag string) string {
+func (intp *GalleryInterpreter) Showvariable(tag string) string {
 	sym, scope := intp.scopeTree.Current().ResolveSymbol(tag)
 	if sym == nil {
 		//T.P("symbol", tag).Debug("no declaration found for symbol")
