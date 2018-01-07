@@ -85,7 +85,7 @@ import (
 	sll "github.com/emirpasic/gods/lists/singlylinkedlist"
 	"github.com/npillmayer/gotype/gtcore/arithmetic"
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	"github.com/npillmayer/gotype/syntax"
+	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables/grammar"
 	dec "github.com/shopspring/decimal"
 )
@@ -175,9 +175,9 @@ func TypeFromString(str string) int {
  *         +--- suffix ".r" of type ComplexSuffix:  "x[].r"
  */
 type PMMPVarDecl struct { // this is a tag, an array-subtype, or a suffix
-	syntax.StdSymbol              // to use this we will have to override getName()
-	Parent           *PMMPVarDecl // e.g., x <- [] <- suffix(a)
-	BaseTag          *PMMPVarDecl // e.g., x // this pointer should never be nil
+	runtime.StdSymbol              // to use this we will have to override getName()
+	Parent            *PMMPVarDecl // e.g., x <- [] <- suffix(a)
+	BaseTag           *PMMPVarDecl // e.g., x // this pointer should never be nil
 }
 
 /* Expressive Stringer implementation.
@@ -230,7 +230,7 @@ func (d *PMMPVarDecl) GetBaseType() int {
 /* Create and initialize a new variable type declaration.
  * This will be passed as a symbol-creator to the symbol table.
  */
-func NewPMMPVarDecl(nm string) syntax.Symbol {
+func NewPMMPVarDecl(nm string) runtime.Symbol {
 	sym := &PMMPVarDecl{}
 	sym.Name = nm
 	sym.Symtype = Undefined
@@ -306,9 +306,9 @@ func (d *PMMPVarDecl) ShowDeclarations(s *bytes.Buffer) *bytes.Buffer {
 }
 
 // check interface assignability
-var _ syntax.Symbol = &PMMPVarDecl{}
-var _ syntax.Typable = &PMMPVarDecl{}
-var _ syntax.TreeNode = &PMMPVarDecl{}
+var _ runtime.Symbol = &PMMPVarDecl{}
+var _ runtime.Typable = &PMMPVarDecl{}
+var _ runtime.TreeNode = &PMMPVarDecl{}
 
 // === Variable References / Usage ===========================================
 
@@ -325,11 +325,11 @@ var _ syntax.TreeNode = &PMMPVarDecl{}
  * Variable references can have a value (of type interface{}).
  */
 type PMMPVarRef struct {
-	syntax.StdSymbol               // store by normalized name
-	cachedName       string        // store full name
-	Decl             *PMMPVarDecl  // type declaration for this variable
-	subscripts       []dec.Decimal // list of subscripts, first to last
-	Value            interface{}   // if known: has a value (numeric or pair)
+	runtime.StdSymbol               // store by normalized name
+	cachedName        string        // store full name
+	Decl              *PMMPVarDecl  // type declaration for this variable
+	subscripts        []dec.Decimal // list of subscripts, first to last
+	Value             interface{}   // if known: has a value (numeric or pair)
 }
 
 /* Variables of type pair will use two sub-symbols for the x-part and
@@ -398,7 +398,7 @@ func CreatePMMPPairTypeVarRef(decl *PMMPVarDecl, value interface{}, indices []de
 /* Symbol-creator for symbol table: creates tag symbol.
  * Do not use this for pair variables !!
  */
-func NewPMMPVarRef(tagName string) syntax.Symbol {
+func NewPMMPVarRef(tagName string) runtime.Symbol {
 	T.P("tag", tagName).Debug("tag for variable reference created")
 	v := &PMMPVarRef{}
 	v.Id = newVarSerial()
@@ -470,13 +470,13 @@ func (v *PMMPVarRef) YPart() *PairPartRef {
 
 /* Get the x-part value of a pair.
  *
- * Interface syntax.Assignable
+ * Interface runtime.Assignable
  */
 func (ppart *PairPartRef) GetValue() interface{} {
 	return ppart.Value
 }
 
-/* Interface syntax.Assignable
+/* Interface runtime.Assignable
  */
 func (ppart *PairPartRef) SetValue(val interface{}) {
 	T.P("var", ppart.GetName()).Debugf("new value: %v", val)
@@ -484,7 +484,7 @@ func (ppart *PairPartRef) SetValue(val interface{}) {
 	ppart.Pairvar.PullValue()
 }
 
-/* Interface syntax.Assignable
+/* Interface runtime.Assignable
  */
 func (ppart *PairPartRef) IsKnown() bool {
 	return (ppart.Value != nil)
@@ -492,24 +492,24 @@ func (ppart *PairPartRef) IsKnown() bool {
 
 /* Filler for interface TreeNode. Never called.
  */
-func (ppart *PairPartRef) GetSibling() syntax.TreeNode {
+func (ppart *PairPartRef) GetSibling() runtime.TreeNode {
 	return nil
 }
 
 /* Filler for interface TreeNode. Never called.
  */
-func (ppart *PairPartRef) SetSibling(syntax.TreeNode) {
+func (ppart *PairPartRef) SetSibling(runtime.TreeNode) {
 }
 
 /* Filler for interface TreeNode. Never called.
  */
-func (ppart *PairPartRef) GetFirstChild() syntax.TreeNode {
+func (ppart *PairPartRef) GetFirstChild() runtime.TreeNode {
 	return nil
 }
 
 /* Filler for interface TreeNode. Never called.
  */
-func (ppart *PairPartRef) SetFirstChild(tn syntax.TreeNode) {
+func (ppart *PairPartRef) SetFirstChild(tn runtime.TreeNode) {
 }
 
 /* Get the full normalized (canonical) name of a variable,  i.e. "x[2].r".
@@ -539,13 +539,13 @@ func (v *PMMPVarRef) GetFullName() string {
 	return strings.Join(suffixes, "")
 }
 
-/* Interface syntax.Assignable
+/* Interface runtime.Assignable
  */
 func (v *PMMPVarRef) GetValue() interface{} {
 	return v.Value
 }
 
-/* Interface syntax.Assignable
+/* Interface runtime.Assignable
  */
 func (v *PMMPVarRef) SetValue(val interface{}) {
 	T.P("var", v.GetName()).Debugf("new value: %v", val)
@@ -615,7 +615,7 @@ func (v *PMMPVarRef) ValueString() string {
 	return "?"
 }
 
-/* Interface syntax.Assignable
+/* Interface runtime.Assignable
  */
 func (v *PMMPVarRef) IsKnown() bool {
 	return (v.Value != nil)
@@ -652,14 +652,14 @@ func newVarSerial() int {
 }
 
 // check interface assignability
-var _ syntax.Symbol = &PMMPVarRef{}
-var _ syntax.Typable = &PMMPVarRef{}
-var _ syntax.TreeNode = &PMMPVarRef{}
-var _ syntax.Assignable = &PMMPVarRef{}
+var _ runtime.Symbol = &PMMPVarRef{}
+var _ runtime.Typable = &PMMPVarRef{}
+var _ runtime.TreeNode = &PMMPVarRef{}
+var _ runtime.Assignable = &PMMPVarRef{}
 
-var _ syntax.Symbol = &PairPartRef{}
-var _ syntax.TreeNode = &PairPartRef{}
-var _ syntax.Assignable = &PairPartRef{}
+var _ runtime.Symbol = &PairPartRef{}
+var _ runtime.TreeNode = &PairPartRef{}
+var _ runtime.Assignable = &PairPartRef{}
 
 // === Variable Parser =======================================================
 
@@ -668,7 +668,7 @@ var _ syntax.Assignable = &PairPartRef{}
  */
 type VarParseListener struct {
 	*grammar.BasePMMPVarListener // build on top of ANTLR's base 'class'
-	scopeTree                    *syntax.ScopeTree
+	scopeTree                    *runtime.ScopeTree
 	def                          *PMMPVarDecl
 	ref                          *PMMPVarRef
 	suffixes                     *sll.List
@@ -754,7 +754,7 @@ func (pl *ParseListener) GetPMMPVarRefFromVarSyntax(vtree antlr.RuleContext) *PM
 }
 */
 
-func GetVarRefFromVarSyntax(vtree antlr.RuleContext, scopes *syntax.ScopeTree) *PMMPVarRef {
+func GetVarRefFromVarSyntax(vtree antlr.RuleContext, scopes *runtime.ScopeTree) *PMMPVarRef {
 	listener := NewVarParseListener()
 	listener.scopeTree = scopes                        // where variables declarations have to be found
 	listener.suffixes = sll.New()                      // list to collect suffixes

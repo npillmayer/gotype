@@ -41,8 +41,8 @@ import (
 
 	"github.com/npillmayer/gotype/gtbackend/gfx"
 	"github.com/npillmayer/gotype/gtcore/arithmetic"
-	"github.com/npillmayer/gotype/syntax"
 	pmmp "github.com/npillmayer/gotype/syntax/pmmpost/grammar"
+	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables"
 	dec "github.com/shopspring/decimal"
 )
@@ -54,7 +54,7 @@ import (
  * Clients should probably first call FindVariableReferenceInMemory(vref).
  */
 func (intp *PMMPostInterpreter) AllocateVariableInMemory(vref *variables.PMMPVarRef,
-	mf *syntax.DynamicMemoryFrame) *variables.PMMPVarRef {
+	mf *runtime.DynamicMemoryFrame) *variables.PMMPVarRef {
 	//
 	mf.Symbols().InsertSymbol(vref)
 	T.P("var", vref.GetFullName()).Debugf("allocating variable in %s", mf.GetName())
@@ -76,14 +76,14 @@ func (intp *PMMPostInterpreter) AllocateVariableInMemory(vref *variables.PMMPVar
  * Parameter doAlloc: should step (4) be performed ?
  */
 func (intp *PMMPostInterpreter) FindVariableReferenceInMemory(vref *variables.PMMPVarRef, doAlloc bool) (
-	*variables.PMMPVarRef, *syntax.DynamicMemoryFrame) {
+	*variables.PMMPVarRef, *runtime.DynamicMemoryFrame) {
 	//
 	if vref.Decl == nil {
 		T.P("var", vref.GetFullName()).Error("attempt to store variable without decl. in memory")
 		return vref, nil
 	}
 	var sym *variables.PMMPVarRef
-	var memframe *syntax.DynamicMemoryFrame
+	var memframe *runtime.DynamicMemoryFrame
 	tagname := vref.Decl.BaseTag.GetName()
 	tag, scope := intp.scopeTree.Current().ResolveSymbol(tagname)
 	if tag != nil { // found tag declaration in scope
@@ -151,7 +151,7 @@ func (intp *PMMPostInterpreter) PushConstant(vref *variables.PMMPVarRef) {
  * or y-part). Parts point to their parent symbol, thus giving us the
  * variable reference.
  */
-func (intp *PMMPostInterpreter) getVariableFromExpression(e syntax.Expression) *variables.PMMPVarRef {
+func (intp *PMMPostInterpreter) getVariableFromExpression(e runtime.Expression) *variables.PMMPVarRef {
 	var v *variables.PMMPVarRef
 	if sym := intp.exprStack.GetVariable(e); sym != nil {
 		var part *variables.PairPartRef
@@ -183,8 +183,8 @@ func (intp *PMMPostInterpreter) encapsulateVariable(v *variables.PMMPVarRef) {
  * may still be relevant to the LEQ-solver. The LEQ will finally decide
  * when to abondon the "zombie" variable.
  */
-func (intp *PMMPostInterpreter) encapsulateVarsInMemory(mf *syntax.DynamicMemoryFrame) {
-	mf.Symbols().Each(func(name string, sym syntax.Symbol) {
+func (intp *PMMPostInterpreter) encapsulateVarsInMemory(mf *runtime.DynamicMemoryFrame) {
+	mf.Symbols().Each(func(name string, sym runtime.Symbol) {
 		vref := sym.(*variables.PMMPVarRef)
 		T.P("var", vref.GetFullName()).Debug("encapsule")
 		intp.exprStack.EncapsuleVariable(vref.GetID()) // vref is now capsule
@@ -202,7 +202,7 @@ func (intp *PMMPostInterpreter) encapsulateVarsInMemory(mf *syntax.DynamicMemory
  * (3) Re-incarnate lvalue (get a new ID for it)
  * (4) Create equation on expression stack
  */
-func (intp *PMMPostInterpreter) assign(lvalue *variables.PMMPVarRef, e syntax.Expression) {
+func (intp *PMMPostInterpreter) assign(lvalue *variables.PMMPVarRef, e runtime.Expression) {
 	varname := lvalue.GetName()
 	oldserial := lvalue.GetID()
 	T.P("var", varname).Debugf("assignment of lvalue #%d", oldserial)
@@ -295,7 +295,7 @@ func (intp *PMMPostInterpreter) mathfunc(n dec.Decimal, fun string) dec.Decimal 
  * Clients may supply a name for the group, otherwise it will be set
  * to "group".
  */
-func (intp *PMMPostInterpreter) begingroup(name string) (*syntax.Scope, *syntax.DynamicMemoryFrame) {
+func (intp *PMMPostInterpreter) begingroup(name string) (*runtime.Scope, *runtime.DynamicMemoryFrame) {
 	if name == "" {
 		name = "group"
 	}

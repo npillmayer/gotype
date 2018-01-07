@@ -26,7 +26,7 @@ import (
 	"regexp"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	"github.com/npillmayer/gotype/syntax"
+	"github.com/npillmayer/gotype/syntax/runtime"
 )
 
 const ( // variable types
@@ -42,7 +42,7 @@ const ( // variable types
 
 var T tracing.Trace = tracing.InterpreterTracer
 
-var ScopeStack *syntax.ScopeTree // to be set from outside (e.g., the parser)
+var ScopeStack *runtime.ScopeTree // to be set from outside (e.g., the parser)
 
 var tagStart *regexp.Regexp = regexp.MustCompile("^[a-z]+") // pattern for tags
 
@@ -63,12 +63,12 @@ func ispair(tagname string) bool {
 		if tag == nil {
 			return false
 		} else {
-			var t syntax.Typable
+			var t runtime.Typable
 			var ok bool
-			if t, ok = tag.(syntax.Typable); ok {
-				ispair := t.GetType() == syntax.PairType
+			if t, ok = tag.(runtime.Typable); ok {
+				ispair := t.GetType() == runtime.PairType
 				T.P("tag", tagprefix).Debugf("ispair? = %v", ispair)
-				return t.GetType() == syntax.PairType
+				return t.GetType() == runtime.PairType
 			}
 		}
 		return true

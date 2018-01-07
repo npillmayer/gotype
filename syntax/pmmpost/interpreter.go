@@ -56,8 +56,8 @@ import (
 	colorful "github.com/lucasb-eyer/go-colorful"
 	"github.com/npillmayer/gotype/gtbackend/gfx"
 	arithm "github.com/npillmayer/gotype/gtcore/arithmetic"
-	"github.com/npillmayer/gotype/syntax"
 	pmmp "github.com/npillmayer/gotype/syntax/pmmpost/grammar"
+	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables"
 	dec "github.com/shopspring/decimal"
 )
@@ -95,13 +95,13 @@ import (
  * behaviour in certain aspects.
  */
 type PMMPostInterpreter struct {
-	ASTListener   *ParseListener           // parse / AST listener
-	scopeTree     *syntax.ScopeTree        // collect scopes
-	memFrameStack *syntax.MemoryFrameStack // runtime stack
-	exprStack     *syntax.ExprStack        // eval expressions
-	pathBuilder   *syntax.PathStack        // construct paths
-	picture       *gfx.Picture             // the picture we're drawing
-	outputRoutine gfx.OutputRoutine        // for shipping out images
+	ASTListener   *ParseListener            // parse / AST listener
+	scopeTree     *runtime.ScopeTree        // collect scopes
+	memFrameStack *runtime.MemoryFrameStack // runtime stack
+	exprStack     *runtime.ExprStack        // eval expressions
+	pathBuilder   *runtime.PathStack        // construct paths
+	picture       *gfx.Picture              // the picture we're drawing
+	outputRoutine gfx.OutputRoutine         // for shipping out images
 }
 
 /* Create a new Interpreter for "Poor Man's MetaPost". This is the top-level
@@ -114,14 +114,14 @@ type PMMPostInterpreter struct {
  */
 func NewPMMPostInterpreter() *PMMPostInterpreter {
 	intp := &PMMPostInterpreter{}
-	intp.scopeTree = new(syntax.ScopeTree)                           // scopes for groups and functions
+	intp.scopeTree = new(runtime.ScopeTree)                          // scopes for groups and functions
 	intp.scopeTree.PushNewScope("globals", variables.NewPMMPVarDecl) // push global scope first
-	intp.memFrameStack = new(syntax.MemoryFrameStack)                // initialize memory frame stack
+	intp.memFrameStack = new(runtime.MemoryFrameStack)               // initialize memory frame stack
 	mf := intp.memFrameStack.PushNewMemoryFrame("global", nil)       // global memory
 	mf.Scope = intp.scopeTree.Globals()                              // connect the global frame with the global scope
-	intp.memFrameStack.Globals().SymbolTable = syntax.NewSymbolTable(variables.NewPMMPVarRef)
-	intp.exprStack = syntax.NewExprStack()
-	intp.pathBuilder = syntax.NewPathStack()
+	intp.memFrameStack.Globals().SymbolTable = runtime.NewSymbolTable(variables.NewPMMPVarRef)
+	intp.exprStack = runtime.NewExprStack()
+	intp.pathBuilder = runtime.NewPathStack()
 	pmmp.ScopeStack = intp.scopeTree
 	intp.loadBuiltinSymbols(intp.scopeTree.Globals())             // load syms into new global scope
 	intp.ASTListener = NewParseListener(intp.scopeTree.Globals()) // listener for ANTLR
@@ -132,7 +132,7 @@ func NewPMMPostInterpreter() *PMMPostInterpreter {
 /* Load builtin symbols into a scope (usually the global scope).
  * TODO: nullpath, z@#, unitcircle, unitsquare
  */
-func (intp *PMMPostInterpreter) loadBuiltinSymbols(scope *syntax.Scope) {
+func (intp *PMMPostInterpreter) loadBuiltinSymbols(scope *runtime.Scope) {
 	/*
 		originDef := CreatePMMPVarDecl("origin", pmmp.PairType, nil) // define origin
 		origin := CreatePMMPPairTypeVarRef(originDef, arithm.MakePair(
@@ -171,7 +171,7 @@ func (intp *PMMPostInterpreter) SetOutputRoutine(o gfx.OutputRoutine) {
  * a group is left.
  * Returns the previously topmost memory frame.
  */
-func (intp *PMMPostInterpreter) popScopeAndMemory() *syntax.DynamicMemoryFrame {
+func (intp *PMMPostInterpreter) popScopeAndMemory() *runtime.DynamicMemoryFrame {
 	hidden := intp.scopeTree.PopScope()
 	hidden.Name = "(hidden)"
 	mf := intp.memFrameStack.PopMemoryFrame()
@@ -215,13 +215,13 @@ type ParseListener struct {
  * - compound statements, i.e. groups (begingroup ... endgroup)
  */
 type Annotation struct {
-	scope *syntax.Scope
+	scope *runtime.Scope
 	text  string
 }
 
 /* Construct a new AST listener.
  */
-func NewParseListener(globalScope *syntax.Scope) *ParseListener {
+func NewParseListener(globalScope *runtime.Scope) *ParseListener {
 	pl := &ParseListener{} // no need to initialize base class
 	pl.annotations = make(map[interface{}]Annotation)
 	pl.annotate("global", globalScope, "")
@@ -278,13 +278,13 @@ func (pl *ParseListener) LazyCreateParser(input antlr.CharStream) {
 
 /* Annotate an AST node, i.e., attach a scope information.
  */
-func (pl *ParseListener) annotate(node interface{}, scope *syntax.Scope, text string) {
+func (pl *ParseListener) annotate(node interface{}, scope *runtime.Scope, text string) {
 	pl.annotations[node] = Annotation{scope, text}
 }
 
 /* Get the annotation for an AST node.
  */
-func (pl *ParseListener) getAnnotation(node interface{}) (*syntax.Scope, string) {
+func (pl *ParseListener) getAnnotation(node interface{}) (*runtime.Scope, string) {
 	if a, found := pl.annotations[node]; found {
 		return a.scope, a.text
 	}
@@ -1065,7 +1065,7 @@ func (pl *ParseListener) ExitDecimal(ctx *pmmp.DecimalContext) {
 func (pl *ParseListener) ExitLiteralpair(ctx *pmmp.LiteralpairContext) {
 	ey, _ := pl.interpreter.exprStack.Pop()
 	ex, _ := pl.interpreter.exprStack.Pop()
-	e := syntax.NewPairExpression(ex.GetXPolyn(), ey.GetXPolyn())
+	e := runtime.NewPairExpression(ex.GetXPolyn(), ey.GetXPolyn())
 	T.Debugf("pair atom %s", e.String())
 	pl.interpreter.exprStack.Push(e)
 }
