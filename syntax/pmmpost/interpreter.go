@@ -56,6 +56,7 @@ import (
 	colorful "github.com/lucasb-eyer/go-colorful"
 	"github.com/npillmayer/gotype/gtbackend/gfx"
 	arithm "github.com/npillmayer/gotype/gtcore/arithmetic"
+	"github.com/npillmayer/gotype/syntax/pmmpost/corelang"
 	pmmp "github.com/npillmayer/gotype/syntax/pmmpost/grammar"
 	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables"
@@ -95,13 +96,14 @@ import (
  * behaviour in certain aspects.
  */
 type PMMPostInterpreter struct {
-	ASTListener   *ParseListener            // parse / AST listener
-	scopeTree     *runtime.ScopeTree        // collect scopes
-	memFrameStack *runtime.MemoryFrameStack // runtime stack
-	exprStack     *runtime.ExprStack        // eval expressions
-	pathBuilder   *runtime.PathStack        // construct paths
-	picture       *gfx.Picture              // the picture we're drawing
-	outputRoutine gfx.OutputRoutine         // for shipping out images
+	ASTListener *ParseListener   // parse / AST listener
+	runtime     *runtime.Runtime // runtime environment
+	/*
+		scopeTree     *runtime.ScopeTree        // collect scopes
+		memFrameStack *runtime.MemoryFrameStack // runtime stack
+		exprStack     *runtime.ExprStack        // eval expressions
+		pathBuilder   *runtime.PathStack        // construct paths
+	*/
 }
 
 /* Create a new Interpreter for "Poor Man's MetaPost". This is the top-level
@@ -114,18 +116,22 @@ type PMMPostInterpreter struct {
  */
 func NewPMMPostInterpreter() *PMMPostInterpreter {
 	intp := &PMMPostInterpreter{}
-	intp.scopeTree = new(runtime.ScopeTree)                          // scopes for groups and functions
-	intp.scopeTree.PushNewScope("globals", variables.NewPMMPVarDecl) // push global scope first
-	intp.memFrameStack = new(runtime.MemoryFrameStack)               // initialize memory frame stack
-	mf := intp.memFrameStack.PushNewMemoryFrame("global", nil)       // global memory
-	mf.Scope = intp.scopeTree.Globals()                              // connect the global frame with the global scope
-	intp.memFrameStack.Globals().SymbolTable = runtime.NewSymbolTable(variables.NewPMMPVarRef)
-	intp.exprStack = runtime.NewExprStack()
-	intp.pathBuilder = runtime.NewPathStack()
-	pmmp.ScopeStack = intp.scopeTree
-	intp.loadBuiltinSymbols(intp.scopeTree.Globals())             // load syms into new global scope
-	intp.ASTListener = NewParseListener(intp.scopeTree.Globals()) // listener for ANTLR
-	intp.ASTListener.interpreter = intp                           // backlink to the interpreter
+	intp.runtime = runtime.NewRuntimeEnvironment(variables.NewPMMPVarDecl)
+	/*
+		intp.scopeTree = new(runtime.ScopeTree)                          // scopes for groups and functions
+		intp.scopeTree.PushNewScope("globals", variables.NewPMMPVarDecl) // push global scope first
+		intp.memFrameStack = new(runtime.MemoryFrameStack)               // initialize memory frame stack
+		mf := intp.memFrameStack.PushNewMemoryFrame("global", nil)       // global memory
+		mf.Scope = intp.scopeTree.Globals()                              // connect the global frame with the global scope
+		intp.memFrameStack.Globals().SymbolTable = runtime.NewSymbolTable(variables.NewPMMPVarRef)
+		intp.exprStack = runtime.NewExprStack()
+		intp.pathBuilder = runtime.NewPathStack()
+	*/
+	pmmp.ScopeStack = intp.runtime.ScopeTree
+	intp.loadBuiltinSymbols(intp.runtime.ScopeTree.Globals())             // load syms into new global scope
+	intp.ASTListener = NewParseListener(intp.runtime.ScopeTree.Globals()) // listener for ANTLR
+	intp.ASTListener.rt = intp.runtime
+	intp.ASTListener.backend = &backend{}
 	return intp
 }
 
@@ -133,52 +139,32 @@ func NewPMMPostInterpreter() *PMMPostInterpreter {
  * TODO: nullpath, z@#, unitcircle, unitsquare
  */
 func (intp *PMMPostInterpreter) loadBuiltinSymbols(scope *runtime.Scope) {
-	/*
-		originDef := CreatePMMPVarDecl("origin", pmmp.PairType, nil) // define origin
-		origin := CreatePMMPPairTypeVarRef(originDef, arithm.MakePair(
-			arithm.ConstZero, arithm.ConstZero), nil)
-		intp.scopeTree.Globals().Symbols().InsertSymbol(originDef)
-		intp.memFrameStack.Globals().Symbols().InsertSymbol(origin)
-	*/
-	originDef := intp.declare("origin", pmmp.PairType)
+	originDef := corelang.Declare(intp.runtime, "origin", pmmp.PairType)
 	origin := arithm.MakePair(arithm.ConstZero, arithm.ConstZero)
-	_ = intp.variable(originDef, origin, nil, true)
-	upDef := intp.declare("up", pmmp.PairType)
+	_ = corelang.Variable(intp.runtime, originDef, origin, nil, true)
+	upDef := corelang.Declare(intp.runtime, "up", pmmp.PairType)
 	up := arithm.MakePair(arithm.ConstZero, arithm.ConstOne)
-	_ = intp.variable(upDef, up, nil, true)
-	downDef := intp.declare("down", pmmp.PairType)
+	_ = corelang.Variable(intp.runtime, upDef, up, nil, true)
+	downDef := corelang.Declare(intp.runtime, "down", pmmp.PairType)
 	down := arithm.MakePair(arithm.ConstZero, arithm.MinusOne)
-	_ = intp.variable(downDef, down, nil, true)
-	rightDef := intp.declare("right", pmmp.PairType)
+	_ = corelang.Variable(intp.runtime, downDef, down, nil, true)
+	rightDef := corelang.Declare(intp.runtime, "right", pmmp.PairType)
 	right := arithm.MakePair(arithm.ConstOne, arithm.ConstZero)
-	_ = intp.variable(rightDef, right, nil, true)
-	leftDef := intp.declare("left", pmmp.PairType)
+	_ = corelang.Variable(intp.runtime, rightDef, right, nil, true)
+	leftDef := corelang.Declare(intp.runtime, "left", pmmp.PairType)
 	left := arithm.MakePair(arithm.MinusOne, arithm.ConstZero)
-	_ = intp.variable(leftDef, left, nil, true)
-	_ = intp.declare("p", pmmp.PairType)
-	_ = intp.declare("q", pmmp.PairType)
-	_ = intp.declare("z", pmmp.PairType)
+	_ = corelang.Variable(intp.runtime, leftDef, left, nil, true)
+	_ = corelang.Declare(intp.runtime, "p", pmmp.PairType)
+	_ = corelang.Declare(intp.runtime, "q", pmmp.PairType)
+	_ = corelang.Declare(intp.runtime, "z", pmmp.PairType)
 }
 
 /* Set an output routine. Default is nil.
  */
 func (intp *PMMPostInterpreter) SetOutputRoutine(o gfx.OutputRoutine) {
-	intp.outputRoutine = o
-}
-
-/* Internal method: Decrease grouping level.
- * We pop the topmost scope and topmost memory frame. This happends after
- * a group is left.
- * Returns the previously topmost memory frame.
- */
-func (intp *PMMPostInterpreter) popScopeAndMemory() *runtime.DynamicMemoryFrame {
-	hidden := intp.scopeTree.PopScope()
-	hidden.Name = "(hidden)"
-	mf := intp.memFrameStack.PopMemoryFrame()
-	if mf.GetScope() != hidden {
-		T.P("mem", mf.GetName()).Error("groups out of sync?")
+	if intp.ASTListener != nil {
+		intp.ASTListener.backend.outputRoutine = o
 	}
-	return mf
 }
 
 /* Parse and interpret a statement list.
@@ -198,7 +184,8 @@ type ParseListener struct {
 	statemParser                 *pmmp.PMMPStatemParser
 	annotations                  map[interface{}]Annotation // node annotations
 	expectingLvalue              bool                       // do not evaluate variable
-	interpreter                  *PMMPostInterpreter        // backlink to the interpreter
+	rt                           *runtime.Runtime           // runtime environment
+	backend                      *backend                   // where to draw to
 	//varParser                    *variables.PMMPVarParser   // sub-parser for variables
 }
 
@@ -267,7 +254,6 @@ func (pl *ParseListener) LazyCreateParser(input antlr.CharStream) {
 	stream := antlr.NewCommonTokenStream(lexer, 0)
 	if pl.statemParser == nil {
 		pl.statemParser = pmmp.NewPMMPStatemParser(stream)
-		//pl.statemParser.AddErrorListener(antlr.NewDiagnosticErrorListener(true))
 		pl.statemParser.RemoveErrorListeners()
 		pl.statemParser.AddErrorListener(&TracingErrorListener{})
 		pl.statemParser.BuildParseTrees = true
@@ -294,7 +280,7 @@ func (pl *ParseListener) getAnnotation(node interface{}) (*runtime.Scope, string
 /* Print out a summary of all the scopes and symbols collected up to now.
  */
 func (pl *ParseListener) Summary() {
-	pl.interpreter.exprStack.Summary()
+	pl.rt.ExprStack.Summary()
 	T.Info("Summary of symbols:")
 	for _, annot := range pl.annotations {
 		scope := annot.scope
@@ -324,15 +310,15 @@ func (pl *ParseListener) VisitTerminal(node antlr.TerminalNode) {
 /* A picture has been completed.
  */
 func (pl *ParseListener) ExitFigure(ctx *pmmp.FigureContext) {
-	if pl.interpreter.picture != nil {
+	if pl.backend.picture != nil {
 		T.Debug("figure complete")
-		image := pl.interpreter.picture.AsImage()
-		if pl.interpreter.outputRoutine != nil {
-			pl.interpreter.outputRoutine.Shipout(pl.interpreter.picture.Name, image)
+		image := pl.backend.picture.AsImage()
+		if pl.backend.outputRoutine != nil {
+			pl.backend.outputRoutine.Shipout(pl.backend.picture.Name, image)
 		} else {
 			T.Error("no output routine set")
 		}
-		pl.interpreter.picture = nil
+		pl.backend.picture = nil
 	}
 }
 
@@ -352,12 +338,12 @@ func (pl *ParseListener) ExitBeginfig(ctx *pmmp.BeginfigContext) {
 		fh, _ := h.Float64()
 		name := strings.Trim(ctx.LABEL().GetText(), "\"")
 		T.P("figure", name).Debugf("dimension %s x %s", w, h)
-		pl.interpreter.picture = gfx.NewPicture(name, fw, fh)
-		pl.interpreter.begingroup("figure")
-		wdecl := pl.interpreter.declare("w", pmmp.NumericType)
-		_ = pl.interpreter.variable(wdecl, w, nil, true)
-		hdecl := pl.interpreter.declare("h", pmmp.NumericType)
-		_ = pl.interpreter.variable(hdecl, h, nil, true)
+		pl.backend.picture = gfx.NewPicture(name, fw, fh)
+		corelang.Begingroup(pl.rt, "figure")
+		wdecl := corelang.Declare(pl.rt, "w", pmmp.NumericType)
+		_ = corelang.Variable(pl.rt, wdecl, w, nil, true)
+		hdecl := corelang.Declare(pl.rt, "h", pmmp.NumericType)
+		_ = corelang.Variable(pl.rt, hdecl, h, nil, true)
 	} else {
 		T.Error("parse error, no figure completed")
 	}
@@ -366,8 +352,8 @@ func (pl *ParseListener) ExitBeginfig(ctx *pmmp.BeginfigContext) {
 /* End a figure.
  */
 func (pl *ParseListener) ExitEndfig(ctx *pmmp.EndfigContext) {
-	if pl.interpreter.picture != nil {
-		pl.interpreter.endgroup()
+	if pl.backend.picture != nil {
+		corelang.Endgroup(pl.rt)
 	}
 }
 
@@ -378,9 +364,9 @@ func (pl *ParseListener) ExitEndfig(ctx *pmmp.EndfigContext) {
  * pathexpression is TOS of path builder stack.
  */
 func (pl *ParseListener) ExitDrawCmd(ctx *pmmp.DrawCmdContext) {
-	pn, _ := pl.interpreter.pathBuilder.Pop()
+	pn, _ := pl.rt.PathBuilder.Pop()
 	path := pn.Path
-	pl.interpreter.picture.Draw(path)
+	pl.backend.picture.Draw(path)
 }
 
 /* Fill command: fill a cloxed path. Fills a path using current color.
@@ -390,10 +376,10 @@ func (pl *ParseListener) ExitDrawCmd(ctx *pmmp.DrawCmdContext) {
  * pathexpression is TOS of path builder stack.
  */
 func (pl *ParseListener) ExitFillCmd(ctx *pmmp.FillCmdContext) {
-	pn, _ := pl.interpreter.pathBuilder.Pop()
+	pn, _ := pl.rt.PathBuilder.Pop()
 	path := pn.Path
-	if pl.interpreter.picture != nil {
-		pl.interpreter.picture.Fill(path)
+	if pl.backend.picture != nil {
+		pl.backend.picture.Fill(path)
 	}
 }
 
@@ -413,19 +399,7 @@ func (pl *ParseListener) ExitPickupCmd(ctx *pmmp.PickupCmdContext) {
 		color = colorFromHex(ctx.COLOR().GetText())
 	}
 	pentype := ctx.PEN().GetText()
-	pl.interpreter.pickupPen(pentype, diam, color)
-	/*
-		var pen *gfx.Pen
-		if pentype == "pencircle" {
-			pen = gfx.NewPencircle(diam)
-		} else {
-			pen = gfx.NewPensquare(diam)
-		}
-		if pl.interpreter.picture != nil {
-			pl.interpreter.picture.SetPen(pen)
-			pl.interpreter.picture.SetColor(color)
-		}
-	*/
+	pl.backend.pickupPen(pentype, diam, color)
 }
 
 /* Read an equation and put it into the LEQ solver.
@@ -437,15 +411,15 @@ func (pl *ParseListener) ExitPickupCmd(ctx *pmmp.PickupCmdContext) {
  * stack. Operates right-associative.
  */
 func (pl *ParseListener) ExitMultiequation(ctx *pmmp.MultiequationContext) {
-	prev, _ := pl.interpreter.exprStack.Pop() // walk the chain from right to left
-	i := ctx.GetChildCount() / 2              // number of expr nodes -1
-	for ; i > 0; i-- {                        // invariant: prev is LHS of equation to the right
-		tos := pl.interpreter.exprStack.Top() // LHS of current equation
-		pl.interpreter.exprStack.Push(prev)   // LHS of equation to the right
-		v := pl.interpreter.getVariableFromExpression(prev)
+	prev, _ := pl.rt.ExprStack.Pop() // walk the chain from right to left
+	i := ctx.GetChildCount() / 2     // number of expr nodes -1
+	for ; i > 0; i-- {               // invariant: prev is LHS of equation to the right
+		tos := pl.rt.ExprStack.Top() // LHS of current equation
+		pl.rt.ExprStack.Push(prev)   // LHS of equation to the right
+		v := corelang.GetVariableFromExpression(pl.rt, prev)
 		T.Debugf("var for equation = TOS: %v", v)
 		prev = tos // advance prev
-		pl.interpreter.exprStack.EquateTOS2OS()
+		pl.rt.ExprStack.EquateTOS2OS()
 	}
 }
 
@@ -456,8 +430,8 @@ func (pl *ParseListener) ExitMultiequation(ctx *pmmp.MultiequationContext) {
  *
  */
 func (pl *ParseListener) ExitPathequation(ctx *pmmp.PathequationContext) {
-	pe, ok := pl.interpreter.pathBuilder.Pop()
-	pv := pl.interpreter.pathBuilder.Top()
+	pe, ok := pl.rt.PathBuilder.Pop()
+	pv := pl.rt.PathBuilder.Top()
 	if ok {
 		vref := pv.Symbol.(*variables.PMMPVarRef)
 		//T.P("var", vref.GetName()).Debugf("set value = %s", pe.Path.String())
@@ -479,37 +453,22 @@ func (pl *ParseListener) ExitPathequation(ctx *pmmp.PathequationContext) {
  * (4) Create equation on expression stack
  */
 func (pl *ParseListener) ExitAssignment(ctx *pmmp.AssignmentContext) {
-	e, _ := pl.interpreter.exprStack.Pop()       // the expression value
-	lvalue, ok := pl.interpreter.exprStack.Pop() // the lvalue
+	e, _ := pl.rt.ExprStack.Pop()       // the expression value
+	lvalue, ok := pl.rt.ExprStack.Pop() // the lvalue
 	if !ok || !lvalue.IsValid() {
 		T.Debug("operands broken for assignment")
 	} else {
-		v := pl.interpreter.getVariableFromExpression(lvalue)
+		v := corelang.GetVariableFromExpression(pl.rt, lvalue)
 		if v != nil {
 			//varname := lvalue.GetXPolyn().TraceString(pl.exprStack)
 			varname := v.GetName()
 			t := v.GetType()
 			T.P("var", varname).Debugf("lvalue type is %s", variables.TypeString(t))
-			if !pl.interpreter.exprStack.CheckTypeMatch(lvalue, e) {
+			if !pl.rt.ExprStack.CheckTypeMatch(lvalue, e) {
 				T.P("var", varname).Errorf("type mismatch")
 				panic("type mismatch in assignment")
 			} else {
-				pl.interpreter.assign(v, e)
-				/*
-					// now execute steps (1) to (4)
-					oldserial := v.GetID()
-					//pl.exprStack.EncapsuleVariable(v.GetID()) // v is now capsule
-					pl.encapsuleVariable(v)
-					T.P("var", varname).Debugf("assignment of lvalue #%d", oldserial)
-					vref, mf := pl.FindVariableReferenceInMemory(v, false)
-					vref.SetValue(nil) // now lvalue is unset / unsolved
-					T.P("var", varname).Debugf("unset in %v", mf)
-					vref.reincarnate()
-					T.P("var", vref.GetName()).Debugf("new lvalue incarnation #%d", vref.GetID())
-					pl.PushVariable(vref, false)            // push LHS on stack
-					pl.interpreter.exprStack.Push(e)        // push RHS on stack
-					pl.interpreter.exprStack.EquateTOS2OS() // construct equation
-				*/
+				corelang.Assign(pl.rt, v, e)
 			}
 		}
 	}
@@ -535,7 +494,7 @@ func (pl *ParseListener) ExitAssignment(ctx *pmmp.AssignmentContext) {
  * definitions (a.k.a. macros) and/or functions.
  */
 func (pl *ParseListener) EnterCompound(ctx *pmmp.CompoundContext) {
-	groupscope, _ := pl.interpreter.begingroup("compound-group")
+	groupscope, _ := corelang.Begingroup(pl.rt, "compound-group")
 	pl.annotate(ctx, groupscope, "") // Annotate the AST node with this scope
 }
 
@@ -548,7 +507,7 @@ func (pl *ParseListener) EnterCompound(ctx *pmmp.CompoundContext) {
  * (a different kind of group).
  */
 func (pl *ParseListener) ExitCompound(ctx *pmmp.CompoundContext) {
-	pl.interpreter.endgroup()
+	corelang.Endgroup(pl.rt)
 	pl.Summary()
 }
 
@@ -561,7 +520,7 @@ func (pl *ParseListener) ExitCompound(ctx *pmmp.CompoundContext) {
  * expression.
  */
 func (pl *ParseListener) EnterExprgroup(ctx *pmmp.ExprgroupContext) {
-	groupscope, _ := pl.interpreter.begingroup("expr-group")
+	groupscope, _ := corelang.Begingroup(pl.rt, "expr-group")
 	pl.annotate(ctx, groupscope, "") // Annotate the AST node with this scope
 }
 
@@ -572,7 +531,7 @@ func (pl *ParseListener) EnterExprgroup(ctx *pmmp.ExprgroupContext) {
  * Additionally leave the return expression on the stack.
  */
 func (pl *ParseListener) ExitExprgroup(ctx *pmmp.ExprgroupContext) {
-	pl.interpreter.endgroup()
+	corelang.Endgroup(pl.rt)
 	// the return expression is already on the stack
 	pl.Summary()
 }
@@ -586,7 +545,7 @@ func (pl *ParseListener) ExitExprgroup(ctx *pmmp.ExprgroupContext) {
  * (a different kind of group).
  */
 func (pl *ParseListener) EnterPairexprgroup(ctx *pmmp.PairexprgroupContext) {
-	groupscope, _ := pl.interpreter.begingroup("expr-group")
+	groupscope, _ := corelang.Begingroup(pl.rt, "expr-group")
 	pl.annotate(ctx, groupscope, "") // Annotate the AST node with this scope
 }
 
@@ -597,7 +556,7 @@ func (pl *ParseListener) EnterPairexprgroup(ctx *pmmp.PairexprgroupContext) {
  * Additionally leave the return expression (type pair) on the stack.
  */
 func (pl *ParseListener) ExitPairexprgroup(ctx *pmmp.PairexprgroupContext) {
-	pl.interpreter.endgroup()
+	corelang.Endgroup(pl.rt)
 	// the return expression is already on the stack
 	pl.Summary()
 }
@@ -610,7 +569,7 @@ func (pl *ParseListener) ExitPairexprgroup(ctx *pmmp.PairexprgroupContext) {
 func (pl *ParseListener) ExitSaveStmt(ctx *pmmp.SaveStmtContext) {
 	T.Debugf("saving %d tags", len(ctx.AllTag()))
 	for _, tag := range ctx.AllTag() { // list of tags
-		pl.interpreter.save(tag.GetText())
+		corelang.Save(pl.rt, tag.GetText())
 	}
 }
 
@@ -631,23 +590,7 @@ func (pl *ParseListener) ExitDeclaration(ctx *pmmp.DeclarationContext) {
 		mftype = pmmp.NumericType
 	}
 	for _, tag := range ctx.AllTag() { // iterator over tag list
-		sym := pl.interpreter.declare(tag.GetText(), mftype)
-		/*
-			sym, scope := l.scopeTree.Current().ResolveSymbol(terminal.GetText())
-			if sym != nil { // already found in scope stack
-				T.P("tag", terminal.GetText()).Debug("declare: found tag in scope %s", scope.GetName())
-				T.P("decl", terminal.GetText()).Debug("variable already declared - re-declaring")
-				// Erase all existing variables and re-define symbol
-				sym, _ = scope.DefineSymbol(terminal.GetText())
-				sym.(*PMMPVarDecl).SetType(mftype)
-				T.P("decl", terminal.GetText()).Errorf("TODO: retract variables (LEQ)")
-			} else { // enter new symbol in global scope
-				scope = l.scopeTree.Globals()
-				sym, _ = scope.DefineSymbol(terminal.GetText())
-				sym.(*PMMPVarDecl).SetType(mftype)
-			}
-			T.P("decl", sym.GetName()).Debugf("declared symbol in %s", scope.GetName())
-		*/
+		sym := corelang.Declare(pl.rt, tag.GetText(), mftype)
 		var s *bytes.Buffer
 		s = sym.ShowDeclarations(s)
 		T.Infof("%s", s.String())
@@ -664,7 +607,7 @@ func (pl *ParseListener) ExitVariable(ctx *pmmp.VariableContext) {
 	T.P("var", t).Debug("num-expr variable, verbose")
 	s := pl.collectVarRefParts(t, ctx.GetChildren())
 	vref := pl.makeCanonicalAndResolve(s, false)
-	pl.interpreter.PushVariable(vref, false)
+	corelang.PushVariable(pl.rt, vref, false)
 }
 
 /* Variable reference as a pair expression primary. Example: "z3r".
@@ -677,7 +620,7 @@ func (pl *ParseListener) ExitPairvariable(ctx *pmmp.PairvariableContext) {
 	T.P("var", t).Debug("pair-expr variable, verbose")
 	s := pl.collectVarRefParts(t, ctx.GetChildren())
 	vref := pl.makeCanonicalAndResolve(s, false)
-	pl.interpreter.PushVariable(vref, false)
+	corelang.PushVariable(pl.rt, vref, false)
 }
 
 /* Variable as a path expression primary. Example: "P3". The variable and
@@ -696,7 +639,7 @@ func (pl *ParseListener) ExitPathvariable(ctx *pmmp.PathvariableContext) {
 		vref.SetType(pmmp.PathType)      // change type live variable
 	}
 	T.P("var", vref.GetName()).Debugf("pushing path = %.28v", vref.GetValue())
-	pl.interpreter.pathBuilder.PushPath(vref, pathValue(vref.GetValue()))
+	pl.rt.PathBuilder.PushPath(vref, pathValue(vref.GetValue()))
 }
 
 // Helper
@@ -723,7 +666,7 @@ func (pl *ParseListener) ExitLvalue(ctx *pmmp.LvalueContext) {
 	T.P("var", t).Debug("lvalue variable, verbose")
 	s := pl.collectVarRefParts(t, ctx.GetChildren())
 	vref := pl.makeCanonicalAndResolve(s, pl.expectingLvalue)
-	pl.interpreter.PushVariable(vref, pl.expectingLvalue)
+	corelang.PushVariable(pl.rt, vref, pl.expectingLvalue)
 	T.P("var", vref.GetName()).Debugf("lvalue type is %s", variables.TypeString(vref.GetType()))
 	pl.expectingLvalue = false
 }
@@ -734,9 +677,9 @@ func (pl *ParseListener) ExitLvalue(ctx *pmmp.LvalueContext) {
  */
 func (pl *ParseListener) ExitNumtertiary(ctx *pmmp.NumtertiaryContext) {
 	if ctx.PLUS() != nil {
-		pl.interpreter.exprStack.AddTOS2OS()
+		pl.rt.ExprStack.AddTOS2OS()
 	} else if ctx.MINUS() != nil {
-		pl.interpreter.exprStack.SubtractTOS2OS()
+		pl.rt.ExprStack.SubtractTOS2OS()
 	} // fallthrough for sole numsecondary
 }
 
@@ -746,9 +689,9 @@ func (pl *ParseListener) ExitNumtertiary(ctx *pmmp.NumtertiaryContext) {
  */
 func (pl *ParseListener) ExitPairtertiary(ctx *pmmp.PairtertiaryContext) {
 	if ctx.PLUS() != nil {
-		pl.interpreter.exprStack.AddTOS2OS()
+		pl.rt.ExprStack.AddTOS2OS()
 	} else if ctx.MINUS() != nil {
-		pl.interpreter.exprStack.SubtractTOS2OS()
+		pl.rt.ExprStack.SubtractTOS2OS()
 	} // fallthrough for sole pairsecondary
 }
 
@@ -759,9 +702,9 @@ func (pl *ParseListener) ExitPairtertiary(ctx *pmmp.PairtertiaryContext) {
  */
 func (pl *ParseListener) ExitNumsecondary(ctx *pmmp.NumsecondaryContext) {
 	if ctx.TIMES() != nil {
-		pl.interpreter.exprStack.MultiplyTOS2OS()
+		pl.rt.ExprStack.MultiplyTOS2OS()
 	} else if ctx.OVER() != nil {
-		pl.interpreter.exprStack.DivideTOS2OS()
+		pl.rt.ExprStack.DivideTOS2OS()
 	} // fallthrough for sole numprimary
 }
 
@@ -791,7 +734,7 @@ func (pl *ParseListener) ExitPathtertiary(ctx *pmmp.PathtertiaryContext) {
 			_, t := pl.getAnnotation(ch) // read annotated label for fragment
 			//T.Debugf("%d: %s = %s", i, t, getCtxText(ch))
 			if t == "pair" {
-				pr, ok := pl.interpreter.exprStack.PopAsPair()
+				pr, ok := pl.rt.ExprStack.PopAsPair()
 				if ok { // is a known pair
 					//T.Debugf("adding pair to path: %s", pr.String())
 					stack.Push(pr)
@@ -799,7 +742,7 @@ func (pl *ParseListener) ExitPathtertiary(ctx *pmmp.PathtertiaryContext) {
 					T.Error("cannot add unknown pair to path")
 				}
 			} else if t == "subpath" {
-				pnode, _ := pl.interpreter.pathBuilder.Pop()
+				pnode, _ := pl.rt.PathBuilder.Pop()
 				//T.Debugf("fragment subpath %v / %v", pnode.Symbol, pnode.Path)
 				//v := pnode.Symbol
 				stack.Push(pnode.Path)
@@ -826,7 +769,7 @@ func (pl *ParseListener) ExitPathtertiary(ctx *pmmp.PathtertiaryContext) {
 		path.Cycle()
 	}
 	T.Debugf("new path = %s", path.String())
-	pl.interpreter.pathBuilder.PushPath(nil, path) // push anonymous path
+	pl.rt.PathBuilder.PushPath(nil, path) // push anonymous path
 }
 
 /* Fragment of a path: either a pair or a sub-path.
@@ -853,9 +796,9 @@ func (pl *ParseListener) ExitPathfragm(ctx *pmmp.PathfragmContext) {
  */
 func (pl *ParseListener) ExitPairsecond(ctx *pmmp.PairsecondContext) {
 	if ctx.TIMES() != nil {
-		pl.interpreter.exprStack.MultiplyTOS2OS()
+		pl.rt.ExprStack.MultiplyTOS2OS()
 	} else if ctx.OVER() != nil {
-		pl.interpreter.exprStack.DivideTOS2OS()
+		pl.rt.ExprStack.DivideTOS2OS()
 	} // fallthrough for sole pairprimary
 }
 
@@ -867,28 +810,28 @@ func (pl *ParseListener) ExitTransform(ctx *pmmp.TransformContext) {
 	_, t := pl.getAnnotation(ctx.Transformer())
 	T.Debugf("transform: %s", t)
 	if t == "scaled" {
-		scale, ok := pl.interpreter.exprStack.PopAsNumeric()
+		scale, ok := pl.rt.ExprStack.PopAsNumeric()
 		if !ok {
 			T.P("transf", t).Error("need known numeric scale")
 		} else {
-			pl.interpreter.exprStack.PushConstant(scale)
-			pl.interpreter.exprStack.MultiplyTOS2OS()
+			pl.rt.ExprStack.PushConstant(scale)
+			pl.rt.ExprStack.MultiplyTOS2OS()
 		}
 	} else if t == "rotated" {
-		angle, ok := pl.interpreter.exprStack.PopAsNumeric()
+		angle, ok := pl.rt.ExprStack.PopAsNumeric()
 		if !ok {
 			T.P("transf", t).Error("need known numeric angle")
 		} else {
-			pl.interpreter.exprStack.PushConstant(angle)
-			pl.interpreter.exprStack.Rotate2OSbyTOS()
+			pl.rt.ExprStack.PushConstant(angle)
+			pl.rt.ExprStack.Rotate2OSbyTOS()
 		}
 	} else if t == "shifted" {
-		shift, ok := pl.interpreter.exprStack.PopAsPair()
+		shift, ok := pl.rt.ExprStack.PopAsPair()
 		if !ok {
 			T.P("transf", t).Error("need known numeric pair")
 		} else {
-			pl.interpreter.exprStack.PushPairConstant(shift)
-			pl.interpreter.exprStack.AddTOS2OS()
+			pl.rt.ExprStack.PushPairConstant(shift)
+			pl.rt.ExprStack.AddTOS2OS()
 		}
 	} else {
 		T.P("transf", t).Error("unknown transform")
@@ -913,7 +856,7 @@ func (pl *ParseListener) ExitTransformer(ctx *pmmp.TransformerContext) {
  * multiply them.
  */
 func (pl *ParseListener) ExitScalarnumatom(ctx *pmmp.ScalarnumatomContext) {
-	pl.interpreter.exprStack.MultiplyTOS2OS()
+	pl.rt.ExprStack.MultiplyTOS2OS()
 }
 
 /* Apply a numeric function to a known numeric argument.
@@ -925,7 +868,7 @@ func (pl *ParseListener) ExitScalarnumatom(ctx *pmmp.ScalarnumatomContext) {
 func (pl *ParseListener) ExitFuncnumatom(ctx *pmmp.FuncnumatomContext) {
 	fname := ctx.MATHFUNC().GetText()
 	T.P("mathf", fname).Debug("applying function")
-	e, ok := pl.interpreter.exprStack.Pop()
+	e, ok := pl.rt.ExprStack.Pop()
 	if !ok || !e.IsValid() {
 		T.P("mathf", fname).Error("no arg present for function")
 	} else {
@@ -933,20 +876,8 @@ func (pl *ParseListener) ExitFuncnumatom(ctx *pmmp.FuncnumatomContext) {
 		if !isconst {
 			T.P("mathf", fname).Error("not implemented: f(<unknown>)")
 		} else {
-			c = pl.interpreter.mathfunc(c, fname)
-			pl.interpreter.exprStack.PushConstant(c)
-			/*
-				switch fname {
-				case "floor":
-					c := c.Floor()
-					pl.interpreter.exprStack.PushConstant(c)
-				case "ceil":
-					c := c.Ceil()
-					pl.interpreter.exprStack.PushConstant(c)
-				case "sqrt":
-					T.P("mathf", fname).Error("function not yet implemented")
-				}
-			*/
+			c = corelang.Mathfunc(c, fname)
+			pl.rt.ExprStack.PushConstant(c)
 		}
 	}
 }
@@ -960,7 +891,7 @@ func (pl *ParseListener) ExitFuncnumatom(ctx *pmmp.FuncnumatomContext) {
  * n[a,b] => a - na + nb.
  */
 func (pl *ParseListener) ExitInterpolation(ctx *pmmp.InterpolationContext) {
-	pl.interpreter.exprStack.Interpolate()
+	pl.rt.ExprStack.Interpolate()
 }
 
 /* Pair interpolation, i.e. n[z1,z2].
@@ -972,7 +903,7 @@ func (pl *ParseListener) ExitInterpolation(ctx *pmmp.InterpolationContext) {
  * n[a,b] => a - na + nb.
  */
 func (pl *ParseListener) ExitPairinterpolation(ctx *pmmp.PairinterpolationContext) {
-	pl.interpreter.exprStack.Interpolate()
+	pl.rt.ExprStack.Interpolate()
 }
 
 /* Length of a pair (i.e., distance from origin). Argument must be a known
@@ -981,7 +912,7 @@ func (pl *ParseListener) ExitPairinterpolation(ctx *pmmp.PairinterpolationContex
  * numprimary : LENGTH pairprimary                        # pointdistance
  */
 func (pl *ParseListener) ExitPointdistance(ctx *pmmp.PointdistanceContext) {
-	pl.interpreter.exprStack.LengthTOS()
+	pl.rt.ExprStack.LengthTOS()
 }
 
 /* X-part or y-part of a pair variable.
@@ -989,21 +920,21 @@ func (pl *ParseListener) ExitPointdistance(ctx *pmmp.PointdistanceContext) {
  * numprimary : PAIRPART pairprimary                      # pairpart
  */
 func (pl *ParseListener) ExitPairpart(ctx *pmmp.PairpartContext) {
-	e := pl.interpreter.exprStack.Top()
+	e := pl.rt.ExprStack.Top()
 	//T.Infof("pairpart of: %v", e)
 	if e.IsPair() { // otherwise just leave numeric expression on stack
-		e, _ = pl.interpreter.exprStack.Pop()
+		e, _ = pl.rt.ExprStack.Pop()
 		if c, isconst := e.GetXPolyn().IsConstant(); isconst {
-			pl.interpreter.exprStack.PushConstant(c) // just push the value
+			pl.rt.ExprStack.PushConstant(c) // just push the value
 		} else {
-			if v := pl.interpreter.getVariableFromExpression(e); v != nil {
+			if v := corelang.GetVariableFromExpression(pl.rt, e); v != nil {
 				//T.Infof("pair on the stack: %v", v)
 				part := ctx.PAIRPART().GetText() // xpart or ypart
 				if v.IsPair() {
 					if part == "xpart" {
-						pl.interpreter.exprStack.PushVariable(v.XPart(), nil)
+						pl.rt.ExprStack.PushVariable(v.XPart(), nil)
 					} else {
-						pl.interpreter.exprStack.PushVariable(v.YPart(), nil)
+						pl.rt.ExprStack.PushVariable(v.YPart(), nil)
 					}
 				} else {
 					T.P("var", v.GetName()).Errorf("cannot take %s from numeric", part)
@@ -1020,9 +951,9 @@ func (pl *ParseListener) ExitPairpart(ctx *pmmp.PairpartContext) {
  */
 func (pl *ParseListener) ExitScalarmulop(ctx *pmmp.ScalarmulopContext) {
 	if ctx.PLUS() != nil {
-		pl.interpreter.exprStack.PushConstant(arithm.ConstOne) // put 1 on stack
+		pl.rt.ExprStack.PushConstant(arithm.ConstOne) // put 1 on stack
 	} else if ctx.MINUS() != nil {
-		pl.interpreter.exprStack.PushConstant(arithm.MinusOne) // -1 on stack
+		pl.rt.ExprStack.PushConstant(arithm.MinusOne) // -1 on stack
 	}
 }
 
@@ -1035,12 +966,12 @@ func (pl *ParseListener) ExitNumtokenatom(ctx *pmmp.NumtokenatomContext) {
 	numbers := ctx.AllDECIMALTOKEN()
 	num1, _ := dec.NewFromString(numbers[0].GetText())
 	T.P("token", num1.String()).Debug("numeric token")
-	pl.interpreter.exprStack.PushConstant(num1) // put decimal number on expression stack
+	pl.rt.ExprStack.PushConstant(num1) // put decimal number on expression stack
 	if len(numbers) > 1 {
 		num2, _ := dec.NewFromString(numbers[1].GetText())
 		T.P("token", num2.String()).Debug("numeric token")
-		pl.interpreter.exprStack.PushConstant(num2)
-		pl.interpreter.exprStack.DivideTOS2OS()
+		pl.rt.ExprStack.PushConstant(num2)
+		pl.rt.ExprStack.DivideTOS2OS()
 	}
 }
 
@@ -1054,7 +985,7 @@ func (pl *ParseListener) ExitDecimal(ctx *pmmp.DecimalContext) {
 		num = num.Mul(unit2numeric(u.GetText())) // multiply with unit value
 	}
 	T.P("token", num.String()).Debug("numeric token")
-	pl.interpreter.exprStack.PushConstant(num) // put decimal number on expression stack
+	pl.rt.ExprStack.PushConstant(num) // put decimal number on expression stack
 }
 
 /* Literal pair, i.e. a point with 2 corrdinates (x-part, y-part).
@@ -1063,11 +994,11 @@ func (pl *ParseListener) ExitDecimal(ctx *pmmp.DecimalContext) {
  *
  */
 func (pl *ParseListener) ExitLiteralpair(ctx *pmmp.LiteralpairContext) {
-	ey, _ := pl.interpreter.exprStack.Pop()
-	ex, _ := pl.interpreter.exprStack.Pop()
+	ey, _ := pl.rt.ExprStack.Pop()
+	ex, _ := pl.rt.ExprStack.Pop()
 	e := runtime.NewPairExpression(ex.GetXPolyn(), ey.GetXPolyn())
 	T.Debugf("pair atom %s", e.String())
-	pl.interpreter.exprStack.Push(e)
+	pl.rt.ExprStack.Push(e)
 }
 
 /* Get a point from a path. The path must be known.
@@ -1078,13 +1009,13 @@ func (pl *ParseListener) ExitLiteralpair(ctx *pmmp.LiteralpairContext) {
  * expression stack.
  */
 func (pl *ParseListener) ExitPathpoint(ctx *pmmp.PathpointContext) {
-	pnode, ok := pl.interpreter.pathBuilder.Pop()
+	pnode, ok := pl.rt.PathBuilder.Pop()
 	if ok {
-		num, _ := pl.interpreter.exprStack.PopAsNumeric()
+		num, _ := pl.rt.ExprStack.PopAsNumeric()
 		i := int(num.IntPart())
 		pr := pnode.Path.GetPoint(i)
 		T.P("op", "point-of").Debugf("point #%d is %s", i, pr)
-		pl.interpreter.exprStack.PushPairConstant(pr)
+		pl.rt.ExprStack.PushPairConstant(pr)
 	} else {
 		T.P("op", "point-of").Error("expected path on the stack")
 	}
@@ -1099,12 +1030,12 @@ func (pl *ParseListener) ExitPathpoint(ctx *pmmp.PathpointContext) {
  * replaced by the reversed path.
  */
 func (pl *ParseListener) ExitReversepath(ctx *pmmp.ReversepathContext) {
-	pnode, ok := pl.interpreter.pathBuilder.Pop()
+	pnode, ok := pl.rt.PathBuilder.Pop()
 	if ok {
 		path := pnode.Path.Copy()
 		path.Reverse()
 		T.P("op", "reverse").Debugf("reversed = %.30s", path.String())
-		pl.interpreter.pathBuilder.PushPath(nil, path)
+		pl.rt.PathBuilder.PushPath(nil, path)
 	} else {
 		T.P("op", "reverse").Error("expected path on the stack")
 	}
@@ -1118,12 +1049,12 @@ func (pl *ParseListener) ExitReversepath(ctx *pmmp.ReversepathContext) {
  * and will be replaced by the subpath.
  */
 func (pl *ParseListener) ExitSubpath(ctx *pmmp.SubpathContext) {
-	pnode, ok := pl.interpreter.pathBuilder.Pop()
+	pnode, ok := pl.rt.PathBuilder.Pop()
 	if ok {
-		fromto, _ := pl.interpreter.exprStack.PopAsPair()
+		fromto, _ := pl.rt.ExprStack.PopAsPair()
 		path := pnode.Path.Copy()
 		path.Subpath(int(fromto.XPart().IntPart()), int(fromto.YPart().IntPart()))
-		pl.interpreter.pathBuilder.PushPath(nil, path)
+		pl.rt.PathBuilder.PushPath(nil, path)
 	} else {
 		T.P("op", "reverse").Error("expected path on the stack")
 	}
@@ -1134,33 +1065,9 @@ func (pl *ParseListener) ExitSubpath(ctx *pmmp.SubpathContext) {
 func (pl *ParseListener) ExitShowvariableCmd(ctx *pmmp.ShowvariableCmdContext) {
 	tag := ctx.Tag().GetText()
 	T.P("tag", tag).Infof("## showvariable %s;", tag)
-	output := pl.interpreter.Showvariable(tag)
+	output := corelang.Showvariable(pl.rt, tag)
 	writer := T.Writer()
 	writer.Write([]byte(output))
-	/*
-		sym, scope := pl.interpreter.scopeTree.Current().ResolveSymbol(nm)
-		if sym == nil {
-			T.P("symbol", nm).Debug("no declaration found for symbol")
-			T.P("var", nm).Infof("## showvariable %s;", nm)
-			fmt.Printf("%s : tag\n", nm)
-		} else {
-			v := sym.(*PMMPVarDecl)
-			var b *bytes.Buffer
-			b = v.ShowVariable(b)
-			vname := v.BaseTag.GetName()
-			T.P("var", vname).Infof("## showvariable %s;", vname)
-			fmt.Print(b.String())
-			// now find all incarnations in top memory-frame(scope)
-			if mf := pl.memFrameStack.FindMemoryFrameWithScope(scope); mf != nil {
-				for _, v := range mf.Symbols().Table {
-					vref := v.(*PMMPVarRef)
-					if vref.decl.BaseTag == sym {
-						fmt.Printf("%s = %s\n", vref.GetFullName(), vref.ValueString())
-					}
-				}
-			}
-		}
-	*/
 }
 
 // --- Variable Handling -----------------------------------------------------
@@ -1187,7 +1094,7 @@ func (pl *ParseListener) collectVarRefParts(t string, children []antlr.Tree) str
 			T.Debugf("adding suffix verbatim: %s", getCtxText(ch))
 			vname.WriteString(ch.(antlr.ParseTree).GetText())
 		} else { // non-terminal is a subscript-expression
-			subscript, ok := pl.interpreter.exprStack.Pop() // take subscript from stack
+			subscript, ok := pl.rt.ExprStack.Pop() // take subscript from stack
 			if !ok {
 				T.P("var", t).Error("expected subscript on expression stack")
 				T.P("var", t).Error("substituting 0 instead")
@@ -1197,7 +1104,7 @@ func (pl *ParseListener) collectVarRefParts(t string, children []antlr.Tree) str
 				if !isconst { // we cannot handle unknown subscripts
 					T.P("var", t).Error("subscript must be known numeric")
 					T.P("var", t).Errorf("substituting 0 for %s",
-						pl.interpreter.exprStack.TraceString(subscript))
+						pl.rt.ExprStack.TraceString(subscript))
 					vname.WriteString("[0]")
 				} else {
 					vname.WriteString("[")
@@ -1215,15 +1122,14 @@ func (pl *ParseListener) collectVarRefParts(t string, children []antlr.Tree) str
 func (pl *ParseListener) ExitSubscript(ctx *pmmp.SubscriptContext) {
 	if ctx.DECIMALTOKEN() != nil {
 		c, _ := dec.NewFromString(ctx.DECIMALTOKEN().GetText())
-		pl.interpreter.exprStack.PushConstant(c)
+		pl.rt.ExprStack.PushConstant(c)
 	}
 }
 
-/* Internal method: get or create a variable reference and put it onto the
- * expression stack. To get the canonical representation of the variable
- * reference, we parse it and construct a small AST. This AST is fed into
- * getPMMPVarRefFromVarSyntax(). The resulting variable reference struct
- * is used to find the memory location of the variable reference.
+/* Get or create a variable reference. To get the canonical representation of
+ * the variable reference, we parse it and construct a small AST. This AST
+ * is fed into getPMMPVarRefFromVarSyntax(). The resulting variable reference
+ * struct is used to find the memory location of the variable reference.
  *
  * The reference lives in a memory frame, so we first locate it, then put
  * it on the expression stack. If the variable has a known value, we will
@@ -1231,8 +1137,8 @@ func (pl *ParseListener) ExitSubscript(ctx *pmmp.SubscriptContext) {
  */
 func (pl *ParseListener) makeCanonicalAndResolve(v string, expectLvalue bool) *variables.PMMPVarRef {
 	vtree := variables.ParseVariableFromString(v, &TracingErrorListener{})
-	vref := variables.GetVarRefFromVarSyntax(vtree, pl.interpreter.scopeTree)
-	vref, _ = pl.interpreter.FindVariableReferenceInMemory(vref, true) // allocate if not found
+	vref := variables.GetVarRefFromVarSyntax(vtree, pl.rt.ScopeTree)
+	vref, _ = corelang.FindVariableReferenceInMemory(pl.rt, vref, true) // allocate if not found
 	return vref
 }
 

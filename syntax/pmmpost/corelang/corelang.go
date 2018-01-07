@@ -1,10 +1,8 @@
-package pmmpost
-
 /*
----------------------------------------------------------------------------
+----------------------------------------------------------------------
 
 BSD License
-Copyright (c) 2017, Norbert Pillmayer <norbert@pillmayer.com>
+Copyright (c) 2017, Norbert Pillmayer
 
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
@@ -30,37 +28,22 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
----------------------------------------------------------------------------
+----------------------------------------------------------------------
 
- * Internal drawing commands for the Poor Man's MetaPost graphics language.
+ * This is the implementation of an interpreter for "Poor Man's MetaPost",
+ * my variant of the MetaPost graphical language. There is an accompanying
+ * ANTLR grammar file, which describes the features and limitations of PMMPost.
+ * I will sometimes refer to MetaFont, the original language underlying
+ * MetaPost, as the grammar definitions are taken from Don Knuth's grammar
+ * description in "The METAFONTBook".
+ *
+ * The implementation is tightly coupled to the ANTLR V4 parser generator.
+ * ANTLR is a great tool and I see no use in being independent from it.
 
 */
 
-import (
-	"image/color"
+package corelang
 
-	"github.com/npillmayer/gotype/gtbackend/gfx"
-	dec "github.com/shopspring/decimal"
-)
+import "github.com/npillmayer/gotype/gtcore/config/tracing"
 
-// A simple backend type
-type backend struct {
-	picture       *gfx.Picture      // the picture we're drawing
-	outputRoutine gfx.OutputRoutine // for shipping out images
-}
-
-/* Pickup a drawing pen. The pen is set as current pen for the current picture.
- */
-func (b *backend) pickupPen(pentype string, diam dec.Decimal, color color.Color) *gfx.Pen {
-	var pen *gfx.Pen
-	if pentype == "pencircle" {
-		pen = gfx.NewPencircle(diam)
-	} else {
-		pen = gfx.NewPensquare(diam)
-	}
-	if b.picture != nil {
-		b.picture.SetPen(pen)
-		b.picture.SetColor(color)
-	}
-	return pen
-}
+var T tracing.Trace = tracing.InterpreterTracer

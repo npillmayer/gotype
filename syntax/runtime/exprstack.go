@@ -437,7 +437,7 @@ func (es *ExprStack) TraceString(e Expression) string {
 /* Predicate: is an expression of a certain type?
  */
 func (es *ExprStack) CheckTypeMatch(e1 Expression, e2 Expression) bool {
-	var match bool = false
+	match := false
 	if e1.IsValid() && e2.IsValid() {
 		if e1.IsPair() == e2.IsPair() {
 			match = true
