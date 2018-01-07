@@ -46,12 +46,12 @@ import (
 	"strconv"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
-	"github.com/npillmayer/gotype/gtbackend/gfx"
 	arithm "github.com/npillmayer/gotype/gtcore/arithmetic"
-	"github.com/npillmayer/gotype/syntax"
-	dec "github.com/shopspring/decimal"
-	"github.com/npillmayer/gotype/syntax/variables"
+	"github.com/npillmayer/gotype/syntax/pmmpost/corelang"
 	"github.com/npillmayer/gotype/syntax/gallery/grammar"
+	"github.com/npillmayer/gotype/syntax/runtime"
+	"github.com/npillmayer/gotype/syntax/variables"
+	dec "github.com/shopspring/decimal"
 )
 
 // === Interpreter ===========================================================
@@ -72,11 +72,11 @@ import (
  * 1. ANTLR V4 constructs an AST for us.
  * 2. We use a listener to walk the AST and execute the statements.
  *
- * Gallery is a dynamically scoped language. This means, functions can
- * access local variables from calling functions or groups. Nevertheless we
- * will find the definition of all variables (which are explicitly defined)
- * in a scope definition. This is mainly for type checking reasons and due
- * to the complex structure of MetaFont variable identifiers.
+ * Metafont, and therefore Gallery, is a dynamically scoped language. This means,
+ * functions can access local variables from calling functions or groups.
+ * Nevertheless we will find the definition of all variables (which are explicitly
+ * defined) in a scope definition. This is mainly for type checking reasons and
+ * due to the complex structure of MetaFont variable identifiers.
  */
 
 /* Type GalleryInterpreter.
@@ -87,13 +87,8 @@ import (
  * behaviour in certain aspects.
  */
 type GalleryInterpreter struct {
-	ASTListener   *ParseListener           // parse / AST listener
-	scopeTree     *syntax.ScopeTree        // collect scopes
-	memFrameStack *syntax.MemoryFrameStack // runtime stack
-	exprStack     *syntax.ExprStack        // eval expressions
-	pathBuilder   *syntax.PathStack        // construct paths
-	picture       *gfx.Picture             // the picture we're drawing
-	outputRoutine gfx.OutputRoutine        // for shipping out images
+	ASTListener *ParseListener   // parse / AST listener
+	runtime     *runtime.Runtime // runtime environment
 }
 
 /* Create a new Interpreter for "Poor Man's MetaPost". This is the top-level
@@ -106,70 +101,11 @@ type GalleryInterpreter struct {
  */
 func NewGalleryInterpreter() *GalleryInterpreter {
 	intp := &GalleryInterpreter{}
-	intp.scopeTree = new(syntax.ScopeTree)                     // scopes for groups and functions
-	intp.scopeTree.PushNewScope("globals", variables.NewPMMPVarDecl)     // push global scope first
-	intp.memFrameStack = new(syntax.MemoryFrameStack)          // initialize memory frame stack
-	mf := intp.memFrameStack.PushNewMemoryFrame("global", nil) // global memory
-	mf.Scope = intp.scopeTree.Globals()                        // connect the global frame with the global scope
-	intp.memFrameStack.Globals().SymbolTable = syntax.NewSymbolTable(variables.NewPMMPVarRef)
-	intp.exprStack = syntax.NewExprStack()
-	intp.pathBuilder = syntax.NewPathStack()
-	intp.loadBuiltinSymbols(intp.scopeTree.Globals())             // load syms into new global scope
-	intp.ASTListener = NewParseListener(intp.scopeTree.Globals()) // listener for ANTLR
-	intp.ASTListener.interpreter = intp                           // backlink to the interpreter
+	intp.runtime = runtime.NewRuntimeEnvironment(variables.NewPMMPVarDecl)
+	corelang.LoadBuiltinSymbols(intp.runtime.ScopeTree.Globals())         // load syms into new global scope
+	intp.ASTListener = NewParseListener(intp.runtime.ScopeTree.Globals()) // listener for ANTLR
+	intp.ASTListener.rt = intp.runtime
 	return intp
-}
-
-/* Load builtin symbols into a scope (usually the global scope).
- * TODO: nullpath, z@#, unitcircle, unitsquare
- */
-func (intp *GalleryInterpreter) loadBuiltinSymbols(scope *syntax.Scope) {
-	/*
-		originDef := CreatePMMPVarDecl("origin", pmmp.PairType, nil) // define origin
-		origin := CreatePMMPPairTypeVarRef(originDef, arithm.MakePair(
-			arithm.ConstZero, arithm.ConstZero), nil)
-		intp.scopeTree.Globals().Symbols().InsertSymbol(originDef)
-		intp.memFrameStack.Globals().Symbols().InsertSymbol(origin)
-	*/
-	originDef := intp.declare("origin", variables.PairType)
-	origin := arithm.MakePair(arithm.ConstZero, arithm.ConstZero)
-	_ = intp.variable(originDef, origin, nil, true)
-	upDef := intp.declare("up", variables.PairType)
-	up := arithm.MakePair(arithm.ConstZero, arithm.ConstOne)
-	_ = intp.variable(upDef, up, nil, true)
-	downDef := intp.declare("down", variables.PairType)
-	down := arithm.MakePair(arithm.ConstZero, arithm.MinusOne)
-	_ = intp.variable(downDef, down, nil, true)
-	rightDef := intp.declare("right", variables.PairType)
-	right := arithm.MakePair(arithm.ConstOne, arithm.ConstZero)
-	_ = intp.variable(rightDef, right, nil, true)
-	leftDef := intp.declare("left", variables.PairType)
-	left := arithm.MakePair(arithm.MinusOne, arithm.ConstZero)
-	_ = intp.variable(leftDef, left, nil, true)
-	_ = intp.declare("p", variables.PairType)
-	_ = intp.declare("q", variables.PairType)
-	_ = intp.declare("z", variables.PairType)
-}
-
-/* Set an output routine. Default is nil.
- */
-func (intp *GalleryInterpreter) SetOutputRoutine(o gfx.OutputRoutine) {
-	intp.outputRoutine = o
-}
-
-/* Internal method: Decrease grouping level.
- * We pop the topmost scope and topmost memory frame. This happends after
- * a group is left.
- * Returns the previously topmost memory frame.
- */
-func (intp *GalleryInterpreter) popScopeAndMemory() *syntax.DynamicMemoryFrame {
-	hidden := intp.scopeTree.PopScope()
-	hidden.Name = "(hidden)"
-	mf := intp.memFrameStack.PopMemoryFrame()
-	if mf.GetScope() != hidden {
-		T.P("mem", mf.GetName()).Error("groups out of sync?")
-	}
-	return mf
 }
 
 /* Parse and interpret a statement list.
@@ -189,7 +125,7 @@ type ParseListener struct {
 	statemParser                 *grammar.GalleryParser
 	annotations                  map[interface{}]Annotation // node annotations
 	expectingLvalue              bool                       // do not evaluate variable
-	interpreter                  *GalleryInterpreter        // backlink to the interpreter
+	rt                           *runtime.Runtime           // runtime environment
 }
 
 /* We will annotate the AST. Functions and groups will get a scope, filled with
@@ -205,13 +141,13 @@ type ParseListener struct {
  * - compound statements, i.e. groups (begingroup ... endgroup)
  */
 type Annotation struct {
-	scope *syntax.Scope
+	scope *runtime.Scope
 	text  string
 }
 
 /* Construct a new AST listener.
  */
-func NewParseListener(globalScope *syntax.Scope) *ParseListener {
+func NewParseListener(globalScope *runtime.Scope) *ParseListener {
 	pl := &ParseListener{} // no need to initialize base class
 	pl.annotations = make(map[interface{}]Annotation)
 	pl.annotate("global", globalScope, "")
@@ -222,8 +158,7 @@ func NewParseListener(globalScope *syntax.Scope) *ParseListener {
  */
 func (pl *ParseListener) ParseStatements(input antlr.CharStream) {
 	pl.LazyCreateParser(input)
-	//tree := pl.statemParser.Figure() // start at top level rule: figure  TODO
-	tree := pl.statemParser.Statement()
+	tree := pl.statemParser.Statementlist()
 	sexpr := antlr.TreesStringTree(tree, nil, pl.statemParser)
 	T.Debugf("### STATEMENT = %s", sexpr)
 	antlr.ParseTreeWalkerDefault.Walk(pl, tree)
@@ -252,6 +187,8 @@ func (c *TracingErrorListener) SyntaxError(r antlr.Recognizer, sym interface{},
 func (pl *ParseListener) LazyCreateParser(input antlr.CharStream) {
 	// We let ANTLR to the heavy lifting.
 	lexer := grammar.NewGalleryLexer(input)
+	lexer.RemoveErrorListeners()
+	lexer.AddErrorListener(&TracingErrorListener{})
 	stream := antlr.NewCommonTokenStream(lexer, 0)
 	if pl.statemParser == nil {
 		pl.statemParser = grammar.NewGalleryParser(stream)
@@ -265,13 +202,13 @@ func (pl *ParseListener) LazyCreateParser(input antlr.CharStream) {
 
 /* Annotate an AST node, i.e., attach a scope information.
  */
-func (pl *ParseListener) annotate(node interface{}, scope *syntax.Scope, text string) {
+func (pl *ParseListener) annotate(node interface{}, scope *runtime.Scope, text string) {
 	pl.annotations[node] = Annotation{scope, text}
 }
 
 /* Get the annotation for an AST node.
  */
-func (pl *ParseListener) getAnnotation(node interface{}) (*syntax.Scope, string) {
+func (pl *ParseListener) getAnnotation(node interface{}) (*runtime.Scope, string) {
 	if a, found := pl.annotations[node]; found {
 		return a.scope, a.text
 	}
@@ -281,7 +218,7 @@ func (pl *ParseListener) getAnnotation(node interface{}) (*syntax.Scope, string)
 /* Print out a summary of all the scopes and symbols collected up to now.
  */
 func (pl *ParseListener) Summary() {
-	pl.interpreter.exprStack.Summary()
+	pl.rt.ExprStack.Summary()
 	T.Info("Summary of symbols:")
 	for _, annot := range pl.annotations {
 		scope := annot.scope
@@ -309,6 +246,7 @@ func (pl *ParseListener) VisitTerminal(node antlr.TerminalNode) {
 }
 
 
+
 // --- Variable Handling -----------------------------------------------------
 
 /* Internal method: Construct a valid variable reference string from parts on
@@ -333,7 +271,7 @@ func (pl *ParseListener) collectVarRefParts(t string, children []antlr.Tree) str
 			T.Debugf("adding suffix verbatim: %s", getCtxText(ch))
 			vname.WriteString(ch.(antlr.ParseTree).GetText())
 		} else { // non-terminal is a subscript-expression
-			subscript, ok := pl.interpreter.exprStack.Pop() // take subscript from stack
+			subscript, ok := pl.rt.ExprStack.Pop() // take subscript from stack
 			if !ok {
 				T.P("var", t).Error("expected subscript on expression stack")
 				T.P("var", t).Error("substituting 0 instead")
@@ -343,7 +281,7 @@ func (pl *ParseListener) collectVarRefParts(t string, children []antlr.Tree) str
 				if !isconst { // we cannot handle unknown subscripts
 					T.P("var", t).Error("subscript must be known numeric")
 					T.P("var", t).Errorf("substituting 0 for %s",
-						pl.interpreter.exprStack.TraceString(subscript))
+						pl.rt.ExprStack.TraceString(subscript))
 					vname.WriteString("[0]")
 				} else {
 					vname.WriteString("[")
@@ -361,15 +299,14 @@ func (pl *ParseListener) collectVarRefParts(t string, children []antlr.Tree) str
 func (pl *ParseListener) ExitSubscript(ctx *grammar.SubscriptContext) {
 	if ctx.DECIMALTOKEN() != nil {
 		c, _ := dec.NewFromString(ctx.DECIMALTOKEN().GetText())
-		pl.interpreter.exprStack.PushConstant(c)
+		pl.rt.ExprStack.PushConstant(c)
 	}
 }
 
-/* Internal method: get or create a variable reference and put it onto the
- * expression stack. To get the canonical representation of the variable
- * reference, we parse it and construct a small AST. This AST is fed into
- * getPMMPVarRefFromVarSyntax(). The resulting variable reference struct
- * is used to find the memory location of the variable reference.
+/* Get or create a variable reference. To get the canonical representation of
+ * the variable reference, we parse it and construct a small AST. This AST
+ * is fed into getPMMPVarRefFromVarSyntax(). The resulting variable reference
+ * struct is used to find the memory location of the variable reference.
  *
  * The reference lives in a memory frame, so we first locate it, then put
  * it on the expression stack. If the variable has a known value, we will
@@ -377,8 +314,8 @@ func (pl *ParseListener) ExitSubscript(ctx *grammar.SubscriptContext) {
  */
 func (pl *ParseListener) makeCanonicalAndResolve(v string, expectLvalue bool) *variables.PMMPVarRef {
 	vtree := variables.ParseVariableFromString(v, &TracingErrorListener{})
-	vref := variables.GetVarRefFromVarSyntax(vtree, pl.interpreter.scopeTree)
-	vref, _ = pl.interpreter.FindVariableReferenceInMemory(vref, true) // allocate if not found
+	vref := variables.GetVarRefFromVarSyntax(vtree, pl.rt.ScopeTree)
+	vref, _ = corelang.FindVariableReferenceInMemory(pl.rt, vref, true) // allocate if not found
 	return vref
 }
 

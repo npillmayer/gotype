@@ -191,6 +191,30 @@ func EncapsulateVarsInMemory(rt *runtime.Runtime, mf *runtime.DynamicMemoryFrame
 	})
 }
 
+/* Load builtin symbols into a scope (usually the global scope).
+ * TODO: nullpath, z@#, unitcircle, unitsquare
+ */
+func LoadBuiltinSymbols(scope *runtime.Scope) {
+	originDef := corelang.Declare(intp.runtime, "origin", pmmp.PairType)
+	origin := arithm.MakePair(arithm.ConstZero, arithm.ConstZero)
+	_ = corelang.Variable(intp.runtime, originDef, origin, nil, true)
+	upDef := corelang.Declare(intp.runtime, "up", pmmp.PairType)
+	up := arithm.MakePair(arithm.ConstZero, arithm.ConstOne)
+	_ = corelang.Variable(intp.runtime, upDef, up, nil, true)
+	downDef := corelang.Declare(intp.runtime, "down", pmmp.PairType)
+	down := arithm.MakePair(arithm.ConstZero, arithm.MinusOne)
+	_ = corelang.Variable(intp.runtime, downDef, down, nil, true)
+	rightDef := corelang.Declare(intp.runtime, "right", pmmp.PairType)
+	right := arithm.MakePair(arithm.ConstOne, arithm.ConstZero)
+	_ = corelang.Variable(intp.runtime, rightDef, right, nil, true)
+	leftDef := corelang.Declare(intp.runtime, "left", pmmp.PairType)
+	left := arithm.MakePair(arithm.MinusOne, arithm.ConstZero)
+	_ = corelang.Variable(intp.runtime, leftDef, left, nil, true)
+	_ = corelang.Declare(intp.runtime, "p", pmmp.PairType)
+	_ = corelang.Declare(intp.runtime, "q", pmmp.PairType)
+	_ = corelang.Declare(intp.runtime, "z", pmmp.PairType)
+}
+
 // === Commands ==============================================================
 
 /* Variable assignment.
