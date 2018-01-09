@@ -34,9 +34,13 @@ import (
 	"os"
 
 	homedir "github.com/mitchellh/go-homedir"
+	"github.com/npillmayer/gotype/gtcore/config"
+	"github.com/npillmayer/gotype/gtcore/config/tracing"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+var T tracing.Trace = tracing.CommandTracer
 
 var cfgFile string
 
@@ -64,7 +68,7 @@ func Execute() {
 	}
 }
 
-func init() { 
+func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Here you will define your flags and configuration settings.
@@ -101,4 +105,5 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
+	config.Initialize()
 }

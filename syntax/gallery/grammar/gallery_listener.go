@@ -7,29 +7,20 @@ import "github.com/antlr/antlr4/runtime/Go/antlr"
 type GalleryListener interface {
 	antlr.ParseTreeListener
 
-	// EnterStatementlist is called when entering the statementlist production.
-	EnterStatementlist(c *StatementlistContext)
+	// EnterProgram is called when entering the program production.
+	EnterProgram(c *ProgramContext)
 
 	// EnterStatement is called when entering the statement production.
 	EnterStatement(c *StatementContext)
 
-	// EnterDeclaration is called when entering the declaration production.
-	EnterDeclaration(c *DeclarationContext)
+	// EnterTypedecl is called when entering the typedecl production.
+	EnterTypedecl(c *TypedeclContext)
 
-	// EnterAssignment is called when entering the assignment production.
-	EnterAssignment(c *AssignmentContext)
+	// EnterLocaldecl is called when entering the localdecl production.
+	EnterLocaldecl(c *LocaldeclContext)
 
-	// EnterCompound is called when entering the compound production.
-	EnterCompound(c *CompoundContext)
-
-	// EnterConstraint is called when entering the constraint production.
-	EnterConstraint(c *ConstraintContext)
-
-	// EnterEquation is called when entering the equation production.
-	EnterEquation(c *EquationContext)
-
-	// EnterOrientation is called when entering the orientation production.
-	EnterOrientation(c *OrientationContext)
+	// EnterParameterdecl is called when entering the parameterdecl production.
+	EnterParameterdecl(c *ParameterdeclContext)
 
 	// EnterSavecmd is called when entering the savecmd production.
 	EnterSavecmd(c *SavecmdContext)
@@ -40,14 +31,41 @@ type GalleryListener interface {
 	// EnterProofcmd is called when entering the proofcmd production.
 	EnterProofcmd(c *ProofcmdContext)
 
+	// EnterLetcmd is called when entering the letcmd production.
+	EnterLetcmd(c *LetcmdContext)
+
+	// EnterPathjoin is called when entering the pathjoin production.
+	EnterPathjoin(c *PathjoinContext)
+
+	// EnterStatementlist is called when entering the statementlist production.
+	EnterStatementlist(c *StatementlistContext)
+
+	// EnterCompound is called when entering the compound production.
+	EnterCompound(c *CompoundContext)
+
+	// EnterEmpty is called when entering the empty production.
+	EnterEmpty(c *EmptyContext)
+
+	// EnterAssignment is called when entering the assignment production.
+	EnterAssignment(c *AssignmentContext)
+
+	// EnterConstraint is called when entering the constraint production.
+	EnterConstraint(c *ConstraintContext)
+
+	// EnterEquation is called when entering the equation production.
+	EnterEquation(c *EquationContext)
+
+	// EnterOrientation is called when entering the orientation production.
+	EnterOrientation(c *OrientationContext)
+
+	// EnterToken is called when entering the token production.
+	EnterToken(c *TokenContext)
+
 	// EnterExpression is called when entering the expression production.
 	EnterExpression(c *ExpressionContext)
 
 	// EnterPathtertiary is called when entering the pathtertiary production.
 	EnterPathtertiary(c *PathtertiaryContext)
-
-	// EnterLonesecondary is called when entering the lonesecondary production.
-	EnterLonesecondary(c *LonesecondaryContext)
 
 	// EnterTerm is called when entering the term production.
 	EnterTerm(c *TermContext)
@@ -61,32 +79,29 @@ type GalleryListener interface {
 	// EnterTransform is called when entering the transform production.
 	EnterTransform(c *TransformContext)
 
-	// EnterLoneprimary is called when entering the loneprimary production.
-	EnterLoneprimary(c *LoneprimaryContext)
-
 	// EnterFactor is called when entering the factor production.
 	EnterFactor(c *FactorContext)
 
 	// EnterTransformer is called when entering the transformer production.
 	EnterTransformer(c *TransformerContext)
 
-	// EnterFuncnumatom is called when entering the funcnumatom production.
-	EnterFuncnumatom(c *FuncnumatomContext)
+	// EnterFuncatom is called when entering the funcatom production.
+	EnterFuncatom(c *FuncatomContext)
 
-	// EnterScalarnumatom is called when entering the scalarnumatom production.
-	EnterScalarnumatom(c *ScalarnumatomContext)
+	// EnterScalaratom is called when entering the scalaratom production.
+	EnterScalaratom(c *ScalaratomContext)
 
 	// EnterInterpolation is called when entering the interpolation production.
 	EnterInterpolation(c *InterpolationContext)
 
-	// EnterSimplenumatom is called when entering the simplenumatom production.
-	EnterSimplenumatom(c *SimplenumatomContext)
+	// EnterSimpleatom is called when entering the simpleatom production.
+	EnterSimpleatom(c *SimpleatomContext)
 
 	// EnterPairpart is called when entering the pairpart production.
 	EnterPairpart(c *PairpartContext)
 
-	// EnterPathpoint is called when entering the pathpoint production.
-	EnterPathpoint(c *PathpointContext)
+	// EnterPointof is called when entering the pointof production.
+	EnterPointof(c *PointofContext)
 
 	// EnterReversepath is called when entering the reversepath production.
 	EnterReversepath(c *ReversepathContext)
@@ -99,6 +114,9 @@ type GalleryListener interface {
 
 	// EnterBox is called when entering the box production.
 	EnterBox(c *BoxContext)
+
+	// EnterEdgepath is called when entering the edgepath production.
+	EnterEdgepath(c *EdgepathContext)
 
 	// EnterScalarmulop is called when entering the scalarmulop production.
 	EnterScalarmulop(c *ScalarmulopContext)
@@ -130,29 +148,20 @@ type GalleryListener interface {
 	// EnterAnytag is called when entering the anytag production.
 	EnterAnytag(c *AnytagContext)
 
-	// ExitStatementlist is called when exiting the statementlist production.
-	ExitStatementlist(c *StatementlistContext)
+	// ExitProgram is called when exiting the program production.
+	ExitProgram(c *ProgramContext)
 
 	// ExitStatement is called when exiting the statement production.
 	ExitStatement(c *StatementContext)
 
-	// ExitDeclaration is called when exiting the declaration production.
-	ExitDeclaration(c *DeclarationContext)
+	// ExitTypedecl is called when exiting the typedecl production.
+	ExitTypedecl(c *TypedeclContext)
 
-	// ExitAssignment is called when exiting the assignment production.
-	ExitAssignment(c *AssignmentContext)
+	// ExitLocaldecl is called when exiting the localdecl production.
+	ExitLocaldecl(c *LocaldeclContext)
 
-	// ExitCompound is called when exiting the compound production.
-	ExitCompound(c *CompoundContext)
-
-	// ExitConstraint is called when exiting the constraint production.
-	ExitConstraint(c *ConstraintContext)
-
-	// ExitEquation is called when exiting the equation production.
-	ExitEquation(c *EquationContext)
-
-	// ExitOrientation is called when exiting the orientation production.
-	ExitOrientation(c *OrientationContext)
+	// ExitParameterdecl is called when exiting the parameterdecl production.
+	ExitParameterdecl(c *ParameterdeclContext)
 
 	// ExitSavecmd is called when exiting the savecmd production.
 	ExitSavecmd(c *SavecmdContext)
@@ -163,14 +172,41 @@ type GalleryListener interface {
 	// ExitProofcmd is called when exiting the proofcmd production.
 	ExitProofcmd(c *ProofcmdContext)
 
+	// ExitLetcmd is called when exiting the letcmd production.
+	ExitLetcmd(c *LetcmdContext)
+
+	// ExitPathjoin is called when exiting the pathjoin production.
+	ExitPathjoin(c *PathjoinContext)
+
+	// ExitStatementlist is called when exiting the statementlist production.
+	ExitStatementlist(c *StatementlistContext)
+
+	// ExitCompound is called when exiting the compound production.
+	ExitCompound(c *CompoundContext)
+
+	// ExitEmpty is called when exiting the empty production.
+	ExitEmpty(c *EmptyContext)
+
+	// ExitAssignment is called when exiting the assignment production.
+	ExitAssignment(c *AssignmentContext)
+
+	// ExitConstraint is called when exiting the constraint production.
+	ExitConstraint(c *ConstraintContext)
+
+	// ExitEquation is called when exiting the equation production.
+	ExitEquation(c *EquationContext)
+
+	// ExitOrientation is called when exiting the orientation production.
+	ExitOrientation(c *OrientationContext)
+
+	// ExitToken is called when exiting the token production.
+	ExitToken(c *TokenContext)
+
 	// ExitExpression is called when exiting the expression production.
 	ExitExpression(c *ExpressionContext)
 
 	// ExitPathtertiary is called when exiting the pathtertiary production.
 	ExitPathtertiary(c *PathtertiaryContext)
-
-	// ExitLonesecondary is called when exiting the lonesecondary production.
-	ExitLonesecondary(c *LonesecondaryContext)
 
 	// ExitTerm is called when exiting the term production.
 	ExitTerm(c *TermContext)
@@ -184,32 +220,29 @@ type GalleryListener interface {
 	// ExitTransform is called when exiting the transform production.
 	ExitTransform(c *TransformContext)
 
-	// ExitLoneprimary is called when exiting the loneprimary production.
-	ExitLoneprimary(c *LoneprimaryContext)
-
 	// ExitFactor is called when exiting the factor production.
 	ExitFactor(c *FactorContext)
 
 	// ExitTransformer is called when exiting the transformer production.
 	ExitTransformer(c *TransformerContext)
 
-	// ExitFuncnumatom is called when exiting the funcnumatom production.
-	ExitFuncnumatom(c *FuncnumatomContext)
+	// ExitFuncatom is called when exiting the funcatom production.
+	ExitFuncatom(c *FuncatomContext)
 
-	// ExitScalarnumatom is called when exiting the scalarnumatom production.
-	ExitScalarnumatom(c *ScalarnumatomContext)
+	// ExitScalaratom is called when exiting the scalaratom production.
+	ExitScalaratom(c *ScalaratomContext)
 
 	// ExitInterpolation is called when exiting the interpolation production.
 	ExitInterpolation(c *InterpolationContext)
 
-	// ExitSimplenumatom is called when exiting the simplenumatom production.
-	ExitSimplenumatom(c *SimplenumatomContext)
+	// ExitSimpleatom is called when exiting the simpleatom production.
+	ExitSimpleatom(c *SimpleatomContext)
 
 	// ExitPairpart is called when exiting the pairpart production.
 	ExitPairpart(c *PairpartContext)
 
-	// ExitPathpoint is called when exiting the pathpoint production.
-	ExitPathpoint(c *PathpointContext)
+	// ExitPointof is called when exiting the pointof production.
+	ExitPointof(c *PointofContext)
 
 	// ExitReversepath is called when exiting the reversepath production.
 	ExitReversepath(c *ReversepathContext)
@@ -222,6 +255,9 @@ type GalleryListener interface {
 
 	// ExitBox is called when exiting the box production.
 	ExitBox(c *BoxContext)
+
+	// ExitEdgepath is called when exiting the edgepath production.
+	ExitEdgepath(c *EdgepathContext)
 
 	// ExitScalarmulop is called when exiting the scalarmulop production.
 	ExitScalarmulop(c *ScalarmulopContext)

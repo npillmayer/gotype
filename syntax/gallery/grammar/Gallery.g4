@@ -33,132 +33,43 @@ This is an ANTLR V4 grammar file for a language called 'Gallery'. Gallery
 is a DSL for placing frames on pages. It is part of a typesetting project
 which uses frames to place text on a page.
 
-The DSL borrows concepts from MetaFont / MetaPost. See the Wiki for details.
+The DSL borrows concepts from MetaFont / MetaPost. See the project
+documentation for details.
 
 */
 
 grammar Gallery;
 
-import GalleryTerminals;
+import GalleryTerminals, CoreLang;
 
-statementlist
-    : ( statement SEMIC )*
+program
+    : statementlist EOF
     ;
 
 statement
-    : declaration
+    : compound
+    | declaration
     | assignment
-    | compound
     | constraint
     | command
+    | empty
     ;
 
 declaration
-    : TYPE TAG ( COMMA TAG )*
-    ;
-
-assignment
-    :  variable ASSIGN expression
-    ;
-
-compound
-    : BEGINGROUP statementlist ENDGROUP
-    ;
-
-constraint
-    : equation
-    | orientation
-    ;
-
-equation
-    : expression ( EQUALS expression )+
-    ;
-
-orientation
-    : tertiary ( (PARALLEL|PERPENDIC|CONGRUENT) tertiary )+
+    : TYPE TAG ( COMMA TAG )*                        # typedecl
+    | LOCAL TYPE? TAG ( COMMA TAG )*                 # localdecl
+    | PARAMETER variable ( tertiary TO tertiary )?   # parameterdecl
     ;
 
 command
     : SAVE TAG (COMMA TAG)*          # savecmd
     | SHOW TAG (COMMA TAG)*          # showcmd
     | PROOF LABEL                    # proofcmd
+    | LET token EQUALS MATHFUNC      # letcmd
     ;
 
 // --- Expressions -----------------------------------------------------------
 
-expression
-    : tertiary
-    | expression PATHCLIPOP tertiary
+pathjoin
+    : PATHJOIN
     ;
-
-tertiary
-    : secondary                                  # lonesecondary
-    | tertiary (PLUS|MINUS) secondary            # term
-    | path                                       # pathtertiary
-    ;
-
-path
-    : secondary ( PATHJOIN secondary )+ cycle?
-    ; 
-
-cycle
-    : PATHJOIN CYCLE
-    ;
-
-secondary
-    : primary                                    # loneprimary
-    | secondary (TIMES|OVER) primary             # factor
-    | secondary transformer                      # transform
-    ;
-
-transformer
-    : ( TRANSFORM primary )+
-    ;
-
-primary
-    : MATHFUNC atom                               # funcnumatom
-    | scalarmulop atom                            # scalarnumatom
-    | numtokenatom LBRACKET tertiary COMMA tertiary RBRACKET  # interpolation 
-    | atom LBRACKET tertiary COMMA tertiary RBRACKET          # interpolation
-    | atom                                        # simplenumatom
-    | PAIRPART primary                            # pairpart
-    | POINT tertiary OF primary                   # pathpoint
-    | REVERSE primary                             # reversepath
-    | SUBPATH tertiary OF primary                 # subpath
-    | EDGECONSTR primary                          # edgeconstraint
-    | (FRAME|BOX) variable                        # box
-    ;
-
-scalarmulop
-    : (PLUS|MINUS)
-    | numtokenatom
-    ;
-
-numtokenatom
-    : DECIMALTOKEN OVER DECIMALTOKEN
-    | DECIMALTOKEN
-    ;
-
-atom
-    : DECIMALTOKEN UNIT?                             # decimal
-    | variable                                       # varatom
-    | LPAREN tertiary COMMA tertiary RPAREN          # literalpair
-    | LPAREN tertiary RPAREN                         # subexpression
-    | BEGINGROUP statementlist tertiary ENDGROUP     # exprgroup
-    ;
-
-variable
-    : MIXEDTAG ( subscript | anytag )*
-    | TAG ( subscript | anytag )*
-    ;
-
-subscript
-    : DECIMALTOKEN
-    | LBRACKET tertiary RBRACKET
-    ;
-
-anytag
-    : TAG
-    | MIXEDTAG
-    ;
-

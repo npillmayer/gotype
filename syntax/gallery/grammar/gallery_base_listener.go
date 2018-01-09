@@ -20,11 +20,11 @@ func (s *BaseGalleryListener) EnterEveryRule(ctx antlr.ParserRuleContext) {}
 // ExitEveryRule is called when any rule is exited.
 func (s *BaseGalleryListener) ExitEveryRule(ctx antlr.ParserRuleContext) {}
 
-// EnterStatementlist is called when production statementlist is entered.
-func (s *BaseGalleryListener) EnterStatementlist(ctx *StatementlistContext) {}
+// EnterProgram is called when production program is entered.
+func (s *BaseGalleryListener) EnterProgram(ctx *ProgramContext) {}
 
-// ExitStatementlist is called when production statementlist is exited.
-func (s *BaseGalleryListener) ExitStatementlist(ctx *StatementlistContext) {}
+// ExitProgram is called when production program is exited.
+func (s *BaseGalleryListener) ExitProgram(ctx *ProgramContext) {}
 
 // EnterStatement is called when production statement is entered.
 func (s *BaseGalleryListener) EnterStatement(ctx *StatementContext) {}
@@ -32,41 +32,23 @@ func (s *BaseGalleryListener) EnterStatement(ctx *StatementContext) {}
 // ExitStatement is called when production statement is exited.
 func (s *BaseGalleryListener) ExitStatement(ctx *StatementContext) {}
 
-// EnterDeclaration is called when production declaration is entered.
-func (s *BaseGalleryListener) EnterDeclaration(ctx *DeclarationContext) {}
+// EnterTypedecl is called when production typedecl is entered.
+func (s *BaseGalleryListener) EnterTypedecl(ctx *TypedeclContext) {}
 
-// ExitDeclaration is called when production declaration is exited.
-func (s *BaseGalleryListener) ExitDeclaration(ctx *DeclarationContext) {}
+// ExitTypedecl is called when production typedecl is exited.
+func (s *BaseGalleryListener) ExitTypedecl(ctx *TypedeclContext) {}
 
-// EnterAssignment is called when production assignment is entered.
-func (s *BaseGalleryListener) EnterAssignment(ctx *AssignmentContext) {}
+// EnterLocaldecl is called when production localdecl is entered.
+func (s *BaseGalleryListener) EnterLocaldecl(ctx *LocaldeclContext) {}
 
-// ExitAssignment is called when production assignment is exited.
-func (s *BaseGalleryListener) ExitAssignment(ctx *AssignmentContext) {}
+// ExitLocaldecl is called when production localdecl is exited.
+func (s *BaseGalleryListener) ExitLocaldecl(ctx *LocaldeclContext) {}
 
-// EnterCompound is called when production compound is entered.
-func (s *BaseGalleryListener) EnterCompound(ctx *CompoundContext) {}
+// EnterParameterdecl is called when production parameterdecl is entered.
+func (s *BaseGalleryListener) EnterParameterdecl(ctx *ParameterdeclContext) {}
 
-// ExitCompound is called when production compound is exited.
-func (s *BaseGalleryListener) ExitCompound(ctx *CompoundContext) {}
-
-// EnterConstraint is called when production constraint is entered.
-func (s *BaseGalleryListener) EnterConstraint(ctx *ConstraintContext) {}
-
-// ExitConstraint is called when production constraint is exited.
-func (s *BaseGalleryListener) ExitConstraint(ctx *ConstraintContext) {}
-
-// EnterEquation is called when production equation is entered.
-func (s *BaseGalleryListener) EnterEquation(ctx *EquationContext) {}
-
-// ExitEquation is called when production equation is exited.
-func (s *BaseGalleryListener) ExitEquation(ctx *EquationContext) {}
-
-// EnterOrientation is called when production orientation is entered.
-func (s *BaseGalleryListener) EnterOrientation(ctx *OrientationContext) {}
-
-// ExitOrientation is called when production orientation is exited.
-func (s *BaseGalleryListener) ExitOrientation(ctx *OrientationContext) {}
+// ExitParameterdecl is called when production parameterdecl is exited.
+func (s *BaseGalleryListener) ExitParameterdecl(ctx *ParameterdeclContext) {}
 
 // EnterSavecmd is called when production savecmd is entered.
 func (s *BaseGalleryListener) EnterSavecmd(ctx *SavecmdContext) {}
@@ -86,6 +68,66 @@ func (s *BaseGalleryListener) EnterProofcmd(ctx *ProofcmdContext) {}
 // ExitProofcmd is called when production proofcmd is exited.
 func (s *BaseGalleryListener) ExitProofcmd(ctx *ProofcmdContext) {}
 
+// EnterLetcmd is called when production letcmd is entered.
+func (s *BaseGalleryListener) EnterLetcmd(ctx *LetcmdContext) {}
+
+// ExitLetcmd is called when production letcmd is exited.
+func (s *BaseGalleryListener) ExitLetcmd(ctx *LetcmdContext) {}
+
+// EnterPathjoin is called when production pathjoin is entered.
+func (s *BaseGalleryListener) EnterPathjoin(ctx *PathjoinContext) {}
+
+// ExitPathjoin is called when production pathjoin is exited.
+func (s *BaseGalleryListener) ExitPathjoin(ctx *PathjoinContext) {}
+
+// EnterStatementlist is called when production statementlist is entered.
+func (s *BaseGalleryListener) EnterStatementlist(ctx *StatementlistContext) {}
+
+// ExitStatementlist is called when production statementlist is exited.
+func (s *BaseGalleryListener) ExitStatementlist(ctx *StatementlistContext) {}
+
+// EnterCompound is called when production compound is entered.
+func (s *BaseGalleryListener) EnterCompound(ctx *CompoundContext) {}
+
+// ExitCompound is called when production compound is exited.
+func (s *BaseGalleryListener) ExitCompound(ctx *CompoundContext) {}
+
+// EnterEmpty is called when production empty is entered.
+func (s *BaseGalleryListener) EnterEmpty(ctx *EmptyContext) {}
+
+// ExitEmpty is called when production empty is exited.
+func (s *BaseGalleryListener) ExitEmpty(ctx *EmptyContext) {}
+
+// EnterAssignment is called when production assignment is entered.
+func (s *BaseGalleryListener) EnterAssignment(ctx *AssignmentContext) {}
+
+// ExitAssignment is called when production assignment is exited.
+func (s *BaseGalleryListener) ExitAssignment(ctx *AssignmentContext) {}
+
+// EnterConstraint is called when production constraint is entered.
+func (s *BaseGalleryListener) EnterConstraint(ctx *ConstraintContext) {}
+
+// ExitConstraint is called when production constraint is exited.
+func (s *BaseGalleryListener) ExitConstraint(ctx *ConstraintContext) {}
+
+// EnterEquation is called when production equation is entered.
+func (s *BaseGalleryListener) EnterEquation(ctx *EquationContext) {}
+
+// ExitEquation is called when production equation is exited.
+func (s *BaseGalleryListener) ExitEquation(ctx *EquationContext) {}
+
+// EnterOrientation is called when production orientation is entered.
+func (s *BaseGalleryListener) EnterOrientation(ctx *OrientationContext) {}
+
+// ExitOrientation is called when production orientation is exited.
+func (s *BaseGalleryListener) ExitOrientation(ctx *OrientationContext) {}
+
+// EnterToken is called when production token is entered.
+func (s *BaseGalleryListener) EnterToken(ctx *TokenContext) {}
+
+// ExitToken is called when production token is exited.
+func (s *BaseGalleryListener) ExitToken(ctx *TokenContext) {}
+
 // EnterExpression is called when production expression is entered.
 func (s *BaseGalleryListener) EnterExpression(ctx *ExpressionContext) {}
 
@@ -97,12 +139,6 @@ func (s *BaseGalleryListener) EnterPathtertiary(ctx *PathtertiaryContext) {}
 
 // ExitPathtertiary is called when production pathtertiary is exited.
 func (s *BaseGalleryListener) ExitPathtertiary(ctx *PathtertiaryContext) {}
-
-// EnterLonesecondary is called when production lonesecondary is entered.
-func (s *BaseGalleryListener) EnterLonesecondary(ctx *LonesecondaryContext) {}
-
-// ExitLonesecondary is called when production lonesecondary is exited.
-func (s *BaseGalleryListener) ExitLonesecondary(ctx *LonesecondaryContext) {}
 
 // EnterTerm is called when production term is entered.
 func (s *BaseGalleryListener) EnterTerm(ctx *TermContext) {}
@@ -128,12 +164,6 @@ func (s *BaseGalleryListener) EnterTransform(ctx *TransformContext) {}
 // ExitTransform is called when production transform is exited.
 func (s *BaseGalleryListener) ExitTransform(ctx *TransformContext) {}
 
-// EnterLoneprimary is called when production loneprimary is entered.
-func (s *BaseGalleryListener) EnterLoneprimary(ctx *LoneprimaryContext) {}
-
-// ExitLoneprimary is called when production loneprimary is exited.
-func (s *BaseGalleryListener) ExitLoneprimary(ctx *LoneprimaryContext) {}
-
 // EnterFactor is called when production factor is entered.
 func (s *BaseGalleryListener) EnterFactor(ctx *FactorContext) {}
 
@@ -146,17 +176,17 @@ func (s *BaseGalleryListener) EnterTransformer(ctx *TransformerContext) {}
 // ExitTransformer is called when production transformer is exited.
 func (s *BaseGalleryListener) ExitTransformer(ctx *TransformerContext) {}
 
-// EnterFuncnumatom is called when production funcnumatom is entered.
-func (s *BaseGalleryListener) EnterFuncnumatom(ctx *FuncnumatomContext) {}
+// EnterFuncatom is called when production funcatom is entered.
+func (s *BaseGalleryListener) EnterFuncatom(ctx *FuncatomContext) {}
 
-// ExitFuncnumatom is called when production funcnumatom is exited.
-func (s *BaseGalleryListener) ExitFuncnumatom(ctx *FuncnumatomContext) {}
+// ExitFuncatom is called when production funcatom is exited.
+func (s *BaseGalleryListener) ExitFuncatom(ctx *FuncatomContext) {}
 
-// EnterScalarnumatom is called when production scalarnumatom is entered.
-func (s *BaseGalleryListener) EnterScalarnumatom(ctx *ScalarnumatomContext) {}
+// EnterScalaratom is called when production scalaratom is entered.
+func (s *BaseGalleryListener) EnterScalaratom(ctx *ScalaratomContext) {}
 
-// ExitScalarnumatom is called when production scalarnumatom is exited.
-func (s *BaseGalleryListener) ExitScalarnumatom(ctx *ScalarnumatomContext) {}
+// ExitScalaratom is called when production scalaratom is exited.
+func (s *BaseGalleryListener) ExitScalaratom(ctx *ScalaratomContext) {}
 
 // EnterInterpolation is called when production interpolation is entered.
 func (s *BaseGalleryListener) EnterInterpolation(ctx *InterpolationContext) {}
@@ -164,11 +194,11 @@ func (s *BaseGalleryListener) EnterInterpolation(ctx *InterpolationContext) {}
 // ExitInterpolation is called when production interpolation is exited.
 func (s *BaseGalleryListener) ExitInterpolation(ctx *InterpolationContext) {}
 
-// EnterSimplenumatom is called when production simplenumatom is entered.
-func (s *BaseGalleryListener) EnterSimplenumatom(ctx *SimplenumatomContext) {}
+// EnterSimpleatom is called when production simpleatom is entered.
+func (s *BaseGalleryListener) EnterSimpleatom(ctx *SimpleatomContext) {}
 
-// ExitSimplenumatom is called when production simplenumatom is exited.
-func (s *BaseGalleryListener) ExitSimplenumatom(ctx *SimplenumatomContext) {}
+// ExitSimpleatom is called when production simpleatom is exited.
+func (s *BaseGalleryListener) ExitSimpleatom(ctx *SimpleatomContext) {}
 
 // EnterPairpart is called when production pairpart is entered.
 func (s *BaseGalleryListener) EnterPairpart(ctx *PairpartContext) {}
@@ -176,11 +206,11 @@ func (s *BaseGalleryListener) EnterPairpart(ctx *PairpartContext) {}
 // ExitPairpart is called when production pairpart is exited.
 func (s *BaseGalleryListener) ExitPairpart(ctx *PairpartContext) {}
 
-// EnterPathpoint is called when production pathpoint is entered.
-func (s *BaseGalleryListener) EnterPathpoint(ctx *PathpointContext) {}
+// EnterPointof is called when production pointof is entered.
+func (s *BaseGalleryListener) EnterPointof(ctx *PointofContext) {}
 
-// ExitPathpoint is called when production pathpoint is exited.
-func (s *BaseGalleryListener) ExitPathpoint(ctx *PathpointContext) {}
+// ExitPointof is called when production pointof is exited.
+func (s *BaseGalleryListener) ExitPointof(ctx *PointofContext) {}
 
 // EnterReversepath is called when production reversepath is entered.
 func (s *BaseGalleryListener) EnterReversepath(ctx *ReversepathContext) {}
@@ -205,6 +235,12 @@ func (s *BaseGalleryListener) EnterBox(ctx *BoxContext) {}
 
 // ExitBox is called when production box is exited.
 func (s *BaseGalleryListener) ExitBox(ctx *BoxContext) {}
+
+// EnterEdgepath is called when production edgepath is entered.
+func (s *BaseGalleryListener) EnterEdgepath(ctx *EdgepathContext) {}
+
+// ExitEdgepath is called when production edgepath is exited.
+func (s *BaseGalleryListener) ExitEdgepath(ctx *EdgepathContext) {}
 
 // EnterScalarmulop is called when production scalarmulop is entered.
 func (s *BaseGalleryListener) EnterScalarmulop(ctx *ScalarmulopContext) {}

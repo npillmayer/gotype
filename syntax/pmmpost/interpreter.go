@@ -56,8 +56,8 @@ import (
 	colorful "github.com/lucasb-eyer/go-colorful"
 	"github.com/npillmayer/gotype/gtbackend/gfx"
 	arithm "github.com/npillmayer/gotype/gtcore/arithmetic"
-	"github.com/npillmayer/gotype/syntax/pmmpost/corelang"
-	pmmp "github.com/npillmayer/gotype/syntax/pmmpost/grammar"
+	"github.com/npillmayer/gotype/syntax/corelang"
+	"github.com/npillmayer/gotype/syntax/pmmpost/grammar"
 	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables"
 	dec "github.com/shopspring/decimal"
@@ -127,7 +127,7 @@ func NewPMMPostInterpreter() *PMMPostInterpreter {
 		intp.exprStack = runtime.NewExprStack()
 		intp.pathBuilder = runtime.NewPathStack()
 	*/
-	pmmp.ScopeStack = intp.runtime.ScopeTree
+	grammar.ScopeStack = intp.runtime.ScopeTree
 	intp.loadBuiltinSymbols(intp.runtime.ScopeTree.Globals())             // load syms into new global scope
 	intp.ASTListener = NewParseListener(intp.runtime.ScopeTree.Globals()) // listener for ANTLR
 	intp.ASTListener.rt = intp.runtime
@@ -139,24 +139,24 @@ func NewPMMPostInterpreter() *PMMPostInterpreter {
  * TODO: nullpath, z@#, unitcircle, unitsquare
  */
 func (intp *PMMPostInterpreter) loadBuiltinSymbols(scope *runtime.Scope) {
-	originDef := corelang.Declare(intp.runtime, "origin", pmmp.PairType)
+	originDef := corelang.Declare(intp.runtime, "origin", grammar.PairType)
 	origin := arithm.MakePair(arithm.ConstZero, arithm.ConstZero)
 	_ = corelang.Variable(intp.runtime, originDef, origin, nil, true)
-	upDef := corelang.Declare(intp.runtime, "up", pmmp.PairType)
+	upDef := corelang.Declare(intp.runtime, "up", grammar.PairType)
 	up := arithm.MakePair(arithm.ConstZero, arithm.ConstOne)
 	_ = corelang.Variable(intp.runtime, upDef, up, nil, true)
-	downDef := corelang.Declare(intp.runtime, "down", pmmp.PairType)
+	downDef := corelang.Declare(intp.runtime, "down", grammar.PairType)
 	down := arithm.MakePair(arithm.ConstZero, arithm.MinusOne)
 	_ = corelang.Variable(intp.runtime, downDef, down, nil, true)
-	rightDef := corelang.Declare(intp.runtime, "right", pmmp.PairType)
+	rightDef := corelang.Declare(intp.runtime, "right", grammar.PairType)
 	right := arithm.MakePair(arithm.ConstOne, arithm.ConstZero)
 	_ = corelang.Variable(intp.runtime, rightDef, right, nil, true)
-	leftDef := corelang.Declare(intp.runtime, "left", pmmp.PairType)
+	leftDef := corelang.Declare(intp.runtime, "left", grammar.PairType)
 	left := arithm.MakePair(arithm.MinusOne, arithm.ConstZero)
 	_ = corelang.Variable(intp.runtime, leftDef, left, nil, true)
-	_ = corelang.Declare(intp.runtime, "p", pmmp.PairType)
-	_ = corelang.Declare(intp.runtime, "q", pmmp.PairType)
-	_ = corelang.Declare(intp.runtime, "z", pmmp.PairType)
+	_ = corelang.Declare(intp.runtime, "p", grammar.PairType)
+	_ = corelang.Declare(intp.runtime, "q", grammar.PairType)
+	_ = corelang.Declare(intp.runtime, "z", grammar.PairType)
 }
 
 /* Set an output routine. Default is nil.
@@ -180,8 +180,8 @@ func (intp *PMMPostInterpreter) ParseStatements(input antlr.CharStream) {
  * (with variable references and values).
  */
 type ParseListener struct {
-	*pmmp.BasePMMPStatemListener // build on top of ANTLR's base 'class'
-	statemParser                 *pmmp.PMMPStatemParser
+	*grammar.BasePMMPostListener // build on top of ANTLR's base 'class'
+	statemParser                 *grammar.PMMPostParser
 	annotations                  map[interface{}]Annotation // node annotations
 	expectingLvalue              bool                       // do not evaluate variable
 	rt                           *runtime.Runtime           // runtime environment
@@ -248,12 +248,12 @@ func (c *TracingErrorListener) SyntaxError(r antlr.Recognizer, sym interface{},
  */
 func (pl *ParseListener) LazyCreateParser(input antlr.CharStream) {
 	// We let ANTLR to the heavy lifting.
-	lexer := pmmp.NewPMMPStatemLexer(input)
+	lexer := grammar.NewPMMPostLexer(input)
 	lexer.RemoveErrorListeners()
 	lexer.AddErrorListener(&TracingErrorListener{})
 	stream := antlr.NewCommonTokenStream(lexer, 0)
 	if pl.statemParser == nil {
-		pl.statemParser = pmmp.NewPMMPStatemParser(stream)
+		pl.statemParser = grammar.NewPMMPostParser(stream)
 		pl.statemParser.RemoveErrorListeners()
 		pl.statemParser.AddErrorListener(&TracingErrorListener{})
 		pl.statemParser.BuildParseTrees = true
@@ -309,7 +309,7 @@ func (pl *ParseListener) VisitTerminal(node antlr.TerminalNode) {
 
 /* A picture has been completed.
  */
-func (pl *ParseListener) ExitFigure(ctx *pmmp.FigureContext) {
+func (pl *ParseListener) ExitFigure(ctx *grammar.FigureContext) {
 	if pl.backend.picture != nil {
 		T.Debug("figure complete")
 		image := pl.backend.picture.AsImage()
@@ -327,7 +327,7 @@ func (pl *ParseListener) ExitFigure(ctx *pmmp.FigureContext) {
  * 'beginfig' '(' LABEL ',' DECIMALTOKEN UNIT ',' DECIMALTOKEN UNIT ')' SEMIC
  *
  */
-func (pl *ParseListener) ExitBeginfig(ctx *pmmp.BeginfigContext) {
+func (pl *ParseListener) ExitBeginfig(ctx *grammar.BeginfigContext) {
 	d := ctx.DECIMALTOKEN(0)
 	if d != nil {
 		w, _ := dec.NewFromString(d.GetText())
@@ -340,9 +340,9 @@ func (pl *ParseListener) ExitBeginfig(ctx *pmmp.BeginfigContext) {
 		T.P("figure", name).Debugf("dimension %s x %s", w, h)
 		pl.backend.picture = gfx.NewPicture(name, fw, fh)
 		corelang.Begingroup(pl.rt, "figure")
-		wdecl := corelang.Declare(pl.rt, "w", pmmp.NumericType)
+		wdecl := corelang.Declare(pl.rt, "w", grammar.NumericType)
 		_ = corelang.Variable(pl.rt, wdecl, w, nil, true)
-		hdecl := corelang.Declare(pl.rt, "h", pmmp.NumericType)
+		hdecl := corelang.Declare(pl.rt, "h", grammar.NumericType)
 		_ = corelang.Variable(pl.rt, hdecl, h, nil, true)
 	} else {
 		T.Error("parse error, no figure completed")
@@ -351,7 +351,7 @@ func (pl *ParseListener) ExitBeginfig(ctx *pmmp.BeginfigContext) {
 
 /* End a figure.
  */
-func (pl *ParseListener) ExitEndfig(ctx *pmmp.EndfigContext) {
+func (pl *ParseListener) ExitEndfig(ctx *grammar.EndfigContext) {
 	if pl.backend.picture != nil {
 		corelang.Endgroup(pl.rt)
 	}
@@ -363,7 +363,7 @@ func (pl *ParseListener) ExitEndfig(ctx *pmmp.EndfigContext) {
  *
  * pathexpression is TOS of path builder stack.
  */
-func (pl *ParseListener) ExitDrawCmd(ctx *pmmp.DrawCmdContext) {
+func (pl *ParseListener) ExitDrawCmd(ctx *grammar.DrawCmdContext) {
 	pn, _ := pl.rt.PathBuilder.Pop()
 	path := pn.Path
 	pl.backend.picture.Draw(path)
@@ -375,7 +375,7 @@ func (pl *ParseListener) ExitDrawCmd(ctx *pmmp.DrawCmdContext) {
  *
  * pathexpression is TOS of path builder stack.
  */
-func (pl *ParseListener) ExitFillCmd(ctx *pmmp.FillCmdContext) {
+func (pl *ParseListener) ExitFillCmd(ctx *grammar.FillCmdContext) {
 	pn, _ := pl.rt.PathBuilder.Pop()
 	path := pn.Path
 	if pl.backend.picture != nil {
@@ -389,7 +389,7 @@ func (pl *ParseListener) ExitFillCmd(ctx *pmmp.FillCmdContext) {
  *
  * The pen is used for subsequent drawing and filling commands.
  */
-func (pl *ParseListener) ExitPickupCmd(ctx *pmmp.PickupCmdContext) {
+func (pl *ParseListener) ExitPickupCmd(ctx *grammar.PickupCmdContext) {
 	diam := arithm.ConstOne
 	if ctx.DECIMALTOKEN() != nil {
 		diam, _ = dec.NewFromString(ctx.DECIMALTOKEN().GetText())
@@ -410,7 +410,7 @@ func (pl *ParseListener) ExitPickupCmd(ctx *pmmp.PickupCmdContext) {
  * Equations may be chained, i.e. a=b=c. All operands are on the expression
  * stack. Operates right-associative.
  */
-func (pl *ParseListener) ExitMultiequation(ctx *pmmp.MultiequationContext) {
+func (pl *ParseListener) ExitMultiequation(ctx *grammar.MultiequationContext) {
 	prev, _ := pl.rt.ExprStack.Pop() // walk the chain from right to left
 	i := ctx.GetChildCount() / 2     // number of expr nodes -1
 	for ; i > 0; i-- {               // invariant: prev is LHS of equation to the right
@@ -429,7 +429,7 @@ func (pl *ParseListener) ExitMultiequation(ctx *pmmp.MultiequationContext) {
  * pathatom EQUALS pathexpression          # pathequation
  *
  */
-func (pl *ParseListener) ExitPathequation(ctx *pmmp.PathequationContext) {
+func (pl *ParseListener) ExitPathequation(ctx *grammar.PathequationContext) {
 	pe, ok := pl.rt.PathBuilder.Pop()
 	pv := pl.rt.PathBuilder.Top()
 	if ok {
@@ -452,7 +452,7 @@ func (pl *ParseListener) ExitPathequation(ctx *pmmp.PathequationContext) {
  * (3) Re-incarnate lvalue (get a new ID for it)
  * (4) Create equation on expression stack
  */
-func (pl *ParseListener) ExitAssignment(ctx *pmmp.AssignmentContext) {
+func (pl *ParseListener) ExitAssignment(ctx *grammar.AssignmentContext) {
 	e, _ := pl.rt.ExprStack.Pop()       // the expression value
 	lvalue, ok := pl.rt.ExprStack.Pop() // the lvalue
 	if !ok || !lvalue.IsValid() {
@@ -493,7 +493,7 @@ func (pl *ParseListener) ExitAssignment(ctx *pmmp.AssignmentContext) {
  * Furthermore, this approach comes handy for the runtime-handling of
  * definitions (a.k.a. macros) and/or functions.
  */
-func (pl *ParseListener) EnterCompound(ctx *pmmp.CompoundContext) {
+func (pl *ParseListener) EnterCompound(ctx *grammar.CompoundContext) {
 	groupscope, _ := corelang.Begingroup(pl.rt, "compound-group")
 	pl.annotate(ctx, groupscope, "") // Annotate the AST node with this scope
 }
@@ -506,7 +506,7 @@ func (pl *ParseListener) EnterCompound(ctx *pmmp.CompoundContext) {
  * of an expression-group. However, this is not relevant for compound statements
  * (a different kind of group).
  */
-func (pl *ParseListener) ExitCompound(ctx *pmmp.CompoundContext) {
+func (pl *ParseListener) ExitCompound(ctx *grammar.CompoundContext) {
 	corelang.Endgroup(pl.rt)
 	pl.Summary()
 }
@@ -516,10 +516,10 @@ func (pl *ParseListener) ExitCompound(ctx *pmmp.CompoundContext) {
  * numatom : BEGINGROUP statementlist numtertiary ENDGROUP  # exprgroup
  *
  * MetaFont allows begingroup ... ; expr endgroup  within expressions,
- * providing brackets around some pmmp and returning a (sub-)
+ * providing brackets around some statements and returning a (sub-)
  * expression.
  */
-func (pl *ParseListener) EnterExprgroup(ctx *pmmp.ExprgroupContext) {
+func (pl *ParseListener) EnterExprgroup(ctx *grammar.ExprgroupContext) {
 	groupscope, _ := corelang.Begingroup(pl.rt, "expr-group")
 	pl.annotate(ctx, groupscope, "") // Annotate the AST node with this scope
 }
@@ -530,7 +530,7 @@ func (pl *ParseListener) EnterExprgroup(ctx *pmmp.ExprgroupContext) {
  *
  * Additionally leave the return expression on the stack.
  */
-func (pl *ParseListener) ExitExprgroup(ctx *pmmp.ExprgroupContext) {
+func (pl *ParseListener) ExitExprgroup(ctx *grammar.ExprgroupContext) {
 	corelang.Endgroup(pl.rt)
 	// the return expression is already on the stack
 	pl.Summary()
@@ -544,7 +544,7 @@ func (pl *ParseListener) ExitExprgroup(ctx *pmmp.ExprgroupContext) {
  * of an expression-group. However, this is not relevant for compound pmmp
  * (a different kind of group).
  */
-func (pl *ParseListener) EnterPairexprgroup(ctx *pmmp.PairexprgroupContext) {
+func (pl *ParseListener) EnterPairexprgroup(ctx *grammar.PairexprgroupContext) {
 	groupscope, _ := corelang.Begingroup(pl.rt, "expr-group")
 	pl.annotate(ctx, groupscope, "") // Annotate the AST node with this scope
 }
@@ -555,7 +555,7 @@ func (pl *ParseListener) EnterPairexprgroup(ctx *pmmp.PairexprgroupContext) {
  *
  * Additionally leave the return expression (type pair) on the stack.
  */
-func (pl *ParseListener) ExitPairexprgroup(ctx *pmmp.PairexprgroupContext) {
+func (pl *ParseListener) ExitPairexprgroup(ctx *grammar.PairexprgroupContext) {
 	corelang.Endgroup(pl.rt)
 	// the return expression is already on the stack
 	pl.Summary()
@@ -566,7 +566,7 @@ func (pl *ParseListener) ExitPairexprgroup(ctx *pmmp.PairexprgroupContext) {
  *
  * saveStmt : 'save' tag (',' tag)*
  */
-func (pl *ParseListener) ExitSaveStmt(ctx *pmmp.SaveStmtContext) {
+func (pl *ParseListener) ExitSaveStmt(ctx *grammar.SaveStmtContext) {
 	T.Debugf("saving %d tags", len(ctx.AllTag()))
 	for _, tag := range ctx.AllTag() { // list of tags
 		corelang.Save(pl.rt, tag.GetText())
@@ -581,13 +581,13 @@ func (pl *ParseListener) ExitSaveStmt(ctx *pmmp.SaveStmtContext) {
  *
  * declaration :  mptype tag ( ',' tag )*
  */
-func (pl *ParseListener) ExitDeclaration(ctx *pmmp.DeclarationContext) {
+func (pl *ParseListener) ExitDeclaration(ctx *grammar.DeclarationContext) {
 	T.P("type", ctx.Mptype().GetText()).Infof("declaration of %d tags", len(ctx.AllTag()))
 	mftype := variables.TypeFromString(ctx.Mptype().GetText())
-	if mftype == pmmp.Undefined {
+	if mftype == grammar.Undefined {
 		T.Error("unknown type: %s", ctx.Mptype().GetText())
 		T.Error("assuming type numeric")
-		mftype = pmmp.NumericType
+		mftype = grammar.NumericType
 	}
 	for _, tag := range ctx.AllTag() { // iterator over tag list
 		sym := corelang.Declare(pl.rt, tag.GetText(), mftype)
@@ -602,11 +602,11 @@ func (pl *ParseListener) ExitDeclaration(ctx *pmmp.DeclarationContext) {
  *      TAG ( subscript | TAG | MIXEDTAG )*
  * MIXEDTAG ( subscript | TAG | MIXEDTAG )*
  */
-func (pl *ParseListener) ExitVariable(ctx *pmmp.VariableContext) {
+func (pl *ParseListener) ExitVariable(ctx *grammar.VariableContext) {
 	t := ctx.GetText()
 	T.P("var", t).Debug("num-expr variable, verbose")
 	s := pl.collectVarRefParts(t, ctx.GetChildren())
-	vref := pl.makeCanonicalAndResolve(s, false)
+	vref := pl.makeCanonicalAndResolve(s, true)
 	corelang.PushVariable(pl.rt, vref, false)
 }
 
@@ -615,11 +615,11 @@ func (pl *ParseListener) ExitVariable(ctx *pmmp.VariableContext) {
  *      PTAG ( subscript | anytag )*                  # pairvariable
  * MIXEDPTAG ( subscript | anytag )*                  # pairvariable
  */
-func (pl *ParseListener) ExitPairvariable(ctx *pmmp.PairvariableContext) {
+func (pl *ParseListener) ExitPairvariable(ctx *grammar.PairvariableContext) {
 	t := ctx.GetText()
 	T.P("var", t).Debug("pair-expr variable, verbose")
 	s := pl.collectVarRefParts(t, ctx.GetChildren())
-	vref := pl.makeCanonicalAndResolve(s, false)
+	vref := pl.makeCanonicalAndResolve(s, true)
 	corelang.PushVariable(pl.rt, vref, false)
 }
 
@@ -628,15 +628,15 @@ func (pl *ParseListener) ExitPairvariable(ctx *pmmp.PairvariableContext) {
  *
  * PATHTAG ( subscript | anytag )*       # pathvariable
  */
-func (pl *ParseListener) ExitPathvariable(ctx *pmmp.PathvariableContext) {
+func (pl *ParseListener) ExitPathvariable(ctx *grammar.PathvariableContext) {
 	t := ctx.GetText()
 	T.P("var", t).Debug("path-expr variable, verbose")
 	s := pl.collectVarRefParts(t, ctx.GetChildren())
-	vref := pl.makeCanonicalAndResolve(s, false)
-	if vref.GetType() != pmmp.PathType { // automacically created as numeric
+	vref := pl.makeCanonicalAndResolve(s, true)
+	if vref.GetType() != grammar.PathType { // automacically created as numeric
 		T.P("var", t).Debug("setting type to path")
-		vref.Decl.SetType(pmmp.PathType) // change type of declaration
-		vref.SetType(pmmp.PathType)      // change type live variable
+		vref.Decl.SetType(grammar.PathType) // change type of declaration
+		vref.SetType(grammar.PathType)      // change type live variable
 	}
 	T.P("var", vref.GetName()).Debugf("pushing path = %.28v", vref.GetValue())
 	pl.rt.PathBuilder.PushPath(vref, pathValue(vref.GetValue()))
@@ -655,17 +655,17 @@ func pathValue(pv interface{}) arithm.Path {
  * We set a flag 'expectingLvalue' to suppress value substitution
  * when the variable is put onto the expression stack.
  */
-func (pl *ParseListener) EnterLvalue(ctx *pmmp.LvalueContext) {
+func (pl *ParseListener) EnterLvalue(ctx *grammar.LvalueContext) {
 	pl.expectingLvalue = true
 }
 
 /* Lvalue for assignments. This is in fact a variable reference.
  */
-func (pl *ParseListener) ExitLvalue(ctx *pmmp.LvalueContext) {
+func (pl *ParseListener) ExitLvalue(ctx *grammar.LvalueContext) {
 	t := ctx.GetText()
 	T.P("var", t).Debug("lvalue variable, verbose")
 	s := pl.collectVarRefParts(t, ctx.GetChildren())
-	vref := pl.makeCanonicalAndResolve(s, pl.expectingLvalue)
+	vref := pl.makeCanonicalAndResolve(s, true)
 	corelang.PushVariable(pl.rt, vref, pl.expectingLvalue)
 	T.P("var", vref.GetName()).Debugf("lvalue type is %s", variables.TypeString(vref.GetType()))
 	pl.expectingLvalue = false
@@ -675,7 +675,7 @@ func (pl *ParseListener) ExitLvalue(ctx *pmmp.LvalueContext) {
  *
  * numtertiary (PLUS|MINUS) numsecondary
  */
-func (pl *ParseListener) ExitNumtertiary(ctx *pmmp.NumtertiaryContext) {
+func (pl *ParseListener) ExitNumtertiary(ctx *grammar.NumtertiaryContext) {
 	if ctx.PLUS() != nil {
 		pl.rt.ExprStack.AddTOS2OS()
 	} else if ctx.MINUS() != nil {
@@ -687,7 +687,7 @@ func (pl *ParseListener) ExitNumtertiary(ctx *pmmp.NumtertiaryContext) {
  *
  * pairtertiary (PLUS|MINUS) pairsecondary
  */
-func (pl *ParseListener) ExitPairtertiary(ctx *pmmp.PairtertiaryContext) {
+func (pl *ParseListener) ExitPairtertiary(ctx *grammar.PairtertiaryContext) {
 	if ctx.PLUS() != nil {
 		pl.rt.ExprStack.AddTOS2OS()
 	} else if ctx.MINUS() != nil {
@@ -700,7 +700,7 @@ func (pl *ParseListener) ExitPairtertiary(ctx *pmmp.PairtertiaryContext) {
  * numprimary
  * numsecondary (TIMES|OVER) numprimary
  */
-func (pl *ParseListener) ExitNumsecondary(ctx *pmmp.NumsecondaryContext) {
+func (pl *ParseListener) ExitNumsecondary(ctx *grammar.NumsecondaryContext) {
 	if ctx.TIMES() != nil {
 		pl.rt.ExprStack.MultiplyTOS2OS()
 	} else if ctx.OVER() != nil {
@@ -719,7 +719,7 @@ func (pl *ParseListener) ExitNumsecondary(ctx *pmmp.NumsecondaryContext) {
  * in reverse order, appending them on the resulting path. The completed
  * path is pushed onto the path stack.
  */
-func (pl *ParseListener) ExitPathtertiary(ctx *pmmp.PathtertiaryContext) {
+func (pl *ParseListener) ExitPathtertiary(ctx *grammar.PathtertiaryContext) {
 	children := ctx.GetChildren()
 	var stack *linkedliststack.Stack = linkedliststack.New()
 	var isCycle, joinMsg bool
@@ -779,7 +779,7 @@ func (pl *ParseListener) ExitPathtertiary(ctx *pmmp.PathtertiaryContext) {
  *
  * We annotate the AST node with a string label: either "subpath" or "pair".
  */
-func (pl *ParseListener) ExitPathfragm(ctx *pmmp.PathfragmContext) {
+func (pl *ParseListener) ExitPathfragm(ctx *grammar.PathfragmContext) {
 	if ctx.Pathsecondary() != nil {
 		pl.annotate(ctx, nil, "subpath")
 	} else if ctx.Pairtertiary() != nil {
@@ -794,7 +794,7 @@ func (pl *ParseListener) ExitPathfragm(ctx *pmmp.PathfragmContext) {
  *  pairsecondary (TIMES|OVER) numprimary
  *  numsecondary TIMES pairprimary
  */
-func (pl *ParseListener) ExitPairsecond(ctx *pmmp.PairsecondContext) {
+func (pl *ParseListener) ExitPairsecond(ctx *grammar.PairsecondContext) {
 	if ctx.TIMES() != nil {
 		pl.rt.ExprStack.MultiplyTOS2OS()
 	} else if ctx.OVER() != nil {
@@ -806,7 +806,7 @@ func (pl *ParseListener) ExitPairsecond(ctx *pmmp.PairsecondContext) {
  *
  * pairsecondary transformer                     # transform
  */
-func (pl *ParseListener) ExitTransform(ctx *pmmp.TransformContext) {
+func (pl *ParseListener) ExitTransform(ctx *grammar.TransformContext) {
 	_, t := pl.getAnnotation(ctx.Transformer())
 	T.Debugf("transform: %s", t)
 	if t == "scaled" {
@@ -842,7 +842,7 @@ func (pl *ParseListener) ExitTransform(ctx *pmmp.TransformContext) {
  *
  * transformer : SCALED numprimary | ROTATED numprimary | SHIFTED pairprimary
  */
-func (pl *ParseListener) ExitTransformer(ctx *pmmp.TransformerContext) {
+func (pl *ParseListener) ExitTransformer(ctx *grammar.TransformerContext) {
 	t := ctx.GetChild(0).(antlr.ParseTree).GetText()
 	T.P("transf", t).Debug("transformer")
 	pl.annotate(ctx, nil, t)
@@ -855,7 +855,7 @@ func (pl *ParseListener) ExitTransformer(ctx *pmmp.TransformerContext) {
  * TOS is a polynomial (known or unknown), 2OS is numeric constant. We just
  * multiply them.
  */
-func (pl *ParseListener) ExitScalarnumatom(ctx *pmmp.ScalarnumatomContext) {
+func (pl *ParseListener) ExitScalarnumatom(ctx *grammar.ScalarnumatomContext) {
 	pl.rt.ExprStack.MultiplyTOS2OS()
 }
 
@@ -865,7 +865,7 @@ func (pl *ParseListener) ExitScalarnumatom(ctx *pmmp.ScalarnumatomContext) {
  *
  * MATHFUNC : 'floor' | 'ceil' | 'sqrt' ;
  */
-func (pl *ParseListener) ExitFuncnumatom(ctx *pmmp.FuncnumatomContext) {
+func (pl *ParseListener) ExitFuncnumatom(ctx *grammar.FuncnumatomContext) {
 	fname := ctx.MATHFUNC().GetText()
 	T.P("mathf", fname).Debug("applying function")
 	e, ok := pl.rt.ExprStack.Pop()
@@ -890,7 +890,7 @@ func (pl *ParseListener) ExitFuncnumatom(ctx *pmmp.FuncnumatomContext) {
  * All three expressions will be on the expression stack. We will convert
  * n[a,b] => a - na + nb.
  */
-func (pl *ParseListener) ExitInterpolation(ctx *pmmp.InterpolationContext) {
+func (pl *ParseListener) ExitInterpolation(ctx *grammar.InterpolationContext) {
 	pl.rt.ExprStack.Interpolate()
 }
 
@@ -902,7 +902,7 @@ func (pl *ParseListener) ExitInterpolation(ctx *pmmp.InterpolationContext) {
  * All three expressions will be on the expression stack. We will convert
  * n[a,b] => a - na + nb.
  */
-func (pl *ParseListener) ExitPairinterpolation(ctx *pmmp.PairinterpolationContext) {
+func (pl *ParseListener) ExitPairinterpolation(ctx *grammar.PairinterpolationContext) {
 	pl.rt.ExprStack.Interpolate()
 }
 
@@ -911,7 +911,7 @@ func (pl *ParseListener) ExitPairinterpolation(ctx *pmmp.PairinterpolationContex
  *
  * numprimary : LENGTH pairprimary                        # pointdistance
  */
-func (pl *ParseListener) ExitPointdistance(ctx *pmmp.PointdistanceContext) {
+func (pl *ParseListener) ExitPointdistance(ctx *grammar.PointdistanceContext) {
 	pl.rt.ExprStack.LengthTOS()
 }
 
@@ -919,7 +919,7 @@ func (pl *ParseListener) ExitPointdistance(ctx *pmmp.PointdistanceContext) {
  *
  * numprimary : PAIRPART pairprimary                      # pairpart
  */
-func (pl *ParseListener) ExitPairpart(ctx *pmmp.PairpartContext) {
+func (pl *ParseListener) ExitPairpart(ctx *grammar.PairpartContext) {
 	e := pl.rt.ExprStack.Top()
 	//T.Infof("pairpart of: %v", e)
 	if e.IsPair() { // otherwise just leave numeric expression on stack
@@ -949,7 +949,7 @@ func (pl *ParseListener) ExitPairpart(ctx *pmmp.PairpartContext) {
  * scalarmulop : ( PLUS | MINUS )          // leave +1 | -1 on stack
  *             | numtokenatom              // nothing to to
  */
-func (pl *ParseListener) ExitScalarmulop(ctx *pmmp.ScalarmulopContext) {
+func (pl *ParseListener) ExitScalarmulop(ctx *grammar.ScalarmulopContext) {
 	if ctx.PLUS() != nil {
 		pl.rt.ExprStack.PushConstant(arithm.ConstOne) // put 1 on stack
 	} else if ctx.MINUS() != nil {
@@ -957,12 +957,12 @@ func (pl *ParseListener) ExitScalarmulop(ctx *pmmp.ScalarmulopContext) {
 	}
 }
 
-/* Numeric prefix for a variable, e.g., 3x, 1/2y.r, -0.25z.
+/* Numeric prefix for a variable, e.g., 3x, 1/2y.r, 0.25z.
  *
  * numtokenatom : DECIMALTOKEN '/' DECIMALTOKEN
  *              | DECIMALTOKEN
  */
-func (pl *ParseListener) ExitNumtokenatom(ctx *pmmp.NumtokenatomContext) {
+func (pl *ParseListener) ExitNumtokenatom(ctx *grammar.NumtokenatomContext) {
 	numbers := ctx.AllDECIMALTOKEN()
 	num1, _ := dec.NewFromString(numbers[0].GetText())
 	T.P("token", num1.String()).Debug("numeric token")
@@ -978,11 +978,12 @@ func (pl *ParseListener) ExitNumtokenatom(ctx *pmmp.NumtokenatomContext) {
 /* Numeric expression primary: decimal constant, possibly including a unit.
  * Example: "3.14162mm".
  */
-func (pl *ParseListener) ExitDecimal(ctx *pmmp.DecimalContext) {
+func (pl *ParseListener) ExitDecimal(ctx *grammar.DecimalContext) {
 	d := ctx.DECIMALTOKEN()
 	num, _ := dec.NewFromString(d.GetText()) // TODO error possible ?!?
 	if u := ctx.UNIT(); u != nil {
-		num = num.Mul(unit2numeric(u.GetText())) // multiply with unit value
+		//num = num.Mul(corelang.Unit2numeric(u.GetText())) // multiply with unit value
+		num = corlang.ScaleDimension(num, u.GetText())
 	}
 	T.P("token", num.String()).Debug("numeric token")
 	pl.rt.ExprStack.PushConstant(num) // put decimal number on expression stack
@@ -993,7 +994,7 @@ func (pl *ParseListener) ExitDecimal(ctx *pmmp.DecimalContext) {
  * pairatom : '(' numtertiary ',' numtertiary ')'        # literalpair
  *
  */
-func (pl *ParseListener) ExitLiteralpair(ctx *pmmp.LiteralpairContext) {
+func (pl *ParseListener) ExitLiteralpair(ctx *grammar.LiteralpairContext) {
 	ey, _ := pl.rt.ExprStack.Pop()
 	ex, _ := pl.rt.ExprStack.Pop()
 	e := runtime.NewPairExpression(ex.GetXPolyn(), ey.GetXPolyn())
@@ -1008,7 +1009,7 @@ func (pl *ParseListener) ExitLiteralpair(ctx *pmmp.LiteralpairContext) {
  * Expects the path to be on the path stack. Will leave a pair on the
  * expression stack.
  */
-func (pl *ParseListener) ExitPathpoint(ctx *pmmp.PathpointContext) {
+func (pl *ParseListener) ExitPathpoint(ctx *grammar.PathpointContext) {
 	pnode, ok := pl.rt.PathBuilder.Pop()
 	if ok {
 		num, _ := pl.rt.ExprStack.PopAsNumeric()
@@ -1029,7 +1030,7 @@ func (pl *ParseListener) ExitPathpoint(ctx *pmmp.PathpointContext) {
  * The pathprimary is expected on the path stack. It will be popped and
  * replaced by the reversed path.
  */
-func (pl *ParseListener) ExitReversepath(ctx *pmmp.ReversepathContext) {
+func (pl *ParseListener) ExitReversepath(ctx *grammar.ReversepathContext) {
 	pnode, ok := pl.rt.PathBuilder.Pop()
 	if ok {
 		path := pnode.Path.Copy()
@@ -1048,7 +1049,7 @@ func (pl *ParseListener) ExitReversepath(ctx *pmmp.ReversepathContext) {
  * The original path is not destoyed. It is expected to be on the path stack
  * and will be replaced by the subpath.
  */
-func (pl *ParseListener) ExitSubpath(ctx *pmmp.SubpathContext) {
+func (pl *ParseListener) ExitSubpath(ctx *grammar.SubpathContext) {
 	pnode, ok := pl.rt.PathBuilder.Pop()
 	if ok {
 		fromto, _ := pl.rt.ExprStack.PopAsPair()
@@ -1062,7 +1063,7 @@ func (pl *ParseListener) ExitSubpath(ctx *pmmp.SubpathContext) {
 
 /* Tracing command: showvariable <tag>.
  */
-func (pl *ParseListener) ExitShowvariableCmd(ctx *pmmp.ShowvariableCmdContext) {
+func (pl *ParseListener) ExitShowvariableCmd(ctx *grammar.ShowvariableCmdContext) {
 	tag := ctx.Tag().GetText()
 	T.P("tag", tag).Infof("## showvariable %s;", tag)
 	output := corelang.Showvariable(pl.rt, tag)
@@ -1119,7 +1120,7 @@ func (pl *ParseListener) collectVarRefParts(t string, children []antlr.Tree) str
 
 /* A variable subscript.
  */
-func (pl *ParseListener) ExitSubscript(ctx *pmmp.SubscriptContext) {
+func (pl *ParseListener) ExitSubscript(ctx *grammar.SubscriptContext) {
 	if ctx.DECIMALTOKEN() != nil {
 		c, _ := dec.NewFromString(ctx.DECIMALTOKEN().GetText())
 		pl.rt.ExprStack.PushConstant(c)
@@ -1135,32 +1136,14 @@ func (pl *ParseListener) ExitSubscript(ctx *pmmp.SubscriptContext) {
  * it on the expression stack. If the variable has a known value, we will
  * put the value onto the stack (otherwise the variable reference).
  */
-func (pl *ParseListener) makeCanonicalAndResolve(v string, expectLvalue bool) *variables.PMMPVarRef {
+func (pl *ParseListener) makeCanonicalAndResolve(v string, create bool) *variables.PMMPVarRef {
 	vtree := variables.ParseVariableFromString(v, &TracingErrorListener{})
 	vref := variables.GetVarRefFromVarSyntax(vtree, pl.rt.ScopeTree)
-	vref, _ = corelang.FindVariableReferenceInMemory(pl.rt, vref, true) // allocate if not found
+	vref, _ = corelang.FindVariableReferenceInMemory(pl.rt, vref, create) // allocate if not found
 	return vref
 }
 
 // --- Utilities -------------------------------------------------------------
-
-/* TODO complete this.
- * Return scaled points for high level units (cm, mm, pt, in, ...)
- */
-func unit2numeric(u string) dec.Decimal {
-	switch u {
-	case "in":
-		return dec.NewFromFloat(0.01388888)
-	}
-	return arithm.ConstOne
-}
-
-/* Scale a numeric value by a unit.
- */
-func scaleDimension(dimen dec.Decimal, unit string) dec.Decimal {
-	u := unit2numeric(unit)
-	return dimen.Mul(u)
-}
 
 /* Create a color from a hex string. Returns black if the string cannot
  * be interpreted as a color hex code.
@@ -1194,7 +1177,7 @@ func isTag(node antlr.Tree) bool {
 	r, ok = node.GetPayload().(antlr.RuleNode)
 	if ok {
 		ctx := r.GetRuleContext()
-		_, ok = ctx.(pmmp.IAnytagContext)
+		_, ok = ctx.(grammar.IAnytagContext)
 	}
 	//fmt.Printf("node is anytag: %v\n", ok)
 	return ok

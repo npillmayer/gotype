@@ -50,29 +50,18 @@ Usage: pmmp [-d <output-dir>] [-f png|svg] [-x] [-m] inputfile.pmp
 
 import (
 	"fmt"
-	"io"
 	"log"
-	"strings"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
-	"github.com/chzyer/readline"
-	"github.com/mitchellh/colorstring"
 	"github.com/npillmayer/gotype/gtbackend/gfx"
 	"github.com/npillmayer/gotype/gtbackend/gfx/png"
 	"github.com/npillmayer/gotype/gtcore/config"
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	"github.com/npillmayer/gotype/syntax/pmmpost"
 	"github.com/spf13/cobra"
 )
 
-var T tracing.Trace = tracing.CommandTracer
-
 // global settings
-const toolname = "pmmp"
-const welcomeMessage = "Welcome to Poor Man's MetaPost [V0.1 experimental]"
-const stdprompt = "[green]pmmp> "
-
-var editmode string = "emacs"
+const pmmpWelcomeMessage = "Welcome to Poor Man's MetaPost [V0.1 experimental]"
 
 // pmmpostCmd represents the pmmp command
 var pmmpostCmd = &cobra.Command{
@@ -82,7 +71,7 @@ var pmmpostCmd = &cobra.Command{
 	MetaPost sytem. Users supply an input program, either as a text file
 	or on the command prompt. Output may be generated as PDF, SVG or PNG.`,
 	Args: cobra.MaximumNArgs(1),
-	Run:  PMMPostCmd,
+	Run:  runPMMPostCmd,
 }
 
 /* COBRA init method. Defines command and flags.
@@ -95,39 +84,24 @@ func init() {
 	pmmpostCmd.Flags().BoolP("debug", "x", false, "Debug mode")
 }
 
-// We support some interactive sub-commands (not part of the PMMP grammar).
-func displayCommands(out io.Writer) {
-	io.WriteString(out, welcomeMessage)
-	io.WriteString(out, "\n\nThe following commands are available:\n\n")
-	io.WriteString(out, "help:               print this message\n")
-	io.WriteString(out, "bye:                quit\n")
-	io.WriteString(out, "mode [mode]:        display or set current editing mode\n")
-	io.WriteString(out, "setprompt [prompt]: set current editing mode [to default],\n")
-	io.WriteString(out, "                    supports color strings, e.g. '[blue]myprompt#'\n\n")
+// A type to instantiate a REPL interpreter.
+type PMMPostREPL struct {
+	BaseREPL
+	pmmpintp interface{}
+	//pmmpintp *pmmpost.PMMPostInterpreter
 }
 
-// Completer-tree for interactive pmmp sub-commands
-var replCompleter = readline.NewPrefixCompleter(
-	readline.PcItem("help"),
-	readline.PcItem("bye"),
-	readline.PcItem("mode",
-		readline.PcItem("vi"),
-		readline.PcItem("emacs"),
-	),
-	readline.PcItem("setprompt"),
-)
-
-// A helper type to instantiate a REPL interpreter.
-type PMMPostREPL struct {
-	interpreter *pmmpost.PMMPostInterpreter
-	readline    *readline.Instance
+/* Bridge to the PMMPost interpreter.
+ */
+func (pmmprepl *PMMPostREPL) InterpretCommand(input string) {
+	//pmmprepl.pmmpintp.ParseStatements(antlr.NewInputStream(input))
 }
 
 /* The PMMPost command (pmmp).
  */
-func PMMPostCmd(cmd *cobra.Command, args []string) {
-	fmt.Println(welcomeMessage)
-	config.Initialize()
+func runPMMPostCmd(cmd *cobra.Command, args []string) {
+	fmt.Println(pmmpWelcomeMessage)
+	welcomeMessage = pmmpWelcomeMessage
 	var inputfilename string
 	if len(args) > 0 {
 		T.Infof("input file is %s", args[0])
@@ -136,21 +110,23 @@ func PMMPostCmd(cmd *cobra.Command, args []string) {
 	tracing.Tracefile = tracing.ConfigTracing(inputfilename)
 	defer tracing.Tracefile.Close()
 	gfx.GlobalCanvasFactory = png.NewContextFactory() // use GG drawing package
-	startInput(inputfilename)
+	startPMMPostInput(inputfilename)
 }
 
 /* Start PMMPost input. if a filename is given, opens the file and reads from
  * there. Otherwise starts an interactive shell (REPL).
  */
-func startInput(inputfilename string) {
+func startPMMPostInput(inputfilename string) {
 	if inputfilename == "" {
 		config.IsInteractive = true
 		repl := NewPMMPostREPL() // go into interactive mode
+		repl.toolname = "pmmp"
 		log.SetOutput(repl.readline.Stderr())
 		defer repl.readline.Close()
 		repl.doLoop()
 	} else {
-		input, err := antlr.NewFileStream(inputfilename) // TODO refactor to get rid of ANTLR
+		//input, err := antlr.NewFileStream(inputfilename) // TODO refactor to get rid of ANTLR
+		_, err := antlr.NewFileStream(inputfilename) // TODO refactor to get rid of ANTLR
 		if err != nil {
 			T.Error("cannot open input file")
 		} else {
@@ -160,9 +136,9 @@ func startInput(inputfilename string) {
 					T.Error("error executing PMMPost statement!")
 				}
 			}()
-			interpreter := pmmpost.NewPMMPostInterpreter()
-			interpreter.SetOutputRoutine(png.NewPNGOutputRoutine()) // will produce PNG format
-			interpreter.ParseStatements(input)
+			//interpreter := pmmpost.NewPMMPostInterpreter()
+			//interpreter.SetOutputRoutine(png.NewPNGOutputRoutine()) // will produce PNG format
+			//interpreter.ParseStatements(input)
 		}
 	}
 }
@@ -172,119 +148,12 @@ func startInput(inputfilename string) {
  * then forward PMMetaPost statements to the parser.
  */
 func NewPMMPostREPL() *PMMPostREPL {
-	rl, err := readline.NewEx(&readline.Config{
-		Prompt:              colorstring.Color(stdprompt),
-		HistoryFile:         "/tmp/pmmpost-repl-history.tmp",
-		AutoComplete:        replCompleter,
-		InterruptPrompt:     "^C",
-		EOFPrompt:           "exit",
-		HistorySearchFold:   true,
-		FuncFilterInputRune: filterReplInput,
-	})
-	if err != nil {
-		panic(err)
-	}
-	repl := &PMMPostREPL{
-		interpreter: pmmpost.NewPMMPostInterpreter(),
-		readline:    rl,
-	}
-	repl.interpreter.SetOutputRoutine(png.NewPNGOutputRoutine()) // will produce PNG format
+	rl := NewReadline("pmmp")
+	repl := &PMMPostREPL{}
+	repl.readline = rl
+	repl.interpreter = repl // we are our own bridge to the interpreter
+	//repl.pmmpintp = pmmpost.NewPMMPostInterpreter()
+	//repl.pmmpintp.SetOutputRoutine(png.NewPNGOutputRoutine()) // will produce PNG format
+	repl.toolname = "pmmp"
 	return repl
-}
-
-/* Enter a REPL and execute each command.
- * Commands are either tool-commands (setprompt, help, etc.)
- * or PMMPost statements.
- */
-func (repl *PMMPostREPL) doLoop() {
-	for {
-		line, err := repl.readline.Readline()
-		if err == readline.ErrInterrupt {
-			if len(line) == 0 {
-				break
-			} else {
-				continue
-			}
-		} else if err == io.EOF {
-			break
-		}
-		line = strings.TrimSpace(line)
-		words := strings.Fields(line)
-		command := "<no command>"
-		if len(words) > 0 {
-			command = words[0]
-		}
-		if doExit := repl.executeCommand(command, words, line); doExit {
-			break
-		}
-	}
-}
-
-/* Central dispatcher function to execute internal commands and PMMetaPost
- * statements. It receives the command (i.e. the first word of the line),
- * a list of words (args) including the command, and the complete line of text.
- * If it returns true, the REPL should terminate.
- */
-func (repl *PMMPostREPL) executeCommand(cmd string, args []string, line string) bool {
-	switch {
-	case cmd == "help":
-		displayCommands(repl.readline.Stderr())
-	case cmd == "bye":
-		println("> goodbye!")
-		return true
-	case cmd == "mode":
-		if len(args) > 1 {
-			switch args[1] {
-			case "vi":
-				repl.readline.SetVimMode(true)
-				editmode = "vi"
-				return false
-			case "emacs":
-				repl.readline.SetVimMode(false)
-				editmode = "emacs"
-				return false
-			}
-		}
-		io.WriteString(repl.readline.Stderr(),
-			fmt.Sprintf("> current input mode: %s\n", editmode))
-	case cmd == "setprompt":
-		var prmpt string
-		if len(line) <= 10 {
-			prmpt = stdprompt
-		} else {
-			prmpt = line[10:] + " "
-		}
-		repl.readline.SetPrompt(colorstring.Color(prmpt))
-	case cmd == "":
-	default:
-		T.Debugf("call PMMPost parser on: '%s'", line)
-		repl.callPMMPostInterpreter(line)
-	}
-	return false // do not exit
-}
-
-/* Call the PMMPost interpreter, sending a statement.
- */
-func (repl *PMMPostREPL) callPMMPostInterpreter(line string) {
-	input := antlr.NewInputStream(line) // TODO refactor to get rid of ANTLR
-	/*
-		defer func() {
-			if r := recover(); r != nil {
-				io.WriteString(repl.readline.Stderr(), "> error executing PMMPost statement!\n")
-				io.WriteString(repl.readline.Stderr(), fmt.Sprintf("> %v\n", r)) // TODO: get ERROR and print
-			}
-		}()
-	*/
-	repl.interpreter.ParseStatements(input)
-}
-
-/* Input filter for REPL. Blocks ctrl-z.
- */
-func filterReplInput(r rune) (rune, bool) {
-	switch r {
-	// block CtrlZ feature
-	case readline.CharCtrlZ:
-		return r, false
-	}
-	return r, true
 }

@@ -1,4 +1,6 @@
 /*
+----------------------------------------------------------------------
+
 BSD License
 Copyright (c) 2017, Norbert Pillmayer
 
@@ -28,84 +30,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----------------------------------------------------------------------
 
-This is a sub-grammar defining the lexical tokens of the 'Galery' DSL.
+This is a sub-grammar defining the lexical tokens of the 'Gallery' DSL.
 
 */
 
-lexer grammar PMMPostTerminals;
+lexer grammar GalleryTerminals;
 
-ASSIGN   : ':=' ;
-EQUALS   : '=' ;
-COLON    : ':' ;
-SEMIC    : ';' ;
-COMMA    : ',' ;
-LPAREN   : '(' ;
-RPAREN   : ')' ;
-LBRACKET : '[' ;
-RBRACKET : ']' ; 
+import CoreTerminals;
 
-PATHJOIN : ('--' '-'? | '..' '.'? | '&' ) ;
+PATHJOIN : ('--' | '&' ) ;
 
-PLUS  : '+' ;
-MINUS : '-' ;
-TIMES : '*' ;
-OVER  : '/' ;
+PARAMETER : 'parameter' ;
 
-PARALLEL    : '||' ;
-PERPENDIC   : '|-' ;
-CONGRUENT   : '~' ;
-
-WHATEVER
-    : '?'
-    | 'whatever'
-    ;
-
-UNIT : ( 'bp' | 'mm' | 'cm' | 'in' | 'pt' | 'pc' ) ;
-
-TYPE : 'numeric' | 'pair' | 'path' | 'framedbox' | 'framedpath' | 'transform' ;
-
-INTERNAL : 'width' | 'height' ;
-
-PAIRPART   : 'xpart' | 'ypart' ;
-EDGECONSTR : 'top' | 'lft' | 'rt' | 'bot' ;
-EDGE       : 'edge' ;
-FRAME      : 'frame' ;
-BOX        : 'box' ;
-
-MATHFUNC : 'length' | 'floor' | 'ceil' | 'sqrt' ;
-SUBPATH  : 'subpath' ;
-REVERSE  : 'reverse' ;
-WITH     : 'with' ;
-POINT    : 'point' ;
-OF       : 'of' ;
-
-TRANSFORM : 'scaled' | 'shifted' | 'rotated' | 'transformed' ;
-
-CYCLE    : 'cycle' ;
-
-PATHCLIPOP : 'union' | 'intersection' | 'difference' ;
-
-BEGINGROUP : 'begingroup' ;
-ENDGROUP   : 'endgroup' ;
-
-PROOF      : 'proof' ;
-SAVE       : 'save' ;
-SHOW       : 'show' ;
-
-TAG        : [a-zA-Z]+ ;
-MIXEDTAG   : '.'? [a-zA-Z] [.a-zA-Z0-9]* ;
-
-DECIMALTOKEN : '0'..'9'+ ( DOT '0'..'9'+ )? '%'? ;
-
-DOT      : '.' ;
-
-LABEL : '"' [a-zA-Z][a-zA-Z0-9 \-_]+ '"' ;
-
-fragment
-LINECOMMENT
-    : '//' .*? '\r'? '\n'      // line comment
-    ;
-
-WS
-    : ( [ \r\n\t]+ | LINECOMMENT )        -> skip
-    ;
+TYPE  : 'numeric' | 'pair' | 'path' | 'transform' | 'framedbox' | 'framedpath' ;

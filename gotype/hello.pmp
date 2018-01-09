@@ -1,8 +1,0 @@
-beginfig("hello", 120mm, 110mm);
-    2 * xpart z1 = xpart z2 + xpart z3 = w;
-    //ypart z2 = ypart z3;
-    //ypart z1 + ypart z2 = h;
-    //(z1-z2) = (z3-z2) rotated 60;
-    //pickup pensquare withcolor #4a78bb;
-    //fill z1--z2--z3--cycle;
-endfig;
