@@ -137,6 +137,38 @@ func TestCycle(t *testing.T) {
 	//fmt.Println(PathAsString(path, controls))
 }
 
+/*
+Draw a cicle with diameter 1 around (2,1). The builder statement returns
+a HobbyPath (type Path under the hood) and SplineControls. Type Path actually
+contains a link to its spline controls (field path.Controls). These controls
+are initially empty and then used for the call to FindHobbyControls(...),
+where they get filled.
+*/
+func ExampleSplineControls_usage() {
+	path, controls := Nullpath().Knot(P(1, 1)).Curve().Knot(P(2, 2)).Curve().Knot(P(3, 1)).
+		Curve().Knot(P(2, 0)).Curve().Cycle()
+	fmt.Printf("skeleton path = %s\n\n", PathAsString(path, nil))
+	fmt.Printf("unknown path = \n%s\n\n", PathAsString(path, controls))
+	controls = FindHobbyControls(path, controls)
+	fmt.Printf("smooth path = \n%s\n\n", PathAsString(path, controls))
+
+	// skeleton path = (1,1) .. (2,2) .. (3,1) .. (2,0) .. cycle
+
+	// unknown path =
+	// (1,1) .. controls (<unknown>) and (<unknown>)
+	//  .. (2,2) .. controls (<unknown>) and (<unknown>)
+	//  .. (3,1) .. controls (<unknown>) and (<unknown>)
+	//  .. (2,0) .. controls (<unknown>) and (<unknown>)
+	//  .. cycle
+
+	// smooth path =
+	// (1,1) .. controls (1.0000,1.5523) and (1.4477,2.0000)
+	//  .. (2,2) .. controls (2.5523,2.0000) and (3.0000,1.5523)
+	//  .. (3,1) .. controls (3.0000,0.4477) and (2.5523,0.0000)
+	//  .. (2,0) .. controls (1.4477,0.0000) and (1.0000,0.4477)
+	//  .. cycle
+}
+
 func TestSplices(t *testing.T) {
 	path, controls := Nullpath().Knot(P(0, 0)).Curve().Knot(P(2, 3)).TensionCurve(N(1.4), N(1.4)).Knot(P(5, 3)).Curve().DirKnot(P(3, -1), P(-1, 0)).Curve().Cycle()
 	controls = FindHobbyControls(path, controls)

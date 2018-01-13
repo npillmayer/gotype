@@ -67,16 +67,16 @@ FindHobbyControls(...)
 which returns the necessary control point information to produce a smooth
 curve:
 
-  (0.0000,0.0000) .. controls (-0.5883,1.2616) and (0.4229,2.6442)
-  .. (2.0000,3.0000) .. controls (2.7160,3.1616) and (4.3325,3.2937)
-  .. (5.0000,3.0000) .. controls (6.5505,2.3177) and (6.2401,-0.4349)
-  .. (3.0000,-1.0000) .. controls (1.8036,-1.2086) and (0.4731,-1.0145)
-  .. cycle
+  (0,0) .. controls (-0.5882,1.2616) and (0.4229,2.6442)
+   .. (2,3) .. controls (2.7160,3.1616) and (4.3325,3.2937)
+   .. (5,3) .. controls (6.5505,2.3177) and (6.2401,-0.4348)
+   .. (3,-1) .. controls (1.8036,-1.2085) and (0.4731,-1.0144)
+   .. cycle
 
 Caveats
 
 (1) The development of this package is still in a very early phase.
-Please do use with caution.
+Please do use with caution!
 
 (2) Currently there are slight deviations from MetaFont's calculation,
 probably due to different rounding. These are under investigation.
@@ -84,6 +84,10 @@ probably due to different rounding. These are under investigation.
 
 (3) Currently it isn't possible to explicitly set control points,
 as I don't need this functionality. This may or may not change in the future.
+Please note that the goal of this project is ultimately to support graphical
+requirements for typesetting, not implementing a graphical system. If you
+need a full fledged engine for preparing illustrations, you should stick
+to MetaPost, which is a really great piece of software!
 
 ----------------------------------------------------------------------
 
@@ -153,7 +157,7 @@ The interface is a "read only" interface in the sense that it provides
 the input path's parameters for the MetaFont spline interpolation.
 A path may have parameters provided for knots or for joins/curves. Possible
 knot parameters are: dir (= an explicit angle for the tangent at the knot) or
-curl (= the amount of curveture at the knot). Curves may be given tension
+curl (= the amount of curvature at the knot). Curves may be given tension
 parameters, which control the "tightness" of the line between knots. A
 negative value for a tension means "at least" the amount of tension and is
 used to prevent the spline from leaving the bounding box of its control
@@ -164,11 +168,11 @@ adhere to the following requirement: Z() must accept subscipts >= N, i.e.
 larger than the length of the path, and return knot[i mod N]. The last
 knot of a cyclic path is identical to the first one, but it must not be
 included twice! Instead, the algorithm relies on the modulo-subscripting
-mechanismus for adressing all knots of the cycle.
+mechanism for adressing all knots of the cycle.
 
 A HobbyPath does not contain information about spline control points (the
 path's properties are understood as "input parameters" for the Hobby
-algorithm. Control point information is handled using a separate interface.
+algorithm). Control point information is handled using a separate interface.
 
 see type SplineControls.
 */
@@ -210,11 +214,11 @@ Otherwise it will include the knot coordinates in one line.
 
 Example, a circle of diameter 1 around (2,1):
 
-  (1.0000,1.0000) .. controls (1.0000,1.5523) and (1.4477,2.0000)
-  .. (2.0000,2.0000) .. controls (2.5523,2.0000) and (3.0000,1.5523)
-  .. (3.0000,1.0000) .. controls (3.0000,0.4477) and (2.5523,0.0000)
-  .. (2.0000,0.0000) .. controls (1.4477,0.0000) and (1.0000,0.4477)
-  .. cycle
+    (1,1) .. controls (1.0000,1.5523) and (1.4477,2.0000)
+      .. (2,2) .. controls (2.5523,2.0000) and (3.0000,1.5523)
+      .. (3,1) .. controls (3.0000,0.4477) and (2.5523,0.0000)
+      .. (2,0) .. controls (1.4477,0.0000) and (1.0000,0.4477)
+      .. cycle
 
 The format is not fully equivalent to MetaFont's, but close.
 */
@@ -224,19 +228,19 @@ func PathAsString(path HobbyPath, contr SplineControls) string {
 		pt := path.Z(i)
 		if i > 0 {
 			if contr != nil {
-				s += fmt.Sprintf(" and %s\n  .. ", ptstring(contr.PreControl(i)))
+				s += fmt.Sprintf(" and %s\n  .. ", ptstring(contr.PreControl(i), true))
 			} else {
 				s += " .. "
 			}
 		}
-		s += fmt.Sprintf("%s", ptstring(pt))
+		s += fmt.Sprintf("%s", ptstring(pt, false))
 		if contr != nil && (i < path.N()-1 || path.IsCycle()) {
-			s += fmt.Sprintf(" .. controls %s", ptstring(contr.PostControl(i)))
+			s += fmt.Sprintf(" .. controls %s", ptstring(contr.PostControl(i), true))
 		}
 	}
 	if path.IsCycle() {
 		if contr != nil {
-			s += fmt.Sprintf(" and %s\n ", ptstring(contr.PreControl(0)))
+			s += fmt.Sprintf(" and %s\n ", ptstring(contr.PreControl(0), true))
 		}
 		s += " .. cycle"
 	}
@@ -255,7 +259,7 @@ type Path struct {
 	postdirs []complex128 // explicit post-direction at point i
 	curls    []complex128 // explicit l and r curl at point i
 	tensions []complex128 // explicit pre- and post-tension at point i
-	controls *splcntrls   // control points to be calculated
+	Controls *splcntrls   // control points to be calculated
 }
 
 // A segment of a path; will implement interface HobbyPath
@@ -288,7 +292,7 @@ func newSkeletonPath(points []a.Pair) *Path {
 	for i, pt := range points {
 		path.points[i] = pair2cmplx(pt) // TODO: initialize all arrays
 	}
-	path.controls = &splcntrls{}
+	path.Controls = &splcntrls{}
 	return path
 }
 
@@ -343,13 +347,13 @@ func Nullpath() *Path {
 
 // End an open path. Part of builder functionality.
 func (path *Path) End() (HobbyPath, SplineControls) {
-	return path, path.controls
+	return path, path.Controls
 }
 
 // Close a cyclic path. Part of builder functionality.
 func (path *Path) Cycle() (HobbyPath, SplineControls) {
 	path.cycle = true
-	return path, path.controls
+	return path, path.Controls
 }
 
 // Add a standard smooth knot to a path. Part of builder functionality.
@@ -408,6 +412,11 @@ func (path *Path) Curve() KnotAdder {
 
 // Connect two knots with a tense curve.
 // Part of builder functionality.
+//
+// Tensions are adapted to lie between 3/4 and 4 (absolute).  Negative tensions
+// are interpreted as "at least" tensions to ensure the spline stays within
+// the bounding box at its control point.
+// BUG(norbert@pillmayer.com): Tension spec "at least" currently not completely implemented.
 func (path *Path) TensionCurve(t1, t2 dec.Decimal) KnotAdder {
 	if path.N() == 0 {
 		panic("cannot add curve to empty path")
@@ -430,18 +439,21 @@ func (path *Path) Concat() KnotAdder {
 
 // --- Setting Path Properties -----------------------------------------------
 
+// Property setter.
 func (path *Path) SetPreDir(i int, dir a.Pair) *Path {
 	path.predirs = extendC(path.predirs, i, cmplx.NaN())
 	path.predirs[i] = pair2cmplx(dir)
 	return path
 }
 
+// Property setter.
 func (path *Path) SetPostDir(i int, dir a.Pair) *Path {
 	path.postdirs = extendC(path.postdirs, i, cmplx.NaN())
 	path.postdirs[i] = pair2cmplx(dir)
 	return path
 }
 
+// Property setter.
 func (path *Path) SetPreCurl(i int, curl dec.Decimal) *Path {
 	path.curls = extendC(path.curls, i, 1+1i)
 	c := path.curls[i]
@@ -450,6 +462,7 @@ func (path *Path) SetPreCurl(i int, curl dec.Decimal) *Path {
 	return path
 }
 
+// Property setter.
 func (path *Path) SetPostCurl(i int, curl dec.Decimal) *Path {
 	path.curls = extendC(path.curls, i, 1+1i)
 	fmt.Printf("i = %d, len(path.curls) = %d\n", i, len(path.curls))
@@ -459,6 +472,11 @@ func (path *Path) SetPostCurl(i int, curl dec.Decimal) *Path {
 	return path
 }
 
+// Property setter.
+//
+// Tensions are adapted to lie between 3/4 and 4 (absolute).  Negative tensions
+// are interpreted as "at least" tensions to ensure the spline stays within
+// the bounding box at its control point.
 func (path *Path) SetPreTension(i int, tension dec.Decimal) *Path {
 	path.tensions = extendC(path.tensions, i, 1+1i)
 	t := path.tensions[i]
@@ -473,6 +491,11 @@ func (path *Path) SetPreTension(i int, tension dec.Decimal) *Path {
 	return path
 }
 
+// Property setter.
+//
+// Tensions are adapted to lie between 3/4 and 4 (absolute).  Negative tensions
+// are interpreted as "at least" tensions to ensure the spline stays within
+// the bounding box at its control point.
 func (path *Path) SetPostTension(i int, tension dec.Decimal) *Path {
 	path.tensions = extendC(path.tensions, i, 1+1i)
 	t := path.tensions[i]
@@ -490,18 +513,22 @@ func (path *Path) SetPostTension(i int, tension dec.Decimal) *Path {
 // === Interface Implementation ==============================================
 
 // Predicate: is this path cyclic?
+//
 // Interface HobbyPath.
 func (path *Path) IsCycle() bool {
 	return path.cycle
 }
 
-// Lenght of this path (knot count).
+// Lenght of this path (knot count). For cyclic paths, the first and last knot
+// should count as one.
+//
 // Interface HobbyPath.
 func (path *Path) N() int {
 	return len(path.points)
 }
 
 // Knot at position (i mod N).
+//
 // Interface HobbyPath.
 func (path *Path) Z(i int) complex128 {
 	if i < 0 || i >= path.N() {
@@ -511,13 +538,15 @@ func (path *Path) Z(i int) complex128 {
 	return z
 }
 
-// Get explicit incoming angle at z.i .
+// Get explicit incoming tangent / direction vector at z.i .
+//
 // Interface HobbyPath.
 func (path *Path) PreDir(i int) complex128 {
 	return getC(path.predirs, i, cmplx.NaN())
 }
 
-// Get explicit outgoing angle at z.i .
+// Get explicit outgoing tangent / direction vector at z.i .
+//
 // Interface HobbyPath.
 func (path *Path) PostDir(i int) complex128 {
 	return getC(path.postdirs, i, cmplx.NaN())
@@ -558,7 +587,7 @@ func (ctrls *splcntrls) SetPreControl(i int, c complex128) {
 
 func (ctrls *splcntrls) SetPostControl(i int, c complex128) {
 	//if ctrls.prec == nil {
-	//	ctrls.postc = make([]complex128, path.N()+2) // postcontrol points to find
+	//  ctrls.postc = make([]complex128, path.N()+2) // postcontrol points to find
 	//}
 	ctrls.postc = extendC(ctrls.postc, i, cmplx.NaN())
 	ctrls.postc[i] = c
@@ -584,6 +613,9 @@ central API function of this package.
 
 Clients may proved a container for the spline control points. If none
 is provided, i.e. controls == nil, this function will allocate one.
+
+FindHobbyControls(...) will trace the calculated final path using log-level
+INFO, if tracingchoices=true (as MetaFont does).
 */
 func FindHobbyControls(path HobbyPath, controls SplineControls) SplineControls {
 	var u []float64 = make([]float64, path.N()+2)
@@ -667,9 +699,9 @@ func endCycle(path HobbyPath, theta, u, v, w []float64) {
 		theta[i] = v[i] - u[i]*theta[i+1]
 	}
 	/*
-		for i := 0; i <= n; i++ {
-			fmt.Printf("theta.%d = %.2g\n", i, rad2deg(theta[i]))
-		}
+	   for i := 0; i <= n; i++ {
+	       fmt.Printf("theta.%d = %.2g\n", i, rad2deg(theta[i]))
+	   }
 	*/
 }
 
@@ -698,10 +730,10 @@ func buildEqs(path HobbyPath, u, v, w []float64) {
 
 func setControls(path HobbyPath, theta []float64, controls SplineControls) SplineControls {
 	/*
-		const_a := 1.41421356     // sqrt(2) -- empiric constants, as explained by J.Hobby
-		const_b := 0.0625         // 1/16
-		const_c := 0.38196601125  // (3 - sqrt(5)) / 2
-		const_cc := 0.61803398875 // 1 - c
+	   const_a := 1.41421356     // sqrt(2) -- empiric constants, as explained by J.Hobby
+	   const_b := 0.0625         // 1/16
+	   const_c := 0.38196601125  // (3 - sqrt(5)) / 2
+	   const_cc := 0.61803398875 // 1 - c
 	*/
 	n := path.N()
 	if controls == nil {
@@ -711,30 +743,30 @@ func setControls(path HobbyPath, theta []float64, controls SplineControls) Splin
 		phi := -psi(path, i+1) - theta[i+1]
 		//fmt.Printf("#### phi(%d) = %.2g\n", i, rad2deg(phi))
 		//fmt.Printf("phi.%d = %.4g - %.4g = %.4g\n", i, rad2deg(-path.psi(i+1)),
-		//	rad2deg(theta[i+1]), rad2deg(phi))
+		//  rad2deg(theta[i+1]), rad2deg(phi))
 		/*
-			a := recip(path.posttension(i))
-			b := recip(path.pretension(i + 1))
-			//
-				st := math.Sin(theta[i])
-				ct := math.Cos(theta[i])
-				sf := math.Sin(phi)
-				cf := math.Cos(phi)
-					alpha := const_a * (st - const_b*sf) * (sf - const_b*st) * (ct - cf)
-					beta := 1 + const_cc*ct + const_c*cf
-					//rho := (2 + alpha) / beta
-					//sigma := (2 - alpha) / beta
+		   a := recip(path.posttension(i))
+		   b := recip(path.pretension(i + 1))
+		   //
+		       st := math.Sin(theta[i])
+		       ct := math.Cos(theta[i])
+		       sf := math.Sin(phi)
+		       cf := math.Cos(phi)
+		           alpha := const_a * (st - const_b*sf) * (sf - const_b*st) * (ct - cf)
+		           beta := 1 + const_cc*ct + const_c*cf
+		           //rho := (2 + alpha) / beta
+		           //sigma := (2 - alpha) / beta
 		*/
 		/*
-			alpha, beta := hobbyParamsAlphaBeta(theta[i], phi)
-			rho, sigma := hobbyParamsRhoSigma(alpha, beta)
-				   rho := complex(a/3*((2+alpha)/beta), 0)
-				   sigma := complex(b/3*((2-alpha)/beta), 0)
-				xpart, ypart := real(path.delta(i)), imag(path.delta(i))
-				pci := complex(xpart*ct-ypart*st, xpart*st+ypart*ct) * rho
-				pcii := complex(xpart*cf+ypart*sf, -xpart*sf+ypart*cf) * sigma
-				path.postc[i%n] = path.z(i) + pci
-				path.prec[(i+1)%n] = path.z(i+1) - pcii
+		   alpha, beta := hobbyParamsAlphaBeta(theta[i], phi)
+		   rho, sigma := hobbyParamsRhoSigma(alpha, beta)
+		          rho := complex(a/3*((2+alpha)/beta), 0)
+		          sigma := complex(b/3*((2-alpha)/beta), 0)
+		       xpart, ypart := real(path.delta(i)), imag(path.delta(i))
+		       pci := complex(xpart*ct-ypart*st, xpart*st+ypart*ct) * rho
+		       pcii := complex(xpart*cf+ypart*sf, -xpart*sf+ypart*cf) * sigma
+		       path.postc[i%n] = path.z(i) + pci
+		       path.prec[(i+1)%n] = path.z(i+1) - pcii
 		*/
 		a := recip(path.PostTension(i))
 		b := recip(path.PreTension(i + 1))
@@ -786,16 +818,16 @@ func cunitvecs(i int, theta, phi float64, dvec complex128) (complex128, complex1
 //func (path *Path) controlPoints(i int, phi, theta, rho, sigma float64) {
 func controlPoints(i int, phi, theta, a, b float64, dvec complex128) (complex128, complex128) {
 	/*
-		n := path.n()
-		a := recip(path.posttension(i))
-		b := recip(path.pretension(i + 1))
-			crho := complex(a/3*rho, 0)
-			csigma := complex(b/3*sigma, 0)
-				dx, dy := real(path.delta(i)), imag(path.delta(i))
-				pci := complex(dx*ct-dy*st, dx*st+dy*ct) * crho
-				pcii := complex(dx*cf+dy*sf, -dx*sf+dy*cf) * csigma
-				path.postc[i%n] = path.z(i) + pci
-				path.prec[(i+1)%n] = path.z(i+1) - pcii
+	   n := path.n()
+	   a := recip(path.posttension(i))
+	   b := recip(path.pretension(i + 1))
+	       crho := complex(a/3*rho, 0)
+	       csigma := complex(b/3*sigma, 0)
+	           dx, dy := real(path.delta(i)), imag(path.delta(i))
+	           pci := complex(dx*ct-dy*st, dx*st+dy*ct) * crho
+	           pcii := complex(dx*cf+dy*sf, -dx*sf+dy*cf) * csigma
+	           path.postc[i%n] = path.z(i) + pci
+	           path.prec[(i+1)%n] = path.z(i+1) - pcii
 	*/
 	alpha, beta := hobbyParamsAlphaBeta(theta, phi)
 	rho, sigma := hobbyParamsRhoSigma(alpha, beta)
@@ -805,10 +837,10 @@ func controlPoints(i int, phi, theta, a, b float64, dvec complex128) (complex128
 	p2 := crho * uv1
 	p3 := csigma * uv2
 	/*
-		path.postc[i%n] = path.z(i) + complex(a/3, 0)*uv1
-		path.prec[(i+1)%n] = path.z(i+1) - complex(b/3, 0)*uv2
-		fmt.Printf("#### post-control of %d = %.1f\n", i, path.postc[i%n])
-		fmt.Printf("#### pre-control of %d  = %.1f\n", i+1, path.prec[(i+1)%n])
+	   path.postc[i%n] = path.z(i) + complex(a/3, 0)*uv1
+	   path.prec[(i+1)%n] = path.z(i+1) - complex(b/3, 0)*uv2
+	   fmt.Printf("#### post-control of %d = %.1f\n", i, path.postc[i%n])
+	   fmt.Printf("#### pre-control of %d  = %.1f\n", i+1, path.prec[(i+1)%n])
 	*/
 	return p2, p3
 }
@@ -820,7 +852,7 @@ func splitSegments(path HobbyPath) []HobbyPath {
 	at := 0
 	for i := 0; i < path.N(); i++ {
 		z := path.Z(i)
-		fmt.Printf("analyzing z.%d = %s\n", i, ptstring(z))
+		fmt.Printf("analyzing z.%d = %s\n", i, ptstring(z, false))
 		lc, rc := path.PreCurl(i), path.PostCurl(i)
 		has2curls := lc != rc && lc != 0.0 && rc != 0.0
 		//has2dirs := ld == rd && !cmplx.IsNaN(ld) && !cmplx.IsNaN(rd)
@@ -954,9 +986,20 @@ func rad2deg(a float64) float64 {
 	return a * 180 / pi
 }
 
-func ptstring(pt complex128) string {
+func ptstring(pt complex128, iscontrol bool) string {
 	if cmplx.IsNaN(pt) {
 		return "(<unknown>)"
+	} else if iscontrol {
+		return fmt.Sprintf("(%.4f,%.4f)", round(real(pt)), round(imag(pt)))
+	} else {
+		return fmt.Sprintf("(%.4g,%.4g)", round(real(pt)), round(imag(pt)))
 	}
-	return fmt.Sprintf("(%.4f,%.4f)", real(pt), imag(pt))
+}
+
+func round(x float64) float64 {
+	if x >= 0 {
+		return float64(int64(x*10000.0+0.5)) / 10000.0
+	} else {
+		return float64(int64(x*10000.0-0.5)) / 10000.0
+	}
 }
