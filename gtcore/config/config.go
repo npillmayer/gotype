@@ -23,3 +23,7 @@ func InitConfigPath() {
 		panic(fmt.Errorf("Fatal error config file: %s \n", err))
 	}
 }
+
+func IsSet(key string) bool {
+	return viper.IsSet(key)
+}

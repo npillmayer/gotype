@@ -15,7 +15,9 @@ func InitDefaults() {
 	viper.SetDefault("tracingsyntax", "WARN")
 	viper.SetDefault("tracingcommands", "WARN")
 	viper.SetDefault("tracinginterpreter", "WARN")
+	viper.SetDefault("tracinggraphics", "WARN")
 
 	viper.SetDefault("tracingcapsules", "WARN")
 	viper.SetDefault("tracingrestores", "WARN")
+	viper.SetDefault("tracingchoices", true)
 }

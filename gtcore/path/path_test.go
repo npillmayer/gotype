@@ -8,6 +8,7 @@ import (
 	"github.com/npillmayer/gotype/gtcore/arithmetic"
 	"github.com/npillmayer/gotype/gtcore/config"
 	"github.com/shopspring/decimal"
+	"github.com/sirupsen/logrus"
 )
 
 var zero = arithmetic.ConstZero
@@ -35,7 +36,6 @@ func TestSliceEnlargement(t *testing.T) {
 
 func TestCreatePath(t *testing.T) {
 	path, _ := testpath()
-	fmt.Printf("path = %s\n", path)
 	if path.N() != 3 {
 		t.Fail()
 	}
@@ -169,11 +169,25 @@ func ExampleSplineControls_usage() {
 	//  .. cycle
 }
 
-func TestSplices(t *testing.T) {
-	path, controls := Nullpath().Knot(P(0, 0)).Curve().Knot(P(2, 3)).TensionCurve(N(1.4), N(1.4)).Knot(P(5, 3)).Curve().DirKnot(P(3, -1), P(-1, 0)).Curve().Cycle()
+func TestSegmentProjection(t *testing.T) {
+	path, _ := Nullpath().Knot(P(1, 1)).Curve().Knot(P(2, 2)).Curve().Knot(P(3, 1)).End()
+	seg := makePathSegment(path, 0, 1)
+	if seg.N() != 2 {
+		t.Fail()
+	}
+}
+
+func TestSegments(t *testing.T) {
+	path, _ := Nullpath().Knot(P(0, 0)).Curve().Knot(P(0, 3)).Curve().
+		Knot(P(5, 3)).Line().DirKnot(P(3, -1), P(0, -1)).Curve().Cycle()
+	segs := splitSegments(path)
+	if len(segs) != 3 {
+		t.Fail()
+	}
+}
+
+func TestSegmentedPath(t *testing.T) {
+	T.SetLevel(logrus.InfoLevel)
+	path, controls := Nullpath().Knot(P(1, 1)).Line().Knot(P(2, 2)).Line().Knot(P(3, 1)).End()
 	controls = FindHobbyControls(path, controls)
-	fmt.Println(PathAsString(path, controls))
-	//p, controls := testpath()
-	//path, _ := p.Curve().Cycle()
-	//path.analyzeSplicePaths()
 }
