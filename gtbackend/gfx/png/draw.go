@@ -1,21 +1,30 @@
-package png
-
 /*
+Package png implements a canvas type as a bridge to the Go Graphics
+drawing package.
+
+----------------------------------------------------------------------
+
 BSD License
+
 Copyright (c) 2017, Norbert Pillmayer <norbert@pillmayer.com>
 
 All rights reserved.
+
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
 are met:
+
 1. Redistributions of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
+notice, this list of conditions and the following disclaimer.
+
 2. Redistributions in binary form must reproduce the above copyright
-   notice, this list of conditions and the following disclaimer in the
-   documentation and/or other materials provided with the distribution.
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
 3. Neither the name of Norbert Pillmayer nor the names of its contributors
-   may be used to endorse or promote products derived from this software
-   without specific prior written permission.
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -29,11 +38,8 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----------------------------------------------------------------------
-
- * This package implements a canvas type as a bridge to the Go Graphics
- * drawing package.
-
 */
+package png
 
 import (
 	"image"
@@ -45,34 +51,80 @@ import (
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
 )
 
+// We are tracing to the graphics trace
 var T tracing.Trace = tracing.GraphicsTracer
 
-/* A canvas type as a bridge to the Go Graphics drawing package.
- */
+// A canvas type as a bridge to the Go Graphics drawing package.
 type GGCanvas struct {
 	context *gg.Context
 }
 
-/* Interface Canvas. Return graphic's width.
- */
+func NewCanvas(width, height float64) *GGCanvas {
+	ggc := &GGCanvas{}
+	ggc.context = newGC(width, height)
+	return ggc
+}
+
+// Interface Canvas. Return graphic's width.
 func (ggc *GGCanvas) W() float64 {
 	return float64(ggc.context.Width())
 }
 
-/* Interface Canvas. Return graphic's height.
- */
+// Interface Canvas. Return graphic's height.
 func (ggc *GGCanvas) H() float64 {
 	return float64(ggc.context.Height())
 }
 
-/* Interface Canvas. Add a stroke to the graphics context.
- * If linecol is non-void, a line will be drawn. If fillcol is non-void and
- * the path is closed, the path's inside area will be filled.
- */
-func (ggc *GGCanvas) AddContour(path arithm.Path, linethickness float64,
+/*
+Interface Canvas. Add a stroke to the graphics context.
+If linecol is non-void, a line will be drawn. If fillcol is non-void and
+the path is closed, the path's inside area will be filled.
+*/
+func (ggc *GGCanvas) AddContour(contour gfx.DrawableContour, linethickness float64,
 	linecol color.Color, fillcol color.Color) {
 	//
-	T.P("fmt", "PNG").Debugf("add contour %.30s", path.String())
+	T.P("fmt", "PNG").Debug("add contour")
+	pt := contour.Start()
+	px, _ := pt.XPart().Float64()
+	py, _ := pt.YPart().Float64()
+	ggc.context.MoveTo(px, py)
+	for pt != nil {
+		var c1, c2 arithm.Pair
+		pt, c1, c2 = contour.ToNextKnot()
+		px, _ = pt.XPart().Float64()
+		py, _ = pt.YPart().Float64()
+		if c1 == nil && c2 == nil {
+			ggc.context.LineTo(px, ggc.yflip(py))
+		} else {
+			c1x, _ := c1.XPart().Float64()
+			c1y, _ := c1.YPart().Float64()
+			c2x, _ := c2.XPart().Float64()
+			c2y, _ := c2.YPart().Float64()
+			ggc.context.CubicTo(c1x, c1y, c2x, c2y, px, py)
+		}
+		if contour.IsCycle() {
+			// close path ?
+			if fillcol != nil {
+				ggc.context.SetColor(fillcol)
+				ggc.context.Fill()
+			}
+		}
+		if linecol != nil {
+			ggc.context.SetLineWidth(linethickness)
+			ggc.context.SetColor(linecol)
+			ggc.context.Stroke()
+		}
+	}
+}
+
+/*
+Interface Canvas. Add a stroke to the graphics context.
+If linecol is non-void, a line will be drawn. If fillcol is non-void and
+the path is closed, the path's inside area will be filled.
+func (ggc *GGCanvas) _addContour(path gfx.DrawableContour, linethickness float64,
+	linecol color.Color, fillcol color.Color) {
+	//
+	T.P("fmt", "PNG").Debug("add contour")
 	l := path.Length()
 	pt := arithm.Pr2Pt(path.GetPoint(0))
 	ggc.context.MoveTo(pt.X, ggc.yflip(pt.Y))
@@ -94,24 +146,24 @@ func (ggc *GGCanvas) AddContour(path arithm.Path, linethickness float64,
 		ggc.context.Stroke()
 	}
 }
+*/
 
-/* GG draw uses a top-down y-coordinate. Flip it.
- */
+// GG draw uses a top-down y-coordinate. Flip it.
 func (ggc *GGCanvas) yflip(y float64) float64 {
 	return ggc.H() - y
 }
 
-/* Interface Canvas. Return the drawing as a stdlib image.
- */
+// Interface Canvas. Return the drawing as a stdlib image.
 func (ggc *GGCanvas) AsImage() image.Image {
 	T.P("fmt", "PNG").Debug("converting image")
 	return ggc.context.Image()
 }
 
-/* Interface Canvas. Set drawing options. Currently only gfx.PENSQUARE and
- * gfx.PENCIRCLE are understood. They determine linecap and and linejoin
- * parameters.
- */
+/*
+Interface Canvas. Set drawing options. Currently only gfx.PENSQUARE and
+gfx.PENCIRCLE are understood. They determine linecap and and linejoin
+parameters.
+*/
 func (ggc *GGCanvas) SetOption(opts int) {
 	if opts == gfx.PENSQUARE {
 		ggc.context.SetLineCapSquare()
@@ -125,14 +177,8 @@ func (ggc *GGCanvas) SetOption(opts int) {
 // check assignability
 var _ gfx.Canvas = &GGCanvas{}
 
-// A factory type for creating graphics contexts
-type ContextFactory struct {
-}
-
-/* Context factory method: create a new graphics context. Parameters are
- * a name for the GC, as well as dimensions width and height.
- */
-func (cfact *ContextFactory) New(name string, w float64, h float64) gfx.Canvas {
+// create a new GG graphics context.
+func newGC(w float64, h float64) *gg.Context {
 	dc := gg.NewContext(int(w), int(h))
 	dc.SetColor(color.Black)
 	dc.SetLineWidth(1.0)
@@ -142,18 +188,5 @@ func (cfact *ContextFactory) New(name string, w float64, h float64) gfx.Canvas {
 	dc.LineTo(0, h)
 	dc.LineTo(0, 0)
 	dc.Stroke()
-	ggc := &GGCanvas{dc}
-	return ggc
-}
-
-/* A pretty Stringer for the factory.
- */
-func (cfact *ContextFactory) String() string {
-	return "<Go Graphics PNG canvas factory>"
-}
-
-/* Create a new factory.
- */
-func NewContextFactory() *ContextFactory {
-	return &ContextFactory{}
+	return dc
 }

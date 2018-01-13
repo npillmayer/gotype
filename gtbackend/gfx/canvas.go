@@ -1,19 +1,37 @@
 /*
+Package gfx implements a backend for graphics. The backend connects to various
+drawing engines (e.g., raster, SVG, PDF, ...).
+
+We abstract the details away with an interface Canvas, which represents
+a rectangular drawing area. The main operation on a Canvas is AddContour,
+the drawing or filling of a path.
+
+Client often will not use Canvas directly, but rather an enclosing struct type
+Picture, which holds a Canvas plus some administrative information.
+
+----------------------------------------------------------------------
+
 BSD License
+
 Copyright (c) 2017, Norbert Pillmayer <norbert@pillmayer.com>
 
 All rights reserved.
+
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
 are met:
+
 1. Redistributions of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
+notice, this list of conditions and the following disclaimer.
+
 2. Redistributions in binary form must reproduce the above copyright
-   notice, this list of conditions and the following disclaimer in the
-   documentation and/or other materials provided with the distribution.
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
 3. Neither the name of Norbert Pillmayer nor the names of its contributors
-   may be used to endorse or promote products derived from this software
-   without specific prior written permission.
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -27,51 +45,51 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----------------------------------------------------------------------
-
- * Backend for graphics. The backend connects to various drawing
- * engines (e.g., raster, SVG, PDF, ...).
- * We abstract the details away with an interface Canvas, which represents
- * a rectangular drawing area. The main operation on a Canvas is AddContour,
- * the drawing or filling of a path.
- *
- * We do not use Canvas directly, but rather an enclosing struct type Picture,
- * which holds a Canvas plus some administrative information.
-
 */
-
 package gfx
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 
 	arithm "github.com/npillmayer/gotype/gtcore/arithmetic"
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
+	"github.com/npillmayer/gotype/gtcore/path"
+	"github.com/npillmayer/gotype/gtcore/polygon"
 	dec "github.com/shopspring/decimal"
 )
 
+// We are tracig to the graphics tracer.
 var G tracing.Trace = tracing.GraphicsTracer
 
-// Interface for output routines to ship out completed images
-type OutputRoutine interface {
-	Shipout(string, image.Image)
+// Table of canvas creation methods
+var supportedGfxTypes map[string](func(float64, float64) Canvas)
+
+func RegisterCanvasCreator(gfxType string, cc func(float64, float64) Canvas) {
+	if supportedGfxTypes == nil {
+		supportedGfxTypes = make(map[string](func(float64, float64) Canvas))
+	}
+	supportedGfxTypes[gfxType] = cc
 }
 
-// We need to create drawing canvases
-var GlobalCanvasFactory CanvasFactory
-
-// We need to create drawing canvases
-type CanvasFactory interface {
-	New(string, float64, float64) Canvas
+// Factory method to reate a new canvas for the given format.
+func NewCanvas(width, height float64, gfxFormat string) Canvas {
+	var cc func(float64, float64) Canvas
+	cc = supportedGfxTypes[gfxFormat]
+	if cc == nil {
+		panic(fmt.Sprintf("unknown graphics format for canvas request: %s"))
+	}
+	return cc(width, height)
 }
 
 // The interface type for drawing canvases
 type Canvas interface {
-	W() float64                                                // width
-	H() float64                                                // height
-	AddContour(arithm.Path, float64, color.Color, color.Color) // filldraw with pen with colors
-	AsImage() image.Image                                      // get a stdlib image
-	SetOption(int)                                             // set a drawing option
+	W() float64                                                    // width
+	H() float64                                                    // height
+	AddContour(DrawableContour, float64, color.Color, color.Color) // filldraw with pen with colors
+	AsImage() image.Image                                          // get a stdlib image
+	SetOption(int)                                                 // set a drawing option
 }
 
 // This is the type for the backend to work with
@@ -97,21 +115,15 @@ const PENSQUARE int = 2
 /* Create a new Picture. Caller has to provide an itentifier, a width and
  * height.
  */
-func NewPicture(name string, w float64, h float64) *Picture {
-	if GlobalCanvasFactory == nil {
-		G.Error("no canvas factory set")
-		panic("cannot create picture: no canvas factory")
-		return nil
-	} else {
-		canvas := GlobalCanvasFactory.New(name, w, h)
-		pic := &Picture{
-			Name:         name,
-			canvas:       canvas,
-			currentColor: color.Black,
-			currentPen:   NewPencircle(arithm.ConstOne),
-		}
-		return pic
+func NewPicture(name string, w float64, h float64, gfxType string) *Picture {
+	canvas := NewCanvas(w, h, gfxType)
+	pic := &Picture{
+		Name:         name,
+		canvas:       canvas,
+		currentColor: color.Black,
+		currentPen:   NewPencircle(arithm.ConstOne),
 	}
+	return pic
 }
 
 /* Create a new round pen.
@@ -136,25 +148,25 @@ func NewPensquare(diam dec.Decimal) *Pen {
 
 /* Draw a line. Uses the current pen.
  */
-func (pic *Picture) Draw(path arithm.Path) {
+func (pic *Picture) Draw(contour DrawableContour) {
 	pendiam, _ := pic.currentPen.diameter.Float64()
 	pic.canvas.SetOption(pic.currentPen.style)
-	pic.canvas.AddContour(path, pendiam, pic.currentColor, nil)
+	pic.canvas.AddContour(contour, pendiam, pic.currentColor, nil)
 }
 
 /* Fill a closed path. Uses the current pen.
  */
-func (pic *Picture) Fill(path arithm.Path) {
+func (pic *Picture) Fill(contour DrawableContour) {
 	pendiam, _ := pic.currentPen.diameter.Float64()
-	pic.canvas.AddContour(path, pendiam, nil, pic.currentColor)
+	pic.canvas.AddContour(contour, pendiam, nil, pic.currentColor)
 }
 
 /* MetaPost's filldraw command. Uses the current pen and color.
  */
-func (pic *Picture) FillDraw(path arithm.Path) {
+func (pic *Picture) FillDraw(contour DrawableContour) {
 	pendiam, _ := pic.currentPen.diameter.Float64()
 	pic.canvas.SetOption(pic.currentPen.style)
-	pic.canvas.AddContour(path, pendiam, pic.currentColor, pic.currentColor)
+	pic.canvas.AddContour(contour, pendiam, pic.currentColor, pic.currentColor)
 }
 
 /* Set the current pen. Will be used for future drawing operations.
@@ -173,4 +185,29 @@ func (pic *Picture) SetColor(color color.Color) {
  */
 func (pic *Picture) AsImage() image.Image {
 	return pic.canvas.AsImage()
+}
+
+// === Drawable Contour ======================================================
+
+type DrawableContour interface {
+	IsCycle() bool
+	Start() arithm.Pair
+	ToNextKnot() (k arithm.Pair, c1 arithm.Pair, c2 arithm.Pair)
+}
+
+func NewPathDrawable(path path.HobbyPath) DrawableContour {
+	panic("not yet implemented: Contour for Path")
+	return nil
+}
+
+func NewPolygonDrawable(pg polygon.Polygon) DrawableContour {
+	panic("not yet implemented: Contour for Polygon")
+	return nil
+}
+
+// === Output Routine ========================================================
+
+// Interface for output routines to ship out completed images
+type OutputRoutine interface {
+	Shipout(string, image.Image)
 }
