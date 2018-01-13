@@ -48,11 +48,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-/* We use an interface to resolve "real" variable names. Within the LEQ
- * variables are encoded by their serial ID, which is used as their position
- * within polynomias. Example: variable "n[3].a" with ID=4711 will become x.4711
- * internally. The resolver maps x.4711 => "n[3].a", i.e., IDs to names.
- */
+/*
+We use an interface to resolve "real" variable names. Within the LEQ
+variables are encoded by their serial ID, which is used as their position
+within polynomias. Example: variable "n[3].a" with ID=4711 will become x.4711
+internally. The resolver maps x.4711 => "n[3].a", i.e., IDs to names.
+*/
 type VariableResolver interface {
 	GetVariableName(int) string             // get real-life name of x.i
 	SetVariableSolved(int, numeric.Decimal) // message: x.i is solved
@@ -61,7 +62,13 @@ type VariableResolver interface {
 
 // === System of linear equations =======================================
 
-// A container for linear equations
+/*
+A container for linear equations. Used to incrementally solve
+systems of linear equations.
+
+Inspired by Donald E. Knuth's MetaFont, John Hobby's MetaPost and by
+a Lua project by John D. Ramsdell: http://luaforge.net/projects/lineqpp/
+*/
 type LinEqSolver struct {
 	dependents       *treemap.Map     // dependent variable at position i has dependencies[i]
 	solved           *treemap.Map     // map x.i => numeric
@@ -69,8 +76,7 @@ type LinEqSolver struct {
 	showdependencies bool             // continuously show dependent variables
 }
 
-/* Create a new sytem of linear equations.
- */
+// Create a new sytem of linear equations.
 func CreateLinEqSolver() *LinEqSolver {
 	leq := LinEqSolver{
 		dependents:       treemap.NewWithIntComparator(), // sorted map
@@ -80,19 +86,21 @@ func CreateLinEqSolver() *LinEqSolver {
 	return &leq
 }
 
-/* Set a variable resolver. Within the LEQ variables are
- * encoded by their serial ID, which is used as their position within
- * polynomias. Example: variable "n[3].a" with ID=4711 will become x.4711
- * internally. The resolver maps x.4711 => "n[3].a".
- */
+/*
+Set a variable resolver. Within the LEQ variables are
+encoded by their serial ID, which is used as their position within
+polynomias. Example: variable "n[3].a" with ID=4711 will become x.4711
+internally. The resolver maps x.4711 => "n[3].a".
+*/
 func (leq *LinEqSolver) SetVariableResolver(resolver VariableResolver) {
 	leq.varresolver = resolver
 }
 
-/* Collect all currently solved variables from a system of linear equations.
- * Solved variables are returned as a map: i(var) -> numeric, where i(var) is an
- * integer representing the position of variable var.
- */
+/*
+Collect all currently solved variables from a system of linear equations.
+Solved variables are returned as a map: i(var) -> numeric, where i(var) is an
+integer representing the position of variable var.
+*/
 func (leq *LinEqSolver) getSolvedVars() maps.Map {
 	setOfSolved := treemap.NewWithIntComparator() // return value
 	it := leq.solved.Iterator()
@@ -102,10 +110,11 @@ func (leq *LinEqSolver) getSolvedVars() maps.Map {
 	return setOfSolved
 }
 
-/* Add a new equation 0 = p (p is Polynomial) to a system of linear equations.
- * Immediately starts to solve the -- possibly incomplete -- system, as
- * far as possible.
- */
+/*
+Add a new equation 0 = p (p is Polynomial) to a system of linear equations.
+Immediately starts to solve the -- possibly incomplete -- system, as
+far as possible.
+*/
 func (leq *LinEqSolver) AddEq(p Polynomial) *LinEqSolver {
 	leq.addEq(p, false)
 	if leq.showdependencies {
@@ -114,8 +123,7 @@ func (leq *LinEqSolver) AddEq(p Polynomial) *LinEqSolver {
 	return leq
 }
 
-/* Add a list of linear equations to the LEQ.
- */
+// Add a list of linear equations to the LEQ.
 func (leq *LinEqSolver) AddEqs(plist []Polynomial) *LinEqSolver {
 	l := len(plist)
 	if l == 0 {

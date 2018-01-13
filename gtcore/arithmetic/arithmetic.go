@@ -1,31 +1,29 @@
-package arithmetic
-
-import (
-	"fmt"
-	"math"
-
-	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	dec "github.com/shopspring/decimal"
-)
-
 /*
+Package arithmetic implements basic arithmetic objects.
+
 ----------------------------------------------------------------------
 
 BSD License
+
 Copyright (c) 2017, Norbert Pillmayer
 
 All rights reserved.
+
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
 are met:
+
 1. Redistributions of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
+notice, this list of conditions and the following disclaimer.
+
 2. Redistributions in binary form must reproduce the above copyright
-   notice, this list of conditions and the following disclaimer in the
-   documentation and/or other materials provided with the distribution.
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
 3. Neither the name of Norbert Pillmayer nor the names of its contributors
-   may be used to endorse or promote products derived from this software
-   without specific prior written permission.
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -39,11 +37,18 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----------------------------------------------------------------------
-
- * Basic arithmetic objects.
-
 */
+package arithmetic
 
+import (
+	"fmt"
+	"math"
+
+	"github.com/npillmayer/gotype/gtcore/config/tracing"
+	dec "github.com/shopspring/decimal"
+)
+
+// We trace to the equations-tracer.
 var T tracing.Trace = tracing.EquationsTracer
 
 // === Numeric Data Type =====================================================
@@ -63,20 +68,17 @@ var Deg2Rad, _ = dec.NewFromString("0.01745329251")
 // numerics below epsilon are considered Zero
 var epsilon dec.Decimal = dec.New(1, -6)
 
-/* Predicate: is n Zero ?
- */
+// Predicate: is n zero ?
 func Zero(n dec.Decimal) bool {
 	return n.Abs().LessThanOrEqual(epsilon)
 }
 
-/* Predicate: is n = 1.0 ?
- */
+// Predicate: is n = 1.0 ?
 func One(n dec.Decimal) bool {
 	return n.Sub(ConstOne).Abs().LessThanOrEqual(epsilon)
 }
 
-/* Make n = 0 if n "means" to be Zero
- */
+// Make n = 0 if n "means" to be zero
 func Zap(n dec.Decimal) dec.Decimal {
 	if Zero(n) {
 		n = ConstZero
@@ -84,8 +86,7 @@ func Zap(n dec.Decimal) dec.Decimal {
 	return n
 }
 
-/* Round to epsilon.
- */
+// Round to epsilon.
 func Round(n dec.Decimal) dec.Decimal {
 	return n.Round(7)
 }
@@ -113,29 +114,30 @@ func MakePair(x, y dec.Decimal) Pair {
 	}
 }
 
+// Quick notation for contructing a pair from floats.
+func P(x, y float64) Pair {
+	return MakePair(dec.NewFromFloat(x), dec.NewFromFloat(y))
+}
+
 // Often used constant
 var Origin Pair = MakePair(ConstZero, ConstZero)
 
-/* Pretty Stringer for simple pairs.
- */
+// Pretty Stringer for simple pairs.
 func (p SimplePair) String() string {
 	return fmt.Sprintf("(%s,%s)", p.X.Round(3).String(), p.Y.Round(3).String())
 }
 
-/* Interface Pair.
- */
+// Interface Pair.
 func (p SimplePair) XPart() dec.Decimal {
 	return p.X
 }
 
-/* Interface Pair.
- */
+// Interface Pair.
 func (p SimplePair) YPart() dec.Decimal {
 	return p.Y
 }
 
-/* Round x-part and y-part to epsilon.
- */
+// Round x-part and y-part to epsilon.
 func (p SimplePair) Zap() Pair {
 	p = SimplePair{
 		X: Zap(p.X),
@@ -144,21 +146,18 @@ func (p SimplePair) Zap() Pair {
 	return p
 }
 
-/* Predicate: is this pair origin?
- */
+// Predicate: is this pair origin?
 func (p SimplePair) Zero() bool {
 	return p.Equal(Origin)
 }
 
-/* Compare 2 pairs.
- */
+// Compare 2 pairs.
 func (p SimplePair) Equal(p2 Pair) bool {
 	p = p.Zap().(SimplePair)
 	return p.X.Equal(p2.XPart()) && p.Y.Equal(p2.YPart())
 }
 
-/* Compare 2 pairs.
- */
+// Add 2 pairs.
 func (p SimplePair) Add(p2 Pair) Pair {
 	p = SimplePair{
 		X: Zap(p.X.Add(p2.XPart())),
@@ -167,8 +166,7 @@ func (p SimplePair) Add(p2 Pair) Pair {
 	return p.Zap()
 }
 
-/* Subtract 2 pairs.
- */
+// Subtract 2 pairs.
 func (p SimplePair) Subtract(p2 Pair) Pair {
 	p = SimplePair{
 		X: Zap(p.X.Sub(p2.XPart())),
@@ -177,8 +175,7 @@ func (p SimplePair) Subtract(p2 Pair) Pair {
 	return p.Zap()
 }
 
-/* Multiply 2 pairs.
- */
+// Multiply 2 pairs.
 func (p SimplePair) Multiply(n dec.Decimal) Pair {
 	p = SimplePair{
 		X: Zap(p.X.Mul(n)),
@@ -187,8 +184,7 @@ func (p SimplePair) Multiply(n dec.Decimal) Pair {
 	return p
 }
 
-/* Divide 2 pairs.
- */
+// Divide 2 pairs.
 func (p SimplePair) Divide(n dec.Decimal) Pair {
 	p = SimplePair{
 		X: Zap(p.X.Div(n)),

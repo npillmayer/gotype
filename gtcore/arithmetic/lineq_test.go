@@ -300,3 +300,16 @@ func TestLEQ5(t *testing.T) {
 		t.Fail()
 	}
 }
+
+// Example for solving linear equations. We use a variable resolver, which
+// maps a numeric value of 0..<n> to lowercase letters 'a'..'z'.
+func TestExampleLinEqSolver_usage(t *testing.T) {
+	//func TestExampleLinEqSolver_usage() {
+	leq := CreateLinEqSolver()
+	r := NewResolver() // clients have to provide their own
+	leq.SetVariableResolver(r)
+	p := polyn(6, X{1, -1}, X{2, -1})
+	leq.AddEq(p)
+	q := polyn(2, X{1, 3}, X{2, -1})
+	leq.AddEq(q)
+}
