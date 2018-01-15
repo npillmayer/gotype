@@ -65,7 +65,7 @@ type GGCanvas struct {
 var _ gfx.Canvas = &GGCanvas{}
 
 func init() {
-	gfx.RegisterCanvasCreator("PNG", NewCanvas)
+	gfx.RegisterCanvasCreator("png", NewCanvas)
 }
 
 func NewCanvas(width, height float64) gfx.Canvas {
@@ -88,28 +88,26 @@ func (ggc *GGCanvas) H() float64 {
 Interface Canvas. Add a stroke to the graphics context.
 If linecol is non-void, a line will be drawn. If fillcol is non-void and
 the path is closed, the path's inside area will be filled.
+
+If tracing mode is DebugLevel red dots are drawn for the contour's knots.
 */
 func (ggc *GGCanvas) AddContour(contour gfx.DrawableContour, linethickness float64,
 	linecol color.Color, fillcol color.Color) {
 	//
 	T.P("fmt", "PNG").Debug("add contour")
 	pt := contour.Start()
-	px, _ := pt.XPart().Float64()
-	py, _ := pt.YPart().Float64()
+	px, py := arithm.Pr2Pt(pt)
 	ggc.context.MoveTo(px, ggc.yflip(py))
 	for pt != nil {
 		var c1, c2 arithm.Pair
 		pt, c1, c2 = contour.ToNextKnot()
 		if pt != nil {
-			px, _ = pt.XPart().Float64()
-			py, _ = pt.YPart().Float64()
+			px, py := arithm.Pr2Pt(pt)
 			if c1 == nil && c2 == nil {
 				ggc.context.LineTo(px, ggc.yflip(py))
 			} else {
-				c1x, _ := c1.XPart().Float64()
-				c1y, _ := c1.YPart().Float64()
-				c2x, _ := c2.XPart().Float64()
-				c2y, _ := c2.YPart().Float64()
+				c1x, c1y := arithm.Pr2Pt(c1)
+				c2x, c2y := arithm.Pr2Pt(c2)
 				ggc.context.CubicTo(c1x, ggc.yflip(c1y), c2x, ggc.yflip(c2y), px, ggc.yflip(py))
 			}
 		}
@@ -126,45 +124,36 @@ func (ggc *GGCanvas) AddContour(contour gfx.DrawableContour, linethickness float
 		ggc.context.SetColor(linecol)
 		ggc.context.Stroke()
 	}
+	ggc.drawKnotsDebug(contour)
 }
 
-/*
-Interface Canvas. Add a stroke to the graphics context.
-If linecol is non-void, a line will be drawn. If fillcol is non-void and
-the path is closed, the path's inside area will be filled.
-func (ggc *GGCanvas) _addContour(path gfx.DrawableContour, linethickness float64,
-	linecol color.Color, fillcol color.Color) {
-	//
-	T.P("fmt", "PNG").Debug("add contour")
-	l := path.Length()
-	pt := arithm.Pr2Pt(path.GetPoint(0))
-	ggc.context.MoveTo(pt.X, ggc.yflip(pt.Y))
-	for i := 1; i < l; i++ {
-		pt = arithm.Pr2Pt(path.GetPoint(i))
-		ggc.context.LineTo(pt.X, ggc.yflip(pt.Y))
-	}
-	if path.IsCycle() {
-		pt = arithm.Pr2Pt(path.GetPoint(0))
-		ggc.context.LineTo(pt.X, ggc.yflip(pt.Y))
-		if fillcol != nil {
-			ggc.context.SetColor(fillcol)
-			ggc.context.Fill()
+func (ggc *GGCanvas) drawKnotsDebug(contour gfx.DrawableContour) {
+	if T.Level == tracing.LevelDebug {
+		T.P("fmt", "PNG").Debug("draw knots (debug)")
+		pt := contour.Start()
+		px, py := arithm.Pr2Pt(pt)
+		ggc.context.MoveTo(px, ggc.yflip(py))
+		ggc.context.DrawCircle(px, ggc.yflip(py), 4)
+		ggc.context.SetRGB(0.7, 0.1, 0)
+		ggc.context.Fill()
+		for pt != nil {
+			pt, _, _ = contour.ToNextKnot()
+			if pt != nil {
+				px, py = arithm.Pr2Pt(pt)
+				ggc.context.DrawCircle(px, ggc.yflip(py), 4)
+				ggc.context.SetRGB(0.7, 0.1, 0)
+				ggc.context.Fill()
+			}
 		}
 	}
-	if linecol != nil {
-		ggc.context.SetLineWidth(linethickness)
-		ggc.context.SetColor(linecol)
-		ggc.context.Stroke()
-	}
 }
-*/
 
 // GG draw uses a top-down y-coordinate. Flip it.
 func (ggc *GGCanvas) yflip(y float64) float64 {
 	return ggc.H() - y
 }
 
-// Interface Canvas. Return the drawing as a stdlib image.
+// Return the drawing as a stdlib image.
 func (ggc *GGCanvas) AsImage() image.Image {
 	T.P("fmt", "PNG").Debug("converting image")
 	return ggc.context.Image()

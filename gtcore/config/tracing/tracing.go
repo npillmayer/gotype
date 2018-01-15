@@ -46,6 +46,12 @@ func init() {
 	InitTracingBootstrap()
 }
 
+const (
+	LevelDebug = log.DebugLevel
+	LevelInfo  = log.InfoLevel
+	LevelError = log.ErrorLevel
+)
+
 type Trace struct {
 	*log.Logger
 	pkgname string

@@ -43,6 +43,7 @@ package arithmetic
 import (
 	"fmt"
 	"math"
+	"math/cmplx"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
 	dec "github.com/shopspring/decimal"
@@ -106,6 +107,11 @@ type SimplePair struct {
 	Y dec.Decimal
 }
 
+// Often used constant
+var Origin Pair = MakePair(ConstZero, ConstZero)
+
+// --- Constructing Pairs ----------------------------------------------------
+
 // Constructor for simple pairs
 func MakePair(x, y dec.Decimal) Pair {
 	return SimplePair{
@@ -114,17 +120,38 @@ func MakePair(x, y dec.Decimal) Pair {
 	}
 }
 
-// Quick notation for contructing a pair from floats.
-func P(x, y float64) Pair {
-	return MakePair(dec.NewFromFloat(x), dec.NewFromFloat(y))
-}
-
-// Often used constant
-var Origin Pair = MakePair(ConstZero, ConstZero)
-
 // Pretty Stringer for simple pairs.
 func (p SimplePair) String() string {
 	return fmt.Sprintf("(%s,%s)", p.X.Round(3).String(), p.Y.Round(3).String())
+}
+
+// Return a SimplePair as a complex number.
+func (p SimplePair) AsCmplx() complex128 {
+	x, _ := p.X.Float64()
+	y, _ := p.Y.Float64()
+	return complex(x, y)
+}
+
+// Create a Pair from a complex number.
+func C2Pr(c complex128) Pair {
+	if cmplx.IsNaN(c) || cmplx.IsInf(c) {
+		T.Error("created pair for complex.NaN")
+		return MakePair(ConstZero, ConstZero)
+	} else {
+		return Pr(real(c), imag(c))
+	}
+}
+
+// Quick notation for contructing a pair from floats.
+func Pr(x, y float64) Pair {
+	return MakePair(dec.NewFromFloat(x), dec.NewFromFloat(y))
+}
+
+// Quick notation for getting float values of a pair.
+func Pr2Pt(pr Pair) (float64, float64) {
+	px, _ := pr.XPart().Float64()
+	py, _ := pr.YPart().Float64()
+	return px, py
 }
 
 // Interface Pair.

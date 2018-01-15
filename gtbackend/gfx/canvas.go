@@ -252,15 +252,19 @@ type pathdrawer struct {
 	n       int
 }
 
+// implement interface DrawableContour
 func (pdrw *pathdrawer) IsCycle() bool {
 	return pdrw.p.IsCycle()
 }
 
+// implement interface DrawableContour
 func (pdrw *pathdrawer) Start() arithm.Pair {
-	G.Debugf("path start at %s", Pr(pdrw.p.Z(0)))
-	return Pr(pdrw.p.Z(0))
+	G.Debugf("path start at %s", arithm.C2Pr(pdrw.p.Z(0)))
+	pdrw.current = 0
+	return arithm.C2Pr(pdrw.p.Z(0))
 }
 
+// implement interface DrawableContour
 func (pdrw *pathdrawer) ToNextKnot() (arithm.Pair, arithm.Pair, arithm.Pair) {
 	pdrw.current++
 	if pdrw.current >= pdrw.n {
@@ -269,12 +273,12 @@ func (pdrw *pathdrawer) ToNextKnot() (arithm.Pair, arithm.Pair, arithm.Pair) {
 	}
 	c1, c2 := pdrw.c.PostControl(pdrw.current-1), pdrw.c.PreControl(pdrw.current%(pdrw.p.N()))
 	if pdrw.current < pdrw.n && !cmplx.IsNaN(c1) {
-		G.Debugf("path next  at %s", Pr(pdrw.p.Z(pdrw.current)))
-		G.Debugf("     controls %s and %s", Pr(c1), Pr(c2))
+		G.Debugf("path next  at %s", arithm.C2Pr(pdrw.p.Z(pdrw.current)))
+		G.Debugf("     controls %s and %s", arithm.C2Pr(c1), arithm.C2Pr(c2))
 	} else {
-		G.Debugf("path next  at %s", Pr(pdrw.p.Z(pdrw.current)))
+		G.Debugf("path next  at %s", arithm.C2Pr(pdrw.p.Z(pdrw.current)))
 	}
-	return Pr(pdrw.p.Z(pdrw.current)), Pr(c1), Pr(c2)
+	return arithm.C2Pr(pdrw.p.Z(pdrw.current)), arithm.C2Pr(c1), arithm.C2Pr(c2)
 }
 
 // An immutable bridge to contours from polygons.
@@ -288,13 +292,4 @@ func NewDrawablePolygon(pg polygon.Polygon) DrawableContour {
 // Interface for output routines to ship out completed images
 type OutputRoutine interface {
 	Shipout(pic *Picture, gfxFormat string) bool
-}
-
-// --- Helpers ---------------------------------------------------------------
-
-func Pr(c complex128) arithm.Pair {
-	if cmplx.IsNaN(c) {
-		return nil
-	}
-	return arithm.MakePair(path.N(real(c)), path.N(imag(c)))
 }
