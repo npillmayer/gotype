@@ -44,6 +44,8 @@ package png
 import (
 	"image"
 	"image/color"
+	ospng "image/png"
+	"io"
 
 	"github.com/fogleman/gg"
 	"github.com/npillmayer/gotype/gtbackend/gfx"
@@ -59,7 +61,14 @@ type GGCanvas struct {
 	context *gg.Context
 }
 
-func NewCanvas(width, height float64) *GGCanvas {
+// check assignability
+var _ gfx.Canvas = &GGCanvas{}
+
+func init() {
+	gfx.RegisterCanvasCreator("PNG", NewCanvas)
+}
+
+func NewCanvas(width, height float64) gfx.Canvas {
 	ggc := &GGCanvas{}
 	ggc.context = newGC(width, height)
 	return ggc
@@ -87,33 +96,35 @@ func (ggc *GGCanvas) AddContour(contour gfx.DrawableContour, linethickness float
 	pt := contour.Start()
 	px, _ := pt.XPart().Float64()
 	py, _ := pt.YPart().Float64()
-	ggc.context.MoveTo(px, py)
+	ggc.context.MoveTo(px, ggc.yflip(py))
 	for pt != nil {
 		var c1, c2 arithm.Pair
 		pt, c1, c2 = contour.ToNextKnot()
-		px, _ = pt.XPart().Float64()
-		py, _ = pt.YPart().Float64()
-		if c1 == nil && c2 == nil {
-			ggc.context.LineTo(px, ggc.yflip(py))
-		} else {
-			c1x, _ := c1.XPart().Float64()
-			c1y, _ := c1.YPart().Float64()
-			c2x, _ := c2.XPart().Float64()
-			c2y, _ := c2.YPart().Float64()
-			ggc.context.CubicTo(c1x, c1y, c2x, c2y, px, py)
-		}
-		if contour.IsCycle() {
-			// close path ?
-			if fillcol != nil {
-				ggc.context.SetColor(fillcol)
-				ggc.context.Fill()
+		if pt != nil {
+			px, _ = pt.XPart().Float64()
+			py, _ = pt.YPart().Float64()
+			if c1 == nil && c2 == nil {
+				ggc.context.LineTo(px, ggc.yflip(py))
+			} else {
+				c1x, _ := c1.XPart().Float64()
+				c1y, _ := c1.YPart().Float64()
+				c2x, _ := c2.XPart().Float64()
+				c2y, _ := c2.YPart().Float64()
+				ggc.context.CubicTo(c1x, ggc.yflip(c1y), c2x, ggc.yflip(c2y), px, ggc.yflip(py))
 			}
 		}
-		if linecol != nil {
-			ggc.context.SetLineWidth(linethickness)
-			ggc.context.SetColor(linecol)
-			ggc.context.Stroke()
+	}
+	if contour.IsCycle() {
+		// close path ?
+		if fillcol != nil {
+			ggc.context.SetColor(fillcol)
+			ggc.context.Fill()
 		}
+	}
+	if linecol != nil {
+		ggc.context.SetLineWidth(linethickness)
+		ggc.context.SetColor(linecol)
+		ggc.context.Stroke()
 	}
 }
 
@@ -159,6 +170,17 @@ func (ggc *GGCanvas) AsImage() image.Image {
 	return ggc.context.Image()
 }
 
+// Shipout the picture to an output device.
+func (ggc *GGCanvas) Shipout(w io.Writer) bool {
+	T.Debugf("shipping out PNG image")
+	img := ggc.AsImage()
+	if err := ospng.Encode(w, img); err != nil {
+		T.Errorf("file error: %v", err.Error())
+		return false
+	}
+	return true
+}
+
 /*
 Interface Canvas. Set drawing options. Currently only gfx.PENSQUARE and
 gfx.PENCIRCLE are understood. They determine linecap and and linejoin
@@ -173,9 +195,6 @@ func (ggc *GGCanvas) SetOption(opts int) {
 		ggc.context.SetLineJoinRound()
 	}
 }
-
-// check assignability
-var _ gfx.Canvas = &GGCanvas{}
 
 // create a new GG graphics context.
 func newGC(w float64, h float64) *gg.Context {
