@@ -1,9 +1,182 @@
-package gtbreak
-
 // Line breaking Verfahren nach D.E. Knuth und Plass
 
-func linebreak() {
+/* Horizon hält nicht nur die aktiven Knoten für die "optimalen"
+Umbrüche, sondern auch für Varianten.
+Was ist "optimal"? Jeder Durchlauf bekommt ein Strategy-Objekt mit, das
+in einer Kette von Delegates einen Beitrag zur Bestimmung leistet (eher
+nach Holkner). Diese Delegates bestimmen die Demerits.
 
+Beim Aufbrechen der Zeilen ist der Folio-Artikel ziemich aufschlussreich:
+wieweit muss man eigentlich glue usw explizit machen? Wie weit nimmt einem
+Unicode das ab?
+
+Folio kennt folgende Objekte:
+- Breakpoint (possible und feasible)
+- Segment (f. Breakpoint, sub-path bis zurück zu paragraph start)
+- Line (zwischen 2 f. Breakpoints, mit key (lineno, break1, break2))
+
+*/
+
+package knuthplass
+
+import (
+    "fmt"
+    "gonum.org/v1/gonum/graph"
+)
+
+const (
+    BoxType int8 = iota
+    GlueType
+    KernType
+    DiscretionaryType
+)
+
+const InfinityDemerits int32 = 10000
+const InfinityMerits int32 = -10000
+
+func demerits(d int32) int32 {
+    if d > InfinityDemerits {
+        d = InfinityDemerits
+    }
+    return d
+}
+
+// --- Beads -----------------------------------------------------------------
+
+type Bead interface {
+    BeadType() int8
+    Text() string
+    Width() WSS
+    Dimens() (int64,int64,int64)
+}
+
+type PseudoBead struct {
+    text string // implements Bead
+}
+
+func (pb *PseudoBead) BeadType() int8 {
+    if pb.text == " " || pb.text == "\n" {
+        return GlueType
+    } else {
+        return BoxType
+    }
+}
+
+func (pb *PseudoBead) Text() string {
+    return pb.text
+}
+
+func (pb *PseudoBead) Width() WSS { // width, w-shrink, w+stretch
+    if pb.text == " " || pb.text == "\n" {
+        return WSS{int64(len(pb.text)), 0, 2}
+    } else {
+        return WSS{int64(len(pb.text)), 0, 0}
+    }
+}
+
+func (pb *PseudoBead) Dimens() (w int64, h int64, d int64) {
+    return int64(len(pb.text)), 1, 0
+}
+
+func NewPseudoBead(text string) *PseudoBead {
+    return &PseudoBead{text: text}
+}
+
+var _ Bead = &PseudoBead{}
+
+// --- Beading ---------------------------------------------------------------
+
+type PseudoBeading struct { // provisional pseudo-implementation, implements Beading
+    text string
+    pos int
+    end int
+}
+
+type Beading interface {
+    GetBead() Bead
+    Advance()
+}
+
+func (pbg *PseudoBeading) GetBead() Bead {
+    fmt.Printf("text = %s\n", pbg.text[pbg.end:pbg.pos+20])
+    t := pbg.text[pbg.pos:pbg.end]
+    return NewPseudoBead(t)
+}
+
+func (pbg *PseudoBeading) Advance() {
+    e := pbg.end
+    if pbg.text[pbg.pos] == ' ' {
+    } else {
+        for pbg.text[e] != ' ' { // TODO make this: looking for penalty
+            e++ // TODO make this unicode-compliant
+        }
+    }
+    pbg.end = e
+    pbg.pos = pbg.end
+}
+
+func NewPseudoBeading(text string) *PseudoBeading {
+    return &PseudoBeading{text: text}
+}
+
+var _ Beading = &PseudoBeading{}
+
+// ---------------------------------------------------------------------------
+
+type LL func(int64)int64 // get line length at line n
+
+type WSS struct {
+    W int64
+    Min int64
+    Max int64
+}
+
+func w(wss WSS) (int64, int64, int64) {
+    return wss.W, wss.Min, wss.Max
+}
+
+type KnuthPlassLinebreaker struct {
+    graph.WeightedDirected
+    beading Beading
+    lineLength LL
+}
+
+type FeasibleBreakpoint struct {
+    graph.Node
+    LineNum int64
+}
+
+type FeasibleSegment struct { // an edge between nodes of feasible breakpoints
+    graph.WeightedEdge
+    Totals WSS
+}
+
+//type CostForBreakpoint struct {
+//    Demerits int32
+//}
+
+func (bk *FeasibleBreakpoint) GetCostTo(bead Bead, frag WSS, linelen int64) (int32, WSS) {
+    w, min, max := w(bead.Width())
+    frag.W += w
+    frag.Min += min
+    frag.Max += max
+    var d int32
+    if frag.W <= linelen {
+        if frag.Max >= linelen {
+            d = int32( linelen * 10000 / (frag.Max - frag.W) )
+            fmt.Printf("w < l: demerits = %d\n", d)
+        }
+    } else if frag.W >= linelen {
+        if frag.Min <= linelen {
+            d = int32( linelen * 10000 / (frag.W - frag.Min) )
+            fmt.Printf("w > l: demerits = %d\n", d)
+        }
+    }
+    return d, frag
+}
+
+func (kp *KnuthPlassLinebreaker) findBreakpoints(beading Beading) (int,[]FeasibleBreakpoint) {
+    return 0, nil
 }
 
 /*
