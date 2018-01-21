@@ -312,6 +312,7 @@ type KnotAdder interface {
 	SmoothKnot(a.Pair) JoinAdder
 	CurlKnot(pr a.Pair, precurl, postcurl dec.Decimal) JoinAdder
 	DirKnot(pr a.Pair, dir a.Pair) JoinAdder
+	AppendSubpath(sp *Path) JoinAdder
 	Cycle() (HobbyPath, SplineControls)
 }
 
@@ -441,6 +442,11 @@ func (path *Path) Concat() KnotAdder {
 	return path
 }
 */
+
+func (path *Path) AppendSubpath(sp *Path) JoinAdder {
+	T.Error("AppendSubpath not yet implemented")
+	return path
+}
 
 // --- Setting Path Properties -----------------------------------------------
 

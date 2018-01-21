@@ -93,7 +93,7 @@ func CollectVarRefParts(rt *runtime.Runtime, t string, children []antlr.Tree) st
 				T.P("var", t).Error("substituting 0 instead")
 				vname.WriteString("[0]")
 			} else {
-				c, isconst := subscript.GetXPolyn().IsConstant()
+				c, isconst := subscript.XPolyn.IsConstant()
 				if !isconst { // we cannot handle unknown subscripts
 					T.P("var", t).Error("subscript must be known numeric")
 					T.P("var", t).Errorf("substituting 0 for %s",
@@ -230,7 +230,7 @@ func PushConstant(rt *runtime.Runtime, vref *variables.PMMPVarRef) {
  * or y-part). Parts point to their parent symbol, thus giving us the
  * variable reference.
  */
-func GetVariableFromExpression(rt *runtime.Runtime, e runtime.Expression) *variables.PMMPVarRef {
+func GetVariableFromExpression(rt *runtime.Runtime, e *runtime.ExprNode) *variables.PMMPVarRef {
 	var v *variables.PMMPVarRef
 	if sym := rt.ExprStack.GetVariable(e); sym != nil {
 		var part *variables.PairPartRef
@@ -304,7 +304,7 @@ func LoadBuiltinSymbols(rt *runtime.Runtime) {
  * (3) Re-incarnate lvalue (get a new ID for it)
  * (4) Create equation on expression stack
  */
-func Assign(rt *runtime.Runtime, lvalue *variables.PMMPVarRef, e runtime.Expression) {
+func Assign(rt *runtime.Runtime, lvalue *variables.PMMPVarRef, e *runtime.ExprNode) {
 	varname := lvalue.GetName()
 	oldserial := lvalue.GetID()
 	T.P("var", varname).Debugf("assignment of lvalue #%d", oldserial)

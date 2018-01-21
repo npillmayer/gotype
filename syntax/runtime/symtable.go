@@ -46,22 +46,22 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* Symbols (constants, variables, etc.) to be stored.
  */
 
-// Every symbol has a serial ID
+// Every symbol has a serial ID.
 var serialID int = 1 // may not start with 0 !
 
-// The most basic symbol needs a name to be referenced under
+// The most basic symbol needs a name to be referenced under.
 type Symbol interface {
 	GetName() string
 	GetID() int
 }
 
-// Some symbols may be typed
+// Some symbols may be typed.
 type Typable interface {
 	GetType() int
 	SetType(int) int
 }
 
-// Some symbols are non-atomic
+// Some symbols are non-atomic.
 type TreeNode interface {
 	GetSibling() TreeNode
 	SetSibling(TreeNode)
@@ -69,7 +69,7 @@ type TreeNode interface {
 	SetFirstChild(TreeNode)
 }
 
-// Our goto-symbol implements all of the interfaces above
+// Our goto-symbol implements all of the interfaces above.
 type StdSymbol struct {
 	Name     string
 	Id       int
@@ -78,7 +78,7 @@ type StdSymbol struct {
 	Children TreeNode
 }
 
-// Pre-defined types, if you want to use them
+// Pre-defined symbol types, if you want to use them.
 const (
 	Undefined int = iota
 	IntegerType
@@ -386,5 +386,3 @@ func (scst *ScopeTree) PopScope() *Scope {
 	scst.ScopeTOS = scst.ScopeTOS.Parent
 	return sc
 }
-
-

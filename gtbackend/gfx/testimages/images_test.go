@@ -17,8 +17,8 @@ func TestEnvironment(t *testing.T) {
 	T.SetLevel(tracing.LevelDebug)
 }
 
-func TestSimplePath1(t *testing.T) {
-	pic := gfx.NewPicture("simple1", 100, 100, "png")
+func TestEmptyPath1(t *testing.T) {
+	pic := gfx.NewPicture("empty", 100, 100, "png")
 	pic.Shipout()
 }
 

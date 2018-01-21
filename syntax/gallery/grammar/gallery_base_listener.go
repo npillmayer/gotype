@@ -170,12 +170,6 @@ func (s *BaseGalleryListener) EnterFactor(ctx *FactorContext) {}
 // ExitFactor is called when production factor is exited.
 func (s *BaseGalleryListener) ExitFactor(ctx *FactorContext) {}
 
-// EnterTransformer is called when production transformer is entered.
-func (s *BaseGalleryListener) EnterTransformer(ctx *TransformerContext) {}
-
-// ExitTransformer is called when production transformer is exited.
-func (s *BaseGalleryListener) ExitTransformer(ctx *TransformerContext) {}
-
 // EnterFuncatom is called when production funcatom is entered.
 func (s *BaseGalleryListener) EnterFuncatom(ctx *FuncatomContext) {}
 

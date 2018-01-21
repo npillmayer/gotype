@@ -100,12 +100,12 @@ cycle
 secondary
     : primary                                    # factor
     | secondary (TIMES|OVER) primary             # factor
-    | secondary transformer                      # transform
+    | secondary ( TRANSFORM primary )+           # transform
     ;
 
-transformer
-    : ( TRANSFORM primary )+
-    ;
+//transformer
+//    : ( TRANSFORM primary )+
+//    ;
 
 primary
     : MATHFUNC atom                               # funcatom

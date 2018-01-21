@@ -5,9 +5,9 @@ import (
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"github.com/npillmayer/gotype/gtcore/arithmetic"
+	"github.com/npillmayer/gotype/gtcore/config/tracing"
 	"github.com/npillmayer/gotype/syntax/variables"
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 )
 
 // Helper
@@ -21,7 +21,7 @@ func createInterpreter(s string) *GalleryInterpreter {
 // ---------------------------------------------------------------------------
 
 func TestParseVariable(t *testing.T) {
-	T.SetLevel(logrus.ErrorLevel)
+	T.SetLevel(tracing.LevelError)
 	intp := createInterpreter("hello") // variable reference
 	tree := intp.ASTListener.statemParser.Variable()
 	sexpr := antlr.TreesStringTree(tree, nil, intp.ASTListener.statemParser)
@@ -104,7 +104,7 @@ func TestParseScalarmulop1(t *testing.T) {
 	}
 	tos := intp.runtime.ExprStack.Top()
 	T.Debugf("TOS = %v", tos)
-	coeff := tos.GetXPolyn().GetCoeffForTerm(sym.GetID())
+	coeff := tos.XPolyn.GetCoeffForTerm(sym.GetID())
 	if !coeff.Equal(decimal.New(3, 0)) {
 		t.Fail()
 	}
@@ -118,7 +118,7 @@ func TestParseScalarmulop2(t *testing.T) {
 	antlr.ParseTreeWalkerDefault.Walk(intp.ASTListener, tree)
 	tos := intp.runtime.ExprStack.Top()
 	T.Debugf("TOS = %v", tos)
-	if !tos.GetYPolyn().GetConstantValue().Equal(decimal.New(-12, 0)) {
+	if !tos.YPolyn.GetConstantValue().Equal(decimal.New(-12, 0)) {
 		t.Fail()
 	}
 }
@@ -131,7 +131,7 @@ func TestParseExprgroup(t *testing.T) {
 	antlr.ParseTreeWalkerDefault.Walk(intp.ASTListener, tree)
 	tos := intp.runtime.ExprStack.Top()
 	T.Debugf("TOS = %v", tos)
-	if !tos.GetXPolyn().GetConstantValue().Equal(arithmetic.ConstOne) {
+	if !tos.XPolyn.GetConstantValue().Equal(arithmetic.ConstOne) {
 		t.Fail()
 	}
 }
@@ -144,7 +144,7 @@ func TestParseMathfunc(t *testing.T) {
 	antlr.ParseTreeWalkerDefault.Walk(intp.ASTListener, tree)
 	tos := intp.runtime.ExprStack.Top()
 	T.Debugf("TOS = %v", tos)
-	if !tos.GetXPolyn().GetConstantValue().Equal(decimal.New(3, 0)) {
+	if !tos.XPolyn.GetConstantValue().Equal(decimal.New(3, 0)) {
 		t.Fail()
 	}
 }
@@ -157,7 +157,7 @@ func TestParsePairpart(t *testing.T) {
 	antlr.ParseTreeWalkerDefault.Walk(intp.ASTListener, tree)
 	tos := intp.runtime.ExprStack.Top()
 	T.Debugf("TOS = %v", tos)
-	if !tos.GetXPolyn().GetConstantValue().Equal(arithmetic.ConstOne) {
+	if !tos.XPolyn.GetConstantValue().Equal(arithmetic.ConstOne) {
 		t.Fail()
 	}
 }
@@ -170,7 +170,7 @@ func TestParseNumericSecondary(t *testing.T) {
 	antlr.ParseTreeWalkerDefault.Walk(intp.ASTListener, tree)
 	tos := intp.runtime.ExprStack.Top()
 	T.Debugf("TOS = %v", tos)
-	if !tos.GetXPolyn().GetConstantValue().Equal(decimal.New(6, 0)) {
+	if !tos.XPolyn.GetConstantValue().Equal(decimal.New(6, 0)) {
 		t.Fail()
 	}
 }
@@ -183,7 +183,7 @@ func TestParsePairSecondary(t *testing.T) {
 	antlr.ParseTreeWalkerDefault.Walk(intp.ASTListener, tree)
 	tos := intp.runtime.ExprStack.Top()
 	T.Debugf("TOS = %v", tos)
-	if !tos.GetYPolyn().GetConstantValue().Equal(decimal.New(3, 0)) {
+	if !tos.YPolyn.GetConstantValue().Equal(decimal.New(3, 0)) {
 		t.Fail()
 	}
 }
@@ -196,7 +196,7 @@ func TestParseNumericTertiary(t *testing.T) {
 	antlr.ParseTreeWalkerDefault.Walk(intp.ASTListener, tree)
 	tos := intp.runtime.ExprStack.Top()
 	T.Debugf("TOS = %v", tos)
-	if !tos.GetXPolyn().GetConstantValue().Equal(arithmetic.ConstOne) {
+	if !tos.XPolyn.GetConstantValue().Equal(arithmetic.ConstOne) {
 		t.Fail()
 	}
 }
@@ -215,4 +215,22 @@ func TestParseEquation(t *testing.T) {
 	if !a.GetValue().(decimal.Decimal).Equal(arithmetic.ConstOne) {
 		t.Fail()
 	}
+}
+
+func TestPathBuilding1(t *testing.T) {
+	T.SetLevel(tracing.LevelDebug)
+	intp := createInterpreter("(0,0) -- (1,2) -- (4,2) -- (3,0) -- cycle")
+	tree := intp.ASTListener.statemParser.Path()
+	sexpr := antlr.TreesStringTree(tree, nil, intp.ASTListener.statemParser)
+	T.Debugf("### path = %s", sexpr)
+	antlr.ParseTreeWalkerDefault.Walk(intp.ASTListener, tree)
+}
+
+func TestPathBuilding2(t *testing.T) {
+	T.SetLevel(tracing.LevelDebug)
+	intp := createInterpreter("(0,0) -- (1,2) shifted (4,2) rotated 30 -- cycle")
+	tree := intp.ASTListener.statemParser.Path()
+	sexpr := antlr.TreesStringTree(tree, nil, intp.ASTListener.statemParser)
+	T.Debugf("### path = %s", sexpr)
+	antlr.ParseTreeWalkerDefault.Walk(intp.ASTListener, tree)
 }

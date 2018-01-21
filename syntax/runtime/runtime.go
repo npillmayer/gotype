@@ -1,21 +1,69 @@
 /*
+Package runtime implements an interpreter runtime, consisting of
+scopes, memory frames and symbols (variable declarations and references).
+
+For a thorough discussion of an interpreter's runtime environment, refer to
+"Language Implementation Patterns" by Terence Parr.
+
+Symbol Table and Scope Tree
+
+This module implements data structures for scope trees and symbol tables
+attached to them.
+
+Memory Frames
+
+This module implements a stack of memory frames.
+Memory frames are used by an interpreter to allocate local storage
+for active scopes.
+
+Expression Stack
+
+This module implements a stack of expressions. It is used for
+expression evaluation during a parser walk of an expression AST.
+Expressions can be of type numeric or of type pair.
+
+Complexity arises from the fact that we handle not only known
+quantities, but unknown ones, too. Unknown variables will be handled
+as terms in linear polynomials. Numeric expressions on the stack are always
+represented by linear polynomials, containing solved and unsolved variables.
+
+The expression stack is connected to a system of linear equations (LEQ).
+If an equation is constructed from 2 polynomials, it is put into the LEQ.
+The LEQ operates on generic identifiers and knows nothing of the
+'real life' symbols we use in the parser. The expression stack is
+a bridge between both worlds: It holds a table (VariableResolver) to
+map LEQ-internal variables to real-life symbols. The variable resolver
+will receive a message from the LEQ whenever an equation gets solved,
+i.e. variables become known.
+
+Other types of expression are not considered native expressions for the
+stack, but it is nevertheless possible to put them on the stack. They
+are stored as interface{} and there are no supporting methods or
+arithmetic operations defined for them.
+
 ----------------------------------------------------------------------
 
 BSD License
+
 Copyright (c) 2017, Norbert Pillmayer
 
 All rights reserved.
+
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
 are met:
+
 1. Redistributions of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
+notice, this list of conditions and the following disclaimer.
+
 2. Redistributions in binary form must reproduce the above copyright
-   notice, this list of conditions and the following disclaimer in the
-   documentation and/or other materials provided with the distribution.
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
 3. Neither the name of Norbert Pillmayer or the names of its contributors
-   may be used to endorse or promote products derived from this software
-   without specific prior written permission.
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -29,14 +77,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----------------------------------------------------------------------
-
- * Package for implementing an interpreter runtime, consisting of
- * scopes, memory frames and symbols (variable declarations and references).
- * For a thorough discussion of an interpreter's runtime environment, refer to
- * "Language Implementation Patterns" by Terence Parr.
-
 */
-
 package runtime
 
 import (
@@ -51,7 +92,7 @@ type Runtime struct {
 	ScopeTree     *ScopeTree        // collect scopes
 	MemFrameStack *MemoryFrameStack // runtime stack of memory frames
 	ExprStack     *ExprStack        // evaluate arithmetic expressions
-	PathBuilder   *PathStack        // construct paths
+	//PathBuilder   *PathStack        // construct paths
 }
 
 /* Construct a new runtime environment, initialized. Accepts a symbol creator for
@@ -66,7 +107,6 @@ func NewRuntimeEnvironment(withDeclarations func(string) Symbol) *Runtime {
 	mf.Scope = rt.ScopeTree.Globals()                        // connect the global frame with the global scope
 	rt.MemFrameStack.Globals().SymbolTable = NewSymbolTable(withDeclarations)
 	rt.ExprStack = NewExprStack()
-	rt.PathBuilder = NewPathStack()
+	//rt.PathBuilder = NewPathStack()
 	return rt
 }
-

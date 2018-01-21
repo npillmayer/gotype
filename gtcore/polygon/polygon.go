@@ -152,10 +152,10 @@ func NullPolygon() *GPPolygon {
 
 func Box(lt a.Pair, rb a.Pair) *GPPolygon {
 	pg := &GPPolygon{}
-	pg.AddKnot(lt)
-	pg.AddKnot(a.MakePair(rb.XPart(), lt.YPart()))
-	pg.AddKnot(rb)
-	pg.AddKnot(a.MakePair(lt.XPart(), rb.YPart()))
+	pg.Knot(lt)
+	pg.Knot(a.MakePair(rb.XPart(), lt.YPart()))
+	pg.Knot(rb)
+	pg.Knot(a.MakePair(lt.XPart(), rb.YPart()))
 	return pg.Cycle()
 }
 
@@ -177,17 +177,17 @@ func (pg *GPPolygon) getContour() *pc.Contour {
 }
 
 // Append a knot to a polygon.
-func (pg *GPPolygon) AddKnot(pr a.Pair) *GPPolygon {
+func (pg *GPPolygon) Knot(pr a.Pair) *GPPolygon {
 	L.Debugf("add knot to polygon: %v", pr)
 	pg.getContour().Add(Pr2Pt(pr))
 	return pg
 }
 
 // Append a polygon to a polygon.
-func (pg *GPPolygon) AddSubpath(p Polygon) *GPPolygon {
+func (pg *GPPolygon) AppendSubpath(p Polygon) *GPPolygon {
 	L.Debugf("add subpath: %s", PolygonAsString(p))
 	for i := 0; i < p.N(); i++ {
-		pg.AddKnot(p.Pt(i))
+		pg.Knot(p.Pt(i))
 	}
 	return pg
 }

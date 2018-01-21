@@ -82,9 +82,6 @@ type GalleryListener interface {
 	// EnterFactor is called when entering the factor production.
 	EnterFactor(c *FactorContext)
 
-	// EnterTransformer is called when entering the transformer production.
-	EnterTransformer(c *TransformerContext)
-
 	// EnterFuncatom is called when entering the funcatom production.
 	EnterFuncatom(c *FuncatomContext)
 
@@ -222,9 +219,6 @@ type GalleryListener interface {
 
 	// ExitFactor is called when exiting the factor production.
 	ExitFactor(c *FactorContext)
-
-	// ExitTransformer is called when exiting the transformer production.
-	ExitTransformer(c *TransformerContext)
 
 	// ExitFuncatom is called when exiting the funcatom production.
 	ExitFuncatom(c *FuncatomContext)

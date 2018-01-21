@@ -32,15 +32,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----------------------------------------------------------------------
 
- * This is the implementation of an interpreter for "Poor Man's MetaPost",
- * my variant of the MetaPost graphical language. There is an accompanying
- * ANTLR grammar file, which describes the features and limitations of PMMPost.
- * I will sometimes refer to MetaFont, the original language underlying
- * MetaPost, as the grammar definitions are taken from Don Knuth's grammar
- * description in "The METAFONTBook".
- *
- * The implementation is tightly coupled to the ANTLR V4 parser generator.
- * ANTLR is a great tool and I see no use in being independent from it.
+This is the implementation of an interpreter for "Poor Man's MetaPost",
+my variant of the MetaPost graphical language. There is an accompanying
+ANTLR grammar file, which describes the features and limitations of PMMPost.
+I will sometimes refer to MetaFont, the original language underlying
+MetaPost, as the grammar definitions are taken from Don Knuth's grammar
+description in "The METAFONTBook".
+
+The implementation is tightly coupled to the ANTLR V4 parser generator.
+ANTLR is a great tool and I see no use in being independent from it.
 
 */
 
@@ -65,36 +65,41 @@ import (
 
 // === Interpreter ===========================================================
 
-/* We use AST-driven interpretation to execute the PMMPost input program. Input
- * is more or less a list of statements and function definitions.
- *
- * We will annotate the AST with scope-information, holding the symbols of
- * dynamic scopes. Scopes stem from either:
- * - function definitions (macros in MetaFont: def and vardef)
- * - compound statements, i.e. groups (begingroup ... endgroup)
- *
- * The interpreter relies on the scopes and definitions constructed earlier.
- * It manages a memory frame stack to track the calling sequence of functions
- * and groups.
- *
- * So the overall picture looks like this:
- * 1. ANTLR V4 constructs an AST for us.
- * 2. We use a listener to walk the AST and execute the statements.
- *
- * Metafont is a dynamically scoped language. This means, functions can
- * access local variables from calling functions or groups. Nevertheless we
- * will find the definition of all variables (which are explicitly defined)
- * in a scope definition. This is mainly for type checking reasons and due
- * to the complex structure of MetaFont variable identifiers.
- */
+/*
+We use AST-driven interpretation to execute the PMMPost input program. Input
+is more or less a list of statements and function definitions.
 
-/* Type PMMPostInterpreter.
- * This is an umbrella object to hold together the various tools needed to
- * execute steps 1 to 3 from above. It will orchestrate and instrument the
- * tools and execute them in the correct order. Also, this object will hold
- * and respect parameters we pass to the interpreter, so we can alter the
- * behaviour in certain aspects.
- */
+We will annotate the AST with scope-information, holding the symbols of
+dynamic scopes. Scopes stem from either:
+
+- function definitions (macros in MetaFont: def and vardef)
+
+- compound statements, i.e. groups (begingroup ... endgroup)
+
+The interpreter relies on the scopes and definitions constructed earlier.
+It manages a memory frame stack to track the calling sequence of functions
+and groups.
+
+So the overall picture looks like this:
+
+1. ANTLR V4 constructs an AST for us.
+
+2. We use a listener to walk the AST and execute the statements.
+
+Metafont is a dynamically scoped language. This means, functions can
+access local variables from calling functions or groups. Nevertheless we
+will find the definition of all variables (which are explicitly defined)
+in a scope definition. This is mainly for type checking reasons and due
+to the complex structure of MetaFont variable identifiers.
+
+PMMPostInterpreter
+
+This is an umbrella object to hold together the various tools needed to
+execute steps 1 and 3 from above. It will orchestrate and instrument the
+tools and execute them in the correct order. Also, this object will hold
+and respect parameters we pass to the interpreter, so we can alter the
+behaviour in certain aspects.
+*/
 type PMMPostInterpreter struct {
 	ASTListener *ParseListener   // parse / AST listener
 	runtime     *runtime.Runtime // runtime environment
