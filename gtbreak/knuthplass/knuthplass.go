@@ -1,6 +1,9 @@
-// Line breaking Verfahren nach D.E. Knuth und Plass
+/*
+Line breaking algorithm described by D.E. Knuth and M.F. Plass.
 
-/* Horizon hält nicht nur die aktiven Knoten für die "optimalen"
+http://defoe.sourceforge.net/folio/knuth-plass.html
+
+Horizon hält nicht nur die aktiven Knoten für die "optimalen"
 Umbrüche, sondern auch für Varianten.
 Was ist "optimal"? Jeder Durchlauf bekommt ein Strategy-Objekt mit, das
 in einer Kette von Delegates einen Beitrag zur Bestimmung leistet (eher
@@ -16,466 +19,327 @@ Folio kennt folgende Objekte:
 - Line (zwischen 2 f. Breakpoints, mit key (lineno, break1, break2))
 
 */
-
 package knuthplass
 
 import (
-    "fmt"
-    "gonum.org/v1/gonum/graph"
+	"fmt"
+	"io/ioutil"
+
+	"github.com/emirpasic/gods/sets/hashset"
+	"github.com/emirpasic/gods/stacks/arraystack"
+	"gonum.org/v1/gonum/graph"
+	"gonum.org/v1/gonum/graph/encoding/dot"
+	sg "gonum.org/v1/gonum/graph/simple"
 )
 
 const (
-    BoxType int8 = iota
-    GlueType
-    KernType
-    DiscretionaryType
+	BoxType int8 = iota
+	GlueType
+	KernType
+	DiscretionaryType
 )
 
 const InfinityDemerits int32 = 10000
 const InfinityMerits int32 = -10000
 
+func beadtype(t int8) string {
+	switch t {
+	case BoxType:
+		return "box"
+	case GlueType:
+		return "glue"
+	case KernType:
+		return "kern"
+	case DiscretionaryType:
+		return "discr"
+	}
+	return "<unknown>"
+}
+
 func demerits(d int32) int32 {
-    if d > InfinityDemerits {
-        d = InfinityDemerits
-    }
-    return d
+	if d > InfinityDemerits {
+		d = InfinityDemerits
+	}
+	return d
 }
 
 // --- Beads -----------------------------------------------------------------
 
 type Bead interface {
-    BeadType() int8
-    Text() string
-    Width() WSS
-    Dimens() (int64,int64,int64)
+	BeadType() int8
+	Text() string
+	Width() WSS                    // width, w-shrink, w+stretch
+	Dimens() (int64, int64, int64) // width, height, depth
 }
-
-type PseudoBead struct {
-    text string // implements Bead
-}
-
-func (pb *PseudoBead) BeadType() int8 {
-    if pb.text == " " || pb.text == "\n" {
-        return GlueType
-    } else {
-        return BoxType
-    }
-}
-
-func (pb *PseudoBead) Text() string {
-    return pb.text
-}
-
-func (pb *PseudoBead) Width() WSS { // width, w-shrink, w+stretch
-    if pb.text == " " || pb.text == "\n" {
-        return WSS{int64(len(pb.text)), 0, 2}
-    } else {
-        return WSS{int64(len(pb.text)), 0, 0}
-    }
-}
-
-func (pb *PseudoBead) Dimens() (w int64, h int64, d int64) {
-    return int64(len(pb.text)), 1, 0
-}
-
-func NewPseudoBead(text string) *PseudoBead {
-    return &PseudoBead{text: text}
-}
-
-var _ Bead = &PseudoBead{}
 
 // --- Beading ---------------------------------------------------------------
 
-type PseudoBeading struct { // provisional pseudo-implementation, implements Beading
-    text string
-    pos int
-    end int
-}
-
+// at = nil : start
 type Beading interface {
-    GetBead() Bead
-    Advance()
+	GetCursor(at BeadingCursor) BeadingCursor
 }
 
-func (pbg *PseudoBeading) GetBead() Bead {
-    fmt.Printf("text = %s\n", pbg.text[pbg.end:pbg.pos+20])
-    t := pbg.text[pbg.pos:pbg.end]
-    return NewPseudoBead(t)
+type BeadingCursor interface {
+	GetBead() Bead
+	Advance() bool
+	ID() int64
 }
-
-func (pbg *PseudoBeading) Advance() {
-    e := pbg.end
-    if pbg.text[pbg.pos] == ' ' {
-    } else {
-        for pbg.text[e] != ' ' { // TODO make this: looking for penalty
-            e++ // TODO make this unicode-compliant
-        }
-    }
-    pbg.end = e
-    pbg.pos = pbg.end
-}
-
-func NewPseudoBeading(text string) *PseudoBeading {
-    return &PseudoBeading{text: text}
-}
-
-var _ Beading = &PseudoBeading{}
 
 // ---------------------------------------------------------------------------
 
-type LL func(int64)int64 // get line length at line n
+type LL func(int64) int64 // get line length at line n
 
 type WSS struct {
-    W int64
-    Min int64
-    Max int64
+	W   int64
+	Min int64
+	Max int64
 }
 
+// --- Horizon (active Nodes) ------------------------------------------------
+
+type activeFeasibleBreakpoints struct {
+	*hashset.Set
+	values  []interface{}
+	iterinx int
+}
+
+func newActiveFeasibleBreakpoints() *activeFeasibleBreakpoints {
+	set := hashset.New()
+	h := &activeFeasibleBreakpoints{set, nil, -1}
+	return h
+}
+
+func (h *activeFeasibleBreakpoints) first() *FeasibleBreakpoint {
+	var f *FeasibleBreakpoint
+	fmt.Printf("horizon: there are %d active FBs\n", h.Size())
+	if h.Size() > 0 {
+		h.values = h.Values()
+		f = h.values[0].(*FeasibleBreakpoint)
+		h.iterinx = 1
+	}
+	return f
+}
+
+func (h *activeFeasibleBreakpoints) next() *FeasibleBreakpoint {
+	var f *FeasibleBreakpoint
+	if h.values != nil && h.iterinx < len(h.values) {
+		f = h.values[h.iterinx].(*FeasibleBreakpoint)
+		h.iterinx++
+	}
+	return f
+}
+
+func (h *activeFeasibleBreakpoints) append(f *FeasibleBreakpoint) {
+	h.Add(f)
+}
+
+func (h *activeFeasibleBreakpoints) remove(f *FeasibleBreakpoint) {
+	h.Remove(f)
+}
+
+// ---------------------------------------------------------------------------
+
 func w(wss WSS) (int64, int64, int64) {
-    return wss.W, wss.Min, wss.Max
+	return wss.W, wss.Min, wss.Max
 }
 
 type KnuthPlassLinebreaker struct {
-    graph.WeightedDirected
-    beading Beading
-    lineLength LL
+	*sg.WeightedDirectedGraph
+	beading    Beading
+	lineLength LL
+	horizon    *activeFeasibleBreakpoints
+}
+
+func NewKPLinebreaker() *KnuthPlassLinebreaker {
+	kp := &KnuthPlassLinebreaker{sg.NewWeightedDirectedGraph(
+		float64(InfinityDemerits), float64(InfinityDemerits)), nil, nil,
+		newActiveFeasibleBreakpoints()}
+	return kp
 }
 
 type FeasibleBreakpoint struct {
-    graph.Node
-    LineNum int64
+	graph.Node
+	LineNum   int64
+	marker    BeadingCursor
+	fragment  WSS   // sum of widths up to last bead iteration
+	totalcost int32 // sum of costs for segments up to this breakpoint
 }
 
-type FeasibleSegment struct { // an edge between nodes of feasible breakpoints
-    graph.WeightedEdge
-    Totals WSS
+func (h *FeasibleBreakpoint) String() string {
+	if h.marker == nil {
+		return "<para-start>"
+	}
+	return fmt.Sprintf("<break l.%d @ %v>", h.LineNum, h.marker.GetBead())
 }
 
-//type CostForBreakpoint struct {
-//    Demerits int32
-//}
-
-func (bk *FeasibleBreakpoint) GetCostTo(bead Bead, frag WSS, linelen int64) (int32, WSS) {
-    w, min, max := w(bead.Width())
-    frag.W += w
-    frag.Min += min
-    frag.Max += max
-    var d int32
-    if frag.W <= linelen {
-        if frag.Max >= linelen {
-            d = int32( linelen * 10000 / (frag.Max - frag.W) )
-            fmt.Printf("w < l: demerits = %d\n", d)
-        }
-    } else if frag.W >= linelen {
-        if frag.Min <= linelen {
-            d = int32( linelen * 10000 / (frag.W - frag.Min) )
-            fmt.Printf("w > l: demerits = %d\n", d)
-        }
-    }
-    return d, frag
+// internal
+func (kp *KnuthPlassLinebreaker) newFeasibleBreakpoint(id int64) *FeasibleBreakpoint {
+	node := sg.Node(id)
+	fb := &FeasibleBreakpoint{node, 1, nil, WSS{}, 0}
+	kp.AddNode(fb)
+	return fb
 }
 
-func (kp *KnuthPlassLinebreaker) findBreakpoints(beading Beading) (int,[]FeasibleBreakpoint) {
-    return 0, nil
+func (kp *KnuthPlassLinebreaker) breakpointAfterBead(marker BeadingCursor) *FeasibleBreakpoint {
+	fb := kp.newFeasibleBreakpoint(marker.ID())
+	fb.marker = marker
+	return fb
 }
+
+func (kp *KnuthPlassLinebreaker) findBreakpointAtMarker(marker BeadingCursor) *FeasibleBreakpoint {
+	var fb *FeasibleBreakpoint
+	if marker != nil {
+		if kp.Has(sg.Node(marker.ID())) {
+			node := kp.Node(marker.ID())
+			fmt.Printf("found existing feas. bp = %v\n", node)
+			if node != nil {
+				fb = node.(*FeasibleBreakpoint)
+			}
+		}
+	}
+	return fb
+}
+
+type feasibleSegment struct { // an edge between nodes of feasible breakpoints
+	graph.WeightedEdge
+	Totals WSS
+}
+
+func (fseg *feasibleSegment) String() string {
+	if fseg == nil {
+		return "<--no edge-->"
+	} else {
+		return fmt.Sprintf("<-%v--(%.1f)--%v->", fseg.From(), fseg.Weight(), fseg.To())
+	}
+}
+
+func (kp *KnuthPlassLinebreaker) feasibleLineBetween(from, to *FeasibleBreakpoint,
+	cost int32, totals WSS, prune bool) *feasibleSegment {
+	//
+	predecs := kp.To(to)
+	var seg *feasibleSegment
+	var p *FeasibleBreakpoint
+	mintotal := InfinityDemerits
+	if prune && len(predecs) > 0 {
+		if len(predecs) > 1 {
+			fmt.Printf("breakpoint %v has %d predecessors", to, len(predecs))
+			panic("breakpoint (with pruning) has more than one predecessor")
+		}
+		p = predecs[0].(*FeasibleBreakpoint)
+		w, _ := kp.Weight(p, to)
+		mintotal = p.totalcost + int32(w)
+	}
+	if from.totalcost+cost < mintotal {
+		edge := kp.NewWeightedEdge(from, to, float64(cost))
+		seg = &feasibleSegment{edge, totals}
+		kp.SetWeightedEdge(seg)
+		if prune && p != nil {
+			kp.RemoveEdge(kp.WeightedEdge(p, to))
+		}
+	}
+	return seg
+}
+
+// === Algorithms ============================================================
 
 /*
-    var linebreak = function (nodes, lines, settings) {
-        var options = {
-            demerits: {
-                line: settings && settings.demerits && settings.demerits.line || 10,
-                flagged: settings && settings.demerits && settings.demerits.flagged || 100,
-                fitness: settings && settings.demerits && settings.demerits.fitness || 3000
-            },
-            tolerance: settings && settings.tolerance || 2
-        },
-        activeNodes = new Typeset.LinkedList(),
-        sum = {
-            width: 0,
-            stretch: 0,
-            shrink: 0
-        },
-        lineLengths = lines,
-        breaks = [],
-        tmp = {
-            data: {
-                demerits: Infinity
-            }
-        };
+Calculate the cost of a breakpoint. A breakpoint may result either in being
+infeasible (demerits >= infinity) or having a positive (demerits) or negative
+(merits) cost/benefit.
 
-        function breakpoint(position, demerits, ratio, line, fitnessClass, totals, previous) {
-            return {
-                position: position,
-                demerits: demerits,
-                ratio: ratio,
-                line: line,
-                fitnessClass: fitnessClass,
-                totals: totals || {
-                    width: 0,
-                    stretch: 0,
-                    shrink: 0
-                },
-                previous: previous
-            };
-        }
+TODO: the cost/badness function should be deleted to a strategy delegate (or
+a chain of delegate => Holkner). Maybe refactor: skeleton algorithm in
+central package, & different strategy delegates in sub-packages. K&P is a
+special delegate with the TeX strategy formalized.
 
-        function computeCost(start, end, active, currentLine) {
-            var width = sum.width - active.totals.width,
-            stretch = 0,
-            shrink = 0,
-            // If the current line index is within the list of linelengths, use it, otherwise use
-            // the last line length of the list.
-            lineLength = currentLine < lineLengths.length ? lineLengths[currentLine - 1] : lineLengths[lineLengths.length - 1];
-
-            if (nodes[end].type === 'penalty') {
-                width += nodes[end].width;
-            }
-
-            if (width < lineLength) {
-                // Calculate the stretch ratio
-                stretch = sum.stretch - active.totals.stretch;
-
-                if (stretch > 0) {
-                    return (lineLength - width) / stretch;
-                } else {
-                    return linebreak.infinity;
-                }
-
-            } else if (width > lineLength) {
-                // Calculate the shrink ratio
-                shrink = sum.shrink - active.totals.shrink;
-
-                if (shrink > 0) {
-                    return (lineLength - width) / shrink;
-                } else {
-                    return linebreak.infinity;
-                }
-            } else {
-                // perfect match
-                return 0;
-            }
-        }
-
-
-        // Add width, stretch and shrink values from the current
-        // break point up to the next box or forced penalty.
-        function computeSum(breakPointIndex) {
-            var result = {
-                    width: sum.width,
-                    stretch: sum.stretch,
-                    shrink: sum.shrink
-                },
-                i = 0;
-
-            for (i = breakPointIndex; i < nodes.length; i += 1) {
-                if (nodes[i].type === 'glue') {
-                    result.width += nodes[i].width;
-                    result.stretch += nodes[i].stretch;
-                    result.shrink += nodes[i].shrink;
-                } else if (nodes[i].type === 'box' || (nodes[i].type === 'penalty' && nodes[i].penalty === -linebreak.infinity && i > breakPointIndex)) {
-                    break;
-                }
-            }
-            return result;
-        }
-
-        // The main loop of the algorithm
-        function mainLoop(node, index, nodes) {
-            var active = activeNodes.first(),
-                next = null,
-                ratio = 0,
-                demerits = 0,
-                candidates = [],
-                badness,
-                currentLine = 0,
-                tmpSum,
-                currentClass = 0,
-                fitnessClass,
-                candidate,
-                newNode;
-
-            // The inner loop iterates through all the active nodes with line < currentLine and then
-            // breaks out to insert the new active node candidates before looking at the next active
-            // nodes for the next lines. The result of this is that the active node list is always
-            // sorted by line number.
-            while (active !== null) {
-
-                candidates = [{
-                    demerits: Infinity
-                }, {
-                    demerits: Infinity
-                }, {
-                    demerits: Infinity
-                }, {
-                    demerits: Infinity
-                }];
-
-                // Iterate through the linked list of active nodes to find new potential active nodes
-                // and deactivate current active nodes.
-                while (active !== null) {
-                    next = active.next;
-                    currentLine = active.data.line + 1;
-                    ratio = computeCost(active.data.position, index, active.data, currentLine);
-
-                    // Deactive nodes when the distance between the current active node and the
-                    // current node becomes too large (i.e. it exceeds the stretch limit and the stretch
-                    // ratio becomes negative) or when the current node is a forced break (i.e. the end
-                    // of the paragraph when we want to remove all active nodes, but possibly have a final
-                    // candidate active node---if the paragraph can be set using the given tolerance value.)
-                    if (ratio < -1 || (node.type === 'penalty' && node.penalty === -linebreak.infinity)) {
-                        activeNodes.remove(active);
-                    }
-
-                    // If the ratio is within the valid range of -1 <= ratio <= tolerance calculate the
-                    // total demerits and record a candidate active node.
-                    if (-1 <= ratio && ratio <= options.tolerance) {
-                        badness = 100 * Math.pow(Math.abs(ratio), 3);
-
-                        // Positive penalty
-                        if (node.type === 'penalty' && node.penalty >= 0) {
-                            demerits = Math.pow(options.demerits.line + badness, 2) + Math.pow(node.penalty, 2);
-                        // Negative penalty but not a forced break
-                        } else if (node.type === 'penalty' && node.penalty !== -linebreak.infinity) {
-                            demerits = Math.pow(options.demerits.line + badness, 2) - Math.pow(node.penalty, 2);
-                        // All other cases
-                        } else {
-                            demerits = Math.pow(options.demerits.line + badness, 2);
-                        }
-
-                        if (node.type === 'penalty' && nodes[active.data.position].type === 'penalty') {
-                            demerits += options.demerits.flagged * node.flagged * nodes[active.data.position].flagged;
-                        }
-
-                        // Calculate the fitness class for this candidate active node.
-                        if (ratio < -0.5) {
-                            currentClass = 0;
-                        } else if (ratio <= 0.5) {
-                            currentClass = 1;
-                        } else if (ratio <= 1) {
-                            currentClass = 2;
-                        } else {
-                            currentClass = 3;
-                        }
-
-                        // Add a fitness penalty to the demerits if the fitness classes of two adjacent lines
-                        // differ too much.
-                        if (Math.abs(currentClass - active.data.fitnessClass) > 1) {
-                            demerits += options.demerits.fitness;
-                        }
-
-                        // Add the total demerits of the active node to get the total demerits of this candidate node.
-                        demerits += active.data.demerits;
-
-                        // Only store the best candidate for each fitness class
-                        if (demerits < candidates[currentClass].demerits) {
-                            candidates[currentClass] = {
-                                active: active,
-                                demerits: demerits,
-                                ratio: ratio
-                            };
-                        }
-                    }
-
-                    active = next;
-
-                    // Stop iterating through active nodes to insert new candidate active nodes in the active list
-                    // before moving on to the active nodes for the next line.
-                    // TODO: The Knuth and Plass paper suggests a conditional for currentLine < j0. This means paragraphs
-                    // with identical line lengths will not be sorted by line number. Find out if that is a desirable outcome.
-                    // For now I left this out, as it only adds minimal overhead to the algorithm and keeping the active node
-                    // list sorted has a higher priority.
-                    if (active !== null && active.data.line >= currentLine) {
-                        break;
-                    }
-                }
-
-                tmpSum = computeSum(index);
-
-                for (fitnessClass = 0; fitnessClass < candidates.length; fitnessClass += 1) {
-                    candidate = candidates[fitnessClass];
-
-                    if (candidate.demerits < Infinity) {
-                        newNode = new Typeset.LinkedList.Node(breakpoint(index, candidate.demerits, candidate.ratio,
-                            candidate.active.data.line + 1, fitnessClass, tmpSum, candidate.active));
-                        if (active !== null) {
-                            activeNodes.insertBefore(active, newNode);
-                        } else {
-                            activeNodes.push(newNode);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Add an active node for the start of the paragraph.
-        activeNodes.push(new Typeset.LinkedList.Node(breakpoint(0, 0, 0, 0, 0, undefined, null)));
-
-        nodes.forEach(function (node, index, nodes) {
-            if (node.type === 'box') {
-                sum.width += node.width;
-            } else if (node.type === 'glue') {
-                if (index > 0 && nodes[index - 1].type === 'box') {
-                    mainLoop(node, index, nodes);
-                }
-                sum.width += node.width;
-                sum.stretch += node.stretch;
-                sum.shrink += node.shrink;
-            } else if (node.type === 'penalty' && node.penalty !== linebreak.infinity) {
-                mainLoop(node, index, nodes);
-            }
-        });
-
-
-        if (activeNodes.size() !== 0) {
-            // Find the best active node (the one with the least total demerits.)
-            activeNodes.forEach(function (node) {
-                if (node.data.demerits < tmp.data.demerits) {
-                    tmp = node;
-                }
-            });
-
-            while (tmp !== null) {
-                breaks.push({
-                    position: tmp.data.position,
-                    ratio: tmp.data.ratio
-                });
-                tmp = tmp.data.previous;
-            }
-            return breaks.reverse();
-        }
-        return [];
-    };
-
-    linebreak.infinity = 10000;
-
-    linebreak.glue = function (width, stretch, shrink) {
-        return {
-            type: 'glue',
-            width: width,
-            stretch: stretch,
-            shrink: shrink
-        };
-    };
-
-    linebreak.box = function (width, value) {
-        return {
-            type: 'box',
-            width: width,
-            value: value
-        };
-    };
-
-    linebreak.penalty = function (width, penalty, flagged) {
-        return {
-            type: 'penalty',
-            width: width,
-            penalty: penalty,
-            flagged: flagged
-        };
-    };
-
-    return linebreak;
-
-})();
-
+Question: Is the box-glue-model part of the central algorithm? Or is it
+already a strategy (component) ?
 */
+func (fb *FeasibleBreakpoint) calculateCostTo(bead Bead, linelen int64) (int32, bool) {
+	w, min, max := w(bead.Width())
+	fb.fragment.W += w
+	fb.fragment.Min += min
+	fb.fragment.Max += max
+	stillreachable := true
+	var d int32 = InfinityDemerits
+	if fb.fragment.W <= linelen {
+		if fb.fragment.Max >= linelen {
+			d = int32(linelen * 100 / (fb.fragment.Max - fb.fragment.W))
+			//fmt.Printf("w < l: demerits = %d\n", d)
+		}
+	} else if fb.fragment.W >= linelen {
+		if fb.fragment.Min <= linelen { // compressible enough?
+			d = int32(linelen * 100 / (fb.fragment.W - fb.fragment.Min))
+			//fmt.Printf("w > l: demerits = %d\n", d)
+		} else { // will not fit any more
+			stillreachable = true
+		}
+	}
+	return demerits(d), stillreachable
+}
+
+func (kp *KnuthPlassLinebreaker) FindBreakpoints(prune bool) (int, []*FeasibleBreakpoint) {
+	fb := kp.newFeasibleBreakpoint(-1) // without bead
+	kp.horizon.append(fb)              // begin of paragraph is first "active node"
+	var cursor BeadingCursor = kp.beading.GetCursor(nil)
+	var bead Bead          // will hold the current bead of kp.beading
+	for cursor.Advance() { // loop over beading
+		bead = cursor.GetBead() // will shift horizon one bead further
+		fmt.Printf("next bead is %s\n", bead)
+		fb = kp.horizon.first() // loop over feas. breakpoints of horizon
+		for fb != nil {         // while there are active f. breakpoints in horizon n
+			//fmt.Printf("fb in horizon = %v\n", fb)
+			cost, stillreachable := fb.calculateCostTo(bead, 30)
+			if cost < InfinityDemerits { // is breakpoint and is feasible
+				fmt.Printf("create feasible breakpoint at %v\n", cursor)
+				newfb := kp.findBreakpointAtMarker(cursor)
+				if newfb == nil { // feas. breakpoint not yet existent
+					newfb = kp.breakpointAfterBead(cursor) // create a f. breakpoint
+				}
+				edge := kp.feasibleLineBetween(fb, newfb, cost, fb.fragment, prune)
+				fmt.Printf("feasible line = %v\n", edge)
+				kp.horizon.append(newfb) // make new fb member of horizon n+1
+			} else if !stillreachable {
+				kp.horizon.remove(fb) // no longer valid in horizon
+			}
+			fb = kp.horizon.next()
+		}
+	}
+	return kp.collectFeasibleBreakpoints(cursor.ID())
+}
+
+func (kp *KnuthPlassLinebreaker) collectFeasibleBreakpoints(last int64) (int, []*FeasibleBreakpoint) {
+	//var optimalBreaks []*FeasibleBreakpoint
+	fmt.Printf("collecting breakpoints, backwards from #%d\n", last)
+	fb := kp.Node(last)
+	stack := arraystack.New()
+	var breakpoints []*FeasibleBreakpoint = make([]*FeasibleBreakpoint, 20)
+	for fb != nil {
+		stack.Push(fb)
+		predecs := kp.To(fb)
+		if predecs == nil || len(predecs) == 0 {
+			fb = nil
+		} else {
+			fmt.Printf("node #%d has %d predecessors\n", fb.ID(), len(predecs))
+			fb = predecs[0]
+		}
+	}
+	if stack.Size() > 0 {
+		fmt.Printf("optimal paragraph breaking uses %d breakpoints\n", stack.Size())
+		p, ok := stack.Pop()
+		for ok {
+			breakpoints = append(breakpoints, p.(*FeasibleBreakpoint))
+			p, ok = stack.Pop()
+		}
+	}
+	return len(breakpoints), breakpoints
+}
+
+func (kp *KnuthPlassLinebreaker) MarshalToDotFile(id string) {
+	dot, err := dot.Marshal(kp, "linebreaks", "", "", false)
+	if err != nil {
+		fmt.Printf("mashalling error: %v", err.Error())
+	} else {
+		ioutil.WriteFile(fmt.Sprintf("./kp_graph_%s.dot", id), dot, 0644)
+	}
+}
