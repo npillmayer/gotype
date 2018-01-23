@@ -10,6 +10,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+var syntrace tracing.Trace = tracing.SyntaxTracer
+
 // Helper
 func createInterpreter(s string) *GalleryInterpreter {
 	intp := NewGalleryInterpreter(false)
@@ -228,7 +230,9 @@ func TestPathBuilding1(t *testing.T) {
 
 func TestPathBuilding2(t *testing.T) {
 	T.SetLevel(tracing.LevelDebug)
-	intp := createInterpreter("(0,0) -- (1,2) shifted (4,2) rotated 30 -- cycle")
+	syntrace.SetLevel(tracing.LevelDebug)
+	intp := createInterpreter("(0,0) -- (1,2) shifted (4,3) rotated 45 -- cycle")
+	//intp := createInterpreter("(0,0) -- (1,2) shifted (4,3) -- cycle")
 	tree := intp.ASTListener.statemParser.Path()
 	sexpr := antlr.TreesStringTree(tree, nil, intp.ASTListener.statemParser)
 	T.Debugf("### path = %s", sexpr)

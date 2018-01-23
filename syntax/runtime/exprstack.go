@@ -178,7 +178,7 @@ func (e *ExprNode) IsPair bool {
 }
 */
 
-// Interface Expression.
+// Is this a valid numeric or pair expression, i.e. non-nil?
 func (e *ExprNode) IsValid() bool {
 	if e.IsPair {
 		return e.XPolyn.Terms != nil && e.YPolyn.Terms != nil
@@ -193,6 +193,16 @@ func (e *ExprNode) GetOther() interface{} {
 	return e.Other
 }
 */
+
+func (e *ExprNode) GetConstNumeric() (dec.Decimal, bool) {
+	if e.IsValid() && !e.IsPair {
+		XPart, isxconst := e.XPolyn.IsConstant()
+		if isxconst {
+			return XPart, true
+		}
+	}
+	return arithm.ConstZero, false
+}
 
 func (e *ExprNode) GetConstPair() (arithm.Pair, bool) {
 	if e.IsValid() && e.IsPair {
@@ -271,22 +281,24 @@ func (es *ExprStack) GetVariableName(id int) string {
 	return v.GetName()
 }
 
-/* Is a variable (index) a capsule, i.e., has it gone out of scope?
- * The terminus stems from MetaFont (with "whatever" being a prominent
- * example for a capsule).
- *
- * Interface VariableResolver.
- */
+/*
+Is a variable (index) a capsule, i.e., has it gone out of scope?
+The terminus stems from MetaFont (with "whatever" being a prominent
+example for a capsule).
+
+Interface VariableResolver.
+*/
 func (es *ExprStack) IsCapsule(id int) bool {
 	_, found := es.resolver[id]
 	return !found
 }
 
-/* Set the value of a variable. If the LEQ solves a variable and it becomes
- * known, the LEQ will send us this message.
- *
- * Interface VariableResolver.
- */
+/*
+Set the value of a variable. If the LEQ solves a variable and it becomes
+known, the LEQ will send us this message.
+
+Interface VariableResolver.
+*/
 func (es *ExprStack) SetVariableSolved(id int, val dec.Decimal) {
 	v, ok := es.resolver[id]
 	if ok { // yes, we know about this variable
@@ -297,16 +309,16 @@ func (es *ExprStack) SetVariableSolved(id int, val dec.Decimal) {
 	}
 }
 
-/* Drop the name of a variable from the variable resolver. The variable itself
- * is not dropped, but rather lives on as an anonymous quantity (i.e., a
- * capsule) as long as it is part of an equation.
- */
+/*
+Drop the name of a variable from the variable resolver. The variable itself
+is not dropped, but rather lives on as an anonymous quantity (i.e., a
+capsule) as long as it is part of an equation.
+*/
 func (es *ExprStack) EncapsuleVariable(id int) {
 	delete(es.resolver, id)
 }
 
-/* Stack functionality. Will return an invalid expression if stack is empty.
- */
+// Stack functionality. Will return an invalid expression if stack is empty.
 func (es *ExprStack) Top() *ExprNode {
 	tos, ok := es.stack.Peek()
 	if !ok {
@@ -315,8 +327,7 @@ func (es *ExprStack) Top() *ExprNode {
 	return tos.(*ExprNode)
 }
 
-/* Stack functionality.
- */
+// Stack functionality.
 func (es *ExprStack) Pop() (*ExprNode, bool) {
 	tos, ok := es.stack.Pop()
 	return tos.(*ExprNode), ok
@@ -343,20 +354,6 @@ func (es *ExprStack) PopAsPair() (arithm.Pair, bool) {
 	} else {
 		return tos.GetConstPair()
 	}
-	/*
-		if ok && tos.(*ExprNode).IsValid() && tos.IsPair {
-			XPart, isxconst := tos.(*ExprNode).XPolyn.IsConstant()
-			YPart, isyconst := tos.(*ExprNode).YPolyn.IsConstant()
-			if isxconst && isyconst {
-				return arithm.MakePair(XPart, YPart), true
-			} else {
-				T.Debugf("TOS is not constant: %s", tos)
-			}
-		} else {
-			T.Debugf("TOS is not a pair: %s", tos)
-		}
-		return arithm.MakePair(arithm.ConstZero, arithm.ConstZero), false
-	*/
 }
 
 // Convenience method: return TOS as interface{}
@@ -374,10 +371,8 @@ func (es *ExprStack) Push(e *ExprNode) *ExprStack {
 	return es
 }
 
-/*
-Push a numeric constant onto the stack. It will be wrapped into a
-polynomial p = c. For pair constants use PushPairConstant(c).
-*/
+// Push a numeric constant onto the stack. It will be wrapped into a
+// polynomial p = c. For pair constants use PushPairConstant(c).
 func (es *ExprStack) PushConstant(c dec.Decimal) *ExprStack {
 	constant := arithm.NewConstantPolynomial(c)
 	T.Debugf("pushing constant = %s", c.String())
@@ -385,9 +380,8 @@ func (es *ExprStack) PushConstant(c dec.Decimal) *ExprStack {
 	return es.Push(NewNumericExpression(constant))
 }
 
-/* Push a pair constant onto the stack. It will be wrapped into a
- * polynomial p = c. For numeric constants use PushConstant(c).
- */
+// Push a pair constant onto the stack. It will be wrapped into a
+// polynomial p = c. For numeric constants use PushConstant(c).
 func (es *ExprStack) PushPairConstant(pc arithm.Pair) *ExprStack {
 	XPart := arithm.NewConstantPolynomial(pc.XPart())
 	YPart := arithm.NewConstantPolynomial(pc.YPart())
@@ -396,10 +390,11 @@ func (es *ExprStack) PushPairConstant(pc arithm.Pair) *ExprStack {
 	return es.Push(e)
 }
 
-/* Push a variable onto the stack. The ID of the variable must be > 0 !
- * It will be wrapped into a polynomial p = 0 + 1 * v.
- * If the variable is of type pair we will push a pair expression.
- */
+/*
+Push a variable onto the stack. The ID of the variable must be > 0 !
+It will be wrapped into a polynomial p = 0 + 1 * v.
+If the variable is of type pair we will push a pair expression.
+*/
 func (es *ExprStack) PushVariable(v Symbol, w Symbol) *ExprStack {
 	es.AnnounceVariable(v)
 	p := arithm.NewConstantPolynomial(arithm.ConstZero)
@@ -418,6 +413,10 @@ func (es *ExprStack) PushVariable(v Symbol, w Symbol) *ExprStack {
 	}
 }
 
+/*
+Push a pair variable onto the stack. The ID of the variable must be > 0 !
+It will be wrapped into two polynomials p = 0 + 1 * xpart/ypart(v).
+*/
 func (es *ExprStack) PushPairVariable(XPart Symbol, xconst dec.Decimal, YPart Symbol,
 	yconst dec.Decimal) *ExprStack {
 	//
@@ -437,10 +436,11 @@ func (es *ExprStack) PushPairVariable(XPart Symbol, xconst dec.Decimal, YPart Sy
 	return es.Push(e)
 }
 
-/* If an expression is a simple variable reference, return the symbol /
- * variable reference. The variable must have been previously announced
- * (see PushVariable(v)).
- */
+/*
+If an expression is a simple variable reference, return the symbol /
+variable reference. The variable must have been previously announced
+(see PushVariable(v)).
+*/
 func (es *ExprStack) GetVariable(e *ExprNode) Symbol {
 	if e.IsValid() {
 		v, ok := e.XPolyn.IsVariable()
@@ -451,21 +451,18 @@ func (es *ExprStack) GetVariable(e *ExprNode) Symbol {
 	return nil
 }
 
-/* Stack functionality.
- */
+// Stack functionality.
 func (es *ExprStack) IsEmpty() bool {
 	return es.stack.Empty()
 }
 
-/* Stack functionality.
- */
+// Stack functionality.
 func (es *ExprStack) Size() int {
 	return es.stack.Size()
 }
 
-/* Internal helper: dump expression stack. This is printed to the trace
- * with level=DEBUG.
- */
+// Internal helper: dump expression stack. This is printed to the trace
+// with level=DEBUG.
 func (es *ExprStack) Dump() {
 	T.P("size", es.Size()).Debug("Expression Stack, TOS first:")
 	it := es.stack.Iterator()
@@ -475,8 +472,7 @@ func (es *ExprStack) Dump() {
 	}
 }
 
-/* Print a summary of LEQ and stack contents.
- */
+// Print a summary of LEQ and stack contents.
 func (es *ExprStack) Summary() {
 	es.leq.Dump(es)
 	es.Dump()
@@ -488,8 +484,7 @@ func (es *ExprStack) isValid(e *ExprNode) bool {
 	return e.XPolyn.Terms != nil
 }
 
-/* Pretty print an expression.
- */
+// Pretty print an expression.
 func (es *ExprStack) TraceString(e *ExprNode) string {
 	if e.IsValid() {
 		return e.XPolyn.TraceString(es)
@@ -498,8 +493,7 @@ func (es *ExprStack) TraceString(e *ExprNode) string {
 	}
 }
 
-/* Predicate: is an expression of a certain type?
- */
+// Predicate: is an expression of a certain type?
 func (es *ExprStack) CheckTypeMatch(e1 *ExprNode, e2 *ExprNode) bool {
 	match := false
 	if e1.IsValid() && e2.IsValid() {
@@ -510,10 +504,11 @@ func (es *ExprStack) CheckTypeMatch(e1 *ExprNode, e2 *ExprNode) bool {
 	return match
 }
 
-/* Check the operands on the stack for an arithmetic operation.
- * Currently will panic if operands are invalid or not enough operands (n) on
- * stack.
- */
+/*
+Check the operands on the stack for an arithmetic operation.
+Currently will panic if operands are invalid or not enough operands (n) on
+stack.
+*/
 func (es *ExprStack) CheckOperands(n int, op string) {
 	if n <= 0 {
 		return
@@ -531,9 +526,7 @@ var _ arithm.VariableResolver = &ExprStack{}
 
 // === Arithmetic Operations =================================================
 
-/* Length of a pair (i.e., distance from origin). Argument must be a known
- * pair.
- */
+// Length of a pair (i.e., distance from origin). Argument must be a known pair.
 func (es *ExprStack) LengthTOS() {
 	es.CheckOperands(1, "get length of")
 	e, _ := es.Pop()
@@ -551,8 +544,7 @@ func (es *ExprStack) LengthTOS() {
 	}
 }
 
-/* Add TOS and 2ndOS. Allowed for known and unknown terms.
- */
+// Add TOS and 2ndOS. Allowed for known and unknown terms.
 func (es *ExprStack) AddTOS2OS() {
 	var e, e1, e2 *ExprNode
 	es.CheckOperands(2, "add")
@@ -579,8 +571,7 @@ func (es *ExprStack) AddTOS2OS() {
 	T.P("op", "ADD").Debugf("result %s", e.String())
 }
 
-/* Subtract TOS from 2ndOS. Allowed for known and unknown terms.
- */
+// Subtract TOS from 2ndOS. Allowed for known and unknown terms.
 func (es *ExprStack) SubtractTOS2OS() {
 	var e, e1, e2 *ExprNode
 	es.CheckOperands(2, "subtract")
@@ -607,8 +598,7 @@ func (es *ExprStack) SubtractTOS2OS() {
 	T.P("op", "SUB").Debugf("result %s", e.String())
 }
 
-/* Multiply TOS and 2ndOS. One multiplicant must be a known numeric constant.
- */
+// Multiply TOS and 2ndOS. One multiplicant must be a known numeric constant.
 func (es *ExprStack) MultiplyTOS2OS() {
 	var e, e1, e2 *ExprNode
 	es.CheckOperands(2, "multiply")
@@ -635,8 +625,7 @@ func (es *ExprStack) MultiplyTOS2OS() {
 	T.P("op", "MUL").Debugf("result = %s", e.String())
 }
 
-/* Divide 2ndOS by TOS. Divisor must be numeric non-0 constant.
- */
+// Divide 2ndOS by TOS. Divisor must be numeric non-0 constant.
 func (es *ExprStack) DivideTOS2OS() {
 	var e, e1, e2 *ExprNode
 	es.CheckOperands(2, "divide")
@@ -660,10 +649,11 @@ func (es *ExprStack) DivideTOS2OS() {
 	T.P("op", "DIV").Debugf("result = %s", e.String())
 }
 
-/* Numeric interpolation operation. Either n must be known or a and b.
- *
- * n[a,b] => a - na + nb.
- */
+/*
+Numeric interpolation operation. Either n must be known or a and b.
+
+n[a,b] => a - na + nb.
+*/
 func (es *ExprStack) Interpolate() {
 	es.CheckOperands(3, "interpolate")
 	var n, a, b *ExprNode
@@ -684,10 +674,11 @@ func (es *ExprStack) Interpolate() {
 	}
 }
 
-/* Pair interpolation operation. Either n must be known or z1 and z2.
- *
- * n[z1,z2] => z1 - n*z1 + n*z2.
- */
+/*
+Pair interpolation operation. Either n must be known or z1 and z2.
+
+n[z1,z2] => z1 - n*z1 + n*z2.
+*/
 func (es *ExprStack) InterpolatePair(n *ExprNode, z1 *ExprNode, z2 *ExprNode) {
 	// second operand will be destroyed, n must be first !
 	px1 := n.XPolyn.Multiply(z1.XPolyn, false)
@@ -703,19 +694,21 @@ func (es *ExprStack) InterpolatePair(n *ExprNode, z1 *ExprNode, z2 *ExprNode) {
 	T.P("op", "INTERP").Debugf("result = %s", e.String())
 }
 
-/* Rotate a pair around origin for TOS degrees, counterclockwise.
- * TOS must be a known numeric constant.
- */
+/*
+Rotate a pair around origin for TOS degrees, counterclockwise.
+TOS must be a known numeric constant.
+*/
 func (es *ExprStack) Rotate2OSbyTOS() {
 	es.CheckOperands(2, "rotate")
 	e, _ := es.Pop()
 	c, _ := e.XPolyn.IsConstant()
 	angle, _ := c.Mul(arithm.Deg2Rad).Float64()
-	T.Debugf("rotating by %s° = %f rad", c, angle)
 	sin := arithm.NewConstantPolynomial(dec.NewFromFloat(math.Sin(angle)))
 	cos := arithm.NewConstantPolynomial(dec.NewFromFloat(math.Cos(angle)))
-	//T.Debugf("sin %s° = %s, cos %s° = %s", c, sin, c, cos)
+	T.Debugf("sin %s° = %s, cos %s° = %s", c, sin, c, cos)
 	e, _ = es.Pop()
+	T.Debugf("rotating %v by %s° = %f rad", e, c, angle)
+	T.Errorf("TODO: rotation calculation is buggy")
 	if e.IsPair {
 		var ysin, ycos, XPart, YPart, tmp arithm.Polynomial
 		tmp = sin.CopyPolynomial()
@@ -731,13 +724,14 @@ func (es *ExprStack) Rotate2OSbyTOS() {
 	}
 }
 
-/* Create an equation of the polynomials of TOS and 2ndOS.
- * Introduces the equation to the solver's linear equation system.
- *
- * If the polynomials are of type pair polynomial, then there will be 2
- * equations, one for the x-part and one for the y-part. LEQ will only handle
- * numeric linear equations.
- */
+/*
+Create an equation of the polynomials of TOS and 2ndOS.
+Introduces the equation to the solver's linear equation system.
+
+If the polynomials are of type pair polynomial, then there will be 2
+equations, one for the x-part and one for the y-part. LEQ will only handle
+numeric linear equations.
+*/
 func (es *ExprStack) EquateTOS2OS() {
 	es.SubtractTOS2OS() // now 0 = p1 - p2
 	e, _ := es.Pop()    // e is interpreted as an equation, one side 0

@@ -238,6 +238,29 @@ func (pl *GalleryParseListener) VisitTerminal(node antlr.TerminalNode) {
 // --- Statements ------------------------------------------------------------
 
 /*
+Finish a declaration statement. Example: "numeric a, b, c;"
+If var decl is new, insert a new symbol in global scope. If var decl
+already exists, erase all variables and re-enter var decl (MetaFont
+semantics). If var decl has been "saved" in the current or in an outer scope,
+make this tag a new undefined symbol.
+
+   TYPE TAG ( COMMA TAG )*                        # typedecl
+
+*/
+func (pl *GalleryParseListener) ExitTypedecl(ctx *grammar.TypedeclContext) {
+	T.P("type", ctx.TYPE().GetText()).Debugf("declaration of %d tags", len(ctx.AllTAG()))
+	mftype := variables.TypeFromString(ctx.TYPE().GetText())
+	if mftype == variables.Undefined {
+		T.Errorf("unknown type: %s", ctx.TYPE().GetText())
+		T.Error("assuming type numeric")
+		mftype = variables.NumericType
+	}
+	for _, tag := range ctx.AllTAG() { // iterator over tag list
+		_ = corelang.Declare(pl.rt, tag.GetText(), mftype)
+	}
+}
+
+/*
 Start a new scope / compound statement: "begingroup".
 
 MetaFont uses dynamic scopes with the "begingroup ... endgroup" notation,
@@ -313,7 +336,7 @@ func (pl *GalleryParseListener) ExitAssignment(ctx *grammar.AssignmentContext) {
 			t := v.GetType()
 			T.P("var", varname).Debugf("lvalue type is %s", variables.TypeString(t))
 			if !pl.rt.ExprStack.CheckTypeMatch(lvalue, e) {
-				T.P("var", varname).Errorf("type mismatch")
+				T.P("var", varname).Errorf("type mismatch in assignment")
 				panic("type mismatch in assignment")
 			} else {
 				corelang.Assign(pl.rt, v, e)
@@ -332,7 +355,6 @@ Equations may be chained, i.e.
    a=b=c
 
 All operands are on the expression stack. Operates right-associative.
-
 */
 func (pl *GalleryParseListener) ExitEquation(ctx *grammar.EquationContext) {
 	prev, _ := pl.rt.ExprStack.Pop() // walk the chain from right to left
@@ -341,7 +363,30 @@ func (pl *GalleryParseListener) ExitEquation(ctx *grammar.EquationContext) {
 		tos := pl.rt.ExprStack.Top() // LHS of current equation
 		pl.rt.ExprStack.Push(prev)   // LHS of equation to the right
 		prev = tos                   // advance prev
+		pl.equate()                  // perform equation depending on operands' type
+	}
+}
+
+// Equation for different expression types.
+func (pl *GalleryParseListener) equate() {
+	rhs, _ := pl.rt.ExprStack.Pop()
+	lhs := pl.rt.ExprStack.Top()
+	etype := pl.getExprType(lhs)
+	T.Debugf("%s equation: %v = %v", variables.TypeString(etype), lhs, rhs)
+	switch etype {
+	case variables.NumericType:
+		pl.rt.ExprStack.Push(rhs)
 		pl.rt.ExprStack.EquateTOS2OS()
+	case variables.PairType:
+		pl.rt.ExprStack.Push(rhs)
+		pl.rt.ExprStack.EquateTOS2OS()
+	case variables.PathType:
+		lhs.Other = rhs.Other // now the path is on the stack
+		sym := pl.rt.ExprStack.GetVariable(lhs)
+		vref, _ := sym.(*variables.PMMPVarRef)
+		vref.SetValue(rhs.Other)
+	default:
+		T.P("op", "=").Errorf("not implemented: equation for type %s", variables.TypeString(etype))
 	}
 }
 
@@ -380,7 +425,40 @@ func (pl *GalleryParseListener) ExitShowcmd(ctx *grammar.ShowcmdContext) {
 // --- Expressions -----------------------------------------------------------
 
 /*
-Add/subtract 2 factors. Factors may be of any type.
+Top level expression.
+
+   expression : tertiary
+              | expression PATHCLIPOP tertiary
+
+Path clipping operations are
+
+   PATHCLIPOP : 'union' | 'intersection' | 'difference'
+
+*/
+func (pl *GalleryParseListener) ExitExpression(ctx *grammar.ExpressionContext) {
+	if ctx.PATHCLIPOP() != nil {
+		e, _ := pl.rt.ExprStack.Pop()
+		p1 := e.Other.(polygon.Polygon)
+		e, _ = pl.rt.ExprStack.Pop()
+		p2 := e.Other.(polygon.Polygon)
+		var p polygon.Polygon
+		switch ctx.PATHCLIPOP().GetText() {
+		case "union":
+			p = polygon.Union(p1, p2)
+		case "intersection":
+			p = polygon.Intersection(p1, p2)
+		case "difference":
+			p = polygon.Difference(p1, p2)
+		default:
+			T.P("op", ctx.PATHCLIPOP().GetText()).Error("unknown clipping operation")
+			p = p1
+		}
+		pl.rt.ExprStack.Push(runtime.NewOtherExpression(p))
+	}
+}
+
+/*
+Add/subtract 2 factors. Factors may be of type numeric or pair.
 
   tertiary : secondary                                  # term
            | tertiary (PLUS|MINUS) secondary            # term
@@ -422,6 +500,7 @@ Create a path by joining path fragments.
 Each fragment is either a known pair or a sub-path. Fragment AST nodes
 are already labeled with a string marker. Pairs and sub-paths lie
 in reverse order on either the expression stack or the path stack.
+
 The completed path is pushed onto the path stack.
 */
 func (pl *GalleryParseListener) ExitPath(ctx *grammar.PathContext) {
@@ -436,7 +515,7 @@ func (pl *GalleryParseListener) ExitPath(ctx *grammar.PathContext) {
 				T.Errorf("polygon elements must be known")
 			}
 		} else if e.Other != nil {
-			if p, ispolyg := e.Other.(*polygon.Polygon); ispolyg {
+			if p, ispolyg := e.Other.(polygon.Polygon); ispolyg {
 				builder.CollectSubpolyg(p)
 			} else {
 				T.P("op", "path").Errorf(" fragment %d is unknown type", l-i)
@@ -448,52 +527,118 @@ func (pl *GalleryParseListener) ExitPath(ctx *grammar.PathContext) {
 	if ctx.Cycle() != nil {
 		builder.Cycle()
 	}
-	_ = builder.MakePolygon()
+	polyg := builder.MakePolygon()
+	e := runtime.NewOtherExpression(polyg) // return the new polygon on the stack
+	pl.rt.ExprStack.Push(e)
 }
 
 /*
-Apply a transformation to a pair or a path.
+Apply a chain of affine transforms to a pair or a path.
 
   secondary ( TRANSFORM primary )+           # transform
 
 */
 func (pl *GalleryParseListener) ExitTransform(ctx *grammar.TransformContext) {
-	l := len(ctx.AllTRANSFORM())
-	trArgs := make([]*runtime.ExprNode, l)
-	for i := l - 1; i >= 0; i-- {
-		trArgs[i], _ = pl.rt.ExprStack.Pop()
+	l := len(ctx.AllTRANSFORM())           // count transforms
+	transforms := make([]string, l)        // array for transform operators
+	for i, t := range ctx.AllTRANSFORM() { // for every transform
+		transforms[i] = t.GetText()
+	}
+	trArgs := make([]*runtime.ExprNode, l) // array for transform parameters
+	for i := l - 1; i >= 0; i-- {          // store all transform parameters
+		trArgs[i], _ = pl.rt.ExprStack.Pop() // t.-parameters are on the stack
 		T.Debugf("transform %d/%d =  %s %v", i, l, ctx.TRANSFORM(i), trArgs[i])
 	}
-	for i, t := range ctx.AllTRANSFORM() {
-		if t == "scaled" {
-			scale, ok := pl.rt.ExprStack.PopAsNumeric()
-			scale := trArgs[i]
-			if !ok {
-				T.P("transf", t).Error("need known numeric scale")
+	// now check secondary (on top of stack): pair, path or transform variable
+	e := pl.rt.ExprStack.Top() // leave it on the stack
+	etype := pl.getExprType(e)
+	switch etype {
+	case variables.PairType:
+		T.Debugf("transform of pair")
+		pl.transformPair(e, transforms, trArgs) // transform a pair
+	case variables.PathType:
+		T.Debugf("transform of polygon")
+		pl.transformPath(e, transforms, trArgs) // transform a path
+	default: // TODO: transform of transform
+		T.Errorf("cannot transform type %s", variables.TypeString(etype))
+	}
+}
+
+func (pl *GalleryParseListener) transformPair(e *runtime.ExprNode, transforms []string,
+	parameters []*runtime.ExprNode) {
+	//
+	_, isknown := e.GetConstPair()
+	for i, t := range transforms {
+		switch t {
+		case "scaled":
+			_, isconst := parameters[i].GetConstNumeric()
+			if !isknown && !isconst {
+				T.Error("not implemented: <unknown pair> scaled <unknown>")
 			} else {
-				pl.rt.ExprStack.PushConstant(scale)
+				pl.rt.ExprStack.Push(parameters[i])
 				pl.rt.ExprStack.MultiplyTOS2OS()
+				T.P("op", "scale").Debugf("result = %v", pl.rt.ExprStack.Top())
 			}
-		} else if t == "rotated" {
-			angle, ok := pl.rt.ExprStack.PopAsNumeric()
-			if !ok {
-				T.P("transf", t).Error("need known numeric angle")
+		case "shifted":
+			_, isconst := parameters[i].GetConstPair()
+			if !isknown && !isconst {
+				T.Error("not implemented: <unknown pair> shifted <unknown>")
 			} else {
-				pl.rt.ExprStack.PushConstant(angle)
-				pl.rt.ExprStack.Rotate2OSbyTOS()
-			}
-		} else if t == "shifted" {
-			shift, ok := pl.rt.ExprStack.PopAsPair()
-			if !ok {
-				T.P("transf", t).Error("need known numeric pair")
-			} else {
-				pl.rt.ExprStack.PushPairConstant(shift)
+				pl.rt.ExprStack.Push(parameters[i])
 				pl.rt.ExprStack.AddTOS2OS()
+				T.P("op", "shift").Debugf("result = %v", pl.rt.ExprStack.Top())
 			}
-		} else {
-			T.P("transf", t).Error("unknown transform")
+		case "rotated":
+			_, isconst := parameters[i].GetConstNumeric()
+			if !isconst {
+				T.Error("not implemented: rotated <unknown>")
+			} else {
+				pl.rt.ExprStack.Push(parameters[i])
+				pl.rt.ExprStack.Rotate2OSbyTOS()
+				T.P("op", "rotate").Debugf("result = %v", pl.rt.ExprStack.Top())
+			}
+		default:
+			T.Errorf("ignoring unknown transform: %s", t)
 		}
 	}
+}
+
+func (pl *GalleryParseListener) transformPath(e *runtime.ExprNode, transforms []string,
+	parameters []*runtime.ExprNode) {
+	//
+	p, _ := e.Other.(polygon.Polygon) // secondary must be known path
+	affinetr := arithm.Identity()     // we'll construct an overall transform
+	for i, t := range transforms {    // apply all transforms to affinetr
+		switch t {
+		case "scaled":
+			_, isconst := parameters[i].GetConstNumeric()
+			if !isconst {
+				T.Error("not implemented: <path> scaled <unknown>")
+			} else {
+				T.Error("not implemented: scaling of <path>")
+			}
+		case "shifted":
+			pr, isconst := parameters[i].GetConstPair()
+			if !isconst {
+				T.Error("not implemented: <path> shifted <unknown>")
+			} else {
+				a := arithm.Translation(pr)
+				affinetr = affinetr.Combine(a)
+			}
+		case "rotated":
+			angle, isconst := parameters[i].GetConstNumeric()
+			if !isconst {
+				T.Error("not implemented: <path> rotated <unknown>")
+			} else {
+				a := arithm.Rotation(angle.Mul(arithm.Deg2Rad))
+				affinetr = affinetr.Combine(a)
+			}
+		default:
+			T.Errorf("ignoring unknown transform: %s", t)
+		}
+	}
+	// now apply the resulting transform to the path/polygon
+	e.Other = polygon.Transform(p, affinetr)
 }
 
 /*
@@ -522,6 +667,20 @@ func (pl *GalleryParseListener) ExitFuncatom(ctx *grammar.FuncatomContext) {
 }
 
 /*
+Numeric interpolation, i.e. "n[a,b]".
+
+   primary
+      | numtokenatom [ tertiary , tertiary ]       # interpolation
+      |         atom [ tertiary , tertiary ]       # interpolation
+
+All three expressions will be on the expression stack. We will convert
+n[a,b] => a - na + nb.
+*/
+func (pl *GalleryParseListener) ExitInterpolation(ctx *grammar.InterpolationContext) {
+	pl.rt.ExprStack.Interpolate()
+}
+
+/*
 Put x-part or y-part of a pair variable on the expression stack.
 The variable may be known or unknown.
 
@@ -540,7 +699,7 @@ func (pl *GalleryParseListener) ExitPairpart(ctx *grammar.PairpartContext) {
 			pl.rt.ExprStack.PushConstant(c) // just push the value
 		} else {
 			if v := corelang.GetVariableFromExpression(pl.rt, e); v != nil {
-				T.Debugf("pair on the stack: %v", v)
+				T.Debugf("part of pair on the stack: %v", v)
 				if part == "xpart" {
 					pl.rt.ExprStack.PushVariable(v.XPart(), nil)
 				} else {
@@ -707,67 +866,29 @@ func (pl *GalleryParseListener) ExitExprgroup(ctx *grammar.ExprgroupContext) {
 	//pl.Summary()
 }
 
-// --- Variable Handling -----------------------------------------------------
+// ---------------------------------------------------------------------------
 
-/* Construct a valid variable reference string from parts on the stack.
- *
- * Collect fragments of a variable reference, e.g. "x[k+1]r".
- * Subscripts should be found on the expression stack and inserted as
- * numeric constants, i.e. resulting in "x[5]r" (if k=4).
- *
- * Parameter t is the text of the variable ref literal, e.g. "x[k+1]r".
- * It is split by the parser into:
- *
- * . "x" -> TAG x
- * . subscript { k+1 }
- * . "r" -> TAG r
- *
-func (pl *GalleryParseListener) collectVarRefParts(t string, children []antlr.Tree) string {
-	var vname bytes.Buffer
-	for _, ch := range children {
-		T.Debugf("collecting var ref part: %s", getCtxText(ch))
-		if isTerminal(ch) { // just copy string parts to output
-			T.Debugf("adding suffix verbatim: %s", getCtxText(ch))
-			vname.WriteString(ch.(antlr.ParseTree).GetText())
-		} else { // non-terminal is a subscript-expression
-			subscript, ok := pl.rt.ExprStack.Pop() // take subscript from stack
-			if !ok {
-				T.P("var", t).Error("expected subscript on expression stack")
-				T.P("var", t).Error("substituting 0 instead")
-				vname.WriteString("[0]")
+// Helper: get the (variable) type of an item of the expression stack
+func (pl *GalleryParseListener) getExprType(e *runtime.ExprNode) int {
+	if e != nil {
+		if e.IsValid() {
+			if e.IsPair {
+				return variables.PairType
 			} else {
-				c, isconst := subscript.GetXPolyn().IsConstant()
-				if !isconst { // we cannot handle unknown subscripts
-					T.P("var", t).Error("subscript must be known numeric")
-					T.P("var", t).Errorf("substituting 0 for %s",
-						pl.rt.ExprStack.TraceString(subscript))
-					vname.WriteString("[0]")
-				} else {
-					vname.WriteString("[")
-					vname.WriteString(c.String())
-					vname.WriteString("]")
+				sym := pl.rt.ExprStack.GetVariable(e)
+				if sym != nil {
+					if t, ok := sym.(runtime.Typed); ok {
+						return t.GetType()
+					}
 				}
 			}
 		}
+		if e.Other != nil { // neither numeric nor pair, now test other types
+			var ok bool
+			if _, ok = e.Other.(polygon.Polygon); ok {
+				return variables.PathType
+			}
+		}
 	}
-	varname := vname.String()
-	T.P("var", varname).Debug("collected parts")
-	return varname
+	return variables.Undefined
 }
-
-/* Get or create a variable reference. To get the canonical representation of
- * the variable reference, we parse it and construct a small AST. This AST
- * is fed into GetVarRefFromVarSyntax(). The resulting variable reference
- * struct is used to find the memory location of the variable reference.
- *
- * The reference lives in a memory frame, so we first locate it, then put
- * it on the expression stack. If the variable has a known value, we will
- * put the value onto the stack (otherwise the variable reference).
- *
-func (pl *GalleryParseListener) makeCanonicalAndResolve(v string, create bool) *variables.PMMPVarRef {
-	vtree := variables.ParseVariableFromString(v, &TracingErrorListener{})
-	vref := variables.GetVarRefFromVarSyntax(vtree, pl.rt.ScopeTree)
-	vref, _ = corelang.FindVariableReferenceInMemory(pl.rt, vref, create)
-	return vref
-}
-*/

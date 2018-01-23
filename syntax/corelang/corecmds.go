@@ -222,14 +222,15 @@ func PushConstant(rt *runtime.Runtime, vref *variables.PMMPVarRef) {
 	}
 }
 
-/* The expression stack knows nothing about the interpreter's symbols, except
- * the few properties of interface Symbol. The expression stack deals with
- * polynomials and serial IDs of variables. To get back from IDs to
- * variable references, we ask the expression stack for a Symbol (from an
- * ID). If the variable is of type pair, the Symbol may be a pair part (x-part
- * or y-part). Parts point to their parent symbol, thus giving us the
- * variable reference.
- */
+/*
+The expression stack knows nothing about the interpreter's symbols, except
+the few properties of interface Symbol. The expression stack deals with
+polynomials and serial IDs of variables. To get back from IDs to
+variable references, we ask the expression stack for a Symbol (from an
+ID). If the variable is of type pair, the Symbol may be a pair part (x-part
+or y-part). Parts point to their parent symbol, thus giving us the
+variable reference.
+*/
 func GetVariableFromExpression(rt *runtime.Runtime, e *runtime.ExprNode) *variables.PMMPVarRef {
 	var v *variables.PMMPVarRef
 	if sym := rt.ExprStack.GetVariable(e); sym != nil {
@@ -244,10 +245,11 @@ func GetVariableFromExpression(rt *runtime.Runtime, e *runtime.ExprNode) *variab
 	return v
 }
 
-/* A variable which goes out of scope becomes a "capsule". We send a message
- * to the expression stack to forget the Symbol(s) for the ID(s) of a
- * variable. Variables are of type numeric or pair.
- */
+/*
+A variable which goes out of scope becomes a "capsule". We send a message
+to the expression stack to forget the Symbol(s) for the ID(s) of a
+variable. Variables are of type numeric or pair.
+*/
 func EncapsulateVariable(rt *runtime.Runtime, v *variables.PMMPVarRef) {
 	rt.ExprStack.EncapsuleVariable(v.GetID())
 	if v.IsPair() {
@@ -256,12 +258,13 @@ func EncapsulateVariable(rt *runtime.Runtime, v *variables.PMMPVarRef) {
 	}
 }
 
-/* Make all variables in a memory frame "capsules".
- * When a memory frame is popped from the stack, the local variables living
- * in the frame have to be made "capsules". This is necessary, because they
- * may still be relevant to the LEQ-solver. The LEQ will finally decide
- * when to abondon the "zombie" variable.
- */
+/*
+Make all variables in a memory frame "capsules".
+When a memory frame is popped from the stack, the local variables living
+in the frame have to be made "capsules". This is necessary, because they
+may still be relevant to the LEQ-solver. The LEQ will finally decide
+when to abondon the "zombie" variable.
+*/
 func EncapsulateVarsInMemory(rt *runtime.Runtime, mf *runtime.DynamicMemoryFrame) {
 	mf.Symbols().Each(func(name string, sym runtime.Symbol) {
 		vref := sym.(*variables.PMMPVarRef)
@@ -270,9 +273,14 @@ func EncapsulateVarsInMemory(rt *runtime.Runtime, mf *runtime.DynamicMemoryFrame
 	})
 }
 
-/* Load builtin symbols into a scope (usually the global scope).
- * TODO: nullpath, z@#, unitcircle, unitsquare
- */
+/*
+Load builtin symbols into a scope (usually the global scope).
+
+TODO:
+
+   nullpath, z@#, unitcircle, unitsquare
+
+*/
 func LoadBuiltinSymbols(rt *runtime.Runtime) {
 	originDef := Declare(rt, "origin", variables.PairType)
 	origin := arithm.MakePair(arithm.ConstZero, arithm.ConstZero)
@@ -343,7 +351,7 @@ func Save(rt *runtime.Runtime, tag string) {
 func Declare(rt *runtime.Runtime, tag string, tp int) *variables.PMMPVarDecl {
 	sym, scope := rt.ScopeTree.Current().ResolveSymbol(tag)
 	if sym != nil { // already found in scope stack
-		T.P("tag", tag).Debug("declare: found tag in scope %s", scope.GetName())
+		T.P("tag", tag).Debugf("declare: found tag in scope %s", scope.GetName())
 		T.P("decl", tag).Debug("variable already declared - re-declaring")
 		// Erase all existing variables and re-define symbol
 		sym, _ = scope.DefineSymbol(tag)
@@ -435,7 +443,6 @@ func PopScopeAndMemory(rt *runtime.Runtime) *runtime.DynamicMemoryFrame {
 func Showvariable(rt *runtime.Runtime, tag string) string {
 	sym, scope := rt.ScopeTree.Current().ResolveSymbol(tag)
 	if sym == nil {
-		//T.P("symbol", tag).Debug("no declaration found for symbol")
 		return fmt.Sprintf("%s : tag\n", tag)
 	} else {
 		v := sym.(*variables.PMMPVarDecl)

@@ -56,8 +56,13 @@ type Symbol interface {
 }
 
 // Some symbols may be typed.
-type Typable interface {
+type Typed interface {
 	GetType() int
+}
+
+// Some symbols may be typable.
+type Typable interface {
+	Typed
 	SetType(int) int
 }
 

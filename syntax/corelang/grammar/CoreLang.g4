@@ -103,10 +103,6 @@ secondary
     | secondary ( TRANSFORM primary )+           # transform
     ;
 
-//transformer
-//    : ( TRANSFORM primary )+
-//    ;
-
 primary
     : MATHFUNC atom                               # funcatom
     | scalarmulop atom                            # scalaratom
