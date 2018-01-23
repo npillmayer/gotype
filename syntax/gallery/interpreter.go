@@ -880,6 +880,8 @@ func (pl *GalleryParseListener) getExprType(e *runtime.ExprNode) int {
 					if t, ok := sym.(runtime.Typed); ok {
 						return t.GetType()
 					}
+				} else {
+					return variables.NumericType
 				}
 			}
 		}
