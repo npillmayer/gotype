@@ -60,6 +60,16 @@ github.com/mitchellh/colorstring
     MIT License (MIT), Copyright (c) 2014 Mitchell Hashimoto
 
 
+github.com/yuin/gopher-lua
+
+    GopherLua is a Lua5.1 VM and compiler written in Go. GopherLua has a same
+    goal with Lua: Be a scripting language with extensible semantics. It
+    provides Go APIs that allow you to easily embed a scripting language to
+    your Go host programs.
+
+    MIT License (MIT), Copyright (c) 2015 Yusuke Inuzuka
+
+
 --- Mathematics ----------------------------------------------------------------
 
 github.com/shopspring/decimal
@@ -73,7 +83,7 @@ github.com/shopspring/decimal
 github.com/akavel/polyclip-go
 
     Library polyclip-go is a pure Go, MIT-licensed implementation of an
-    [algorithm for Boolean operations on 2D polygons] fmartin (invented by
+    algorithm for Boolean operations on 2D polygons (invented by
     F. Martínez, A.J. Rueda, F.R. Feito) -- that is, for calculation of
     polygon intersection, union, difference and xor.
 
@@ -84,6 +94,14 @@ Linear equations algorithm
 
     Inspired by Donald E. Knuth's MetaFont, John Hobby's MetaPost and by
     a Lua project by John D. Ramsdell: http://luaforge.net/projects/lineqpp/
+
+
+gonum.org/v1/gonum/graph
+
+    This is a generalized graph package for the Go language.
+
+    Copyright (c) 2013 The Gonum Authors. All rights reserved.
+    BSD License
 
 
 --- Hyphenation ----------------------------------------------------------------
