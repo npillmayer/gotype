@@ -7,7 +7,7 @@ import (
 )
 
 func TestBuilder(t *testing.T) {
-	pg := NullPolygon().AddKnot(a.P(0, 0)).AddKnot(a.P(1, 3)).AddKnot(a.P(3, 0)).Cycle()
+	pg := NullPolygon().Knot(a.Pr(0, 0)).Knot(a.Pr(1, 3)).Knot(a.Pr(3, 0)).Cycle()
 	L.Infof("pg = %s", PolygonAsString(pg))
 	if pg.N() != 3 {
 		t.Fail()
@@ -15,7 +15,7 @@ func TestBuilder(t *testing.T) {
 }
 
 func TestBox(t *testing.T) {
-	box := Box(a.P(0, 5), a.P(4, 1))
+	box := Box(a.Pr(0, 5), a.Pr(4, 1))
 	L.Infof("box = %s", PolygonAsString(box))
 	if box.N() != 4 {
 		t.Fail()

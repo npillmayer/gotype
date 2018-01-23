@@ -1,8 +1,11 @@
 /*
-Package polygon deals with polygons, i.e. paths with straigt lines.
+Package polygon deals with polygons, ie paths with straight lines.
 
 This is, besides other functionality, a proxy class for a polyclip package from
-https://github.com/akavel/polyclip-go.
+
+   https://github.com/akavel/polyclip-go
+
+(See CREDITS file for details)
 
 ---------------------------------------------------------------------------
 
@@ -61,7 +64,7 @@ var L tracing.Trace = tracing.SyntaxTracer
 
 // An interface for immutable polygons.
 type Polygon interface {
-	IsCycle() bool // is this a cyclic polygon, i.e, is is complete?
+	IsCycle() bool // is this a cyclic polygon, i.e, is it complete?
 	N() int        // number of knots in the polygon
 	Pt(int) a.Pair // knot #i modulo N
 }
@@ -83,23 +86,6 @@ func PolygonAsString(pg Polygon) string {
 	}
 	return s.String()
 }
-
-// An interface for paths
-/*
-type Path interface {
-	fmt.Stringer
-	AddPoint(pr Pair)
-	AddSubpath(p Path)
-	GetPoint(i int) Pair
-	DeletePoint(i int)
-	Subpath(from, to int)
-	Length() int
-	IsCycle() bool
-	Cycle()
-	Copy() Path
-	Reverse()
-}
-*/
 
 // === Polygon Implementation ================================================
 
@@ -144,30 +130,53 @@ func (pg *GPPolygon) IsCycle() bool {
 
 // === Builder ===============================================================
 
-// Create an empty polygon.
+/*
+Create an empty polygon.
+
+This is the starting point for a builder-like functionality. Clients start
+with a null-polygon and subsequently add knots to it.
+
+Example (package qualifiers omitted for clarity and brevity):
+
+   polygon := NullPolygon().Knot(P(1,2)).Knot(P(12,5)).Knot(P(20,3.5)).Cycle()
+
+*/
 func NullPolygon() *GPPolygon {
 	pg := &GPPolygon{}
 	return pg
 }
 
-func Box(lt a.Pair, rb a.Pair) *GPPolygon {
+// Create a box given the top-left and bottom-right corner.
+func Box(topleft a.Pair, bottomright a.Pair) *GPPolygon {
 	pg := &GPPolygon{}
-	pg.Knot(lt)
-	pg.Knot(a.MakePair(rb.XPart(), lt.YPart()))
-	pg.Knot(rb)
-	pg.Knot(a.MakePair(lt.XPart(), rb.YPart()))
+	pg.Knot(topleft)
+	pg.Knot(a.MakePair(bottomright.XPart(), topleft.YPart()))
+	pg.Knot(bottomright)
+	pg.Knot(a.MakePair(topleft.XPart(), bottomright.YPart()))
 	return pg.Cycle()
 }
 
-/*
-func NewPath(prs []Pair) Path {
-	pg := NullPath()
-	for _, pr := range prs {
-		pg.AddPoint(pr)
-	}
-	return pg
+// Internal: create a polygon from a polyclip-polygon
+func polygonFromContour(c pc.Polygon) Polygon {
+	return &GPPolygon{contours: c, isCycle: true}
 }
-*/
+
+// Internal: get a polyclip-polygon out of interface Polygon
+func getOrMakeContours(pg Polygon) pc.Polygon {
+	var contours pc.Polygon
+	if p, ok := pg.(*GPPolygon); ok {
+		contours = p.contours
+	} else {
+		p := NullPolygon()
+		for i := 0; i < pg.N(); i++ {
+			knot := pg.Pt(i)
+			p.Knot(knot)
+		}
+		p.isCycle = true
+		contours = p.contours
+	}
+	return contours
+}
 
 func (pg *GPPolygon) getContour() *pc.Contour {
 	if len(pg.contours) == 0 {
@@ -223,6 +232,50 @@ func (pg *GPPolygon) Subpath(from, to int) {
 // check assignability
 //var _ Path = &Polygon{}
 var _ Polygon = &GPPolygon{}
+
+// Stringer
+func (pg *GPPolygon) String() string {
+	return PolygonAsString(pg)
+}
+
+// === Operations on Polygons ================================================
+
+// Apply an affine transform to (all knots of) a polygon.
+// Returns a new polygon (input parameters are unchanged).
+func Transform(pg Polygon, t *a.AffineTransform) Polygon {
+	ptransformed := NullPolygon()
+	for i := 0; i < pg.N(); i++ {
+		knot := pg.Pt(i)
+		knot = t.Transform(knot)
+		ptransformed.Knot(knot)
+	}
+	ptransformed.isCycle = pg.IsCycle()
+	return ptransformed
+}
+
+// Construct the union of 2 polygons. Returns a new polygon.
+func Union(pg1 Polygon, pg2 Polygon) Polygon {
+	contour1 := getOrMakeContours(pg1)
+	contour2 := getOrMakeContours(pg2)
+	pg := contour1.Construct(pc.UNION, contour2)
+	return polygonFromContour(pg)
+}
+
+// Construct the intersection of 2 polygons. Returns a new polygon.
+func Intersection(pg1 Polygon, pg2 Polygon) Polygon {
+	contour1 := getOrMakeContours(pg1)
+	contour2 := getOrMakeContours(pg2)
+	pg := contour1.Construct(pc.INTERSECTION, contour2)
+	return polygonFromContour(pg)
+}
+
+// Construct the difference of 2 polygons. Returns a new polygon.
+func Difference(pg1 Polygon, pg2 Polygon) Polygon {
+	contour1 := getOrMakeContours(pg1)
+	contour2 := getOrMakeContours(pg2)
+	pg := contour1.Construct(pc.DIFFERENCE, contour2)
+	return polygonFromContour(pg)
+}
 
 // === Utilities =============================================================
 
