@@ -93,6 +93,7 @@ behaviour in certain aspects.
 type GalleryInterpreter struct {
 	ASTListener *GalleryParseListener // parse / AST listener
 	runtime     *runtime.Runtime      // runtime environment
+	scripting   *corelang.Scripting   // Lua scripting subsystem
 }
 
 /*
@@ -107,10 +108,11 @@ Loads builtin symbols (variables and types) if argument is true.
 func NewGalleryInterpreter(loadBuiltins bool) *GalleryInterpreter {
 	intp := &GalleryInterpreter{}
 	intp.runtime = runtime.NewRuntimeEnvironment(variables.NewPMMPVarDecl)
+	intp.scripting = corelang.NewScripting() // scripting subsystem
 	if loadBuiltins {
-		corelang.LoadBuiltinSymbols(intp.runtime) // load syms into global scope
+		corelang.LoadBuiltinSymbols(intp.runtime, intp.scripting) // load syms into global scope
 	}
-	intp.ASTListener = NewParseListener(intp.runtime) // listener for ANTLR
+	intp.ASTListener = NewParseListener(intp.runtime, intp.scripting) // listener for ANTLR
 	return intp
 }
 
@@ -132,6 +134,7 @@ type GalleryParseListener struct {
 	annotations                  map[interface{}]Annotation // node annotations
 	expectingLvalue              bool                       // do not evaluate variable
 	rt                           *runtime.Runtime           // runtime environment
+	scripting                    *corelang.Scripting        // (Lua) sciptirg environment
 }
 
 /*
@@ -155,9 +158,10 @@ type Annotation struct {
 }
 
 // Construct a new AST listener.
-func NewParseListener(rt *runtime.Runtime) *GalleryParseListener {
+func NewParseListener(rt *runtime.Runtime, scr *corelang.Scripting) *GalleryParseListener {
 	pl := &GalleryParseListener{} // no need to initialize base class
 	pl.rt = rt
+	pl.scripting = scr
 	pl.annotations = make(map[interface{}]Annotation)
 	pl.annotate("global", rt.ScopeTree.Globals(), "")
 	return pl
@@ -446,9 +450,9 @@ func (pl *GalleryParseListener) ExitExpression(ctx *grammar.ExpressionContext) {
 		case "union":
 			p = polygon.Union(p1, p2)
 		case "intersection":
-			p = polygon.Intersection(p1, p2)
+			p = polygon.Union(p1, p2)
 		case "difference":
-			p = polygon.Difference(p1, p2)
+			p = polygon.Union(p1, p2)
 		default:
 			T.P("op", ctx.PATHCLIPOP().GetText()).Error("unknown clipping operation")
 			p = p1
@@ -650,18 +654,43 @@ Apply a function to a known argument.
 */
 func (pl *GalleryParseListener) ExitFuncatom(ctx *grammar.FuncatomContext) {
 	fname := ctx.MATHFUNC().GetText()
-	T.P("mathf", fname).Debug("applying function")
+	T.P("func", fname).Debug("applying function")
 	e, ok := pl.rt.ExprStack.Pop()
-	if !ok || !e.IsValid() {
-		T.P("mathf", fname).Error("no arg present for function")
-	} else {
-		c, isconst := e.XPolyn.IsConstant()
-		if !isconst {
-			T.P("mathf", fname).Error("not implemented: f(<unknown>)")
+	if ok {
+		var val interface{}
+		etype := pl.getExprType(e)
+		switch etype {
+		case variables.NumericType:
+			if val, ok = e.GetConstNumeric(); !ok {
+				T.P("func", fname).Error("not implemented: f(<unknown numeric>)")
+				val = nil
+			}
+		case variables.PairType:
+			if val, ok = e.GetConstPair(); !ok {
+				T.P("func", fname).Error("not implemented: f(<unknown pair>)")
+				val = nil
+			}
+		case variables.PathType:
+			val = e.Other
+		default:
+			T.P("func", fname).Errorf("not implemented: f(%s)", variables.TypeString(etype))
+		}
+		if val != nil {
+			r, rtype := corelang.CallFunc(val, fname, pl.scripting)
+			switch rtype {
+			case variables.NumericType:
+				pl.rt.ExprStack.PushConstant(r.(dec.Decimal))
+			case variables.PairType:
+				pl.rt.ExprStack.PushPairConstant(r.(arithm.Pair))
+			case variables.PathType:
+				e := runtime.NewOtherExpression(r)
+				pl.rt.ExprStack.Push(e)
+			default:
+				T.P("func", fname).Error("unknown return type, replaced by numeric 0")
+				pl.rt.ExprStack.PushConstant(arithm.ConstZero)
+			}
 		} else {
-			// TODO: call Lua function
-			c = corelang.Mathfunc(c, fname)
-			pl.rt.ExprStack.PushConstant(c)
+			pl.rt.ExprStack.PushConstant(arithm.ConstZero)
 		}
 	}
 }
@@ -880,7 +909,7 @@ func (pl *GalleryParseListener) getExprType(e *runtime.ExprNode) int {
 					if t, ok := sym.(runtime.Typed); ok {
 						return t.GetType()
 					}
-				} else {
+				} else if _, ok := e.GetConstNumeric(); ok {
 					return variables.NumericType
 				}
 			}

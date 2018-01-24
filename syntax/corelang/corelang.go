@@ -3,6 +3,9 @@ Package corelang implements core commands for DSLs dealing with artihmetic
 expressions, pairs and paths. It borrows from MetaFont/MetaPost,
 as described in the accompanying ANTLR grammar file.
 
+This package also includes the support for Lua scripting. The DSLs stemming
+from this language core are Lua-enabled by default.
+
 The implementation is tightly coupled to the ANTLR V4 parser generator.
 ANTLR is a great tool and I see no use in being independent from it.
 
