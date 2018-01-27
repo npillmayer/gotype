@@ -40,7 +40,7 @@ func NewScripting(rt *runtime.Runtime) *Scripting {
 		T.Error("failed to create Lua scripting subsystem")
 		return nil
 	}
-	luastate.DoFile(gtlocate.FileResource("numeric", "lua"))
+	luastate.DoFile(gtlocate.FileResource("hostlang", "lua"))
 	scr := &Scripting{luastate, nil, rt}
 	scr.hooks = make(map[string]lua.LGFunction)
 	T.Info("Scripting initialized")

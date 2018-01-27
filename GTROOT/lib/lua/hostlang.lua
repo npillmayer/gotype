@@ -3,33 +3,55 @@
 -- https://www.lua.org/pil/13.4.1.html
 -- https://www.lua.org/pil/contents.html
 
-Numeric = {}      -- The numeric namespace
-Numeric.prototype = { _parent = nil, _tag = nil, _suffix = '<suffix>', _value = nil }
-Numeric.mt = {}   -- metatable for numeric
+HostLang = {}      -- The numeric namespace
 
-function Numeric.variable(tag) -- create a new numeric variable
-    local n = { _tag = nil, _suffix = tag }
-    setmetatable(n, Numeric.mt)
+HostVarRef = {}
+HostVarRef.prototype = {
+    _parent = nil,
+    _tag = nil,
+    _suffix = '<suffix>',
+    _value = nil,
+    type = "numeric"
+}
+
+HostVarRef.mt = {}   -- metatable for numeric
+
+function HostLang._variable(tag) -- create a new variable
+    local v = { _tag = nil, _suffix = tag }
+    v.type = "numeric"
+    setmetatable(v, HostVarRef.mt)
+    return v
+end
+
+function HostLang.numeric(tag) -- create a new numeric variable
+    local n = HostLang._variable(tag)
+    n.type = "numeric"
     return n
 end
 
-function Numeric.mt.__index(n, suffix)
+function HostLang.pair(tag) -- create a new pair variable
+    local n = HostLang._variable(tag)
+    pr.type = "pair"
+    return n
+end
+
+function HostVarRef.mt.__index(n, suffix)
     local atsuffix = '@'..suffix
     local suffix_var = rawget(n, atsuffix)
     if suffix_var then
         return suffix_var
     end
-    return Numeric.prototype[suffix]
+    return HostVarRef.prototype[suffix]
 end
 
-function Numeric.mt.__tostring(n)
+function HostVarRef.mt.__tostring(n)
     return "<numeric "..n:fullname().."="..(n._value or "<unknown>")..">"
 end
 
-function Numeric.mt.__newindex(n, suffix, v)
+function HostVarRef.mt.__newindex(n, suffix, v)
     suffix = suffix or 'value'
     local atsuffix = '@' .. suffix
-    local var = Numeric.variable(suffix)
+    local var = HostLang._variable(suffix)
     rawset(var, "_tag", n._tag or n)
     rawset(var, "_parent", n)
     rawset(var, '_value', v)
@@ -37,21 +59,21 @@ function Numeric.mt.__newindex(n, suffix, v)
     return n
 end
 
-Numeric.prototype.tag = function(n)
+HostVarRef.prototype.tag = function(n)
     if not n._tag then
         return n
     end
     return n._tag
 end
 
-Numeric.prototype.isknown = function(n)
+HostVarRef.prototype.isknown = function(n)
     if n._value == nil then
         return false
     end
     return true
 end
 
-Numeric.prototype.value = function(n, x)
+HostVarRef.prototype.value = function(n, x)
     if x then
         n._value = x
     else
@@ -59,7 +81,7 @@ Numeric.prototype.value = function(n, x)
     end
 end
 
-Numeric.prototype.fullname = function(n)
+HostVarRef.prototype.fullname = function(n)
     s = ""
     repeat
         if type(n._suffix) == "number" then
@@ -75,5 +97,4 @@ Numeric.prototype.fullname = function(n)
     return s
 end
 
-
-return Numeric
+return HostLang
