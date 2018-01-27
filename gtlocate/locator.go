@@ -7,7 +7,7 @@ func gtrootdir() string {
 	if gtroot == "" {
 		gopath := os.Getenv("GOPATH")
 		if gopath == "" {
-			gtroot = os.Getenv("HOME")
+			gtroot = os.Getenv("HOME") + "/gotype"
 		} else {
 			gtroot = gopath + "/src/github.com/npillmayer/gotype/GTROOT"
 		}
