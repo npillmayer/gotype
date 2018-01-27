@@ -53,8 +53,6 @@ import (
 	"log"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
-	"github.com/npillmayer/gotype/gtbackend/gfx"
-	"github.com/npillmayer/gotype/gtbackend/gfx/png"
 	"github.com/npillmayer/gotype/gtcore/config"
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
 	"github.com/spf13/cobra"
@@ -109,7 +107,7 @@ func runPMMPostCmd(cmd *cobra.Command, args []string) {
 	}
 	tracing.Tracefile = tracing.ConfigTracing(inputfilename)
 	defer tracing.Tracefile.Close()
-	gfx.GlobalCanvasFactory = png.NewContextFactory() // use GG drawing package
+	//gfx.GlobalCanvasFactory = png.NewContextFactory() // use GG drawing package
 	startPMMPostInput(inputfilename)
 }
 

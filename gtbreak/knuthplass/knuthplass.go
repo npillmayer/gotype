@@ -1,7 +1,14 @@
 /*
-Line breaking algorithm described by D.E. Knuth and M.F. Plass.
+Line breaking algorithm described by D.E. Knuth and M.F. Plass (early draft).
 
-http://defoe.sourceforge.net/folio/knuth-plass.html
+Definite source of information is of course
+
+   Computers & Typesetting, Vol. A & C.
+   http://www-cs-faculty.stanford.edu/~knuth/abcde.html
+
+A good summary may be found in
+
+   http://defoe.sourceforge.net/folio/knuth-plass.html
 
 Horizon hält nicht nur die aktiven Knoten für die "optimalen"
 Umbrüche, sondern auch für Varianten.

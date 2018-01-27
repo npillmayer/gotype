@@ -108,7 +108,7 @@ Loads builtin symbols (variables and types) if argument is true.
 func NewGalleryInterpreter(loadBuiltins bool) *GalleryInterpreter {
 	intp := &GalleryInterpreter{}
 	intp.runtime = runtime.NewRuntimeEnvironment(variables.NewPMMPVarDecl)
-	intp.scripting = corelang.NewScripting() // scripting subsystem
+	intp.scripting = corelang.NewScripting(intp.runtime) // scripting subsystem
 	if loadBuiltins {
 		corelang.LoadBuiltinSymbols(intp.runtime, intp.scripting) // load syms into global scope
 	}

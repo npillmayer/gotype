@@ -227,17 +227,15 @@ type AffineTransform struct {
 	matrix []dec.Decimal // a 3x3 matrix, flattened by rows
 }
 
-/* Internal constructor. Clients can use this as a starting point for
- * transform combinations.
- */
+// Internal constructor. Clients can use this as a starting point for
+// transform combinations.
 func newAffineTransform() *AffineTransform {
 	m := &AffineTransform{}
 	m.matrix = make([]dec.Decimal, 9)
 	return m
 }
 
-/* Identity transform. Will transform a point onto itself.
- */
+// Identity transform. Will transform a point onto itself.
 func Identity() *AffineTransform {
 	m := newAffineTransform()
 	m.set(0, 0, ConstOne)
@@ -246,8 +244,7 @@ func Identity() *AffineTransform {
 	return m
 }
 
-/* Translation transform. Translate a point by (dx,dy).
- */
+// Translation transform. Translate a point by (dx,dy).
 func Translation(pr Pair) *AffineTransform {
 	m := Identity()
 	m.set(0, 2, pr.XPart())
@@ -255,9 +252,8 @@ func Translation(pr Pair) *AffineTransform {
 	return m
 }
 
-/* Rotation transform. Rotate a point counter-clockwise around the origin.
- * Argument is in radians.
- */
+// Rotation transform. Rotate a point counter-clockwise around the origin.
+// Argument is in radians.
 func Rotation(theta dec.Decimal) *AffineTransform {
 	m := newAffineTransform()
 	f, _ := theta.Float64()
@@ -271,8 +267,7 @@ func Rotation(theta dec.Decimal) *AffineTransform {
 	return m
 }
 
-/* Debug Stringer for an affine transform.
- */
+// Debug Stringer for an affine transform.
 func (m *AffineTransform) String() string {
 	s := fmt.Sprintf("[%s,%s,%s|%s,%s,%s|%s,%s,%s]", m.matrix[0], m.matrix[1],
 		m.matrix[2], m.matrix[3], m.matrix[4], m.matrix[5], m.matrix[6],
@@ -307,9 +302,8 @@ func dotProd(vec1, vec2 []dec.Decimal) dec.Decimal {
 	return p1.Add(p2.Add(p3))
 }
 
-/* Combine 2 affine transformation to a new one. Returns a new transformation
- * without changing the argument(s).
- */
+// Combine 2 affine transformation to a new one. Returns a new transformation
+// without changing the argument(s).
 func (m *AffineTransform) Combine(n *AffineTransform) *AffineTransform {
 	o := newAffineTransform()
 	for row := 0; row < 3; row++ {
@@ -328,8 +322,7 @@ func (m *AffineTransform) multiplyVector(v []dec.Decimal) []dec.Decimal {
 	return c
 }
 
-/* Transform a 2D-point. The argument is unchanged and a new pair is returned.
- */
+// Transform a 2D-point. The argument is unchanged and a new pair is returned.
 func (m *AffineTransform) Transform(pr Pair) Pair {
 	c := make([]dec.Decimal, 3)
 	c[0] = pr.XPart()

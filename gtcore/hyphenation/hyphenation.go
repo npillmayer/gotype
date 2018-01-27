@@ -44,54 +44,58 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
  * ----------------------------------------------------------------------
  *
- * Quick and dirty implementation of a hyphenation algorithm (TODO: make
- * more time and space efficient).
- *
- * Package for an algorithm to hyphenate words. It is based on an algorithm
- * described by Frank Liang (F.M.Liang http://www.tug.org/docs/liang/). It loads
- * a pattern file (available with the TeX distribution) and builds a trie
- * structure, carrying an array of positions at every 'leaf'.
- *
- * The trie package I'm using here is a very naive implementation and should
- * be replaced by a more sophisticated one
- * (e.g., https://github.com/siongui/go-succinct-data-structure-trie).
- * Resulting from the API of the trie, the implementation of the pattern
- * application algorithm is bad. TODO: improve time complexity of pattern
- * application.
- *
- * Further reading:
- *
- * https://www.microsoft.com/en-us/Typography/OpenTypeSpecification.aspx
- * https://nedbatchelder.com/code/modules/hyphenate.html   (Python implementation)
- * http://www.mnn.ch/hyph/hyphenation2.html  / https://github.com/mnater/hyphenator
+Quick and dirty implementation of a hyphenation algorithm.
+
+(TODO: make more time and space efficient).
+
+Package for an algorithm to hyphenate words. It is based on an algorithm
+described by Frank Liang (F.M.Liang http://www.tug.org/docs/liang/). It loads
+a pattern file (available with the TeX distribution) and builds a trie
+structure, carrying an array of positions at every 'leaf'.
+
+The trie package I'm using here is a very naive implementation and should
+be replaced by a more sophisticated one
+(e.g., https://github.com/siongui/go-succinct-data-structure-trie).
+Resulting from the API of the trie, the implementation of the pattern
+application algorithm is bad. TODO: improve time complexity of pattern
+application.
+
+Further reading:
+
+https://www.microsoft.com/en-us/Typography/OpenTypeSpecification.aspx
+https://nedbatchelder.com/code/modules/hyphenate.html   (Python implementation)
+http://www.mnn.ch/hyph/hyphenation2.html  / https://github.com/mnater/hyphenator
 */
 
-// a hyphenation dictionnary consists of hyphenation patterns and a list of exceptions
+// A hyphenation dictionnary consists of hyphenation patterns and a list of exceptions
 type Dictionnary struct {
 	exceptions map[string][]int // e.g., "computer" => [3,5] = "com-pu-ter"
 	patterns   *trie.Trie       // where we store patterns and positions
 	Identifier string           // Identifies the dictionnary
 }
 
-/* Load a pattern file. Returns the identifier of the pattern file and a trie.
- *
- * Patterns are enclosed in between
- *
- * \patterns{ % some comment
- *  ...
- * .wil5i
- * .ye4
- * 4ab.
- * a5bal
- * a5ban
- * abe2
- *  ...
- * }
- *
- * Odd numbers stand for possible discretionnaries, even numbers forbid
- * hyphenation. Digits belong to the character immediately after them, i.e.,
- * "a5ban" => (a)(5b)(a)(n) => positions["aban"] = [0,5,0,0].
- */
+/*
+Load a pattern file. Returns the identifier of the pattern file and a trie.
+
+Patterns are enclosed in between
+
+   \patterns{ % some comment
+    ...
+   .wil5i
+   .ye4
+   4ab.
+   a5bal
+   a5ban
+   abe2
+    ...
+   }
+
+Odd numbers stand for possible discretionnaries, even numbers forbid
+hyphenation. Digits belong to the character immediately after them, i.e.,
+
+   "a5ban" => (a)(5b)(a)(n) => positions["aban"] = [0,5,0,0].
+
+*/
 func LoadPatterns(patternfile string) *Dictionnary {
 	file, err := os.Open(patternfile)
 	if err != nil {
@@ -139,18 +143,19 @@ func LoadPatterns(patternfile string) *Dictionnary {
 	return dict
 }
 
-/* Read exceptions from a pattern file. Exceptions are denoted as
- *
- * ex-cep-tion
- * ta-ble
- *
- * and so on, a single word per line. Exceptions are enclosed in
- *
- * \hyphenation{ % some comment
- *  ...
- * }
- *
- */
+/*
+Read exceptions from a pattern file. Exceptions are denoted as
+
+   ex-cep-tion
+   ta-ble
+
+and so on, a single word per line. Exceptions are enclosed in
+
+   \hyphenation{ % some comment
+    ...
+   }
+
+*/
 func (dict *Dictionnary) readExceptions(scanner *bufio.Scanner) {
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -175,17 +180,26 @@ func (dict *Dictionnary) readExceptions(scanner *bufio.Scanner) {
 	}
 }
 
-/* Return a word with possible hyphens inserted.
- * Example: "table" => "ta-ble".
- */
+/*
+Return a word with possible hyphens inserted.
+Example:
+
+   "table" => "ta-ble".
+
+*/
 func (dict *Dictionnary) HypenationString(word string) string {
 	s := dict.Hyphenate(word)
 	return strings.Join(s, "-")
 }
 
-/* Return a word split up at legal hyphenation positions.
- * Example: "table" => [ "ta", "ble" ].
- */
+/*
+Return a word split up at legal hyphenation positions.
+
+Example:
+
+    "table" => [ "ta", "ble" ].
+
+*/
 func (dict *Dictionnary) Hyphenate(word string) []string {
 	if positions, found := dict.exceptions[word]; found {
 		return splitAtPositions(word, positions)
@@ -205,10 +219,11 @@ func (dict *Dictionnary) Hyphenate(word string) []string {
 	}
 }
 
-/* For a given word fragment w, find trie entries for every prefix of w.
- * Example: word fragement is "gment". Find entries for "gment", "ment",
- * "ent", "nt", "t". Collect and return the resulting positions arrays.
- */
+/*
+For a given word fragment w, find trie entries for every prefix of w.
+Example: word fragement is "gment". Find entries for "gment", "ment",
+"ent", "nt", "t". Collect and return the resulting positions arrays.
+*/
 func findPrefixPositions(wordfragment string, trie *trie.Trie) [][]int {
 	l := len(wordfragment)
 	var pp [][]int           // return value
@@ -221,14 +236,21 @@ func findPrefixPositions(wordfragment string, trie *trie.Trie) [][]int {
 	return pp
 }
 
-/* Merge a collection of positions arrays to a given positions array at
- * a given index. Positions are overwritten, if a new position is greater
- * than the old one. If the positions array isn't long enough, it will be
- * enlarged.
- *
- * Example: given p = [0,2,0,0] and pp = { [1,7], [0,0,3] } =>
- * after merge at position 1: p = [0,2,7,3].
- */
+/*
+Merge a collection of positions arrays to a given positions array at
+a given index. Positions are overwritten, if a new position is greater
+than the old one. If the positions array isn't long enough, it will be
+enlarged.
+
+Example:
+
+    given p = [0,2,0,0] and pp = { [1,7], [0,0,3] } =>
+
+after merge at position 1:
+
+    p = [0,2,7,3].
+
+*/
 func mergePositions(positions []int, pp [][]int, at int) []int {
 	for _, p := range pp { // for all partial position arrays
 		for relAt, num := range p { // for evey relative position

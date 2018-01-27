@@ -3,6 +3,7 @@ package corelang
 import (
 	"fmt"
 
+	"github.com/npillmayer/gotype/gtlocate"
 	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables"
 	"github.com/shopspring/decimal"
@@ -39,6 +40,7 @@ func NewScripting(rt *runtime.Runtime) *Scripting {
 		T.Error("failed to create Lua scripting subsystem")
 		return nil
 	}
+	luastate.DoFile(gtlocate.FileResource("numeric", "lua"))
 	scr := &Scripting{luastate, nil, rt}
 	scr.hooks = make(map[string]lua.LGFunction)
 	T.Info("Scripting initialized")

@@ -92,7 +92,6 @@ type Runtime struct {
 	ScopeTree     *ScopeTree        // collect scopes
 	MemFrameStack *MemoryFrameStack // runtime stack of memory frames
 	ExprStack     *ExprStack        // evaluate arithmetic expressions
-	//PathBuilder   *PathStack        // construct paths
 }
 
 /* Construct a new runtime environment, initialized. Accepts a symbol creator for
@@ -107,6 +106,5 @@ func NewRuntimeEnvironment(withDeclarations func(string) Symbol) *Runtime {
 	mf.Scope = rt.ScopeTree.Globals()                        // connect the global frame with the global scope
 	rt.MemFrameStack.Globals().SymbolTable = NewSymbolTable(withDeclarations)
 	rt.ExprStack = NewExprStack()
-	//rt.PathBuilder = NewPathStack()
 	return rt
 }

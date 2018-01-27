@@ -1,5 +1,5 @@
 /*
-Package path deals with MetaFont/MetaPost-like paths and provides an
+Package path deals with MetaFont/MetaPost-like paths. It provides an
 implementation of John Hobby's spline interpolation algorithm.
 
 Spline interpolation by Hobby's algorithm results in aesthetically pleasing
