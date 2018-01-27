@@ -52,6 +52,7 @@ function HostVarRef.mt.__newindex(n, suffix, v)
     suffix = suffix or 'value'
     local atsuffix = '@' .. suffix
     local var = HostLang._variable(suffix)
+    var.type = n.type
     rawset(var, "_tag", n._tag or n)
     rawset(var, "_parent", n)
     rawset(var, '_value', v)
