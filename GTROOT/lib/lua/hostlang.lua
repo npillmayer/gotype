@@ -3,7 +3,7 @@
 -- https://www.lua.org/pil/13.4.1.html
 -- https://www.lua.org/pil/contents.html
 
-HostLang = {}      -- The numeric namespace
+HostLang = {}      -- The Host Language namespace
 
 HostVarRef = {}
 HostVarRef.prototype = {
@@ -14,7 +14,7 @@ HostVarRef.prototype = {
     type = "numeric"
 }
 
-HostVarRef.mt = {}   -- metatable for numeric
+HostVarRef.mt = {}   -- metatable for host variable references
 
 function HostLang._variable(tag) -- create a new variable
     local v = { _tag = nil, _suffix = tag }
@@ -45,7 +45,7 @@ function HostVarRef.mt.__index(n, suffix)
 end
 
 function HostVarRef.mt.__tostring(n)
-    return "<numeric "..n:fullname().."="..(n._value or "<unknown>")..">"
+    return "<host-var "..n:fullname().."="..(n._value or "<unknown>")..">"
 end
 
 function HostVarRef.mt.__newindex(n, suffix, v)
