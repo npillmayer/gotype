@@ -5,31 +5,32 @@ import (
 	"testing"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
+	"github.com/npillmayer/gotype/syntax/runtime"
+	"github.com/npillmayer/gotype/syntax/variables"
 	lua "github.com/yuin/gopher-lua"
 )
 
 func TestLuaInit(t *testing.T) {
 	T.SetLevel(tracing.LevelDebug)
-	L := NewScripting()
+	L := NewScripting(nil)
 	if L == nil {
 		t.Fail()
 	}
 }
 
 func TestLuaEval1(t *testing.T) {
-	l := NewScripting()
-	n, err := l.Eval(`print("lua")`)
-	T.Debugf("Lua eval return value = %d", n)
-	if n != 0 || err != nil {
+	l := NewScripting(nil)
+	_, err := l.Eval(`print("lua")`)
+	if err != nil {
 		t.Fail()
 	}
 }
 
 func TestLuaEval2(t *testing.T) {
-	l := NewScripting()
+	l := NewScripting(nil)
 	l.Register("ping", ping)
-	n, err := l.Eval(`print(ping())`)
-	if n != 0 || err != nil {
+	_, err := l.Eval(`print(ping())`)
+	if err != nil {
 		t.Fail()
 	}
 }
@@ -54,7 +55,7 @@ func TestLuaArgs2(t *testing.T) {
 
 func TestLuaHook(t *testing.T) {
 	T.SetLevel(tracing.LevelDebug)
-	l := NewScripting()
+	l := NewScripting(nil)
 	l.RegisterHook("hello", ping)
 	r, _ := l.CallHook("hello")
 	T.Debugf("r = %v", r)
@@ -64,7 +65,7 @@ func TestLuaHook(t *testing.T) {
 }
 
 func TestLuaHook2(t *testing.T) {
-	scripting := NewScripting()
+	scripting := NewScripting(nil)
 	scripting.RegisterHook("stars", func(L *lua.LState) int {
 		L.Push(lua.LString("* * * * *")) // push result
 		return 1                         // return value count
@@ -74,7 +75,7 @@ func TestLuaHook2(t *testing.T) {
 
 func ExampleScripting_hook() {
 	// Call hook from Go
-	scripting := NewScripting()
+	scripting := NewScripting(nil)
 	scripting.RegisterHook("echo", func(L *lua.LState) int { // register closure
 		lv := L.Get(-1)                                      // get top of stack
 		msg := fmt.Sprintf("echo: %s !", lua.LVAsString(lv)) // process
@@ -87,10 +88,37 @@ func ExampleScripting_hook() {
 }
 
 func TestUserDataPair(t *testing.T) {
-	l := NewScripting()
+	l := NewScripting(nil)
 	l.registerPairType()
 	T.Debug("----------------------------------------")
 	l.Eval(`p = pair.new{1, 1}`)
 	l.Eval(`p:x(4)`)
 	l.Eval(`print(p:x())`)
+}
+
+func TestUserDataVarRef(t *testing.T) {
+	l := NewScripting(runtime.NewRuntimeEnvironment(variables.NewPMMPVarDecl))
+	l.registerDSLRuntimeEnvType()
+	l.registerVarRefType()
+	T.Debug("----------------------------------------")
+	l.Eval(`
+        a = varref.refer_to("a2r")
+        a:value(7)
+        print(a:value())
+    `)
+}
+
+func TestUserDataRuntime(t *testing.T) {
+	l := NewScripting(runtime.NewRuntimeEnvironment(variables.NewPMMPVarDecl))
+	l.registerDSLRuntimeEnvType()
+	l.registerVarRefType()
+	T.Debug("----------------------------------------")
+	l.Eval(`rt = runtime.current`)
+	l.Eval(`x = rt.connect_variable("x")`)
+	l.Eval(`print(x)`)
+	l.Eval(`print(x:value())`)
+	l.Eval(`print(x:isknown())`)
+	l.Eval(`x:value(3.14)`)
+	l.Eval(`print("x="..x:value())`)
+	l.Eval(`print(x:isknown())`)
 }

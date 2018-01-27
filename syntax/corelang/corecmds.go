@@ -120,9 +120,14 @@ the variable reference, we parse it and construct a small AST. This AST
 is fed into GetVarRefFromVarSyntax(). The resulting variable reference
 struct is used to find the memory location of the variable reference.
 
-The reference lives in a memory frame, so we first locate it, then put
-it on the expression stack. If the variable has a known value, we will
-put the value onto the stack (otherwise the variable reference).
+Example:
+
+	vref := MakeCanonicalAndResolve(rt, "a2r", true)
+	// now vref.String() gives something like:
+	//      "<var a[2].r=<nil> w/ <decl a[].r/numeric>>"
+
+If a variable has been undeclared and is now created, the top-most scope
+and memory-frame will hold the newly created variable.
 */
 func MakeCanonicalAndResolve(rt *runtime.Runtime, v string, create bool) *variables.PMMPVarRef {
 	vtree := variables.ParseVariableFromString(v, &TracingErrorListener{})
@@ -304,7 +309,7 @@ func LoadBuiltinSymbols(rt *runtime.Runtime, scripting *Scripting) {
 	_ = Variable(rt, leftDef, left, nil, true)
 	_ = Declare(rt, "p", variables.PairType)
 	_ = Declare(rt, "q", variables.PairType)
-	scripting.RegisterHook("z", ping)
+	//scripting.RegisterHook("TODO: z", ping)
 }
 
 // === Commands ==============================================================

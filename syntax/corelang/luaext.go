@@ -28,17 +28,18 @@ the Lua stack, and then call Lua-function inlua(...) on it.
 */
 type Scripting struct {
 	*lua.LState
-	hooks map[string]lua.LGFunction
+	hooks   map[string]lua.LGFunction
+	runtime *runtime.Runtime
 }
 
 // Create a new scripting subsystem. Not thread safe.
-func NewScripting() *Scripting {
+func NewScripting(rt *runtime.Runtime) *Scripting {
 	luastate := lua.NewState()
 	if luastate == nil {
 		T.Error("failed to create Lua scripting subsystem")
 		return nil
 	}
-	scr := &Scripting{luastate, nil}
+	scr := &Scripting{luastate, nil, rt}
 	scr.hooks = make(map[string]lua.LGFunction)
 	T.Info("Scripting initialized")
 	return scr
@@ -196,21 +197,25 @@ accepted).
 Eval accepts a variable number of untyped arguments. These are put on the
 Lua stack before the statement is executed.
 */
-func (lscript *Scripting) Eval(luacmd string, arguments ...interface{}) (int, error) {
+func (lscript *Scripting) Eval(luacmd string, arguments ...interface{}) (ScriptingArgs, error) {
 	args := asScriptingArgs(arguments...)
 	largs := forLua(args)
 	for _, larg := range largs {
 		lscript.Push(larg)
 	}
 	var lv lua.LValue
+	var r ScriptingArgs
 	err := lscript.DoString(luacmd)
 	if err != nil {
-		T.Errorf("scripting error: %s", err.Error())
+		T.P("script", "lua").Errorf("scripting error: %s", err.Error())
 	} else {
-		lv = lscript.Get(-1)
+		if lscript.GetTop() > 1 {
+			r = returnScriptingArgs(lscript.Get(-1)) // wrap returned value
+			T.P("script", "lua").Debugf("return value on Lua stack = %s", lua.LVAsString(lv))
+			lscript.Pop(1) // remove received value from stack
+		}
 	}
-	T.P("lua", "eval").Debugf("return value on Lua stack = %s", lua.LVAsString(lv))
-	return lscript.GetTop(), err
+	return r, err
 }
 
 // For testing purposes
@@ -234,11 +239,11 @@ const luaPairTypeName = "pair"
 /*
 Lua UserData type for pairs.
 
-Example:
+Example (Lua):
 
   p = pair.new{2, 5}
-  print(p:x())
-  p:y(3.14)
+  print(p:x())          -- get x-part
+  p:y(3.14)             -- set y-part
 
 */
 type LuaPair struct {
@@ -273,7 +278,6 @@ func newPair(L *lua.LState) int {
 		y := xy.RawGet(lua.LNumber(2))
 		pair = &LuaPair{x.(lua.LNumber), y.(lua.LNumber)}
 	}
-	//pair := &LuaPair{L.CheckNumber(1), L.CheckNumber(2)}
 	ud := L.NewUserData()
 	ud.Value = pair
 	L.SetMetatable(ud, L.GetTypeMetatable(luaPairTypeName))
@@ -318,53 +322,218 @@ func pairGetSetY(L *lua.LState) int {
 
 // === User Data Type: Variable ==============================================
 
-const luaNumericTypeName = "numeric"
+const luaVarRefTypeName = "varref"
 
 /*
-Lua UserData type for numeric variables. A numeric variable may be known
-or unknown.
+Lua UserData type for variables. Variables reference DSL-variables in
+the DSL's runtime environment (MetaFont-like variables of type numeric, pair,
+etc.) A variable may be known or unknown.
+
+Example (Lua):
+
+    a = hostlang.numeric("a")   -- connect to a tag of the host language
+    a[2].r = 3.14               -- assign a numeric value to an 'a'-variable
+    print(a[2].r:value())       -- prints "3.14"
+
+Variable a[2].r  (or short: a2r) is now set/known in the host-language (DSL):
+
+    DSL> show a;
+    ## show a;                                    tag=a
+    a : numeric
+    a[] : numeric
+    a[].r : numeric
+    ## a[2].r = 3.14
+
+Lua's notation for (sub-)tables lends itself nicely for a congruency to
+MetaFont-style variable notations. However, it is not possible to use the
+DSL shorthand notation ("a2r") for variable names in Lua.
+
+In Lua, there are two member-functions defined for type varref: value() and
+isknown(). value() is a getter/setter for the variable value. isknown()
+returns a boolean value.
+
+Example (Lua):
+
+    a = hostlang.numeric("a")   -- connect to a tag of the host language
+    print(a:isknown())          -- prints "false" if not yet defined in the DSL
+    a:value(3.14)               -- must use this notation for 'a' base tag
+    print(a:isknown())          -- prints "true"
+
+Variables of this kind are 'live'-objects, i.e. they are always synchronous
+between the two languages.
 */
-type LuaNumeric struct {
-	e *runtime.ExprNode
+type LuaVarRef struct {
+	vref *variables.PMMPVarRef
 }
 
-var numericMethods = map[string]lua.LGFunction{
-	"value":   numericGetSetValue,
-	"isknown": numericIsKnown,
-}
-
-// Registers numeric type to given Scripting.
-func (lscript *Scripting) registerNumericType() {
-	mt := lscript.NewTypeMetatable(luaNumericTypeName)
-	lscript.SetGlobal("numeric", mt)
-	// static attributes
-	lscript.SetField(mt, "new", lscript.NewFunction(newNumeric))
-	// methods
-	lscript.SetField(mt, "__index", lscript.SetFuncs(lscript.NewTable(), numericMethods))
-}
-
-// Constructor
-func newNumeric(L *lua.LState) int {
-	var n *LuaNumeric
-	if L.GetTop() >= 2 {
-		n = newLuaNumeric(L.CheckNumber(1))
+// Stringer for variable references. Used for varref.__tostring(...).
+// Will give a debug representation of the DSL-connected variable.
+func (lvref *LuaVarRef) String() string {
+	if lvref.vref == nil {
+		return "<undefined variable>"
 	} else {
-		n = newLuaNumeric(nil)
+		return lvref.vref.String()
 	}
-	ud := L.NewUserData()
-	ud.Value = n
-	L.SetMetatable(ud, L.GetTypeMetatable(luaNumericTypeName))
-	L.Push(ud)
+}
+
+// Metatable functions for type varref
+var varRefMethods = map[string]lua.LGFunction{
+	"value":   varRefGetSetValue,
+	"isknown": varRefIsKnown,
+}
+
+// Registers varRef type to given Scripting.
+func (lscript *Scripting) registerVarRefType() {
+	mt := lscript.NewTypeMetatable(luaVarRefTypeName)
+	lscript.SetGlobal("varref", mt)
+	lscript.SetField(mt, "refer_to", lscript.NewFunction(referToVar))
+	lscript.SetField(mt, "__index", lscript.SetFuncs(lscript.NewTable(), varRefMethods))
+	lscript.SetField(mt, "__tostring", lscript.NewFunction(varRef2String))
+}
+
+/*
+Lua constructor: Construct a variable reference from a variable name.
+Variable names are (complex) MetaFont-style variables.
+
+Examples:
+
+    "a", "z[2]", "x[3.14].r", "hello.world[3]"
+
+Essentially performs a call to MakeCanonicalAndResolve(...).
+*/
+func referToVar(L *lua.LState) int {
+	varname := L.CheckString(1)
+	if lrt := getGlobalDSLRuntimeEnv(L); lrt != nil {
+		vref := MakeCanonicalAndResolve(lrt.rt, varname, true)
+		T.Debugf("var. ref. = %v", vref)
+		vudata := newVarRefUserData(L, vref)
+		L.Push(vudata)
+		return 1
+	}
+	return 0
+}
+
+// Create a LuaVarRef UserData wrapper for a variable reference.
+// Sets the correct metatable for the variable.
+func newVarRefUserData(L *lua.LState, vref *variables.PMMPVarRef) *lua.LUserData {
+	vudata := L.NewUserData()
+	lvref := &LuaVarRef{vref}
+	vudata.Value = lvref
+	L.SetMetatable(vudata, L.GetTypeMetatable(luaVarRefTypeName))
+	return vudata
+}
+
+// Checks whether the first lua argument is a *LUserData with *VarRef and returns
+// this *VarRef.
+func checkVarRef(L *lua.LState) *LuaVarRef {
+	udata := L.CheckUserData(1)
+	if v, ok := udata.Value.(*LuaVarRef); ok {
+		return v
+	}
+	L.ArgError(1, "varref expected")
+	return nil
+}
+
+// Function for varref metatable:
+// getter and setter for variable's value()
+func varRefGetSetValue(L *lua.LState) int {
+	v := checkVarRef(L)
+	if L.GetTop() == 2 { // setter
+		f := L.CheckNumber(2)
+		d := decimal.NewFromFloat(float64(f))
+		v.vref.SetValue(d)
+		return 0
+	} else { // getter
+		val := v.vref.GetValue()
+		if n, ok := val.(decimal.Decimal); ok {
+			lf, _ := n.Float64()
+			L.Push(lua.LNumber(lf))
+		} else {
+			L.Push(lua.LNil)
+		}
+		return 1
+	}
+	return 0
+}
+
+// Function for varref metatable
+func varRefIsKnown(L *lua.LState) int {
+	v := checkVarRef(L)
+	L.Push(lua.LBool(v.vref.IsKnown()))
 	return 1
 }
 
-// Checks whether the first lua argument is a *LUserData with *Numeric and returns
-// this *Numeric.
-func checkNumeric(L *lua.LState) *LuaNumeric {
-	ud := L.CheckUserData(1)
-	if v, ok := ud.Value.(*LuaNumeric); ok {
-		return v
+// Function for varref metatable
+func varRef2String(L *lua.LState) int {
+	v := checkVarRef(L)
+	s := v.String()
+	L.Push(lua.LString(s))
+	return 1
+}
+
+// === User Data Type: Runtime ===============================================
+
+// Global Lua type: runtime. This connects the Lua scripting sub-sytem
+// to the DSL's runtime environment
+const luaDSLRuntimeTypeName = "runtime"
+
+/*
+Lua UserData type for the DSL's interpreter runtime environment.
+The scripting sub-system has access to variables of the DSL (and therefore
+access to scopes and memory-frames of the runtime environment).
+
+Example (Lua):
+
+    rt = runtime.current                -- find the host-DSL runtime environment
+    x = rt.connect_variable("x")        -- create a varref (UserData) for tag 'x'
+    print(x)                            -- print a representation for 'x'
+    print(x:value())                    -- print the value of 'x'
+
+This will support other host-DSL commands in the future.
+*/
+type DSLRuntimeEnv struct {
+	rt *runtime.Runtime
+}
+
+var runtimeMethods = map[string]lua.LGFunction{
+	"connect_variable": runtimeConnectVar,
+}
+
+// Registers runtime type to given Scripting.
+func (lscript *Scripting) registerDSLRuntimeEnvType() {
+	grt := &DSLRuntimeEnv{
+		rt: lscript.runtime,
 	}
-	L.ArgError(1, "numeric expected")
-	return nil
+	udata := lscript.NewUserData()
+	udata.Value = grt
+	mt := lscript.NewTypeMetatable(luaDSLRuntimeTypeName)
+	lscript.SetMetatable(udata, mt)
+	lscript.SetGlobal("runtime", mt)
+	lscript.SetField(mt, "current", udata)
+	lscript.SetField(mt, "__index", lscript.SetFuncs(lscript.NewTable(), runtimeMethods))
+}
+
+func runtimeConnectVar(L *lua.LState) int {
+	varname := L.CheckString(1)
+	if lrt := getGlobalDSLRuntimeEnv(L); lrt != nil {
+		vref := MakeCanonicalAndResolve(lrt.rt, varname, true)
+		T.Debugf("variable reference = %v", vref)
+		vudata := newVarRefUserData(L, vref)
+		L.Push(vudata)
+		return 1
+	}
+	return 0
+}
+
+func getGlobalDSLRuntimeEnv(L *lua.LState) *DSLRuntimeEnv {
+	mt := L.GetTypeMetatable(luaDSLRuntimeTypeName)
+	if mt != nil {
+		udata := L.GetField(mt, "current").(*lua.LUserData)
+		lrt := udata.Value.(*DSLRuntimeEnv)
+		return lrt
+	} else {
+		T.P("script", "lua").Error("host language runtime env. not found")
+		T.Error("Did you pre-load UserData-type 'runtime'?")
+		return nil
+	}
 }
