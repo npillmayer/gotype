@@ -49,6 +49,7 @@ program
 statement
     : compound
     | declaration
+    | vardef
     | assignment
     | constraint
     | command

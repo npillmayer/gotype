@@ -44,6 +44,10 @@ statementlist
     : ( statement SEMIC )*
     ;
 
+vardef
+    : VARDEF TAG ( COMMA TAG )*
+    ;
+
 compound
     : BEGINGROUP statementlist ENDGROUP
     ;

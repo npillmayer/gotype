@@ -3,6 +3,7 @@ package corelang
 import (
 	"fmt"
 
+	"github.com/npillmayer/gotype/gtcore/arithmetic"
 	"github.com/npillmayer/gotype/gtlocate"
 	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables"
@@ -14,7 +15,7 @@ import (
 
 /*
 Type Scripting is an opaque data type to provide access to the
-scripting subsystem.
+scripting sub-system.
 
 DSLs built on top of this language core may be scripted with Lua.
 Lua scripts may be called as hooks or as functions on primary level.
@@ -33,16 +34,24 @@ type Scripting struct {
 	runtime *runtime.Runtime
 }
 
-// Create a new scripting subsystem. Not thread safe.
+// Create a new scripting subsystem. Scripting sub-systems are not thread safe.
 func NewScripting(rt *runtime.Runtime) *Scripting {
 	luastate := lua.NewState()
 	if luastate == nil {
 		T.Error("failed to create Lua scripting subsystem")
 		return nil
 	}
-	luastate.DoFile(gtlocate.FileResource("hostlang", "lua"))
+	T.Info("Loading initial Lua scripts")
+	hostlang := gtlocate.FileResource("hostlang", "lua")
+	T.Infof("- %s", hostlang)
+	luastate.DoFile(hostlang)
+	luastate.DoString("hostlang = HostLang")
 	scr := &Scripting{luastate, nil, rt}
+	scr.registerDSLRuntimeEnvType()
+	scr.registerVarRefType()
+	scr.registerPairType()
 	scr.hooks = make(map[string]lua.LGFunction)
+	scr.RegisterHook("trace", trace)
 	T.Info("Scripting initialized")
 	return scr
 }
@@ -51,10 +60,10 @@ func NewScripting(rt *runtime.Runtime) *Scripting {
 
 // We shield the Lua implementation from our scripting API.
 // Parameters and return values are provided as generic values.
-type ScriptingArgs []interface{}
+type scriptingArgs []interface{}
 
-func asScriptingArgs(values ...interface{}) ScriptingArgs {
-	args := make(ScriptingArgs, len(values))
+func asScriptingArgs(values ...interface{}) scriptingArgs {
+	args := make(scriptingArgs, len(values))
 	for i, a := range values {
 		args[i] = a
 	}
@@ -62,7 +71,7 @@ func asScriptingArgs(values ...interface{}) ScriptingArgs {
 }
 
 // Convert a Go type argument list into Lua types
-func forLua(values ScriptingArgs) []lua.LValue {
+func forLua(values scriptingArgs) []lua.LValue {
 	args := make([]lua.LValue, len(values))
 	for i, a := range values {
 		if a == nil {
@@ -86,58 +95,174 @@ func forLua(values ScriptingArgs) []lua.LValue {
 	return args
 }
 
-// Convert and wrap a Lua return value into ScriptingArgs
-func returnScriptingArgs(lv lua.LValue) ScriptingArgs {
-	a := make(ScriptingArgs, 1)
-	if lua.LVIsFalse(lv) {
-		a[0] = nil
-	} else {
-		switch lv.Type() {
-		case lua.LTNumber:
-			a[0] = float64(lv.(lua.LNumber))
-			a[0] = decimal.NewFromFloat(a[0].(float64))
-		case lua.LTString:
-			a[0] = lua.LVAsString(lv)
-		case lua.LTUserData:
-			//a = append(a, lua.LTUserData)
-			T.Error("not yet implemented: user data, ignored")
-		default:
-			T.Error("unexpected scripting value type, ignored")
+// --- Helpers for decoding Lua LValues --------------------------------------
+
+func isUserData(lv lua.LValue) (*lua.LUserData, bool) {
+	if lv.Type() == lua.LTUserData {
+		udata := lv.(*lua.LUserData)
+		return udata, true
+	}
+	return nil, false
+}
+
+func isVariable(lv lua.LValue) (*runtime.ExprNode, *variables.PMMPVarRef, bool) {
+	if udata, ok := isUserData(lv); ok {
+		if v, isvref := udata.Value.(*LuaVarRef); isvref {
+			var e *runtime.ExprNode
+			if v.vref.IsPair() {
+				x := v.vref.XPart()
+				y := v.vref.YPart()
+				e = runtime.NewPairVarExpression(x, y)
+			} else {
+				e = runtime.NewNumericVarExpression(v.vref)
+			}
+			return e, v.vref, true
 		}
 	}
-	return a
+	return nil, nil, false
 }
 
-type ScriptingArgsIterator struct {
-	args ScriptingArgs
-	inx  int
+func isNumericConstant(lv lua.LValue) (decimal.Decimal, bool) {
+	if lv.Type() == lua.LTNumber {
+		f := float64(lv.(lua.LNumber))
+		n := decimal.NewFromFloat(f)
+		return n, true
+	}
+	return arithmetic.ConstZero, false
 }
 
-func (scrargs ScriptingArgs) Iterator() *ScriptingArgsIterator {
-	return &ScriptingArgsIterator{scrargs, -1}
+func isPair(lv lua.LValue) (*LuaPair, bool) {
+	if udata, ok := isUserData(lv); ok {
+		if lpr, ispair := udata.Value.(*LuaPair); ispair {
+			return lpr, true
+		}
+	}
+	return nil, false
 }
 
-func (it *ScriptingArgsIterator) Next() bool {
+func isLiteralPair(lv lua.LValue) (*runtime.ExprNode, []*variables.PMMPVarRef, bool) {
+	var vars []*variables.PMMPVarRef = make([]*variables.PMMPVarRef, 2)
+	if lpr, ok := isPair(lv); ok {
+		var x, y arithmetic.Polynomial
+		if xc, xisconst := isNumericConstant(lpr.X); xisconst {
+			x = arithmetic.NewConstantPolynomial(xc)
+		} else if xv, v, xisvar := isVariable(lpr.X); xisvar {
+			x = xv.XPolyn
+			vars[0] = v
+		} else {
+			T.Error("illegal x-part for pair returned from Lua, assuming 0")
+			x = arithmetic.NewConstantPolynomial(arithmetic.ConstZero)
+		}
+		if yc, yisconst := isNumericConstant(lpr.Y); yisconst {
+			y = arithmetic.NewConstantPolynomial(yc)
+		} else if yv, v, yisvar := isVariable(lpr.Y); yisvar {
+			y = yv.XPolyn
+			vars[1] = v
+		} else {
+			T.Error("illegal y-part for pair returned from Lua, assuming 0")
+			y = arithmetic.NewConstantPolynomial(arithmetic.ConstZero)
+		}
+		return runtime.NewPairExpression(x, y), vars, true
+	}
+	return nil, vars, false
+}
+
+func isString(lv lua.LValue) (string, bool) {
+	if lv.Type() == lua.LTString {
+		s := lua.LVAsString(lv)
+		return s, true
+	}
+	return "", false
+}
+
+// ---------------------------------------------------------------------------
+
+// Type to return values from Lua scripts.
+// Single values are accessed with an iterator.
+//
+// see ScriptingReturnValueIterator
+type ScriptingReturnValues struct {
+	values []lua.LValue
+}
+
+// Iterator type for scripting return values.
+// Return values from Lua are wrapped into an opaque type
+// ScriptingReturnValues and accessed using this iterator type.
+//
+// see ScriptingReturnValues.Iterator()
+type ScriptingReturnValueIterator struct {
+	values *ScriptingReturnValues
+	inx    int
+}
+
+// Create an iterator for scripting arguments / return values.
+func (r *ScriptingReturnValues) Iterator() *ScriptingReturnValueIterator {
+	return &ScriptingReturnValueIterator{r, -1}
+}
+
+// Is there a next scripting argument?
+// Advances the iterator's cursor.
+func (it *ScriptingReturnValueIterator) Next() bool {
+	T.Debugf("%d return values to iterate", len(it.values.values))
 	it.inx++
-	if it.inx < len(it.args) {
+	if it.inx < len(it.values.values) {
 		return true
 	} else {
 		return false
 	}
 }
 
-func (it *ScriptingArgsIterator) Value() (interface{}, int) {
-	if it.inx < len(it.args) {
-		a := it.args[it.inx]
+// Get the value of the scripting argument under the iterator's cursor.
+// Returns the value and a type (see package 'variables' for the
+// definition of variable types).
+func (it *ScriptingReturnValueIterator) Value() (interface{}, int) {
+	if it.inx < len(it.values.values) {
+		a := it.values.values[it.inx]
 		if a == nil {
 			return nil, variables.Undefined
-		} else if v, ok := a.(decimal.Decimal); ok {
+		} else if v, ok := isNumericConstant(a); ok {
 			return v, variables.NumericType
 		} else {
 			T.Errorf("not yet implemented: type for %v", a)
 		}
 	}
 	return nil, variables.Undefined
+}
+
+// Get the value of the scripting argument under the iterator's cursor.
+// Returns the value wrapped in an expression node (or nil).
+// If variables are part of the expression(s), they are returned in a
+// separate array.
+func (it *ScriptingReturnValueIterator) ValueAsExprNode() (*runtime.ExprNode, []*variables.PMMPVarRef) {
+	if it.inx < len(it.values.values) {
+		lv := it.values.values[it.inx]
+		T.Debugf("iterator: value as expression = %v", lv)
+		if lua.LVIsFalse(lv) {
+			T.Error("'nil' return value from Lua, substituting numeric 0")
+			p := arithmetic.NewConstantPolynomial(arithmetic.ConstZero)
+			return runtime.NewNumericExpression(p), nil
+		} else if _, ok := isString(lv); ok {
+			T.Error("cannot process string return value, substituting numeric 0")
+			p := arithmetic.NewConstantPolynomial(arithmetic.ConstZero)
+			return runtime.NewNumericExpression(p), nil
+		} else if e, v, ok := isVariable(lv); ok {
+			T.Debugf("return values iterator: variable = %v", e)
+			vars := make([]*variables.PMMPVarRef, 1)
+			vars[0] = v
+			return e, vars
+		} else if c, ok := isNumericConstant(lv); ok {
+			p := arithmetic.NewConstantPolynomial(c)
+			return runtime.NewNumericExpression(p), nil
+		} else if e, vxy, ok := isLiteralPair(lv); ok {
+			T.Debugf("return values iterator: literal pair = %v", e)
+			return e, vxy
+		} else {
+			T.Error("unknown return value from Lua, substituting numeric 0")
+			p := arithmetic.NewConstantPolynomial(arithmetic.ConstZero)
+			return runtime.NewNumericExpression(p), nil
+		}
+	}
+	return nil, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -175,46 +300,82 @@ Go types.
 
 see RegisterHook()
 */
-func (lscript *Scripting) CallHook(hook string, arguments ...interface{}) (ScriptingArgs, error) {
-	args := asScriptingArgs(arguments...)
-	err := lscript.CallByParam(lua.P{
-		Fn:      lscript.GetGlobal(hook),
-		NRet:    1,
-		Protect: true,
-	}, forLua(args)...)
-	var r ScriptingArgs
-	if err == nil {
-		r = returnScriptingArgs(lscript.Get(-1)) // wrap returned value
-		lscript.Pop(1)                           // remove received value from stack
+func (lscript *Scripting) CallHook(hook string, arguments ...interface{}) (
+	*ScriptingReturnValues, error) {
+	//
+	T.P("lua", hook).Debug("call hook")
+	if lscript.hooks[hook] == nil {
+		T.P("lua", hook).Error("hook not registered")
 	}
+	r, err := lscript.Call("", hook, arguments...)
 	return r, err
 }
 
 /*
-Evaluate a Lua statement, given as string. Returns the number of return
-arguments on the stack and a possible error condition. The statement must
-be a syntactically correct and complete statement (no expressions etc.
-accepted).
+Call a Lua function, possibly qualified by a table prefix.
+*/
+func (lscript *Scripting) Call(table string, function string, arguments ...interface{}) (
+	*ScriptingReturnValues, error) {
+	//
+	var lfunc lua.LValue
+	if table == "" {
+		lfunc = lscript.GetGlobal(function)
+	} else {
+		t := lscript.GetGlobal(table)
+		lfunc = lscript.GetField(t, function)
+	}
+	args := asScriptingArgs(arguments...)
+	err := lscript.CallByParam(lua.P{
+		Fn:      lfunc,
+		NRet:    1,
+		Protect: true,
+	}, forLua(args)...)
+	var r *ScriptingReturnValues
+	if err == nil {
+		T.P("lua", function).Debugf("%d return values on the stack", lscript.GetTop())
+		r = lscript.returnFromScripting(lscript.GetTop()) // return all values on the stack
+	}
+	return r, err
+}
+
+// return n values (off the stack) from a Lua call.
+func (lscript *Scripting) returnFromScripting(n int) *ScriptingReturnValues {
+	values := make([]lua.LValue, n)
+	i, j := n, -1
+	for ; i > 0; i-- {
+		lv := lscript.Get(j)
+		values[-(j + 1)] = lv
+		T.Debugf("return value %d = %v", -(j + 1), lv)
+		j--
+	}
+	lscript.Pop(n)
+	rv := &ScriptingReturnValues{values: values}
+	return rv
+}
+
+/*
+Evaluate a Lua statement, given as string. Return arguments (from the Lua stack)
+are packed into an opaque data structure. The second return value is a possible
+error condition. The Lua command(s) must be syntactically correct and complete
+statements (no expressions etc. accepted).
 
 Eval accepts a variable number of untyped arguments. These are put on the
 Lua stack before the statement is executed.
 */
-func (lscript *Scripting) Eval(luacmd string, arguments ...interface{}) (ScriptingArgs, error) {
+func (lscript *Scripting) Eval(luacmd string, arguments ...interface{}) (*ScriptingReturnValues, error) {
 	args := asScriptingArgs(arguments...)
 	largs := forLua(args)
 	for _, larg := range largs {
 		lscript.Push(larg)
 	}
-	var lv lua.LValue
-	var r ScriptingArgs
+	var r *ScriptingReturnValues
 	err := lscript.DoString(luacmd)
 	if err != nil {
 		T.P("script", "lua").Errorf("scripting error: %s", err.Error())
 	} else {
-		if lscript.GetTop() > 1 {
-			r = returnScriptingArgs(lscript.Get(-1)) // wrap returned value
-			T.P("script", "lua").Debugf("return value on Lua stack = %s", lua.LVAsString(lv))
-			lscript.Pop(1) // remove received value from stack
+		if err == nil {
+			T.P("lua", "eval").Debugf("%d return values on the stack", lscript.GetTop())
+			r = lscript.returnFromScripting(lscript.GetTop()) // return all values on the stack
 		}
 	}
 	return r, err
@@ -234,6 +395,41 @@ func echo(L *lua.LState) int {
 	return 1
 }
 
+// Tracer for the Lua scripting sub-system.
+// Will be registered under 'trace(level, message)'.
+func trace(L *lua.LState) int {
+	s := L.CheckString(-1)
+	level := L.CheckInt(-2)
+	if level == 0 {
+		S.Debug(s)
+	} else {
+		S.Info(s)
+	}
+	return 0
+}
+
+// vardef z(suffixes)
+/*
+func lua_z(L *lua.LState) int {
+	suffixes := L.Get(-1)
+	T.Debugf("lua_z(%v)", suffixes)
+	L.Push(suffixes)
+	hostlang := L.GetGlobal("hostlang")
+	fmt.Printf("hostlang     = %v\n", hostlang)
+	z := L.GetField(hostlang, "z")
+	fmt.Printf("hostlang.z() = %v\n", z)
+	err := L.CallByParam(lua.P{
+		Fn:      z,
+		NRet:    1,    // number of returned values
+		Protect: true, // return err or panic
+	}, suffixes)
+	if err != nil {
+		T.Errorf("CallByParam error: %v", err.Error())
+	}
+	return 1
+}
+*/
+
 // === User Data Type: Pair ==================================================
 
 const luaPairTypeName = "pair"
@@ -249,8 +445,8 @@ Example (Lua):
 
 */
 type LuaPair struct {
-	X lua.LNumber
-	Y lua.LNumber
+	X lua.LValue
+	Y lua.LValue
 }
 
 var pairMethods = map[string]lua.LGFunction{
@@ -270,6 +466,7 @@ func (lscript *Scripting) registerPairType() {
 
 // Constructor
 func newPair(L *lua.LState) int {
+	T.P("lua", "udata").Debug("creating pair() UserData")
 	var pair *LuaPair
 	xy := L.CheckTable(1)
 	if xy.MaxN() != 2 {
@@ -278,7 +475,7 @@ func newPair(L *lua.LState) int {
 	} else {
 		x := xy.RawGet(lua.LNumber(1))
 		y := xy.RawGet(lua.LNumber(2))
-		pair = &LuaPair{x.(lua.LNumber), y.(lua.LNumber)}
+		pair = &LuaPair{x, y}
 	}
 	ud := L.NewUserData()
 	ud.Value = pair
@@ -302,10 +499,10 @@ func checkPair(L *lua.LState) *LuaPair {
 func pairGetSetX(L *lua.LState) int {
 	p := checkPair(L)
 	if L.GetTop() == 2 { // setter
-		p.X = L.CheckNumber(2)
+		p.X = L.CheckAny(2)
 		return 0
 	} else { // getter
-		L.Push(lua.LNumber(p.X))
+		L.Push(p.X)
 		return 1
 	}
 }
@@ -314,10 +511,10 @@ func pairGetSetX(L *lua.LState) int {
 func pairGetSetY(L *lua.LState) int {
 	p := checkPair(L)
 	if L.GetTop() == 2 { // setter
-		p.Y = L.CheckNumber(2)
+		p.Y = L.CheckAny(2)
 		return 0
 	} else { // getter
-		L.Push(lua.LNumber(p.Y))
+		L.Push(p.Y)
 		return 1
 	}
 }

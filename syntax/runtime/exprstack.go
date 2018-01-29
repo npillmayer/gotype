@@ -144,6 +144,27 @@ func NewPairExpression(xp arithm.Polynomial, yp arithm.Polynomial) *ExprNode {
 	return &ExprNode{XPolyn: xp, YPolyn: yp, IsPair: true}
 }
 
+/*
+Create a non-constant numeric expression node.
+*/
+func NewNumericVarExpression(v Symbol) *ExprNode {
+	p := arithm.NewConstantPolynomial(arithm.ConstZero)
+	p = p.SetTerm(v.GetID(), arithm.ConstOne) // p = 0 + 1*v
+	return NewNumericExpression(p)
+}
+
+/*
+Create a non-constant pair expression node. Arguments are x-part and y-part
+for the pair.
+*/
+func NewPairVarExpression(xpart Symbol, ypart Symbol) *ExprNode {
+	px := arithm.NewConstantPolynomial(arithm.ConstZero)
+	px = px.SetTerm(xpart.GetID(), arithm.ConstOne)
+	py := arithm.NewConstantPolynomial(arithm.ConstZero)
+	py = py.SetTerm(ypart.GetID(), arithm.ConstOne)
+	return NewPairExpression(px, py)
+}
+
 // Create an expression node with other information
 func NewOtherExpression(something interface{}) *ExprNode {
 	e := &ExprNode{}
@@ -369,6 +390,9 @@ func (es *ExprStack) PopAsOther() (interface{}, bool) {
 func (es *ExprStack) Push(e *ExprNode) *ExprStack {
 	es.stack.Push(e)
 	return es
+}
+
+func (es *ExprStack) announce(e *ExprNode) {
 }
 
 // Push a numeric constant onto the stack. It will be wrapped into a

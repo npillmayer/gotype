@@ -61,3 +61,4 @@ package corelang
 import "github.com/npillmayer/gotype/gtcore/config/tracing"
 
 var T tracing.Trace = tracing.InterpreterTracer
+var S tracing.Trace = tracing.ScriptingTracer

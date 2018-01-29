@@ -3,7 +3,7 @@
 -- https://www.lua.org/pil/13.4.1.html
 -- https://www.lua.org/pil/contents.html
 
-HostLang = {}      -- The Host Language namespace
+HostLang = {}      -- The numeric namespace
 
 HostVarRef = {}
 HostVarRef.prototype = {
@@ -14,7 +14,7 @@ HostVarRef.prototype = {
     type = "numeric"
 }
 
-HostVarRef.mt = {}   -- metatable for host variable references
+HostVarRef.mt = {}   -- metatable for numeric
 
 function HostLang._variable(tag) -- create a new variable
     local v = { _tag = nil, _suffix = tag }
@@ -45,14 +45,13 @@ function HostVarRef.mt.__index(n, suffix)
 end
 
 function HostVarRef.mt.__tostring(n)
-    return "<host-var "..n:fullname().."="..(n._value or "<unknown>")..">"
+    return "<numeric "..n:fullname().."="..(n._value or "<unknown>")..">"
 end
 
 function HostVarRef.mt.__newindex(n, suffix, v)
     suffix = suffix or 'value'
     local atsuffix = '@' .. suffix
     local var = HostLang._variable(suffix)
-    var.type = n.type
     rawset(var, "_tag", n._tag or n)
     rawset(var, "_parent", n)
     rawset(var, '_value', v)
@@ -96,6 +95,18 @@ HostVarRef.prototype.fullname = function(n)
         n = n._parent
     until not n
     return s
+end
+
+-- --- predefined functions ---------------------------------------------
+
+vardef = {}
+
+function vardef.z(suffixes)
+    trace(0, "z() with suffixes "..(suffixes or ""))
+    x = varref.refer_to("x"..(suffixes or ""))
+    y = varref.refer_to("y"..(suffixes or ""))
+    p = pair.new{x, y}
+    return p
 end
 
 return HostLang

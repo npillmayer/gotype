@@ -309,7 +309,6 @@ func LoadBuiltinSymbols(rt *runtime.Runtime, scripting *Scripting) {
 	_ = Variable(rt, leftDef, left, nil, true)
 	_ = Declare(rt, "p", variables.PairType)
 	_ = Declare(rt, "q", variables.PairType)
-	//scripting.RegisterHook("TODO: z", ping)
 }
 
 // === Commands ==============================================================
@@ -409,36 +408,67 @@ func Variable(rt *runtime.Runtime, decl *variables.PMMPVarDecl, value interface{
 Apply a (math or scripting) function, given by name, to a known/constant argument.
 Internal math functions are floor(), ceil() and sqrt(). Other function names
 will be delegated to the scripting subsystem (Lua).
+
+Lua function may return just one value (of type numeric, pair or path).
 */
-func CallFunc(val interface{}, fun string, scripting *Scripting) (interface{}, int) {
-	switch fun {
-	case "floor":
-		n := val.(dec.Decimal)
-		n = n.Floor()
-		return n, variables.NumericType
-	case "ceil":
-		n := val.(dec.Decimal)
-		n = n.Ceil()
-		return n, variables.NumericType
-	case "sqrt":
-		T.P("func", fun).Error("function not yet implemented")
-	default:
-		if strings.HasPrefix(fun, "@") {
-			fun = strings.TrimLeft(fun, "@")
-		}
+func CallFunc(val interface{}, fun string, scripting *Scripting) (*runtime.ExprNode, []*variables.PMMPVarRef) {
+	n := arithm.ConstZero
+	if strings.HasPrefix(fun, "@") {
+		fun = strings.TrimLeft(fun, "@")
 		T.P("func", fun).Debug("calling Lua scripting subsytem")
 		r, err := scripting.CallHook(fun, val)
 		if err == nil {
 			it := r.Iterator() // iterator over return values
 			if it.Next() {     // go to first return value
-				val, tp := it.Value() // now unpack return value
-				return val, tp        // return values and type
+				e, vars := it.ValueAsExprNode() // unpack first return value only
+				return e, vars
 			}
 		} else {
 			T.P("func", fun).Errorf("scripting error: %v", err.Error())
 		}
+	} else {
+		switch fun {
+		case "floor":
+			n = val.(dec.Decimal)
+			n = n.Floor()
+		case "ceil":
+			n = val.(dec.Decimal)
+			n = n.Ceil()
+		case "sqrt":
+			T.P("func", fun).Error("function not yet implemented")
+		default:
+			T.P("func", fun).Error("function not implemented")
+		}
 	}
-	return nil, variables.Undefined
+	p := arithm.NewConstantPolynomial(n)
+	e := runtime.NewNumericExpression(p)
+	return e, nil
+}
+
+/*
+Call the Lua script for a vardef variable. The parameters of the call will
+be the suffixes of the variable, i.e. all subscripts and tags after the base
+tag.
+
+Return values are wrapped into an expression node. If variables are part of
+the returned expressions, they are packed into an array of variable
+references.
+*/
+func CallVardef(vref *variables.PMMPVarRef, scripting *Scripting) (*runtime.ExprNode, []*variables.PMMPVarRef) {
+	basetag := vref.Decl.BaseTag
+	suffixes := vref.GetSuffixesString()
+	T.Debugf("vardef call %s(%s)", basetag.GetName(), suffixes)
+	r, err := scripting.Call("vardef", basetag.GetName(), suffixes)
+	if err == nil {
+		it := r.Iterator() // iterator over return values
+		if it.Next() {     // go to first return value
+			e, vars := it.ValueAsExprNode() // unpack first return value only
+			return e, vars
+		}
+	} else {
+		T.P("vardef", basetag.GetName()).Errorf("scripting error: %v", err.Error())
+	}
+	return nil, nil
 }
 
 /*

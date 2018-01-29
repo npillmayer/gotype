@@ -68,6 +68,7 @@ var InterpreterTracer Trace
 var SyntaxTracer Trace
 var CommandTracer Trace
 var GraphicsTracer Trace
+var ScriptingTracer Trace
 
 var packageTracers map[string]Trace = make(map[string]Trace)
 var levelMap map[string]log.Level = make(map[string]log.Level)
@@ -102,6 +103,11 @@ func InitTracingBootstrap() {
 	gfxTracer.SetLevel(log.InfoLevel)
 	GraphicsTracer = Trace{gfxTracer, "GF"}
 	packageTracers["GF"] = GraphicsTracer
+
+	scriptingTracer := log.New()
+	scriptingTracer.SetLevel(log.InfoLevel)
+	ScriptingTracer = Trace{scriptingTracer, "LS"}
+	packageTracers["LS"] = ScriptingTracer
 }
 
 func SetTraceLevel(p string) {
@@ -116,6 +122,7 @@ func ConfigTracing(inputfilename string) *os.File {
 	EquationsTracer.SetLevel(levelMap[viper.GetString("tracingequations")])
 	SyntaxTracer.SetLevel(levelMap[viper.GetString("tracingsyntax")])
 	GraphicsTracer.SetLevel(levelMap[viper.GetString("tracinggraphics")])
+	ScriptingTracer.SetLevel(levelMap[viper.GetString("tracingscripting")])
 
 	if !viper.GetBool("tracingonline") {
 		//tracefiledir := viper.GetString("outputdir")
@@ -136,6 +143,8 @@ func ConfigTracing(inputfilename string) *os.File {
 			InterpreterTracer.Formatter = &log.TextFormatter{}
 			GraphicsTracer.Out = file
 			GraphicsTracer.Formatter = &log.TextFormatter{}
+			ScriptingTracer.Out = file
+			ScriptingTracer.Formatter = &log.TextFormatter{}
 		}
 	}
 
@@ -144,6 +153,7 @@ func ConfigTracing(inputfilename string) *os.File {
 	EquationsTracer.P("level", EquationsTracer.Level).Info("Equations-Trace is alive")
 	SyntaxTracer.P("level", SyntaxTracer.Level).Info("Syntax-Trace is alive")
 	GraphicsTracer.P("level", GraphicsTracer.Level).Info("Graphics-Trace is alive")
+	ScriptingTracer.P("level", ScriptingTracer.Level).Info("Scripting-Trace is alive")
 
 	return Tracefile
 }

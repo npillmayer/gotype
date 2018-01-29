@@ -111,6 +111,7 @@ func NewGalleryInterpreter(loadBuiltins bool) *GalleryInterpreter {
 	intp.scripting = corelang.NewScripting(intp.runtime) // scripting subsystem
 	if loadBuiltins {
 		corelang.LoadBuiltinSymbols(intp.runtime, intp.scripting) // load syms into global scope
+		intp.loadAdditionalBuiltinSymbols(intp.runtime, intp.scripting)
 	}
 	intp.ASTListener = NewParseListener(intp.runtime, intp.scripting) // listener for ANTLR
 	return intp
@@ -119,6 +120,13 @@ func NewGalleryInterpreter(loadBuiltins bool) *GalleryInterpreter {
 // Parse and interpret a statement list.
 func (intp *GalleryInterpreter) ParseStatements(input antlr.CharStream) {
 	intp.ASTListener.ParseStatements(input)
+}
+
+// Load additionl builtins for this language (added to the core symbols)
+func (intp *GalleryInterpreter) loadAdditionalBuiltinSymbols(rt *runtime.Runtime,
+	scripting *corelang.Scripting) {
+	//
+	//scripting.RegisterHook("TODO: z", ping)
 }
 
 // === AST driven parsing ====================================================
@@ -261,6 +269,19 @@ func (pl *GalleryParseListener) ExitTypedecl(ctx *grammar.TypedeclContext) {
 	}
 	for _, tag := range ctx.AllTAG() { // iterator over tag list
 		_ = corelang.Declare(pl.rt, tag.GetText(), mftype)
+	}
+}
+
+/*
+Finish a vardef. Vardefs are primary tags, which call a Lua script.
+
+	vardef : VARDEF TAG ( COMMA TAG )*
+
+*/
+func (pl *GalleryParseListener) ExitVardef(ctx *grammar.VardefContext) {
+	T.P("def", "vardef").Debugf("declaration of %d tags", len(ctx.AllTAG()))
+	for _, tag := range ctx.AllTAG() { // iterator over tag list
+		_ = corelang.Declare(pl.rt, tag.GetText(), variables.VardefType)
 	}
 }
 
@@ -646,7 +667,9 @@ func (pl *GalleryParseListener) transformPath(e *runtime.ExprNode, transforms []
 }
 
 /*
-Apply a function to a known argument.
+Apply a function to a known argument. Functions may be internal math
+functions (working on type numeric) or calls to the (Lua) scripting
+sub-system.
 
   primary  :  MATHFUNC atom                  # funcatom
   MATHFUNC : 'floor' | 'ceil' | 'sqrt' | @func ;
@@ -676,19 +699,9 @@ func (pl *GalleryParseListener) ExitFuncatom(ctx *grammar.FuncatomContext) {
 			T.P("func", fname).Errorf("not implemented: f(%s)", variables.TypeString(etype))
 		}
 		if val != nil {
-			r, rtype := corelang.CallFunc(val, fname, pl.scripting)
-			switch rtype {
-			case variables.NumericType:
-				pl.rt.ExprStack.PushConstant(r.(dec.Decimal))
-			case variables.PairType:
-				pl.rt.ExprStack.PushPairConstant(r.(arithm.Pair))
-			case variables.PathType:
-				e := runtime.NewOtherExpression(r)
-				pl.rt.ExprStack.Push(e)
-			default:
-				T.P("func", fname).Error("unknown return type, replaced by numeric 0")
-				pl.rt.ExprStack.PushConstant(arithm.ConstZero)
-			}
+			e, vars := corelang.CallFunc(val, fname, pl.scripting)
+			announceVariables(vars, pl.rt.ExprStack)
+			pl.rt.ExprStack.Push(e)
 		} else {
 			pl.rt.ExprStack.PushConstant(arithm.ConstZero)
 		}
@@ -778,12 +791,34 @@ func (pl *GalleryParseListener) ExitVariable(ctx *grammar.VariableContext) {
 	t := ctx.GetText()
 	T.P("var", t).Debug("variable, verbose")
 	s := corelang.CollectVarRefParts(pl.rt, t, ctx.GetChildren())
-	vref := corelang.MakeCanonicalAndResolve(pl.rt, s, true) // create if not defined
-	corelang.PushVariable(pl.rt, vref, pl.expectingLvalue)
+	vref := corelang.MakeCanonicalAndResolve(pl.rt, s, true)
+	if vref.GetType() == variables.VardefType {
+		// TODO: call Lua for vardef variables
+		// inspect the return value and put it on the expression stack
+		// return values may be numeric, pair, path/polygon
+		pl.callVardef(vref, pl.expectingLvalue)
+	} else {
+		corelang.PushVariable(pl.rt, vref, pl.expectingLvalue)
+	}
 	if pl.expectingLvalue {
 		T.P("var", vref.GetName()).Debugf("lvalue type is %s",
 			variables.TypeString(vref.GetType()))
 		pl.expectingLvalue = false
+	}
+}
+
+// Call Lua for a varref.
+func (pl *GalleryParseListener) callVardef(vref *variables.PMMPVarRef, expectLvalue bool) {
+	e, vars := corelang.CallVardef(vref, pl.scripting)
+	T.P("vardef", vref.GetName()).Debugf("return value from Lua call: %v", e)
+	announceVariables(vars, pl.rt.ExprStack)
+	pl.rt.ExprStack.Push(e)
+}
+
+// Helper
+func announceVariables(vars []*variables.PMMPVarRef, es *runtime.ExprStack) {
+	for _, v := range vars {
+		es.AnnounceVariable(v)
 	}
 }
 

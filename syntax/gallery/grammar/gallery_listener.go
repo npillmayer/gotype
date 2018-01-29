@@ -40,6 +40,9 @@ type GalleryListener interface {
 	// EnterStatementlist is called when entering the statementlist production.
 	EnterStatementlist(c *StatementlistContext)
 
+	// EnterVardef is called when entering the vardef production.
+	EnterVardef(c *VardefContext)
+
 	// EnterCompound is called when entering the compound production.
 	EnterCompound(c *CompoundContext)
 
@@ -177,6 +180,9 @@ type GalleryListener interface {
 
 	// ExitStatementlist is called when exiting the statementlist production.
 	ExitStatementlist(c *StatementlistContext)
+
+	// ExitVardef is called when exiting the vardef production.
+	ExitVardef(c *VardefContext)
 
 	// ExitCompound is called when exiting the compound production.
 	ExitCompound(c *CompoundContext)

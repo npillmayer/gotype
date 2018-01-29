@@ -109,6 +109,7 @@ const (
 	PenType
 	BoxType
 	FrameType
+	VardefType
 	ComplexArray
 	ComplexSuffix
 )
@@ -132,6 +133,8 @@ func TypeString(vt int) string {
 		return "box"
 	case FrameType:
 		return "frame"
+	case VardefType:
+		return "vardef"
 	case ComplexArray:
 		return "[]"
 	case ComplexSuffix:
@@ -350,7 +353,8 @@ sibling-link (x-part) and child-link (y-part) of the PMMPVarRef.
 Both parts link back to the pair variable.
 
 We need a different serial ID for the y-part, as it will be used as a
-variable index in a system of linear equations LEQ.
+variable index in a system of linear equations LEQ. Otherwise x-part and
+y-part would not be distinguishable for the LEQ.
 */
 type PairPartRef struct {
 	Id      int         // serial ID
@@ -369,7 +373,7 @@ func CreatePMMPVarRef(decl *PMMPVarDecl, value interface{}, indices []dec.Decima
 			subscripts: indices,
 			Value:      value,
 		}
-		v.SetType(decl.GetType())
+		v.SetType(decl.GetBaseType())
 		v.Id = newVarSerial() // TODO: check, when this is needed (now: id leak)
 		//T.Debugf("created var ref: subscripts = %v", indices)
 		return v
@@ -429,6 +433,17 @@ func (v *PMMPVarRef) GetName() string {
 		v.cachedName = v.GetFullName()
 	}
 	return v.cachedName
+}
+
+/*
+Strip the base tag string off of a variable and return all the suffxies
+as string.
+*/
+func (v *PMMPVarRef) GetSuffixesString() string {
+	basetag := v.Decl.BaseTag
+	basetagstring := basetag.GetName()
+	fullstring := v.GetFullName()
+	return fullstring[len(basetagstring):]
 }
 
 // --- Variable Type Pair ----------------------------------------------------

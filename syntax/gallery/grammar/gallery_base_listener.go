@@ -86,6 +86,12 @@ func (s *BaseGalleryListener) EnterStatementlist(ctx *StatementlistContext) {}
 // ExitStatementlist is called when production statementlist is exited.
 func (s *BaseGalleryListener) ExitStatementlist(ctx *StatementlistContext) {}
 
+// EnterVardef is called when production vardef is entered.
+func (s *BaseGalleryListener) EnterVardef(ctx *VardefContext) {}
+
+// ExitVardef is called when production vardef is exited.
+func (s *BaseGalleryListener) ExitVardef(ctx *VardefContext) {}
+
 // EnterCompound is called when production compound is entered.
 func (s *BaseGalleryListener) EnterCompound(ctx *CompoundContext) {}
 

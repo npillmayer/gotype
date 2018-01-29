@@ -64,8 +64,9 @@ LAMBDAARG  : '@' ;
 BEGINGROUP : 'begingroup' ;
 ENDGROUP   : 'endgroup' ;
 
-LOCAL : 'local' ;
-TYPE  : 'numeric' | 'pair' | 'path' | 'transform' ;
+LOCAL  : 'local' ;
+VARDEF : 'vardef' ;
+TYPE   : 'numeric' | 'pair' | 'path' | 'transform' ;
 
 PAIRPART   : 'xpart' | 'ypart' ;
 EDGECONSTR : 'top' | 'left' | 'right' | 'bottom' ;
