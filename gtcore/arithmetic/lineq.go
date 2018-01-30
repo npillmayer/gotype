@@ -809,8 +809,7 @@ func (p Polynomial) Divide(p2 Polynomial, destructive bool) Polynomial {
 	//}
 }
 
-/* Eliminate all terms with coefficient=0.
- */
+// Eliminate all terms with coefficient=0.
 func (p Polynomial) Zap() Polynomial {
 	positions := p.Terms.Keys()     // all non-Zero terms of p
 	for _, pos := range positions { // inspect terms
@@ -827,9 +826,10 @@ func (p Polynomial) Zap() Polynomial {
 	return p
 }
 
-/* Is a Polynomial a constant, i.e. p = { c }? Returns the constant and a flag.
- * If p is a Pair Polynomial, this method will return xpart(c).
- */
+/*
+Is a Polynomial a constant, i.e. p = { c }? Returns the constant and a flag.
+If p is a Pair Polynomial, this method will return xpart(c).
+*/
 func (p Polynomial) IsConstant() (numeric.Decimal, bool) {
 	/*
 		if p.ispair {
@@ -841,9 +841,10 @@ func (p Polynomial) IsConstant() (numeric.Decimal, bool) {
 	return p.GetCoeffForTerm(0), p.Terms.Size() == 1
 }
 
-/* Is a Polynomial a variable?, i.e. a single term with coefficient = 1.
- * Returns the position of the term and a flag.
- */
+/*
+Is a Polynomial a variable?, i.e. a single term with coefficient = 1.
+Returns the position of the term and a flag.
+*/
 func (p Polynomial) IsVariable() (int, bool) {
 	if p.Terms.Size() == 2 { // ok: p = a*x.i + c
 		if Zero(p.GetCoeffForTerm(0)) { // if c == 0
@@ -858,15 +859,21 @@ func (p Polynomial) IsVariable() (int, bool) {
 	return -77777, false
 }
 
-/* Get the constant term of a polynomial.
- */
+// Is this a correctly initialized polynomial?
+func (p Polynomial) IsValid() bool {
+	return (p.Terms != nil)
+}
+
+// Get the constant term of a polynomial.
 func (p Polynomial) GetConstantValue() numeric.Decimal {
 	return p.GetCoeffForTerm(0)
 }
 
-/* Get the coefficient for term no. i.
- * Example: p = x + 3x.2  => coeff(2) = 3
- */
+/*
+Get the coefficient for term # i.
+
+Example: p = x + 3x.2  => coeff(2) = 3
+*/
 func (p Polynomial) GetCoeffForTerm(i int) numeric.Decimal {
 	var sc interface{}
 	var found bool
@@ -880,8 +887,7 @@ func (p Polynomial) GetCoeffForTerm(i int) numeric.Decimal {
 
 // === Utilities =============================================================
 
-/* Helper: dump all known equations.
- */
+// Helper: dump all known equations.
 func (leq *LinEqSolver) Dump(resolv VariableResolver) {
 	fmt.Println("----------------------------------------------------------------------")
 	fmt.Println("Dependents:                                                        LEQ")
@@ -901,19 +907,21 @@ func (leq *LinEqSolver) Dump(resolv VariableResolver) {
 	fmt.Println("----------------------------------------------------------------------")
 }
 
-/* Create a string representation for a Polynomial.
- * Uses internal variable representations x.<n> where n corresponds to
- * the variable's real life ID.
- */
+/*
+Create a string representation for a Polynomial.
+Uses internal variable representations x.<n> where n corresponds to
+the variable's real life ID.
+*/
 func (p Polynomial) String() string {
 	return p.TraceString(nil)
 }
 
-/* Create a string representation for a Polynomial. Uses a variable name
- * resolver to print 'real' variable identifiers. If no resolver is
- * present, variables are printed in a generic form: +/- a.i x.i, where i is
- * the position of the term. Coefficients are rounded to the 3rd place.
- */
+/*
+Create a string representation for a Polynomial. Uses a variable name
+resolver to print 'real' variable identifiers. If no resolver is
+present, variables are printed in a generic form: +/- a.i x.i, where i is
+the position of the term. Coefficients are rounded to the 3rd place.
+*/
 func (p Polynomial) TraceString(resolv VariableResolver) string {
 	var buffer bytes.Buffer
 	it := p.Terms.Iterator()
@@ -964,8 +972,7 @@ func (p Polynomial) TraceString(resolv VariableResolver) string {
 	return buffer.String()
 }
 
-/* Helper for tracing output. Parameter resolv may be nil.
- */
+// Helper for tracing output. Parameter resolv may be nil.
 func TraceStringVar(i int, resolv VariableResolver) string {
 	if resolv == nil {
 		return fmt.Sprintf("x.%d", i)
@@ -974,9 +981,10 @@ func TraceStringVar(i int, resolv VariableResolver) string {
 	}
 }
 
-/* Comparator for polynomials. Polynomials are "smaller" if their arity
- * is smaller, i.e. they have less unknown variables.
- */
+/*
+Comparator for polynomials. Polynomials are "smaller" if their arity
+is smaller, i.e. they have less unknown variables.
+*/
 func PolynArityComparator(polyn1, polyn2 interface{}) int {
 	p1, _ := polyn1.(Polynomial)
 	p2, _ := polyn2.(Polynomial)
