@@ -637,8 +637,9 @@ func (es *ExprStack) MultiplyTOS2OS() {
 			panic("not implemented: <pair> * <pair>")
 		} else {
 			n := e2.XPolyn
+			nn := n.CopyPolynomial()
 			px := e1.XPolyn.Multiply(n, false)
-			py := e1.YPolyn.Multiply(n, false)
+			py := e1.YPolyn.Multiply(nn, false)
 			e = NewPairExpression(px, py)
 		}
 	} else {
