@@ -494,7 +494,7 @@ func (pl *GalleryParseListener) ExitTerm(ctx *grammar.TermContext) {
 		pl.rt.ExprStack.AddTOS2OS()
 	} else if ctx.MINUS() != nil {
 		pl.rt.ExprStack.SubtractTOS2OS()
-	} // fallthrough for sole secondary
+	} // fallthrough for lone secondary
 }
 
 /*
@@ -514,7 +514,7 @@ func (pl *GalleryParseListener) ExitFactor(ctx *grammar.FactorContext) {
 		pl.rt.ExprStack.MultiplyTOS2OS()
 	} else if ctx.OVER() != nil {
 		pl.rt.ExprStack.DivideTOS2OS()
-	} // fallthrough for sole primary
+	} // fallthrough for lone primary
 }
 
 /*
