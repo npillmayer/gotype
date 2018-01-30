@@ -773,7 +773,7 @@ func (p Polynomial) Multiply(p2 Polynomial, destructive bool) Polynomial {
 	if !isconst {
 		c, isconst = p1.IsConstant() // is p1 constant?
 		if !isconst {
-			panic("neither muliplier nor multiplicand constant")
+			panic("not implemented: <unknown> * <unknown>")
 		}
 		p1 = p2 // swap to operate on p2
 	}
