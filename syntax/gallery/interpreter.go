@@ -790,15 +790,18 @@ TODO check for @#
 func (pl *GalleryParseListener) ExitVariable(ctx *grammar.VariableContext) {
 	t := ctx.GetText()
 	T.P("var", t).Debug("variable, verbose")
-	s := corelang.CollectVarRefParts(pl.rt, t, ctx.GetChildren())
-	vref := corelang.MakeCanonicalAndResolve(pl.rt, s, true)
-	if vref.GetType() == variables.VardefType {
-		// TODO: call Lua for vardef variables
-		// inspect the return value and put it on the expression stack
-		// return values may be numeric, pair, path/polygon
-		pl.callVardef(vref, pl.expectingLvalue)
-	} else {
+	var vref *variables.PMMPVarRef
+	if t == "whatever" {
+		vref = corelang.Whatever(pl.rt)
 		corelang.PushVariable(pl.rt, vref, pl.expectingLvalue)
+	} else {
+		s := corelang.CollectVarRefParts(pl.rt, t, ctx.GetChildren())
+		vref = corelang.MakeCanonicalAndResolve(pl.rt, s, true)
+		if vref.GetType() == variables.VardefType {
+			pl.callVardef(vref, pl.expectingLvalue)
+		} else {
+			corelang.PushVariable(pl.rt, vref, pl.expectingLvalue)
+		}
 	}
 	if pl.expectingLvalue {
 		T.P("var", vref.GetName()).Debugf("lvalue type is %s",
@@ -939,12 +942,17 @@ func (pl *GalleryParseListener) getExprType(e *runtime.ExprNode) int {
 			if e.IsPair {
 				return variables.PairType
 			} else {
-				sym := pl.rt.ExprStack.GetVariable(e)
-				if sym != nil {
-					if t, ok := sym.(runtime.Typed); ok {
-						return t.GetType()
+				/*
+					sym := pl.rt.ExprStack.GetVariable(e)
+					if sym != nil {
+						if t, ok := sym.(runtime.Typed); ok {
+							return t.GetType()
+						}
+					} else if _, ok := e.GetConstNumeric(); ok {
+						return variables.NumericType
 					}
-				} else if _, ok := e.GetConstNumeric(); ok {
+				*/
+				if e.XPolyn.IsValid() {
 					return variables.NumericType
 				}
 			}

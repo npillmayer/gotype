@@ -1,6 +1,7 @@
 package gallery
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
@@ -204,6 +205,8 @@ func TestParseNumericTertiary(t *testing.T) {
 }
 
 func TestParseEquation(t *testing.T) {
+	T.SetLevel(tracing.LevelDebug)
+	fmt.Printf("-------------------------------------")
 	intp := createInterpreter("2a = b = 2") // minimal equation
 	tree := intp.ASTListener.statemParser.Equation()
 	sexpr := antlr.TreesStringTree(tree, nil, intp.ASTListener.statemParser)

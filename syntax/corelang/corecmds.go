@@ -49,6 +49,9 @@ import (
 	dec "github.com/shopspring/decimal"
 )
 
+// Declaration of 'whatever', used to instantiate anonymous whatever-variables.
+var WhateverDeclaration *variables.PMMPVarDecl
+
 // --- Custom Error Listener -------------------------------------------------
 
 // We create our own type of error listener for the ANTLR parser
@@ -309,6 +312,9 @@ func LoadBuiltinSymbols(rt *runtime.Runtime, scripting *Scripting) {
 	_ = Variable(rt, leftDef, left, nil, true)
 	_ = Declare(rt, "p", variables.PairType)
 	_ = Declare(rt, "q", variables.PairType)
+	w := Declare(rt, "_whtvr", variables.NumericType) // 'whatever' variables
+	// make whatever[]
+	WhateverDeclaration = variables.CreatePMMPVarDecl("<array>", variables.ComplexArray, w)
 }
 
 // === Commands ==============================================================
@@ -403,6 +409,28 @@ func Variable(rt *runtime.Runtime, decl *variables.PMMPVarDecl, value interface{
 	}
 	return v
 }
+
+/*
+Create a whatever anonymous variable. In MetaFont this is a macro, but
+it is a frequent use case, so we put it in the core.
+*/
+func Whatever(rt *runtime.Runtime) *variables.PMMPVarRef {
+	var vref *variables.PMMPVarRef
+	sym, _ := rt.ScopeTree.Globals().ResolveSymbol("_whtvr")
+	if sym == nil {
+		T.Error("'whatever'-variable not correctly initialized")
+	} else {
+		//func CreatePMMPVarRef(*PMMPVarDecl, value, indices []dec.Decimal) *PMMPVarRef {
+		inx := make([]dec.Decimal, 1)
+		whateverCounter++
+		inx[0] = dec.New(whateverCounter, 0)
+		vref = variables.CreatePMMPVarRef(WhateverDeclaration, nil, inx)
+	}
+	return vref
+}
+
+// Counter for 'whatever' anonymous variables.
+var whateverCounter int64
 
 /*
 Apply a (math or scripting) function, given by name, to a known/constant argument.
