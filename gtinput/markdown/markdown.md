@@ -34,3 +34,9 @@ Parser werden top-down programmiert, so dass die Implementierung einigermaßen e
 [Set of Integers](https://github.com/karlseguin/intset)
 (für die Mengenoperationen bei der DFA-Bildung/LR(0)-Set)
 
+[Lexer in Go](https://github.com/timtadh/lexmachine#narrative-documentation)
+
+**nachdenken**:
+
+* LR(0) DFA Generator selbst schreiben
+* DFS als lesbare Funktionen (siehe Pike on Template lexing)

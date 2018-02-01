@@ -3,6 +3,7 @@ package lr
 import (
 	"fmt"
 
+	"github.com/emirpasic/gods/sets/hashset"
 	"github.com/npillmayer/gotype/syntax/runtime"
 )
 
@@ -31,6 +32,11 @@ func (r *Rule) String() string {
 type Item struct {
 	rule *Rule
 	dot  int
+}
+
+func (i *Item) String() string {
+	s := fmt.Sprintf("%v ::= %v @ %v", i.rule.lhs, i.rule.rhs[0:i.dot], i.rule.rhs[i.dot:])
+	return s
 }
 
 type Grammar struct {
@@ -125,10 +131,15 @@ func (rb *RuleBuilder) T(s string, tokval int) *RuleBuilder {
 
 func (rb *RuleBuilder) Epsilon() *Rule {
 	rb.gb.appendRule(rb.rule)
-	T.Debugf("appending rule:  %v", rb.rule)
+	T.Debugf("appending epsilon-rule:  %v", rb.rule)
 	r := rb.rule
 	rb.rule = nil
 	return r
+}
+
+func (rb *RuleBuilder) EOF() *Rule {
+	rb.T("<EOF>", 0)
+	return rb.End()
 }
 
 func (rb *RuleBuilder) End() *Rule {
@@ -141,4 +152,31 @@ func (rb *RuleBuilder) End() *Rule {
 
 // === Table Generation ======================================================
 
-func (g *Grammar) closure(r *lrItem)
+type itemSet struct {
+	*hashset.Set
+}
+
+func newItemSet() *itemSet {
+	s := hashset.New()
+	iset := &itemSet{s}
+	return iset
+}
+
+var _ *itemSet = newItemSet() // verify assignability
+
+func (g *Grammar) closure(r *Item) *itemSet {
+	iset := newItemSet()
+	iset.Add(r)
+	sym := iset.peekSymbol() // get symbol after dot
+	if sym != nil {
+		return g.recClosure(sym, iset)
+	}
+	return iset
+}
+
+// https://www.cs.bgu.ac.il/~comp151/wiki.files/ps6.html#sec-2-7-3
+func (g *Grammar) recClosure(A Symbol, iset *itemSet) *itemSet {
+	// iterate through all rules
+	// is LHS = A ?
+	// create item A ::= * RHS  ? How to proceed with eps-rules?
+}

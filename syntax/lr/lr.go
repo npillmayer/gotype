@@ -1,4 +1,7 @@
 /*
+Package lr implements an LR parser generator specifically for
+Markdown parsing.
+
 ----------------------------------------------------------------------
 
 BSD License
