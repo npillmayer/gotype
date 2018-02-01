@@ -1,6 +1,6 @@
 .DS_Store
 .idea
-.png
-.svg
-.dot
-.pdf
+*.png
+*.svg
+*.dot
+*.pdf
