@@ -165,21 +165,37 @@ func TestFirstSet(t *testing.T) {
 
 func TestFollowSet(t *testing.T) {
 	b := NewGrammarBuilder("G")
-	b.LHS("S").N("E").End()
-	b.LHS("E").N("T").EOF()
-	b.LHS("T").T("a", 1).End()
-	b.LHS("T").Epsilon()
+	b.LHS("S").N("A").T("a", 1).EOF()
+	b.LHS("A").N("B").N("D").End()
+	b.LHS("B").T("b", 2).End()
+	b.LHS("B").Epsilon()
+	b.LHS("D").T("d", 3).End()
+	b.LHS("D").Epsilon()
 	g := b.Grammar()
 	g.Dump()
 	ga := NewGrammarAnalysis(g)
 	ga.markEps()
+	ga.g.symbols.Each(func(name string, sym runtime.Symbol) {
+		A := sym.(Symbol)
+		if !A.IsTerminal() {
+			if ga.derivesEps[A] {
+				T.Debugf("%v  => epsilon", A)
+			}
+		}
+	})
 	ga.initFirstSets()
 	for key, value := range ga.firstSets.sets {
-		T.Debugf("key = %v     value = %v", key, value)
+		A := key.(Symbol)
+		if !A.IsTerminal() {
+			T.Debugf("FIRST(%v) = %v", A, value)
+		}
 	}
 	T.Debug("-------")
 	ga.initFollowSets()
-	for key, value := range ga.followSets.sets {
-		T.Debugf("key = %v     value = %v", key, value)
-	}
+	ga.g.symbols.Each(func(name string, sym runtime.Symbol) {
+		A := sym.(Symbol)
+		if !A.IsTerminal() {
+			T.Debugf("FOLLOW(%v) = %v", A, ga.Follow(A))
+		}
+	})
 }

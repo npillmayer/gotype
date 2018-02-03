@@ -8,17 +8,18 @@ import (
 
 // --- Rules -----------------------------------------------------------------
 
+// An interface for symbols of grammars, i.e. terminals and non-terminals.
 type Symbol interface {
-	//fmt.Stringer
-	IsTerminal() bool
-	Token() int
-	GetID() int
+	IsTerminal() bool // is this symbol a terminal?
+	Token() int       // token value of terminals
+	GetID() int       // ID of non-terminals (and possibly terminals)
 }
 
+// A type for rules of a grammar
 type Rule struct {
-	lhs   []Symbol
-	rhs   []Symbol
-	items map[int]*item
+	lhs   []Symbol      // symbols of left hand side
+	rhs   []Symbol      // symbols of right hand side
+	items map[int]*item // Earley items for this rule
 }
 
 func newRule() *Rule {
@@ -29,6 +30,7 @@ func newRule() *Rule {
 	return r
 }
 
+// Return an item for a rule wth the dot at the start of RHS
 func (r *Rule) startItem() (*item, Symbol) {
 	if r.isEps() {
 		return nil, nil
@@ -36,7 +38,7 @@ func (r *Rule) startItem() (*item, Symbol) {
 		var i *item
 		if i = r.items[0]; i == nil {
 			i = &item{rule: r, dot: 0}
-			r.items[0] = i
+			r.items[0] = i // store this item
 		}
 		return i, r.rhs[0]
 	}
@@ -54,6 +56,7 @@ func (r *Rule) findOrCreateItem(dot int) (*item, Symbol) {
 	return i, i.peekSymbol()
 }
 
+// Debugging helper: string representation of a grammar rule
 func (r *Rule) String() string {
 	s := fmt.Sprintf("%v ::= %v", r.lhs, r.rhs)
 	return s
@@ -91,6 +94,7 @@ func (i *item) advance() (*item, Symbol) {
 
 // --- Grammar ---------------------------------------------------------------
 
+// Type for a grammar. Usually created using a GrammarBuilder.
 type Grammar struct {
 	name    string
 	rules   []*Rule
@@ -98,7 +102,7 @@ type Grammar struct {
 	epsilon Symbol
 }
 
-func NewLRGrammar(gname string) *Grammar {
+func newLRGrammar(gname string) *Grammar {
 	g := &Grammar{}
 	g.name = gname
 	g.rules = make([]*Rule, 0, 30)
@@ -120,6 +124,7 @@ func (g *Grammar) findNonTermRules(sym Symbol) *itemSet {
 	return iset
 }
 
+// Debugging helper: dump symbols and rules to stdout
 func (g *Grammar) Dump() {
 	fmt.Printf("--- %s --------------------------------------------\n", g.name)
 	fmt.Printf("epsilon  = %d\n", g.epsilon.GetID())
@@ -140,9 +145,9 @@ func (g *Grammar) Dump() {
 // ---------------------------------------------------------------------------
 
 const (
-	epsilonType  = -1
 	NonTermType  = 100
 	TerminalType = 1000
+	epsilonType  = 999
 )
 
 type lrSymbol struct {
@@ -154,7 +159,7 @@ func (lrsym *lrSymbol) String() string {
 }
 
 func (lrsym *lrSymbol) IsTerminal() bool {
-	return lrsym.GetType() >= TerminalType
+	return lrsym.GetType() >= epsilonType
 }
 
 func (lrsym *lrSymbol) Token() int {
@@ -170,12 +175,35 @@ func newLRSymbol(s string) runtime.Symbol {
 
 // === Builder ===============================================================
 
+/*
+Grammars are constructed using a GrammarBuilder.
+
+    b := NewGrammarBuilder("G")
+    b.LHS("S").N("A").T("a", 1).EOF()  // S  ->  A a EOF
+    b.LHS("A").N("B").N("D").End()     // A  ->  B D
+    b.LHS("B").T("b", 2).End()         // B  ->  b
+    b.LHS("B").Epsilon()               // B  ->
+    b.LHS("D").T("d", 3).End()         // D  ->  d
+    b.LHS("D").Epsilon()               // D  ->
+
+This results in the following grammar:  b.Grammar().Dump() :
+
+  0: [S] ::= [A a #eof]
+  1: [A] ::= [B D]
+  2: [B] ::= [b]
+  3: [B] ::= []
+  4: [D] ::= [d]
+  5: [D] ::= []
+
+A call to b.Grammar() returns the (completed) grammar.
+*/
 type GrammarBuilder struct {
 	g *Grammar
 }
 
+// Get a new grammar builder, given the name of the grammar to build.
 func NewGrammarBuilder(gname string) *GrammarBuilder {
-	g := NewLRGrammar(gname)
+	g := newLRGrammar(gname)
 	gb := &GrammarBuilder{g}
 	return gb
 }
@@ -191,6 +219,7 @@ func (gb *GrammarBuilder) appendRule(r *Rule) {
 	gb.g.rules = append(gb.g.rules, r)
 }
 
+// Start a rule given the left hand side symbol (non-terminal).
 func (gb *GrammarBuilder) LHS(s string) *RuleBuilder {
 	rb := gb.newRuleBuilder()
 	sym, _ := rb.gb.g.symbols.ResolveOrDefineSymbol(s)
@@ -199,15 +228,18 @@ func (gb *GrammarBuilder) LHS(s string) *RuleBuilder {
 	return rb
 }
 
+// Return the (completed) grammar.
 func (gb *GrammarBuilder) Grammar() *Grammar {
 	return gb.g
 }
 
+// A builder type for rules
 type RuleBuilder struct {
 	gb   *GrammarBuilder
 	rule *Rule
 }
 
+// Append a non-terminal to the builder.
 func (rb *RuleBuilder) N(s string) *RuleBuilder {
 	sym, _ := rb.gb.g.symbols.ResolveOrDefineSymbol(s)
 	lrs := sym.(*lrSymbol)
@@ -215,6 +247,7 @@ func (rb *RuleBuilder) N(s string) *RuleBuilder {
 	return rb
 }
 
+// Append a terminal to the builder.
 func (rb *RuleBuilder) T(s string, tokval int) *RuleBuilder {
 	sym, _ := rb.gb.g.symbols.ResolveOrDefineSymbol(s)
 	lrs := sym.(*lrSymbol)
@@ -223,6 +256,8 @@ func (rb *RuleBuilder) T(s string, tokval int) *RuleBuilder {
 	return rb
 }
 
+// Set epsilon as the RHS of a production.
+// This must be called directly after rb.LHS(...).
 func (rb *RuleBuilder) Epsilon() *Rule {
 	rb.gb.appendRule(rb.rule)
 	T.Debugf("appending epsilon-rule:  %v", rb.rule)
@@ -231,11 +266,17 @@ func (rb *RuleBuilder) Epsilon() *Rule {
 	return r
 }
 
+// Append EOF as a (terminal) symbol to a rule.
+// This completes the rule (no other builder calls should be made
+// for this rule).
 func (rb *RuleBuilder) EOF() *Rule {
 	rb.T("#eof", 0)
 	return rb.End()
 }
 
+// End a rule.
+// This completes the rule (no other builder calls should be made
+// for this rule).
 func (rb *RuleBuilder) End() *Rule {
 	rb.gb.appendRule(rb.rule)
 	T.Debugf("appending rule:  %v", rb.rule)

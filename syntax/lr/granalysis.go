@@ -1,14 +1,14 @@
 package lr
 
-import "github.com/npillmayer/gotype/syntax/runtime"
+import (
+	"fmt"
+
+	"github.com/npillmayer/gotype/syntax/runtime"
+)
 
 /*
-Grammar analysis.
-
-- rules deriving epsilon
-- FIRST and FOLLOW sets
+Grammar analysis (FIRST and FOLLOW sets).
 */
-
 type GrammarAnalysis struct {
 	g          *Grammar
 	derivesEps map[Symbol]bool
@@ -16,6 +16,9 @@ type GrammarAnalysis struct {
 	followSets *symSetMap
 }
 
+// Create an analyser for a grammar.
+// The analyser immediately starts its work and computes
+// FIRST and FOLLOW.
 func NewGrammarAnalysis(g *Grammar) *GrammarAnalysis {
 	ga := &GrammarAnalysis{}
 	ga.g = g
@@ -23,6 +26,18 @@ func NewGrammarAnalysis(g *Grammar) *GrammarAnalysis {
 	ga.firstSets = newSymSetMap()
 	ga.followSets = newSymSetMap()
 	return ga
+}
+
+// Return the FIRST set for a non-terminal.
+// Returns a list of tokens.
+func (ga *GrammarAnalysis) First(sym Symbol) []int {
+	return ga.firstSets.getSetFor(sym).syms
+}
+
+// Return the FOLLOW set for a non-terminal.
+// Returns a list of tokens.
+func (ga *GrammarAnalysis) Follow(sym Symbol) []int {
+	return ga.followSets.getSetFor(sym).syms
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +167,11 @@ func (symset *symSet) union(set2 *symSet) (*symSet, bool) {
 	return symset, changed
 }
 
+func (symset *symSet) String() string {
+	s := fmt.Sprintf("%v", symset.syms)
+	return s
+}
+
 // --- FIRST and FOLLOW ------------------------------------------------------
 
 func (ga *GrammarAnalysis) computeFirst(syms []Symbol) *symSet {
@@ -163,16 +183,21 @@ func (ga *GrammarAnalysis) computeFirst(syms []Symbol) *symSet {
 	first := ga.firstSets.getSetFor(syms[0])
 	var result *symSet = newSymbolSet()
 	result.union(first)
+	result = result.withoutEps()
 	var k int = 1
+	//T.Infof(". c_first  : first(%v) = %v", syms, first)
 	for ; k < len(syms); k++ {
 		if first.containsEps() { // prev one did contain epsilon
-			first := ga.firstSets.getSetFor(syms[k]).withoutEps()
+			//T.Infof("  . c_first: first(%v) = %v", syms[k-1:], first)
+			first = ga.firstSets.getSetFor(syms[k])
 			result.union(first)
+			result = result.withoutEps()
+			//T.Infof("  . c_first: first'(%v) = %v", syms[k:], first)
 		} else {
 			break
 		}
 	}
-	if k == len(syms)-1 && ga.firstSets.getSetFor(syms[k]).containsEps() {
+	if k == len(syms) && ga.firstSets.getSetFor(syms[k-1]).containsEps() {
 		result.add(ga.g.epsilon)
 	}
 	return result
@@ -181,19 +206,22 @@ func (ga *GrammarAnalysis) computeFirst(syms []Symbol) *symSet {
 func (ga *GrammarAnalysis) initFirstSets() {
 	ga.g.symbols.Each(func(name string, sym runtime.Symbol) {
 		A := sym.(Symbol)
-		if !A.IsTerminal() { // for all non-terminals
+		if !A.IsTerminal() { // for all non-terminals A
 			if ga.derivesEps[A] {
 				ga.firstSets.addSymFor(A, ga.g.epsilon)
 			}
 		}
 	})
 	ga.g.symbols.Each(func(name string, sym runtime.Symbol) {
-		T := sym.(Symbol)
-		if T.IsTerminal() { // for all terminals
-			ga.firstSets.addSymFor(T, T)
+		B := sym.(Symbol)
+		if B.IsTerminal() { // for all terminals B
+			ga.firstSets.addSymFor(B, B)
 			for _, r := range ga.g.rules {
-				if !r.isEps() && symvalue(r.rhs[0]) == symvalue(T) {
-					ga.firstSets.addSymFor(r.lhs[0], T)
+				A := r.lhs[0]
+				if !r.isEps() && symvalue(r.rhs[0]) == symvalue(B) {
+					// if A -> t(B) ...
+					ga.firstSets.addSymFor(A, B)
+					//T.Infof("adding term = %v to first(%v)", B, A)
 				}
 			}
 		}
@@ -201,40 +229,36 @@ func (ga *GrammarAnalysis) initFirstSets() {
 	for changed := true; changed; {
 		changed = false
 		for _, r := range ga.g.rules {
+			A := r.lhs[0]
 			first := ga.computeFirst(r.rhs)
-			T.Infof("first(%v) = %v", r.lhs[0], first)
-			//l := len(ga.firstSets.getSetFor(r.lhs[0]).syms)
-			_, ch := ga.firstSets.getSetFor(r.lhs[0]).union(first)
-			/*
-				if len(f.syms) > l {
-					T.Infof("changed = true")
-					changed = true
-				}
-			*/
-			changed = changed && ch
+			//T.Infof("c_first(%v) = %v", r, first)
+			_, ch := ga.firstSets.getSetFor(A).union(first)
+			//T.Infof("(ch)anged = %v", ch)
+			//T.Infof("new first(%v) = %v", A, ga.firstSets.getSetFor(A))
+			changed = changed || ch
 		}
 	}
 }
 
 func (ga *GrammarAnalysis) initFollowSets() {
-	ga.followSets.addSymFor(ga.g.rules[0].lhs[0], ga.g.epsilon)
+	ga.followSets.addSymFor(ga.g.rules[0].lhs[0], ga.g.epsilon) // start symbol
 	for changed := true; changed; {
 		changed = false
 		for _, r := range ga.g.rules {
-			T.Infof("rule  %v", r)
-			A := r.lhs[0]             // look for A -> ...By
+			//T.Infof("rule  %v", r)
+			A := r.lhs[0]             // look for A -> ... B y
 			for k, B := range r.rhs { // look for non-terms in RHS of r
 				if !B.IsTerminal() {
-					T.Infof("      %v in RHS(%v)", B, A)
 					y := r.rhs[k+1:]
-					T.Infof("      y = %v", y)
+					//T.Infof("      %v in RHS(%v),  y = %v", B, A, y)
+					//T.Infof("      y = %v", y)
 					yfirst := ga.computeFirst(y)
 					_, ch := ga.followSets.getSetFor(B).union(yfirst.withoutEps())
 					if yfirst.containsEps() {
 						followA := ga.followSets.getSetFor(A)
 						_, ch = ga.followSets.getSetFor(B).union(followA)
 					}
-					changed = changed && ch
+					changed = changed || ch
 				}
 			}
 		}
