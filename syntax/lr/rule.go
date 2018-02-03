@@ -3,25 +3,55 @@ package lr
 import (
 	"fmt"
 
-	"github.com/emirpasic/gods/sets/hashset"
 	"github.com/npillmayer/gotype/syntax/runtime"
 )
 
+// --- Rules -----------------------------------------------------------------
+
 type Symbol interface {
-	fmt.Stringer
+	//fmt.Stringer
 	IsTerminal() bool
+	Token() int
+	GetID() int
 }
 
 type Rule struct {
-	lhs []Symbol
-	rhs []Symbol
+	lhs   []Symbol
+	rhs   []Symbol
+	items map[int]*item
 }
 
 func newRule() *Rule {
 	r := &Rule{}
 	r.lhs = make([]Symbol, 0, 5)
 	r.rhs = make([]Symbol, 0, 5)
+	r.items = make(map[int]*item)
 	return r
+}
+
+func (r *Rule) startItem() (*item, Symbol) {
+	if r.isEps() {
+		return nil, nil
+	} else {
+		var i *item
+		if i = r.items[0]; i == nil {
+			i = &item{rule: r, dot: 0}
+			r.items[0] = i
+		}
+		return i, r.rhs[0]
+	}
+}
+
+func (r *Rule) findOrCreateItem(dot int) (*item, Symbol) {
+	if dot > len(r.rhs) {
+		return nil, nil
+	}
+	var i *item
+	if i = r.items[dot]; i == nil {
+		i = &item{rule: r, dot: dot}
+		r.items[dot] = i
+	}
+	return i, i.peekSymbol()
 }
 
 func (r *Rule) String() string {
@@ -29,25 +59,88 @@ func (r *Rule) String() string {
 	return s
 }
 
-type Item struct {
+func (r *Rule) isEps() bool {
+	return len(r.rhs) == 0
+}
+
+type item struct {
 	rule *Rule
 	dot  int
 }
 
-func (i *Item) String() string {
+func (i *item) String() string {
 	s := fmt.Sprintf("%v ::= %v @ %v", i.rule.lhs, i.rule.rhs[0:i.dot], i.rule.rhs[i.dot:])
 	return s
 }
+
+func (i *item) peekSymbol() Symbol {
+	if i.dot >= len(i.rule.rhs) {
+		return nil
+	}
+	return i.rule.rhs[i.dot]
+}
+
+func (i *item) advance() (*item, Symbol) {
+	if i.dot >= len(i.rule.rhs) {
+		return nil, nil
+	} else {
+		ii, A := i.rule.findOrCreateItem(i.dot + 1)
+		return ii, A
+	}
+}
+
+// --- Grammar ---------------------------------------------------------------
 
 type Grammar struct {
 	name    string
 	rules   []*Rule
 	symbols *runtime.SymbolTable
+	epsilon Symbol
 }
 
-// ===========================================================================
+func NewLRGrammar(gname string) *Grammar {
+	g := &Grammar{}
+	g.name = gname
+	g.rules = make([]*Rule, 0, 30)
+	g.symbols = runtime.NewSymbolTable(newLRSymbol)
+	eps := newLRSymbol("_eps").(*lrSymbol)
+	eps.SetType(epsilonType)
+	g.epsilon = eps
+	return g
+}
+
+func (g *Grammar) findNonTermRules(sym Symbol) *itemSet {
+	iset := newItemSet()
+	for _, r := range g.rules {
+		if r.lhs[0] == sym {
+			i, _ := r.startItem()
+			iset.Add(i)
+		}
+	}
+	return iset
+}
+
+func (g *Grammar) Dump() {
+	fmt.Printf("--- %s --------------------------------------------\n", g.name)
+	fmt.Printf("epsilon  = %d\n", g.epsilon.GetID())
+	g.symbols.Each(func(name string, sym runtime.Symbol) {
+		A := sym.(Symbol)
+		if A.IsTerminal() {
+			fmt.Printf("T  %5s = %d\n", name, A.Token())
+		} else {
+			fmt.Printf("N  %5s = %d\n", name, A.GetID())
+		}
+	})
+	for k, r := range g.rules {
+		fmt.Printf("%3d: %s\n", k, r.String())
+	}
+	fmt.Println("-------------------------------------------------------")
+}
+
+// ---------------------------------------------------------------------------
 
 const (
+	epsilonType  = -1
 	NonTermType  = 100
 	TerminalType = 1000
 )
@@ -61,7 +154,11 @@ func (lrsym *lrSymbol) String() string {
 }
 
 func (lrsym *lrSymbol) IsTerminal() bool {
-	return lrsym.GetType() > TerminalType
+	return lrsym.GetType() >= TerminalType
+}
+
+func (lrsym *lrSymbol) Token() int {
+	return lrsym.GetType()
 }
 
 func newLRSymbol(s string) runtime.Symbol {
@@ -71,23 +168,16 @@ func newLRSymbol(s string) runtime.Symbol {
 	return &lrSymbol{st}
 }
 
-func NewLRGrammar(gname string) *Grammar {
-	g := &Grammar{}
-	g.name = gname
-	g.rules = make([]*Rule, 0, 30)
-	g.symbols = runtime.NewSymbolTable(newLRSymbol)
-	return g
-}
-
-func (g *Grammar) Builder() *GrammarBuilder {
-	gb := &GrammarBuilder{g}
-	return gb
-}
-
 // === Builder ===============================================================
 
 type GrammarBuilder struct {
 	g *Grammar
+}
+
+func NewGrammarBuilder(gname string) *GrammarBuilder {
+	g := NewLRGrammar(gname)
+	gb := &GrammarBuilder{g}
+	return gb
 }
 
 func (gb *GrammarBuilder) newRuleBuilder() *RuleBuilder {
@@ -107,6 +197,10 @@ func (gb *GrammarBuilder) LHS(s string) *RuleBuilder {
 	lrs := sym.(*lrSymbol)
 	rb.rule.lhs = append(rb.rule.lhs, lrs)
 	return rb
+}
+
+func (gb *GrammarBuilder) Grammar() *Grammar {
+	return gb.g
 }
 
 type RuleBuilder struct {
@@ -138,7 +232,7 @@ func (rb *RuleBuilder) Epsilon() *Rule {
 }
 
 func (rb *RuleBuilder) EOF() *Rule {
-	rb.T("<EOF>", 0)
+	rb.T("#eof", 0)
 	return rb.End()
 }
 
@@ -148,35 +242,4 @@ func (rb *RuleBuilder) End() *Rule {
 	r := rb.rule
 	rb.rule = nil
 	return r
-}
-
-// === Table Generation ======================================================
-
-type itemSet struct {
-	*hashset.Set
-}
-
-func newItemSet() *itemSet {
-	s := hashset.New()
-	iset := &itemSet{s}
-	return iset
-}
-
-var _ *itemSet = newItemSet() // verify assignability
-
-func (g *Grammar) closure(r *Item) *itemSet {
-	iset := newItemSet()
-	iset.Add(r)
-	sym := iset.peekSymbol() // get symbol after dot
-	if sym != nil {
-		return g.recClosure(sym, iset)
-	}
-	return iset
-}
-
-// https://www.cs.bgu.ac.il/~comp151/wiki.files/ps6.html#sec-2-7-3
-func (g *Grammar) recClosure(A Symbol, iset *itemSet) *itemSet {
-	// iterate through all rules
-	// is LHS = A ?
-	// create item A ::= * RHS  ? How to proceed with eps-rules?
 }
