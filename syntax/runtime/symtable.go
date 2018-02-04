@@ -244,11 +244,12 @@ func (t *SymbolTable) ResolveOrDefineSymbol(symname string) (Symbol, bool) {
 	return sym, found
 }
 
-/* Create a new symbol to store into the symbol table.
- * The symbol's name may not be empty
- * Overwrites existing symbol with this name, if any.
- * Returns the new symbol and the previously stored symbol (or nil).
- */
+/*
+Create a new symbol to store into the symbol table.
+The symbol's name may not be empty
+Overwrites existing symbol with this name, if any.
+Returns the new symbol and the previously stored symbol (or nil).
+*/
 func (t *SymbolTable) DefineSymbol(symname string) (Symbol, Symbol) {
 	if len(symname) == 0 {
 		return nil, nil
@@ -258,16 +259,19 @@ func (t *SymbolTable) DefineSymbol(symname string) (Symbol, Symbol) {
 	return sym, old
 }
 
-/* Insert a pre-created symbol.
- */
+// Insert a pre-created symbol.
 func (t *SymbolTable) InsertSymbol(sym Symbol) Symbol {
 	old := t.ResolveSymbol(sym.GetName())
 	t.Table[sym.GetName()] = sym
 	return old
 }
 
-/* Iterate over each symbol in the table, executing a mapper function.
- */
+// Count the symbols in a symbol table.
+func (t *SymbolTable) Size() int {
+	return len(t.Table)
+}
+
+// Iterate over each symbol in the table, executing a mapper function.
 func (t *SymbolTable) Each(mapper func(string, Symbol)) {
 	for k, v := range t.Table {
 		mapper(k, v)
