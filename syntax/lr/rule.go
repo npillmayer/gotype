@@ -32,14 +32,14 @@ func newRule() *Rule {
 
 // Return an item for a rule wth the dot at the start of RHS
 func (r *Rule) startItem() (*item, Symbol) {
+	var i *item
+	if i = r.items[0]; i == nil {
+		i = &item{rule: r, dot: 0}
+		r.items[0] = i // store this item
+	}
 	if r.isEps() {
-		return nil, nil
+		return i, nil
 	} else {
-		var i *item
-		if i = r.items[0]; i == nil {
-			i = &item{rule: r, dot: 0}
-			r.items[0] = i // store this item
-		}
 		return i, r.rhs[0]
 	}
 }
@@ -118,10 +118,29 @@ func (g *Grammar) findNonTermRules(sym Symbol) *itemSet {
 	for _, r := range g.rules {
 		if r.lhs[0] == sym {
 			i, _ := r.startItem()
+			if i == nil {
+				T.Error("i == NIL")
+			}
 			iset.Add(i)
 		}
 	}
 	return iset
+}
+
+/*
+Iterate over all non-terminal symbols of the grammar, given the symbol's
+literal and the symbol itself. Return values of the mapper function for
+all non-terminal is returned as an array.
+*/
+func (g *Grammar) EachNonTerminal(mapper func(symname string, sym Symbol) interface{}) []interface{} {
+	var r []interface{} = make([]interface{}, 0, len(g.rules))
+	for k, v := range g.symbols.Table {
+		A := v.(Symbol)
+		if !A.IsTerminal() {
+			r = append(r, mapper(k, A))
+		}
+	}
+	return r
 }
 
 // Debugging helper: dump symbols and rules to stdout

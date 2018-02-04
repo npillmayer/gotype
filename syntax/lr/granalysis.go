@@ -7,7 +7,14 @@ import (
 )
 
 /*
-Grammar analysis (FIRST and FOLLOW sets).
+Replace home-grown int-set by
+
+https://github.com/golang/tools/blob/master/container/intsets/sparse.go
+
+*/
+
+/*
+Object for grammar analysis (compute FIRST and FOLLOW sets).
 */
 type GrammarAnalysis struct {
 	g          *Grammar
@@ -26,6 +33,11 @@ func NewGrammarAnalysis(g *Grammar) *GrammarAnalysis {
 	ga.firstSets = newSymSetMap()
 	ga.followSets = newSymSetMap()
 	return ga
+}
+
+// Return the grammer this analyser operates on.
+func (ga *GrammarAnalysis) Grammar() *Grammar {
+	return ga.g
 }
 
 // Return the FIRST set for a non-terminal.

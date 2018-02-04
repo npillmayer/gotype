@@ -12,7 +12,6 @@ func traceOn() {
 }
 
 func TestBuilder1(t *testing.T) {
-	traceOn()
 	b := NewGrammarBuilder("G")
 	b.LHS("S").N("A").End()
 	if len(b.Grammar().rules) != 1 {
@@ -65,7 +64,7 @@ func TestClosure2(t *testing.T) {
 	b.LHS("E").N("E").T("+", 1).T("(", 2).N("E").T(")", 3).End()
 	b.LHS("E").T("a", 4).End()
 	g := b.Grammar()
-	b.Grammar().Dump()
+	//b.Grammar().Dump()
 	closure0 := g.closure(r0.startItem())
 	closure0.Dump()
 }
@@ -76,9 +75,9 @@ func TestItemSetEquality(t *testing.T) {
 	b.LHS("E").N("E").T("+", 1).T("(", 2).N("E").T(")", 3).End()
 	b.LHS("E").T("a", 4).End()
 	g := b.Grammar()
-	b.Grammar().Dump()
+	//b.Grammar().Dump()
 	closure0 := g.closure(r0.startItem())
-	closure0.Dump()
+	//closure0.Dump()
 	closure1 := g.closure(r0.startItem())
 	if !closure0.equals(closure1) {
 		t.Fail()
@@ -91,10 +90,10 @@ func TestClosure4(t *testing.T) {
 	b.LHS("E").N("E").T("+", 1).T("(", 2).N("E").T(")", 3).End()
 	b.LHS("E").T("a", 4).End()
 	g := b.Grammar()
-	b.Grammar().Dump()
+	//b.Grammar().Dump()
 	i, A := r0.startItem()
 	closure0 := g.closure(i, A)
-	closure0.Dump()
+	//closure0.Dump()
 	g.gotoSet(closure0, A)
 }
 
@@ -104,10 +103,10 @@ func TestStateRetrieval(t *testing.T) {
 	b.LHS("E").N("E").T("+", 1).T("(", 2).N("E").T(")", 3).End()
 	b.LHS("E").T("a", 4).End()
 	g := b.Grammar()
-	cfsm := emptyCFSM()
+	cfsm := emptyCFSM(g)
 	closure0 := g.closure(r0.startItem())
 	s0 := cfsm.addState(closure0)
-	s0.Dump()
+	//s0.Dump()
 	s1 := cfsm.addState(closure0)
 	if s0.id != s1.id {
 		t.Fail()
@@ -120,8 +119,10 @@ func TestBuildCFSM(t *testing.T) {
 	b.LHS("E").N("E").T("+", 1).T("(", 2).N("E").T(")", 3).End()
 	b.LHS("E").T("a", 4).End()
 	g := b.Grammar()
-	c := g.buildCFSM()
-	cfsm2dot(c)
+	ga := NewGrammarAnalysis(g)
+	lrgen := NewLRTableGenerator(ga)
+	c := lrgen.buildCFSM()
+	c.CFSM2GraphViz("/tmp/cfsm-" + "G1" + ".dot")
 }
 
 func TestDerivesEps(t *testing.T) {
@@ -154,7 +155,7 @@ func TestFirstSet(t *testing.T) {
 	b.LHS("T").T("a", 1).End()
 	b.LHS("T").Epsilon()
 	g := b.Grammar()
-	g.Dump()
+	//g.Dump()
 	ga := NewGrammarAnalysis(g)
 	ga.markEps()
 	ga.initFirstSets()
@@ -172,30 +173,45 @@ func TestFollowSet(t *testing.T) {
 	b.LHS("D").T("d", 3).End()
 	b.LHS("D").Epsilon()
 	g := b.Grammar()
-	g.Dump()
+	//g.Dump()
 	ga := NewGrammarAnalysis(g)
 	ga.markEps()
-	ga.g.symbols.Each(func(name string, sym runtime.Symbol) {
-		A := sym.(Symbol)
-		if !A.IsTerminal() {
-			if ga.derivesEps[A] {
-				T.Debugf("%v  => epsilon", A)
+	/*
+		ga.g.symbols.Each(func(name string, sym runtime.Symbol) {
+			A := sym.(Symbol)
+			if !A.IsTerminal() {
+				if ga.derivesEps[A] {
+					T.Debugf("%v  => epsilon", A)
+				}
 			}
-		}
-	})
+		})
+	*/
 	ga.initFirstSets()
-	for key, value := range ga.firstSets.sets {
-		A := key.(Symbol)
-		if !A.IsTerminal() {
-			T.Debugf("FIRST(%v) = %v", A, value)
-		}
-	}
+	ga.Grammar().EachNonTerminal( // supply a mapper function
+		func(name string, A Symbol) interface{} {
+			T.Debugf("FIRST(%s) = %v", name, ga.First(A))
+			return nil
+		})
 	T.Debug("-------")
 	ga.initFollowSets()
-	ga.g.symbols.Each(func(name string, sym runtime.Symbol) {
-		A := sym.(Symbol)
-		if !A.IsTerminal() {
-			T.Debugf("FOLLOW(%v) = %v", A, ga.Follow(A))
-		}
-	})
+	ga.Grammar().EachNonTerminal(
+		func(name string, A Symbol) interface{} {
+			T.Debugf("FOLLOW(%s) = %v", name, ga.Follow(A))
+			return nil
+		})
+}
+
+func TestGotoTable(t *testing.T) {
+	b := NewGrammarBuilder("G")
+	b.LHS("S").N("A").EOF()
+	b.LHS("A").T("a", 1).End()
+	b.LHS("A").Epsilon()
+	g := b.Grammar()
+	g.Dump()
+	ga := NewGrammarAnalysis(g)
+	lrgen := NewLRTableGenerator(ga)
+	traceOn()
+	lrgen.CreateTables()
+	lrgen.CFSM().CFSM2GraphViz("/tmp/cfsm.dot")
+	GotoTableAsHTML(lrgen, "goto.html")
 }
