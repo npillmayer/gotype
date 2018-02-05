@@ -132,7 +132,7 @@ func (m *IntMatrix) Set(i, j int, value int) *IntMatrix {
 		at++
 	}
 	// the following 3 lines have to work for k being the right edge of v or not
-	m.values = append(m.values, tnew)    // make room and take care for append-case
+	m.values = append(m.values, tnew)    // make room
 	copy(m.values[at+1:], m.values[at:]) // copy remainder values one index to right
 	m.values[at] = tnew                  // if not append-case: insert new triplet
 	return m
