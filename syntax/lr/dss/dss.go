@@ -55,6 +55,46 @@ For further information see for example
 
 	https://people.eecs.berkeley.edu/~necula/Papers/elkhound_cc04.pdf
 
+Status
+
+This is experimental software, currently not intended for production use.
+
+----------------------------------------------------------------------
+
+BSD License
+
+Copyright (c) 2017, Norbert Pillmayer
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+3. Neither the name of Norbert Pillmayer or the names of its contributors
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+----------------------------------------------------------------------
 */
 package dss
 
@@ -190,6 +230,7 @@ type DSSRoot struct {
 func NewRoot(name string) *DSSRoot {
 	root := &DSSRoot{Name: name}
 	root.bottom = newDSSNode(-999, &pseudo{"bottom"})
+	root.bottom.pathcnt = 1
 	root.stacks = make([]*Stack, 0, 10)
 	root.reservoir = ssl.New()
 	return root
@@ -220,6 +261,16 @@ func (root *DSSRoot) newNode(state int, sym lr.Symbol) *DSSNode {
 		node = newDSSNode(state, sym)
 	}
 	return node
+}
+
+// Wrap nodes of a stack as heads of new stacks.
+func (root *DSSRoot) makeStackHeadsFrom(nodes []*DSSNode) (ret []*Stack) {
+	for _, n := range nodes {
+		s := NewStack(root)
+		s.tos = n
+		ret = append(ret, s)
+	}
+	return
 }
 
 // Find a TOS of any stack in the DSS which carries state and sym.
@@ -321,11 +372,12 @@ func (stack *Stack) Push(state int, sym lr.Symbol) *Stack {
 		if succ == nil { // not found in DSS
 			succ = stack.root.newNode(state, sym)
 			T.Debugf("creating state: %v", succ)
+			succ.pathcnt = stack.tos.pathcnt
 		} else {
 			T.Debugf("found state on other stack: %v", succ)
+			succ.pathcnt++
 		}
 		succ.prepend(stack.tos)
-		succ.pathcnt = stack.tos.pathcnt
 		stack.tos.append(succ)
 		stack.tos = succ
 	}
@@ -339,8 +391,8 @@ func (stack *Stack) Push(state int, sym lr.Symbol) *Stack {
 // For a RHS there may be more than one path downwards the stack marked
 // with the symbols of RHS. It is not deterministic which one this method
 // will find and return.
-func (stack *Stack) findHandleBranch(handle []lr.Symbol) []*DSSNode {
-	path, ok := collectHandleBranch(stack.tos, handle, len(handle))
+func (stack *Stack) findHandleBranch(handle []lr.Symbol, skip int) []*DSSNode {
+	path, ok := collectHandleBranch(stack.tos, handle, len(handle), &skip)
 	if ok {
 		T.Debugf("found a handle %v", path)
 	}
@@ -351,19 +403,23 @@ func (stack *Stack) findHandleBranch(handle []lr.Symbol) []*DSSNode {
 // The bottom-most node, i.e. the one terminating the recursion, will allocate
 // the result array. This array will then be handed upwards the call stack,
 // being filled with node links on the way.
-func collectHandleBranch(n *DSSNode, handleRest []lr.Symbol, handleLen int) ([]*DSSNode, bool) {
+func collectHandleBranch(n *DSSNode, handleRest []lr.Symbol, handleLen int, skip *int) ([]*DSSNode, bool) {
 	l := len(handleRest)
 	if l > 0 {
 		if n.Sym == handleRest[l-1] {
 			T.Debugf("handle symbol match at %d = %v", l-1, n.Sym)
 			for _, pred := range n.preds {
-				branch, found := collectHandleBranch(pred, handleRest[:l-1], handleLen)
+				branch, found := collectHandleBranch(pred, handleRest[:l-1], handleLen, skip)
 				if found {
-					T.Debugf("partial branch: %v", branch)
-					if branch != nil { // a-ha, deepest node has created collector
-						branch[l-1] = n // collect n in branch
+					if *skip == 0 {
+						T.Debugf("partial branch: %v", branch)
+						if branch != nil { // a-ha, deepest node has created collector
+							branch[l-1] = n // collect n in branch
+						}
+						return branch, true // return with partially filled branch
+					} else {
+						*skip = max(0, *skip-1)
 					}
-					return branch, true // return with partially filled branch
 				}
 			}
 		}
@@ -412,15 +468,16 @@ func (stack *Stack) splitOff(path []*DSSNode) *Stack {
 
 The handle nodes must exist in the DSS (not checked again).
 */
-func (stack *Stack) Reduce(handleNodes []*DSSNode, popStates bool) []*Stack {
+func (stack *Stack) reduce(handleNodes []*DSSNode) (ret []*Stack) {
 	dodelete := true
 	if stack.tos.successorCount() > 0 { // there are nodes above
 		dodelete = false
 	}
 	haveDeleted := false
 	l := len(handleNodes)
+	var node *DSSNode
 	for i := l - 1; i >= 0; i-- { // iterate handle symbols back to front
-		node := handleNodes[i]
+		node = handleNodes[i]
 		T.Debugf("reducing node %v (now cnt=%d)", node, node.pathcnt)
 		T.Debugf("         node %v has %d succs", node, len(node.succs))
 		if node.isInverseJoin() {
@@ -434,6 +491,9 @@ func (stack *Stack) Reduce(handleNodes []*DSSNode, popStates bool) []*Stack {
 			dodelete = true
 			node.pathcnt--
 		}
+		if i == 0 {
+			ret = stack.root.makeStackHeadsFrom(node.preds)
+		}
 		if dodelete && node.pathcnt == 0 {
 			node.isolate()
 			stack.root.recycleNode(node)
@@ -442,7 +502,58 @@ func (stack *Stack) Reduce(handleNodes []*DSSNode, popStates bool) []*Stack {
 			haveDeleted = false
 		}
 	}
-	return nil
+	return
+}
+
+/*
+Perform a reduce operation, given a handle, i.e. a right hand side of a
+grammar rule. Strictly speaking, it performs not a complete reduce operation,
+but just the first part: popping the RHS symbols off the stack.
+Clients will have to push the LHS symbol separately.
+
+With a DSS, reduce may result in a multitude of new stack configurations.
+Whenever there is a reduce/reduce conflict or a shift/reduce-conflict, a GLR
+parser will perform both reduce-operations. To this end each possible operation
+(i.e, parser) will (conceptually) use its own stack.
+Thus multiple return values of a reduce operation correspond to (temporary
+or real) ambiguity of a grammar.
+
+Example:  X ::= A + A  (grammar rule)
+
+	Stack 1:  ... a A + A
+	Stack 2:  ... A + A + A
+
+	as a DSS: -[a]-------
+	                    [A] [+]-[A]        now reduce this: A + A  to  X
+	          -[A]-[+]---
+
+This will result in 2 new stack heads:
+
+	as a DSS: -[a]-
+	          -[A]-[+]-
+
+After pushing X onto the stack, the 2 stacks may be merged (on 'X'), thus
+resulting in a single stack head again.
+
+	as a DSS: -[a]-----
+	                   [X]
+	          -[A]-[+]-
+
+*/
+func (stack *Stack) Reduce(handle []lr.Symbol) (ret []*Stack) {
+	haveReduced := true
+	foundCnt := 0
+	for haveReduced {
+		haveReduced = false
+		handleNodes := stack.findHandleBranch(handle, foundCnt)
+		if handleNodes != nil {
+			haveReduced = true
+			foundCnt++
+			s := stack.reduce(handleNodes)
+			ret = append(ret, s...)
+		}
+	}
+	return
 }
 
 /*
@@ -456,14 +567,14 @@ conformance with the general contract of a stack. With parsing, popping of
 states happens during reductions, and the API offers more convenient
 functions for this.
 */
-func (stack *Stack) Pop() []*Stack {
+func (stack *Stack) Pop() (ret []*Stack) {
 	if stack.tos != stack.root.bottom { // ensure stack not empty
 		// If tos is part of another chain: return node and go down one node
 		// If shared by another stack: return node and go down one node
 		// If not shared: remove node
 		// Increase pathcnt at new TOS
 		var oldTOS *DSSNode = stack.tos
-		var r []*Stack
+		//var r []*Stack
 		for i, n := range stack.tos.preds { // at least 1 predecessor
 			if i == 0 { // 1st one: keep this stack
 				stack.tos = n
@@ -473,14 +584,14 @@ func (stack *Stack) Pop() []*Stack {
 				s.tos = n
 				//s.calculateHeight()
 				//T.Debugf("creating new stack for %v (of height=%d)", n, s.height)
-				r = append(r, s)
+				ret = append(ret, s)
 			}
 		}
 		if oldTOS.succs == nil || len(oldTOS.succs) == 0 {
 			oldTOS.isolate()
 			stack.root.recycleNode(oldTOS)
 		}
-		return r
+		return ret
 	}
 	return nil
 }
@@ -517,7 +628,7 @@ func (stack *Stack) pop(toNode *DSSNode, deleteNode bool, collectStacks bool) ([
 /*
 Output a DSS in Graphviz DOT format (for debugging purposes).
 */
-func DSS2Dot(root *DSSRoot, w io.Writer) {
+func DSS2Dot(root *DSSRoot, path []*DSSNode, w io.Writer) {
 	istos := map[*DSSNode]bool{}
 	for _, stack := range root.stacks {
 		istos[stack.tos] = true
@@ -528,7 +639,7 @@ func DSS2Dot(root *DSSRoot, w io.Writer) {
 	walkDAG(root, func(node *DSSNode, arg interface{}) {
 		ids[node] = idcounter
 		idcounter++
-		styles := nodeDotStyles(node)
+		styles := nodeDotStyles(node, pathContains(path, node))
 		if istos[node] {
 			styles += ",shape=box"
 		}
@@ -545,13 +656,21 @@ func DSS2Dot(root *DSSRoot, w io.Writer) {
 	io.WriteString(w, "}\n")
 }
 
-func nodeDotStyles(node *DSSNode) string {
+func nodeDotStyles(node *DSSNode, highlight bool) string {
 	s := ",style=filled"
-	s = s + fmt.Sprintf(",fillcolor=\"%s\"", hexcolors[node.pathcnt])
+	if highlight {
+		s = s + fmt.Sprintf(",fillcolor=\"%s\"", hexhlcolors[node.pathcnt])
+	} else {
+		s = s + fmt.Sprintf(",fillcolor=\"%s\"", hexcolors[node.pathcnt])
+	}
 	return s
 }
 
-var hexcolors = [...]string{"white", "#CCDDFF", "#AACCFF", "#88BBFF", "blue", "red", "red", "red", "red"}
+var hexhlcolors = [...]string{"#FFEEDD", "#FFDDCC", "#FFCCAA", "#FFBB88", "#FFAA66",
+	"#FF9944", "#FF8822", "#FF7700", "#ff6600"}
+
+var hexcolors = [...]string{"white", "#CCDDFF", "#AACCFF", "#88BBFF", "#66AAFF",
+	"#4499FF", "#2288FF", "#0077FF", "#0066FF"}
 
 // Debugging
 func PrintDSS(root *DSSRoot) {
@@ -584,10 +703,23 @@ func walkDAG(root *DSSRoot, worker func(*DSSNode, interface{}), arg interface{})
 
 // --- Helpers ---------------------------------------------------------------
 
+func pathContains(s []*DSSNode, node *DSSNode) bool {
+	if s != nil {
+		for _, n := range s {
+			if n == node {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func contains(s []*DSSNode, sym lr.Symbol) *DSSNode {
-	for _, n := range s {
-		if n.Sym == sym {
-			return n
+	if s != nil {
+		for _, n := range s {
+			if n.Sym == sym {
+				return n
+			}
 		}
 	}
 	return nil
@@ -641,3 +773,10 @@ func (sy *pseudo) GetID() int {
 }
 
 var _ lr.Symbol = &pseudo{}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
