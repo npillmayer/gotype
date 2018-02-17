@@ -15,3 +15,21 @@ func TestSparse1(t *testing.T) {
 		t.Fail()
 	}
 }
+
+func TestSparse2(t *testing.T) {
+	m := NewIntMatrix(10, 10, -1)
+	m.Add(5, 5, 77)
+	m.Add(5, 5, 88)
+	if m.Value(5, 5) != 77 {
+		t.Fail()
+	}
+	if a, b := m.Values(5, 5); a != 77 || b != 88 {
+		t.Fail()
+	}
+	if m.Value(0, 0) != -1 {
+		t.Fail()
+	}
+	if m.ValueCount() != 1 {
+		t.Fail()
+	}
+}
