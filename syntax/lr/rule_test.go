@@ -1,6 +1,7 @@
 package lr
 
 import (
+	"io/ioutil"
 	"testing"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
@@ -119,7 +120,7 @@ func TestBuildCFSM(t *testing.T) {
 	b.LHS("E").N("E").T("+", 1).T("(", 2).N("E").T(")", 3).End()
 	b.LHS("E").T("a", 4).End()
 	g := b.Grammar()
-	ga := NewGrammarAnalysis(g)
+	ga := makeGrammarAnalysis(g)
 	lrgen := NewLRTableGenerator(ga)
 	c := lrgen.buildCFSM()
 	c.CFSM2GraphViz("/tmp/cfsm-" + "G1" + ".dot")
@@ -133,7 +134,7 @@ func TestDerivesEps(t *testing.T) {
 	b.LHS("F").Epsilon()
 	g := b.Grammar()
 	//g.Dump()
-	ga := NewGrammarAnalysis(g)
+	ga := makeGrammarAnalysis(g)
 	ga.markEps()
 	cnt := 0
 	g.symbols.Each(func(name string, sym runtime.Symbol) {
@@ -156,7 +157,7 @@ func TestFirstSet(t *testing.T) {
 	b.LHS("T").Epsilon()
 	g := b.Grammar()
 	//g.Dump()
-	ga := NewGrammarAnalysis(g)
+	ga := makeGrammarAnalysis(g)
 	ga.markEps()
 	ga.initFirstSets()
 	for key, value := range ga.firstSets.sets {
@@ -174,7 +175,7 @@ func TestFollowSet(t *testing.T) {
 	b.LHS("D").Epsilon()
 	g := b.Grammar()
 	//g.Dump()
-	ga := NewGrammarAnalysis(g)
+	ga := makeGrammarAnalysis(g)
 	ga.markEps()
 	/*
 		ga.g.symbols.Each(func(name string, sym runtime.Symbol) {
@@ -210,8 +211,30 @@ func TestGotoTable(t *testing.T) {
 	g.Dump()
 	ga := NewGrammarAnalysis(g)
 	lrgen := NewLRTableGenerator(ga)
-	traceOn()
-	lrgen.CreateTables()
+	lrgen.dfa = lrgen.buildCFSM()
+	lrgen.gototable = lrgen.BuildGotoTable()
 	lrgen.CFSM().CFSM2GraphViz("/tmp/cfsm.dot")
-	GotoTableAsHTML(lrgen, "goto.html")
+	tmp, _ := ioutil.TempFile("", "lr_")
+	T.Infof("writing HTML to %s", tmp.Name())
+	GotoTableAsHTML(lrgen, tmp)
+}
+
+func TestActionTable(t *testing.T) {
+	b := NewGrammarBuilder("G")
+	b.LHS("S").N("A").EOF()
+	b.LHS("A").T("a", 1).End()
+	b.LHS("A").Epsilon()
+	g := b.Grammar()
+	g.Dump()
+	ga := NewGrammarAnalysis(g)
+	lrgen := NewLRTableGenerator(ga)
+	lrgen.dfa = lrgen.buildCFSM()
+	traceOn()
+	T.Debugln("\n---------- Action 0 -----------------------------------")
+	lrgen.actiontable = lrgen.BuildLR0ActionTable()
+	T.Debugln("\n---------- Action 1 -----------------------------------")
+	lrgen.actiontable = lrgen.BuildSLR1ActionTable()
+	tmp, _ := ioutil.TempFile("", "lr_")
+	T.Infof("writing HTML to %s", tmp.Name())
+	ActionTableAsHTML(lrgen, tmp)
 }

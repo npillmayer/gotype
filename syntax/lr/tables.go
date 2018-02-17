@@ -2,6 +2,7 @@ package lr
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/emirpasic/gods/lists/arraylist"
@@ -186,6 +187,11 @@ func state(id int, iset *itemSet) *cfsmState {
 	return s
 }
 
+func (s *cfsmState) allItems() []interface{} {
+	vals := s.items.Values()
+	return vals
+}
+
 func (s *cfsmState) String() string {
 	return fmt.Sprintf("(state %d | [%d])", s.id, s.items.Size())
 }
@@ -274,10 +280,11 @@ and then a table generator. LRTableGenerator.CreateTables() constructs
 the CFSM and parser tables for an LR-parser recognizing grammar G.
 */
 type LRTableGenerator struct {
-	g         *Grammar
-	ga        *GrammarAnalysis
-	dfa       *CFSM
-	gototable *sparse.IntMatrix
+	g           *Grammar
+	ga          *GrammarAnalysis
+	dfa         *CFSM
+	gototable   *sparse.IntMatrix
+	actiontable *sparse.IntMatrix
 }
 
 /*
@@ -308,7 +315,8 @@ Create the necessary data structures for an SLR parser.
 */
 func (lrgen *LRTableGenerator) CreateTables() {
 	lrgen.dfa = lrgen.buildCFSM()
-	lrgen.gototable = lrgen.buildGotoTable()
+	lrgen.gototable = lrgen.BuildGotoTable()
+	lrgen.actiontable = lrgen.BuildSLR1ActionTable()
 }
 
 // Construct the characteristic finite state machine CFSM for a grammar.
@@ -373,10 +381,10 @@ node [shape=record];
 // ===========================================================================
 
 /*
-Build the GOTO table.
-Refer to Figure 6.9
+Build the GOTO table. This is normally not called directly, but rather
+via CreateTables().
 */
-func (lrgen *LRTableGenerator) buildGotoTable() *sparse.IntMatrix {
+func (lrgen *LRTableGenerator) BuildGotoTable() *sparse.IntMatrix {
 	statescnt := lrgen.dfa.states.Size()
 	maxtok := 0
 	lrgen.g.symbols.Each(func(n string, sym runtime.Symbol) {
@@ -386,7 +394,7 @@ func (lrgen *LRTableGenerator) buildGotoTable() *sparse.IntMatrix {
 		}
 	})
 	T.Infof("GOTO table of size %d x %d", statescnt, maxtok)
-	gototable := sparse.NewIntMatrix(statescnt, maxtok, -1)
+	gototable := sparse.NewIntMatrix(statescnt, maxtok, sparse.DefaultNullValue)
 	states := lrgen.dfa.states.Iterator()
 	for states.Next() {
 		state := states.Value().(*cfsmState)
@@ -394,51 +402,159 @@ func (lrgen *LRTableGenerator) buildGotoTable() *sparse.IntMatrix {
 		for _, e := range edges {
 			//T.Debugf("edge %s --%v--> %v", state, e.label, e.to)
 			//T.Debugf("GOTO (%d , %d ) = %d", state.id, symvalue(e.label), e.to.id)
-			gototable.Set(state.id, symvalue(e.label), e.to.id)
+			gototable.Set(state.id, symvalue(e.label), int32(e.to.id))
 		}
 	}
 	return gototable
 }
 
-func GotoTableAsHTML(lrgen *LRTableGenerator, filename string) {
+func GotoTableAsHTML(lrgen *LRTableGenerator, w io.Writer) {
 	if lrgen.gototable == nil {
 		T.Errorf("GOTO table not yet created, cannot export to HTML")
 		return
 	}
-	f, err := os.Create(filename)
-	if err != nil {
-		panic(fmt.Sprintf("file open error: %v", err.Error()))
+	parserTableAsHTML(lrgen, "GOTO", lrgen.gototable, w)
+}
+
+func ActionTableAsHTML(lrgen *LRTableGenerator, w io.Writer) {
+	if lrgen.actiontable == nil {
+		T.Errorf("ACTION table not yet created, cannot export to HTML")
+		return
 	}
-	defer f.Close()
+	parserTableAsHTML(lrgen, "ACTION", lrgen.actiontable, w)
+}
+
+func parserTableAsHTML(lrgen *LRTableGenerator, tname string, table *sparse.IntMatrix, w io.Writer) {
 	var symvec []Symbol = make([]Symbol, lrgen.g.symbols.Size())
-	f.WriteString("<html><body>\n")
-	f.WriteString("<img src=\"cfsm.png\"/><p>")
-	f.WriteString(fmt.Sprintf("GOTO table of size = %d<p>", lrgen.gototable.ValueCount()))
-	f.WriteString("<table border=1 cellspacing=0 cellpadding=5>\n")
-	f.WriteString("<tr bgcolor=#cccccc><td></td>\n")
+	io.WriteString(w, "<html><body>\n")
+	io.WriteString(w, "<img src=\"cfsm.png\"/><p>")
+	io.WriteString(w, fmt.Sprintf("%s table of size = %d<p>", tname, table.ValueCount()))
+	io.WriteString(w, "<table border=1 cellspacing=0 cellpadding=5>\n")
+	io.WriteString(w, "<tr bgcolor=#cccccc><td></td>\n")
 	j := 0
 	lrgen.g.symbols.Each(func(n string, sym runtime.Symbol) {
 		A := sym.(Symbol)
-		f.WriteString(fmt.Sprintf("<td>%s</td>", A))
+		io.WriteString(w, fmt.Sprintf("<td>%s</td>", A))
 		symvec[j] = A
 		j++
 	})
-	f.WriteString("</tr>\n")
+	io.WriteString(w, "</tr>\n")
 	states := lrgen.dfa.states.Iterator()
 	for states.Next() {
 		state := states.Value().(*cfsmState)
-		f.WriteString(fmt.Sprintf("<tr><td>state %d</td>\n", state.id))
+		io.WriteString(w, fmt.Sprintf("<tr><td>state %d</td>\n", state.id))
 		for _, A := range symvec {
-			v := lrgen.gototable.Value(state.id, symvalue(A))
+			v := table.Value(state.id, symvalue(A))
 			td := fmt.Sprintf("%d", v)
-			if v == -1 {
+			if v == table.NullValue() {
 				td = "&nbsp;"
 			}
-			f.WriteString("<td>")
-			f.WriteString(td)
-			f.WriteString("</td>\n")
+			io.WriteString(w, "<td>")
+			io.WriteString(w, td)
+			io.WriteString(w, "</td>\n")
 		}
-		f.WriteString("</tr>\n")
+		io.WriteString(w, "</tr>\n")
 	}
-	f.WriteString("</table></body></html>\n")
+	io.WriteString(w, "</table></body></html>\n")
+}
+
+// ===========================================================================
+
+/*
+Build the LR(0) Action table. This method is not called by CreateTables(),
+as we normally use an SLR(1) parser and therefore an action table with
+lookahead included. This method is provided as an add-on.
+*/
+func (lrgen *LRTableGenerator) BuildLR0ActionTable() *sparse.IntMatrix {
+	statescnt := lrgen.dfa.states.Size()
+	T.Infof("ACTION.0 table of size %d x 1", statescnt)
+	actions := sparse.NewIntMatrix(statescnt, 1, sparse.DefaultNullValue)
+	return lrgen.buildActionTable(actions, false)
+}
+
+/*
+Build the SLR(1) Action table. This method is normally not called by
+clients, but rather via CreateTables(). It builds an action table including
+lookahead (using the FOLLOW-set created by the grammar analyzer).
+*/
+func (lrgen *LRTableGenerator) BuildSLR1ActionTable() *sparse.IntMatrix {
+	statescnt := lrgen.dfa.states.Size()
+	maxtok := 0
+	lrgen.g.symbols.Each(func(n string, sym runtime.Symbol) {
+		A := sym.(Symbol)
+		if A.Token() > maxtok { // find maximum token value
+			maxtok = A.Token()
+		}
+	})
+	T.Infof("ACTION.1 table of size %d x %d", statescnt, maxtok)
+	actions := sparse.NewIntMatrix(statescnt, maxtok, sparse.DefaultNullValue)
+	return lrgen.buildActionTable(actions, true)
+}
+
+/*
+	states := lrgen.dfa.states.Iterator()
+	for states.Next() {
+		state := states.Value().(*cfsmState)
+		for _, v := range state.items.Values() {
+			T.Infof("item in s%d = %v", state.id, v)
+			i, _ := v.(*item)
+			sym := i.peekSymbol()
+			prefix := i.getPrefix()
+			//sid := state.id
+			T.Infof("    symbol at dot = %v, prefix = %v", sym, prefix)
+			if sym != nil && sym.IsTerminal() { // create a shift entry
+				T.Info("    creating shift action entry")
+				actions.Add(state.id, 1, 1) // general shift (no lookahead)
+			}
+			if len(prefix) > 0 && sym == nil {
+				rule, inx := lrgen.g.matchesRHS(prefix, false)
+				if inx >= 0 { // create a reduce entry
+					lookaheads := lrgen.ga.Follow(rule.lhs[0])
+					T.Infof("    Follow(%v) = %v", rule.lhs[0], lookaheads)
+					for _, la := range lookaheads {
+						actions.Add(state.id, la, int32(-inx)) // reduce rule[inx]
+						T.Infof("    creating reduce_%d action entry @ %v for %v", inx, la, rule)
+					}
+				}
+			}
+		}
+	}
+	return actions
+}
+*/
+
+func (lrgen *LRTableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bool) *sparse.IntMatrix {
+	states := lrgen.dfa.states.Iterator()
+	for states.Next() {
+		state := states.Value().(*cfsmState)
+		for _, v := range state.items.Values() {
+			T.Debugf("item in s%d = %v", state.id, v)
+			i, _ := v.(*item)
+			sym := i.peekSymbol()
+			prefix := i.getPrefix()
+			//sid := state.id
+			T.Debugf("    symbol at dot = %v, prefix = %v", sym, prefix)
+			if sym != nil && sym.IsTerminal() { // create a shift entry
+				T.Debug("    creating shift action entry")
+				actions.Add(state.id, 1, 1) // general shift (no lookahead)
+			}
+			if len(prefix) > 0 && sym == nil {
+				rule, inx := lrgen.g.matchesRHS(prefix, false)
+				if inx >= 0 { // create a reduce entry
+					if slr1 {
+						lookaheads := lrgen.ga.Follow(rule.lhs[0])
+						T.Debugf("    Follow(%v) = %v", rule.lhs[0], lookaheads)
+						for _, la := range lookaheads {
+							actions.Add(state.id, la, int32(-inx)) // reduce rule[inx]
+							T.Debugf("    creating reduce_%d action entry @ %v for %v", inx, la, rule)
+						}
+					} else {
+						T.Debugf("    creating reduce_%d action entry for %v", inx, rule)
+						actions.Add(state.id, 1, int32(-inx)) // reduce rule[inx]
+					}
+				}
+			}
+		}
+	}
+	return actions
 }

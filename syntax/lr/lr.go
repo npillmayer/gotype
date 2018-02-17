@@ -57,9 +57,9 @@ Parser Construction
 
 Using grammar analysis as input, a bottom-up parser can be constructed.
 First a characteristic finite state machine (CFSM) is built from the
-grammar, which will then be transformed into a GOTO table (LR(0)-table)
-for a SLR parser. The CFSM will not be thrown away, but is made available
-to the client.  This is intended
+grammar. The CFSM will then be transformed into a GOTO table (LR(0)-table)
+and an ACTION table for a SLR(1) parser. The CFSM will not be thrown away,
+but is made available to the client.  This is intended
 for debugging purposes, but may be useful for error recovery, too.
 It can be exported to Graphviz's Dot-format.
 

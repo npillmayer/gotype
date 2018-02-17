@@ -7,10 +7,9 @@ import (
 )
 
 /*
-Replace home-grown int-set by
+TODO: Replace home-grown int-set by
 
 https://github.com/golang/tools/blob/master/container/intsets/sparse.go
-
 */
 
 /*
@@ -23,16 +22,30 @@ type GrammarAnalysis struct {
 	followSets *symSetMap
 }
 
-// Create an analyser for a grammar.
-// The analyser immediately starts its work and computes
-// FIRST and FOLLOW.
+/*
+Create an analyser for a grammar.
+The analyser immediately starts its work and computes FIRST and FOLLOW sets.
+*/
 func NewGrammarAnalysis(g *Grammar) *GrammarAnalysis {
+	ga := makeGrammarAnalysis(g)
+	ga.analyse()
+	return ga
+}
+
+// create a fully initialized grammar analysis object
+func makeGrammarAnalysis(g *Grammar) *GrammarAnalysis {
 	ga := &GrammarAnalysis{}
 	ga.g = g
 	ga.derivesEps = make(map[Symbol]bool)
 	ga.firstSets = newSymSetMap()
 	ga.followSets = newSymSetMap()
 	return ga
+}
+
+func (ga *GrammarAnalysis) analyse() {
+	ga.markEps()
+	ga.initFirstSets()
+	ga.initFollowSets()
 }
 
 // Return the grammer this analyser operates on.

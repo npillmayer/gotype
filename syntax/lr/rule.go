@@ -30,6 +30,29 @@ func newRule() *Rule {
 	return r
 }
 
+// Check if two RHS are identical. If parameter prefix is true, this function
+// returns true when handle is a prefix of r, even if handle is of length 0.
+func (r *Rule) eqRHS(handle []Symbol, prefix bool) bool {
+	if r.rhs == nil && handle == nil {
+		return true
+	}
+	if r.rhs == nil || handle == nil {
+		return false
+	}
+	if !prefix && (len(r.rhs) != len(handle)) {
+		return false
+	}
+	for i := range r.rhs {
+		if i >= len(handle) {
+			return true
+		}
+		if r.rhs[i] != handle[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // Return an item for a rule wth the dot at the start of RHS
 func (r *Rule) startItem() (*item, Symbol) {
 	var i *item
@@ -83,6 +106,11 @@ func (i *item) peekSymbol() Symbol {
 	return i.rule.rhs[i.dot]
 }
 
+// returns a slice, so the result should probably be considered read-only.
+func (i *item) getPrefix() []Symbol {
+	return i.rule.rhs[:i.dot]
+}
+
 func (i *item) advance() (*item, Symbol) {
 	if i.dot >= len(i.rule.rhs) {
 		return nil, nil
@@ -127,6 +155,15 @@ func (g *Grammar) findNonTermRules(sym Symbol) *itemSet {
 	return iset
 }
 
+func (g *Grammar) matchesRHS(handle []Symbol, prefix bool) (*Rule, int) {
+	for i, r := range g.rules {
+		if r.eqRHS(handle, prefix) {
+			return r, i
+		}
+	}
+	return nil, -1
+}
+
 /*
 Iterate over all non-terminal symbols of the grammar, given the symbol's
 literal and the symbol itself. Return values of the mapper function for
@@ -164,8 +201,8 @@ func (g *Grammar) Dump() {
 // ---------------------------------------------------------------------------
 
 const (
-	NonTermType  = 100
-	TerminalType = 1000
+	nonTermType  = 100
+	terminalType = 1000
 	epsilonType  = 999
 )
 
@@ -188,7 +225,7 @@ func (lrsym *lrSymbol) Token() int {
 func newLRSymbol(s string) runtime.Symbol {
 	sym := runtime.NewStdSymbol(s)
 	st := sym.(*runtime.StdSymbol)
-	st.Symtype = NonTermType
+	st.Symtype = nonTermType
 	return &lrSymbol{st}
 }
 
@@ -270,7 +307,7 @@ func (rb *RuleBuilder) N(s string) *RuleBuilder {
 func (rb *RuleBuilder) T(s string, tokval int) *RuleBuilder {
 	sym, _ := rb.gb.g.symbols.ResolveOrDefineSymbol(s)
 	lrs := sym.(*lrSymbol)
-	lrs.Symtype = TerminalType + tokval
+	lrs.Symtype = terminalType + tokval
 	rb.rule.rhs = append(rb.rule.rhs, lrs)
 	return rb
 }
