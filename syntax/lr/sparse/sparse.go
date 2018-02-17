@@ -76,7 +76,11 @@ type triplet struct {
 	value    intPair
 }
 
-// Create a new matrix for int, size m x n.
+/*
+Create a new matrix for int, size m x n. The 3rd argument is a null-value,
+indicating empty entries (use DefaultNullValue if you haven't any specific
+requirements).
+*/
 func NewIntMatrix(m, n int, nullValue int32) *IntMatrix {
 	return &IntMatrix{
 		values:  []triplet{},
@@ -85,6 +89,9 @@ func NewIntMatrix(m, n int, nullValue int32) *IntMatrix {
 		nullval: nullValue,
 	}
 }
+
+// Default null-value for matrices (min int32)
+const DefaultNullValue = -2147483648
 
 // Return row count.
 func (m *IntMatrix) M() int {
