@@ -55,8 +55,9 @@ Type for a spare matrix of integer values. Construct with
 Now
 
     M.Set(2, 3, 4711)              // set a value
-    v := M.Value(2, 3              // returns 4711
-    cnt := M.ValueCount()          // returns 1
+    v := M.Value(2, 3)             // returns 4711
+    M.Add(2, 3, 123)               // add a second value
+    cnt := M.ValueCount()          // still returns 1 (one position set)
     v = M.Value(10, 10)            // returns -1, i.e. the null-value
 
 Values cannot be deleted, but may be overwritten with the null-value. Space for
