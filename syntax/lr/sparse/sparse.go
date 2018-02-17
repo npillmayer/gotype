@@ -1,8 +1,9 @@
 /*
 Package sparse implements a simple type for sparse integer matrices.
 It is mainly used for parser tables (GOTO-table and ACTION-table).
+Every entry in the table is either a single int32 or a pair (int32,int32).
 
-Implementation uses COO algorithm (a.k.a. triplet-encoding).
+This implementation uses the COO algorithm (a.k.a. triplet-encoding).
 
    https://medium.com/@jmaxg3/101-ways-to-store-a-sparse-matrix-c7f2bf15a229
    https://www.coin-or.org/Ipopt/documentation/node38.html
@@ -65,17 +66,17 @@ type IntMatrix struct {
 	values  []triplet
 	rowcnt  int
 	colcnt  int
-	nullval int
+	nullval int32
 }
 
 // Triplet values to store
 type triplet struct {
 	row, col int
-	value    int
+	value    intPair
 }
 
 // Create a new matrix for int, size m x n.
-func NewIntMatrix(m, n int, nullValue int) *IntMatrix {
+func NewIntMatrix(m, n int, nullValue int32) *IntMatrix {
 	return &IntMatrix{
 		values:  []triplet{},
 		rowcnt:  m,
@@ -95,7 +96,7 @@ func (m *IntMatrix) N() int {
 }
 
 // Return this matrix' null value
-func (m *IntMatrix) NullValue() int {
+func (m *IntMatrix) NullValue() int32 {
 	return m.nullval
 }
 
@@ -104,12 +105,12 @@ func (m *IntMatrix) ValueCount() int {
 	return len(m.values)
 }
 
-// Return the value at position (i,j), or NullValue
-func (m *IntMatrix) Value(i, j int) int {
+// Return the primary value at position (i,j), or NullValue
+func (m *IntMatrix) Value(i, j int) int32 {
 	for _, t := range m.values {
 		if !t.storedLeftOf(i, j) { // have skipped all lesser indices
 			if t.storedAt(i, j) {
-				return t.value
+				return t.value.first()
 			}
 			break
 		}
@@ -117,25 +118,62 @@ func (m *IntMatrix) Value(i, j int) int {
 	return m.nullval
 }
 
+// Return the pair of values at position (i,j), or (NullValue, NullValue)
+func (m *IntMatrix) Values(i, j int) (int32, int32) {
+	for _, t := range m.values {
+		if !t.storedLeftOf(i, j) { // have skipped all lesser indices
+			if t.storedAt(i, j) {
+				return t.value.first(), t.value.second()
+			}
+			break
+		}
+	}
+	return m.nullval, m.nullval
+}
+
 // Set a value in the matrix at position (i,j).
-func (m *IntMatrix) Set(i, j int, value int) *IntMatrix {
-	tnew := triplet{row: i, col: j, value: value}
+func (m *IntMatrix) Set(i, j int, value int32) *IntMatrix {
+	return m.setOrAdd(i, j, value, false)
+}
+
+func (m *IntMatrix) Add(i, j int, value int32) *IntMatrix {
+	return m.setOrAdd(i, j, value, true)
+}
+
+func (m *IntMatrix) setOrAdd(i, j int, value int32, doAdd bool) *IntMatrix {
 	at := 0 // will be position of new value
 	for k, t := range m.values {
 		if !t.storedLeftOf(i, j) { // have skipped all lesser indices
 			if t.storedAt(i, j) { // value already present
-				m.values[k].value = value // set new value
-				return m                  // and done
+				if doAdd {
+					v := m.values[k].value
+					m.values[k].value = addIntValue(v, value, m.nullval) // add new value
+				} else {
+					m.values[k].value = newIntPair(value, 0) // set new value
+				}
+				return m // and done
 			}
 			break // no old value present
 		}
 		at++
 	}
+	tnew := triplet{row: i, col: j, value: newIntPair(value, 0)}
 	// the following 3 lines have to work for k being the right edge of v or not
 	m.values = append(m.values, tnew)    // make room
 	copy(m.values[at+1:], m.values[at:]) // copy remainder values one index to right
 	m.values[at] = tnew                  // if not append-case: insert new triplet
 	return m
+}
+
+func addIntValue(v intPair, n int32, nullval int32) intPair {
+	if v.first() == nullval {
+		return newIntPair(n, 0)
+	} else if v.second() == nullval {
+		return v.setSecond(n)
+	} else {
+		// entry is full. what to do?
+		return v.setSecond(n) // overwrite second
+	}
 }
 
 func (t *triplet) storedLeftOf(i, j int) bool {
@@ -144,4 +182,31 @@ func (t *triplet) storedLeftOf(i, j int) bool {
 
 func (t *triplet) storedAt(i, j int) bool {
 	return (t.row == i && t.col == j)
+}
+
+// we will store 2 int32 in one position
+type intPair int64
+
+func newIntPair(a, b int32) intPair {
+	pr := int64(b)
+	pr = pr<<32 + int64(a)
+	return intPair(pr)
+}
+
+func (pr intPair) first() int32 {
+	return int32(pr)
+}
+
+func (pr intPair) second() int32 {
+	return int32(pr >> 32)
+}
+
+func (pr intPair) setFirst(a int32) intPair {
+	pr = pr + intPair(int64(a))
+	return pr
+}
+
+func (pr intPair) setSecond(b int32) intPair {
+	pr = pr + intPair(int64(b)<<32)
+	return pr
 }
