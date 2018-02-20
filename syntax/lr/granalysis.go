@@ -2,8 +2,6 @@ package lr
 
 import (
 	"fmt"
-
-	"github.com/npillmayer/gotype/syntax/runtime"
 )
 
 /*
@@ -115,13 +113,6 @@ func (m *symSetMap) addSymFor(forN Symbol, A Symbol) {
 	symset.add(A)
 }
 
-func symvalue(A Symbol) int {
-	if A.IsTerminal() {
-		return A.Token()
-	}
-	return A.GetID()
-}
-
 type symSet struct { // enable hashing on symSet
 	syms []int
 }
@@ -229,27 +220,25 @@ func (ga *GrammarAnalysis) computeFirst(syms []Symbol) *symSet {
 }
 
 func (ga *GrammarAnalysis) initFirstSets() {
-	ga.g.symbols.Each(func(name string, sym runtime.Symbol) {
-		A := sym.(Symbol)
-		if !A.IsTerminal() { // for all non-terminals A
-			if ga.derivesEps[A] {
-				ga.firstSets.addSymFor(A, ga.g.epsilon)
-			}
+	ga.g.EachNonTerminal(func(A Symbol) interface{} {
+		//if !A.IsTerminal() { // for all non-terminals A
+		if ga.derivesEps[A] { // if A derives epsilon => epsilon in FIRST(A)
+			ga.firstSets.addSymFor(A, ga.g.epsilon)
 		}
+		return nil
 	})
-	ga.g.symbols.Each(func(name string, sym runtime.Symbol) {
-		B := sym.(Symbol)
-		if B.IsTerminal() { // for all terminals B
-			ga.firstSets.addSymFor(B, B)
-			for _, r := range ga.g.rules {
-				A := r.lhs[0]
-				if !r.isEps() && symvalue(r.rhs[0]) == symvalue(B) {
-					// if A -> t(B) ...
-					ga.firstSets.addSymFor(A, B)
-					//T.Infof("adding term = %v to first(%v)", B, A)
-				}
+	ga.g.EachTerminal(func(B Symbol) interface{} {
+		//if B.IsTerminal() { // for all terminals B
+		ga.firstSets.addSymFor(B, B)
+		for _, r := range ga.g.rules {
+			A := r.lhs[0]
+			if !r.isEps() && symvalue(r.rhs[0]) == symvalue(B) {
+				// if A -> t(B) ...
+				ga.firstSets.addSymFor(A, B)
+				//T.Infof("adding term = %v to first(%v)", B, A)
 			}
 		}
+		return nil
 	})
 	for changed := true; changed; {
 		changed = false

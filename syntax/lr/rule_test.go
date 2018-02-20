@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	"github.com/npillmayer/gotype/syntax/runtime"
 )
 
 func traceOn() {
@@ -16,6 +15,10 @@ func TestBuilder1(t *testing.T) {
 	b := NewGrammarBuilder("G")
 	b.LHS("S").N("A").End()
 	if len(b.Grammar().rules) != 1 {
+		t.Fail()
+	}
+	sym := b.Grammar().rules[0].lhs[0]
+	if sym == nil || sym.GetID() > nonTermType {
 		t.Fail()
 	}
 }
@@ -137,12 +140,12 @@ func TestDerivesEps(t *testing.T) {
 	ga := makeGrammarAnalysis(g)
 	ga.markEps()
 	cnt := 0
-	g.symbols.Each(func(name string, sym runtime.Symbol) {
-		A := sym.(Symbol)
-		T.Debugf("%s => eps  : %v", name, ga.derivesEps[A])
+	g.EachSymbol(func(A Symbol) interface{} {
+		T.Debugf("%v => eps  : %v", A, ga.derivesEps[A])
 		if ga.derivesEps[A] {
 			cnt++
 		}
+		return nil
 	})
 	if cnt != 2 {
 		t.Fail() // E and F should => eps
@@ -189,15 +192,15 @@ func TestFollowSet(t *testing.T) {
 	*/
 	ga.initFirstSets()
 	ga.Grammar().EachNonTerminal( // supply a mapper function
-		func(name string, A Symbol) interface{} {
-			T.Debugf("FIRST(%s) = %v", name, ga.First(A))
+		func(A Symbol) interface{} {
+			T.Debugf("FIRST(%v) = %v", A, ga.First(A))
 			return nil
 		})
 	T.Debug("-------")
 	ga.initFollowSets()
 	ga.Grammar().EachNonTerminal(
-		func(name string, A Symbol) interface{} {
-			T.Debugf("FOLLOW(%s) = %v", name, ga.Follow(A))
+		func(A Symbol) interface{} {
+			T.Debugf("FOLLOW(%v) = %v", A, ga.Follow(A))
 			return nil
 		})
 }
@@ -234,7 +237,15 @@ func TestActionTable(t *testing.T) {
 	lrgen.actiontable = lrgen.BuildLR0ActionTable()
 	T.Debugln("\n---------- Action 1 -----------------------------------")
 	lrgen.actiontable = lrgen.BuildSLR1ActionTable()
-	tmp, _ := ioutil.TempFile("", "lr_")
-	T.Infof("writing HTML to %s", tmp.Name())
-	ActionTableAsHTML(lrgen, tmp)
+	/*
+		tmp, _ := ioutil.TempFile("", "lr_")
+		T.Infof("writing HTML to %s", tmp.Name())
+		ActionTableAsHTML(lrgen, tmp)
+	*/
+}
+
+func TestScannerSimple1(t *testing.T) {
+	scanner := NewScanner(nil)
+	tokval, token := scanner.NextToken(nil)
+	T.Infof("scanned: %d / %v", tokval, token)
 }

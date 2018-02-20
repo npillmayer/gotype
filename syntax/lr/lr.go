@@ -37,21 +37,21 @@ grammar is subjected to a GrammarAnalysis object, which computes FIRST and
 FOLLOW sets for the grammar and determines all epsilon-derivable rules.
 
 Although FIRST and FOLLOW-sets are mainly intended to be used for internal
-purposes of constructing the parser tables, methods for getting FIRST(A)
-and FOLLOW(A) of non-terminals are defined to be public.
+purposes of constructing the parser tables, methods for getting FIRST(N)
+and FOLLOW(N) of non-terminals are defined to be public.
 
     ga := lr.NewGrammarAnalysis(g)  // analyser for grammar above
     ga.Grammar().EachNonTerminal(
-        func(name string, A Symbol) interface{} {             // ad-hoc mapper function
-            fmt.Printf("FIRST(%s) = %v", name, ga.First(A))   // get FIRST-set for A
+        func(name string, N Symbol) interface{} {             // ad-hoc mapper function
+            fmt.Printf("FIRST(%s) = %v", name, ga.First(N))   // get FIRST-set for N
             return nil
         })
 
     // Output:
-    FIRST(S) = [1001 1002 1003]     // terminal token values as int, 1001 = 'a'
-    FIRST(A) = [999 1002 1003]      // 999 = epsilon
-    FIRST(B) = [999 1002]           // 1002 = 'b'
-    FIRST(D) = [999 1003]           // 1003 = 'd'
+    FIRST(S) = [1 2 3]         // terminal token values as int, 1 = 'a'
+    FIRST(A) = [0 2 3]         // 0 = epsilon
+    FIRST(B) = [0 2]           // 2 = 'b'
+    FIRST(D) = [0 3]           // 3 = 'd'
 
 Parser Construction
 
@@ -73,7 +73,7 @@ Example:
 
 BSD License
 
-Copyright (c) 2017, Norbert Pillmayer
+Copyright (c) 2017–2018, Norbert Pillmayer
 
 All rights reserved.
 

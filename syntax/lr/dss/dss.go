@@ -250,6 +250,16 @@ func NewRoot(name string, invalidState int) *DSSRoot {
 	return root
 }
 
+/*
+Get the stacks heads currently active in the DSS.
+No order is guaranteed.
+*/
+func (root *DSSRoot) ActiveStacks() []*Stack {
+	dup := make([]*Stack, len(root.stacks))
+	copy(dup, root.stacks)
+	return dup
+}
+
 // Remove a stack from the list of stacks
 func (root *DSSRoot) removeStack(stack *Stack) {
 	for i, s := range root.stacks {
@@ -264,6 +274,7 @@ func (root *DSSRoot) removeStack(stack *Stack) {
 // As a slight optimization, we do not throw away popped nodes, but rather
 // append them to a free-list for re-use.
 // TODO: create an initial pool of nodes.
+// TODO: migrate this to stdlib's sync/pool.
 func (root *DSSRoot) recycleNode(node *DSSNode) {
 	T.Debugf("recycling node %v", node)
 	node.State = 0
@@ -624,8 +635,8 @@ func (stack *Stack) Reduce(handle []lr.Symbol) (ret []*Stack) {
 		path = stack.FindHandlePath(handle, skip)
 	}
 	destructive := stack.IsAlone() // give general permission to delete reduced nodes?
-	for path = range paths {       // now reduce along every path
-		stacks := stack.reduce(handleNodes, destructive)
+	for _, path = range paths {    // now reduce along every path
+		stacks := stack.reduce(path, destructive)
 		ret = append(ret, stacks...) // collect returned stack heads
 	}
 	if len(ret) > 0 { // if avail, replace 1st stack with this

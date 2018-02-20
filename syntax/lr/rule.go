@@ -2,6 +2,7 @@ package lr
 
 import (
 	"fmt"
+	"text/scanner"
 
 	"github.com/npillmayer/gotype/syntax/runtime"
 )
@@ -15,11 +16,18 @@ type Symbol interface {
 	GetID() int       // ID of non-terminals (and possibly terminals)
 }
 
+func symvalue(A Symbol) int {
+	if A.IsTerminal() {
+		return A.Token()
+	}
+	return A.GetID()
+}
+
 // A type for rules of a grammar
 type Rule struct {
 	lhs   []Symbol      // symbols of left hand side
 	rhs   []Symbol      // symbols of right hand side
-	items map[int]*item // Earley items for this rule
+	items map[int]*item // Earley items for this rule, int = dot position
 }
 
 func newRule() *Rule {
@@ -58,7 +66,7 @@ func (r *Rule) startItem() (*item, Symbol) {
 	var i *item
 	if i = r.items[0]; i == nil {
 		i = &item{rule: r, dot: 0}
-		r.items[0] = i // store this item
+		r.items[0] = i // store this item for dot-position = 0
 	}
 	if r.isEps() {
 		return i, nil
@@ -72,9 +80,9 @@ func (r *Rule) findOrCreateItem(dot int) (*item, Symbol) {
 		return nil, nil
 	}
 	var i *item
-	if i = r.items[dot]; i == nil {
+	if i = r.items[dot]; i == nil { // not found => create item for dot position
 		i = &item{rule: r, dot: dot}
-		r.items[dot] = i
+		r.items[dot] = i // remember the new item
 	}
 	return i, i.peekSymbol()
 }
@@ -124,21 +132,31 @@ func (i *item) advance() (*item, Symbol) {
 
 // Type for a grammar. Usually created using a GrammarBuilder.
 type Grammar struct {
-	name    string
-	rules   []*Rule
-	symbols *runtime.SymbolTable
-	epsilon Symbol
+	Name         string         // a grammar has a name, for documentation only
+	rules        []*Rule        // grammar productions, first one is start rule
+	epsilon      Symbol         // a special symbol representing epsilon
+	nonterminals map[int]Symbol // all non-terminals
+	terminals    map[int]Symbol // all terminals
+	//symbols *runtime.SymbolTable
 }
 
 func newLRGrammar(gname string) *Grammar {
 	g := &Grammar{}
-	g.name = gname
+	g.Name = gname
 	g.rules = make([]*Rule, 0, 30)
-	g.symbols = runtime.NewSymbolTable(newLRSymbol)
+	//g.symbols = runtime.NewSymbolTable(newLRSymbol)
+	g.terminals = make(map[int]Symbol)
+	g.nonterminals = make(map[int]Symbol)
 	eps := newLRSymbol("_eps").(*lrSymbol)
 	eps.SetType(epsilonType)
+	eps.Id = 0
 	g.epsilon = eps
 	return g
+}
+
+// Get the symbol representing epsilon for this grammar. Treat as read-only.
+func (g *Grammar) Epsilon() Symbol {
+	return g.epsilon
 }
 
 func (g *Grammar) findNonTermRules(sym Symbol) *itemSet {
@@ -147,7 +165,7 @@ func (g *Grammar) findNonTermRules(sym Symbol) *itemSet {
 		if r.lhs[0] == sym {
 			i, _ := r.startItem()
 			if i == nil {
-				T.Error("i == NIL")
+				T.Error("inconsistency? start-item == NIL")
 			}
 			iset.Add(i)
 		}
@@ -165,33 +183,96 @@ func (g *Grammar) matchesRHS(handle []Symbol, prefix bool) (*Rule, int) {
 }
 
 /*
-Iterate over all non-terminal symbols of the grammar, given the symbol's
-literal and the symbol itself. Return values of the mapper function for
-all non-terminal is returned as an array.
+Iterate over all non-terminal symbols of the grammar.
+Return values of the mapper function for all non-terminals are returned as an
+array.
 */
-func (g *Grammar) EachNonTerminal(mapper func(symname string, sym Symbol) interface{}) []interface{} {
-	var r []interface{} = make([]interface{}, 0, len(g.rules))
-	for k, v := range g.symbols.Table {
-		A := v.(Symbol)
-		if !A.IsTerminal() {
-			r = append(r, mapper(k, A))
-		}
+func (g *Grammar) EachNonTerminal(mapper func(sym Symbol) interface{}) []interface{} {
+	var r []interface{} = make([]interface{}, 0, len(g.nonterminals))
+	//for k, v := range g.symbols.Table {
+	for _, A := range g.nonterminals {
+		//A := v.(Symbol)
+		r = append(r, mapper(A))
+		//if !A.IsTerminal() {
+		//	r = append(r, mapper(k, A))
+		//}
 	}
 	return r
 }
 
-// Debugging helper: dump symbols and rules to stdout
-func (g *Grammar) Dump() {
-	fmt.Printf("--- %s --------------------------------------------\n", g.name)
-	fmt.Printf("epsilon  = %d\n", g.epsilon.GetID())
-	g.symbols.Each(func(name string, sym runtime.Symbol) {
-		A := sym.(Symbol)
-		if A.IsTerminal() {
-			fmt.Printf("T  %5s = %d\n", name, A.Token())
-		} else {
-			fmt.Printf("N  %5s = %d\n", name, A.GetID())
+/*
+Iterate over all terminals of the grammar.
+Return values of the mapper function for all terminals are returned as an array.
+*/
+func (g *Grammar) EachTerminal(mapper func(sym Symbol) interface{}) []interface{} {
+	var r []interface{} = make([]interface{}, 0, len(g.terminals))
+	for _, B := range g.terminals {
+		r = append(r, mapper(B))
+	}
+	return r
+}
+
+/*
+Iterate over all symbols of the grammar.
+Return values of the mapper function are returned as an array.
+*/
+func (g *Grammar) EachSymbol(mapper func(sym Symbol) interface{}) []interface{} {
+	var r []interface{} = make([]interface{}, 0, len(g.terminals)+len(g.nonterminals))
+	for _, A := range g.nonterminals {
+		r = append(r, mapper(A))
+	}
+	for _, B := range g.terminals {
+		r = append(r, mapper(B))
+	}
+	return r
+}
+
+func (g *Grammar) resolveOrDefineNonTerminal(s string) Symbol {
+	for _, nt := range g.nonterminals {
+		if lrsym, ok := nt.(*lrSymbol); ok {
+			if lrsym.GetName() == s {
+				return lrsym
+			}
 		}
-	})
+	}
+	lrsym := newLRSymbol(s)
+	g.nonterminals[lrsym.GetID()] = lrsym
+	return lrsym
+}
+
+func (g *Grammar) resolveOrDefineTerminal(s string) Symbol {
+	for _, nt := range g.terminals {
+		if lrsym, ok := nt.(*lrSymbol); ok {
+			if lrsym.GetName() == s {
+				return lrsym
+			}
+		}
+	}
+	lrsym := newLRSymbol(s)
+	g.terminals[lrsym.GetID()] = lrsym
+	return lrsym
+}
+
+// Debugging helper: dump symbols and rules to stdout.
+func (g *Grammar) Dump() {
+	fmt.Printf("--- %s --------------------------------------------\n", g.Name)
+	fmt.Printf("epsilon  = %d\n", g.epsilon.GetID())
+	for _, A := range g.nonterminals {
+		fmt.Printf("N  %v = %d\n", A, A.GetID())
+	}
+	for _, A := range g.terminals {
+		fmt.Printf("T  %v = %d\n", A, A.Token())
+	}
+	/*
+		g.symbols.Each(func(name string, sym runtime.Symbol) {
+			A := sym.(Symbol)
+			if A.IsTerminal() {
+				fmt.Printf("T  %5s = %d\n", name, A.Token())
+			} else {
+				fmt.Printf("N  %5s = %d\n", name, A.GetID())
+			}
+		})
+	*/
 	for k, r := range g.rules {
 		fmt.Printf("%3d: %s\n", k, r.String())
 	}
@@ -201,13 +282,20 @@ func (g *Grammar) Dump() {
 // ---------------------------------------------------------------------------
 
 const (
-	nonTermType  = 100
-	terminalType = 1000
-	epsilonType  = 999
+	epsilonType  = 0
+	terminalType = 1
+	nonTermType  = -1000 // IDs of non-terminals MUST be below this !
 )
 
+// Serial no. for lrSymbol IDs
+var lrSymbolIDSerial int = nonTermType - 1
+
+// An internal symbol type used by the grammar builder.
+// Clients may supply their own symbol type, but should be able to
+// rely on a standard implementation, if they do not bring one themselves.
 type lrSymbol struct {
 	*runtime.StdSymbol
+	tokval int
 }
 
 func (lrsym *lrSymbol) String() string {
@@ -215,18 +303,20 @@ func (lrsym *lrSymbol) String() string {
 }
 
 func (lrsym *lrSymbol) IsTerminal() bool {
-	return lrsym.GetType() >= epsilonType
+	return lrsym.GetType() == terminalType
 }
 
 func (lrsym *lrSymbol) Token() int {
-	return lrsym.GetType()
+	return lrsym.tokval
 }
 
-func newLRSymbol(s string) runtime.Symbol {
-	sym := runtime.NewStdSymbol(s)
-	st := sym.(*runtime.StdSymbol)
-	st.Symtype = nonTermType
-	return &lrSymbol{st}
+func newLRSymbol(s string) Symbol {
+	stdsym := runtime.NewStdSymbol(s)
+	sym := &lrSymbol{stdsym.(*runtime.StdSymbol), 0}
+	sym.Symtype = nonTermType
+	sym.Id = lrSymbolIDSerial // -1001, -1002, -1003, ...
+	lrSymbolIDSerial--
+	return sym
 }
 
 // === Builder ===============================================================
@@ -278,9 +368,8 @@ func (gb *GrammarBuilder) appendRule(r *Rule) {
 // Start a rule given the left hand side symbol (non-terminal).
 func (gb *GrammarBuilder) LHS(s string) *RuleBuilder {
 	rb := gb.newRuleBuilder()
-	sym, _ := rb.gb.g.symbols.ResolveOrDefineSymbol(s)
-	lrs := sym.(*lrSymbol)
-	rb.rule.lhs = append(rb.rule.lhs, lrs)
+	sym := rb.gb.g.resolveOrDefineNonTerminal(s)
+	rb.rule.lhs = append(rb.rule.lhs, sym)
 	return rb
 }
 
@@ -296,19 +385,44 @@ type RuleBuilder struct {
 }
 
 // Append a non-terminal to the builder.
+// The internal symbol created for the non-terminal will have an ID
+// less than -1000.
 func (rb *RuleBuilder) N(s string) *RuleBuilder {
-	sym, _ := rb.gb.g.symbols.ResolveOrDefineSymbol(s)
+	sym := rb.gb.g.resolveOrDefineNonTerminal(s)
+	rb.rule.rhs = append(rb.rule.rhs, sym)
+	return rb
+}
+
+/*
+Append a terminal to the builder.
+The symbol created for the terminal must not have a token value
+<= -1000 and not have value 0 or -1.
+This is due to the convention of the stdlib-package text/parser, which
+uses token values > 0 for single-rune tokens and token values < 0 for
+common language elements like identifiers, strings, numbers, etc.
+(it is assumed that no symbol set will require more than 1000 of such
+language elements). The method call will panic if this restriction is
+violated.
+*/
+func (rb *RuleBuilder) T(s string, tokval int) *RuleBuilder {
+	if tokval <= nonTermType {
+		T.Errorf("illegal token value parameter (%d), must be > %d", tokval, nonTermType)
+		panic(fmt.Sprintf("illegal token value parameter (%d)", tokval))
+	}
+	sym := rb.gb.g.resolveOrDefineTerminal(s)
 	lrs := sym.(*lrSymbol)
+	lrs.Symtype = terminalType
+	lrs.tokval = tokval
 	rb.rule.rhs = append(rb.rule.rhs, lrs)
 	return rb
 }
 
-// Append a terminal to the builder.
-func (rb *RuleBuilder) T(s string, tokval int) *RuleBuilder {
-	sym, _ := rb.gb.g.symbols.ResolveOrDefineSymbol(s)
-	lrs := sym.(*lrSymbol)
-	lrs.Symtype = terminalType + tokval
-	rb.rule.rhs = append(rb.rule.rhs, lrs)
+// Append your own symbol objects to the builder to extend the RHS of a rule.
+// Clients will have to make sure no different 2 symbols have the same ID
+// and no symbol ID equals a token value of a non-terminal. This restriction
+// is necessary to help produce correct GOTO tables for LR-parsing.
+func (rb *RuleBuilder) AppendSymbol(sym Symbol) *RuleBuilder {
+	rb.rule.rhs = append(rb.rule.rhs, sym)
 	return rb
 }
 
@@ -326,7 +440,7 @@ func (rb *RuleBuilder) Epsilon() *Rule {
 // This completes the rule (no other builder calls should be made
 // for this rule).
 func (rb *RuleBuilder) EOF() *Rule {
-	rb.T("#eof", 0)
+	rb.T("#eof", scanner.EOF)
 	return rb.End()
 }
 
