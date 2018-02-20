@@ -23,8 +23,9 @@ func symvalue(A Symbol) int {
 	return A.GetID()
 }
 
-// A type for rules of a grammar
+// A type for rules of a grammar. Rules cannot be shared between grammars.
 type Rule struct {
+	no    int           // order number of this rule within a grammar
 	lhs   []Symbol      // symbols of left hand side
 	rhs   []Symbol      // symbols of right hand side
 	items map[int]*item // Earley items for this rule, int = dot position
@@ -137,14 +138,12 @@ type Grammar struct {
 	epsilon      Symbol         // a special symbol representing epsilon
 	nonterminals map[int]Symbol // all non-terminals
 	terminals    map[int]Symbol // all terminals
-	//symbols *runtime.SymbolTable
 }
 
 func newLRGrammar(gname string) *Grammar {
 	g := &Grammar{}
 	g.Name = gname
 	g.rules = make([]*Rule, 0, 30)
-	//g.symbols = runtime.NewSymbolTable(newLRSymbol)
 	g.terminals = make(map[int]Symbol)
 	g.nonterminals = make(map[int]Symbol)
 	eps := newLRSymbol("_eps").(*lrSymbol)
@@ -154,20 +153,30 @@ func newLRGrammar(gname string) *Grammar {
 	return g
 }
 
-// Get the symbol representing epsilon for this grammar. Treat as read-only.
+// Get the symbol representing epsilon for this grammar. Treat as read-only!
 func (g *Grammar) Epsilon() Symbol {
 	return g.epsilon
 }
 
-func (g *Grammar) findNonTermRules(sym Symbol) *itemSet {
+// Get the symbol representing epsilon for this grammar. Treat as read-only!
+func (g *Grammar) Rule(no int) *Rule {
+	if no < 0 || no >= len(g.rules) {
+		return nil
+	}
+	return g.rules[no]
+}
+
+func (g *Grammar) findNonTermRules(sym Symbol, includeEpsRules bool) *itemSet {
 	iset := newItemSet()
 	for _, r := range g.rules {
 		if r.lhs[0] == sym {
-			i, _ := r.startItem()
-			if i == nil {
-				T.Error("inconsistency? start-item == NIL")
+			if !r.isEps() || includeEpsRules {
+				i, _ := r.startItem()
+				if i == nil {
+					T.Error("inconsistency? start-item == NIL")
+				}
+				iset.Add(i)
 			}
-			iset.Add(i)
 		}
 	}
 	return iset
@@ -189,13 +198,8 @@ array.
 */
 func (g *Grammar) EachNonTerminal(mapper func(sym Symbol) interface{}) []interface{} {
 	var r []interface{} = make([]interface{}, 0, len(g.nonterminals))
-	//for k, v := range g.symbols.Table {
 	for _, A := range g.nonterminals {
-		//A := v.(Symbol)
 		r = append(r, mapper(A))
-		//if !A.IsTerminal() {
-		//	r = append(r, mapper(k, A))
-		//}
 	}
 	return r
 }
@@ -263,18 +267,8 @@ func (g *Grammar) Dump() {
 	for _, A := range g.terminals {
 		fmt.Printf("T  %v = %d\n", A, A.Token())
 	}
-	/*
-		g.symbols.Each(func(name string, sym runtime.Symbol) {
-			A := sym.(Symbol)
-			if A.IsTerminal() {
-				fmt.Printf("T  %5s = %d\n", name, A.Token())
-			} else {
-				fmt.Printf("N  %5s = %d\n", name, A.GetID())
-			}
-		})
-	*/
-	for k, r := range g.rules {
-		fmt.Printf("%3d: %s\n", k, r.String())
+	for _, r := range g.rules {
+		fmt.Printf("%3d: %s\n", r.no, r.String())
 	}
 	fmt.Println("-------------------------------------------------------")
 }
@@ -294,8 +288,8 @@ var lrSymbolIDSerial int = nonTermType - 1
 // Clients may supply their own symbol type, but should be able to
 // rely on a standard implementation, if they do not bring one themselves.
 type lrSymbol struct {
-	*runtime.StdSymbol
-	tokval int
+	*runtime.StdSymbol     // TODO: create our own (do not couple to StdSymbol)
+	tokval             int // for terminals
 }
 
 func (lrsym *lrSymbol) String() string {
@@ -332,7 +326,7 @@ Grammars are constructed using a GrammarBuilder.
     b.LHS("D").T("d", 3).End()         // D  ->  d
     b.LHS("D").Epsilon()               // D  ->
 
-This results in the following grammar:  b.Grammar().Dump() :
+This results in the following grammar:  b.Grammar().Dump()
 
   0: [S] ::= [A a #eof]
   1: [A] ::= [B D]
@@ -362,6 +356,8 @@ func (gb *GrammarBuilder) newRuleBuilder() *RuleBuilder {
 }
 
 func (gb *GrammarBuilder) appendRule(r *Rule) {
+	rno := len(gb.g.rules)
+	r.no = rno
 	gb.g.rules = append(gb.g.rules, r)
 }
 

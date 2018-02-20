@@ -26,8 +26,16 @@ func TestParser1(t *testing.T) {
 	ga := lr.NewGrammarAnalysis(g)
 	lrgen := lr.NewLRTableGenerator(ga)
 	lrgen.CreateTables()
-	parser := Create(g, lrgen.GotoTable(), lrgen.ActionTable())
+	parser := Create(g, lrgen.GotoTable(), lrgen.ActionTable(), lrgen.AcceptingStates())
 	scanner := NewScanner(nil)
 	traceOn()
 	parser.Parse(lrgen.CFSM().S0, scanner)
+	/*
+		lrgen.CFSM().CFSM2GraphViz("/tmp/cfsm-" + "G1" + ".dot")
+		tmp, _ := ioutil.TempFile("", "lr_")
+		T.Infof("writing HTML to %s", tmp.Name())
+		lr.ActionTableAsHTML(lrgen, tmp)
+		lr.GotoTableAsHTML(lrgen, tmp)
+		tmp.Close()
+	*/
 }

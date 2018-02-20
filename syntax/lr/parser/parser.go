@@ -78,7 +78,7 @@ http://www.cse.unt.edu/~sweany/CSCE3650/HANDOUTS/LRParseAlg.pdf
 var testscanner scanner.Scanner
 
 func init() {
-	const src = `a b a a`
+	const src = `+a b a a`
 	testscanner.Init(strings.NewReader(src))
 	testscanner.Filename = "example"
 }
@@ -112,14 +112,21 @@ func (s *Scanner) NextToken(expected []int) (int, interface{}) {
 }
 
 type Parser struct {
-	G       *lr.Grammar
-	dss     *dss.DSSRoot
-	gotoT   *sparse.IntMatrix
-	actionT *sparse.IntMatrix
+	G         *lr.Grammar
+	dss       *dss.DSSRoot      // stack
+	gotoT     *sparse.IntMatrix // GOTO table
+	actionT   *sparse.IntMatrix // ACTION table
+	accepting []int             // slice of accepting states
 }
 
-func Create(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntMatrix) *Parser {
-	parser := &Parser{G: g, gotoT: gotoTable, actionT: actionTable}
+func Create(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntMatrix,
+	acceptingStates []int) *Parser {
+	parser := &Parser{
+		G:         g,
+		gotoT:     gotoTable,
+		actionT:   actionTable,
+		accepting: acceptingStates,
+	}
 	return parser
 }
 
@@ -135,6 +142,7 @@ func (p *Parser) Parse(S *lr.CFSMState, scanner *Scanner) {
 	p.dss = dss.NewRoot("G", -1)    // forget existing one, if present
 	start := dss.NewStack(p.dss)    // create first stack instance in DSS
 	start.Push(S.ID, p.G.Epsilon()) // push the start state onto the stack
+	// http://www.cse.unt.edu/~sweany/CSCE3650/HANDOUTS/LRParseAlg.pdf
 	for {
 		tval, token := scanner.NextToken(nil)
 		if token == nil {
@@ -142,29 +150,41 @@ func (p *Parser) Parse(S *lr.CFSMState, scanner *Scanner) {
 		}
 		T.Debugf("got token %v from scanner", token)
 		activeStacks := p.dss.ActiveStacks()
-		T.P("lr", "parse").Debugf("currently %d active stacks", len(activeStacks))
+		T.P("lr", "parse").Debugf("currently %d active stack(s)", len(activeStacks))
 		for _, stack := range activeStacks {
 			stateID, sym := stack.Peek()
 			T.P("dss", "TOS").Debugf("state = %d, symbol = %v", stateID, sym)
 			action1, action2 := p.actionT.Values(stateID, tval)
 			if action1 == p.actionT.NullValue() {
-				T.Info("no entry in ACTION table found")
+				T.Info("no entry in ACTION table found, parser dies")
+				stack.Die()
 			} else {
-				if action2 != 0 {
-					T.Info("conflict, resolving with stack.fork()")
+				conflict := action2 != 0 // conflict, resolve with stack.fork()
+				if conflict {
+					T.Info("conflict")
 				}
 				if action1 < 0 {
-					T.Infof("reduce %d", action1)
+					p.reduce(p.G.Rule(int(-action1)), stack)
 				} else {
-					T.Info("shift")
+					p.shift(tval, stack)
 				}
 				if action2 < 0 {
-					T.Infof("reduce %d", action2)
+					p.reduce(p.G.Rule(int(-action2)), stack)
 				} else if action2 > 0 {
-					T.Info("shift")
+					p.shift(tval, stack)
 				}
 			}
 		}
 		break
 	}
+}
+
+func (p *Parser) shift(tokval int, stack *dss.Stack) int {
+	T.Infof("shift %v", tokval)
+	return 0
+}
+
+func (p *Parser) reduce(rule *lr.Rule, stack *dss.Stack) int {
+	T.Infof("reduce %v", rule)
+	return 0
 }
