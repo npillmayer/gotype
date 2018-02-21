@@ -39,6 +39,16 @@ func newRule() *Rule {
 	return r
 }
 
+/*
+Get the right hand side of a rule as a shallow copy. Clients should treat
+it as read-only.
+*/
+func (r *Rule) GetRHS() []Symbol {
+	dup := make([]Symbol, len(r.rhs))
+	copy(dup, r.rhs)
+	return dup
+}
+
 // Check if two RHS are identical. If parameter prefix is true, this function
 // returns true when handle is a prefix of r, even if handle is of length 0.
 func (r *Rule) eqRHS(handle []Symbol, prefix bool) bool {
@@ -133,11 +143,12 @@ func (i *item) advance() (*item, Symbol) {
 
 // Type for a grammar. Usually created using a GrammarBuilder.
 type Grammar struct {
-	Name         string         // a grammar has a name, for documentation only
-	rules        []*Rule        // grammar productions, first one is start rule
-	epsilon      Symbol         // a special symbol representing epsilon
-	nonterminals map[int]Symbol // all non-terminals
-	terminals    map[int]Symbol // all terminals
+	Name             string         // a grammar has a name, for documentation only
+	rules            []*Rule        // grammar productions, first one is start rule
+	epsilon          Symbol         // a special symbol representing epsilon
+	nonterminals     map[int]Symbol // all non-terminals
+	terminals        map[int]Symbol // all terminals
+	terminalsByToken map[int]Symbol // terminals, indexed by token value
 }
 
 func newLRGrammar(gname string) *Grammar {
@@ -146,6 +157,7 @@ func newLRGrammar(gname string) *Grammar {
 	g.rules = make([]*Rule, 0, 30)
 	g.terminals = make(map[int]Symbol)
 	g.nonterminals = make(map[int]Symbol)
+	g.terminalsByToken = make(map[int]Symbol)
 	eps := newLRSymbol("_eps").(*lrSymbol)
 	eps.SetType(epsilonType)
 	eps.Id = 0
@@ -164,6 +176,10 @@ func (g *Grammar) Rule(no int) *Rule {
 		return nil
 	}
 	return g.rules[no]
+}
+
+func (g *Grammar) GetTerminalSymbolFor(tokenvalue int) Symbol {
+	return g.terminalsByToken[tokenvalue]
 }
 
 func (g *Grammar) findNonTermRules(sym Symbol, includeEpsRules bool) *itemSet {
@@ -244,7 +260,7 @@ func (g *Grammar) resolveOrDefineNonTerminal(s string) Symbol {
 	return lrsym
 }
 
-func (g *Grammar) resolveOrDefineTerminal(s string) Symbol {
+func (g *Grammar) resolveOrDefineTerminal(s string, tokval int) Symbol {
 	for _, nt := range g.terminals {
 		if lrsym, ok := nt.(*lrSymbol); ok {
 			if lrsym.GetName() == s {
@@ -252,8 +268,15 @@ func (g *Grammar) resolveOrDefineTerminal(s string) Symbol {
 			}
 		}
 	}
-	lrsym := newLRSymbol(s)
+	lrsym := newLRSymbol(s).(*lrSymbol)
+	lrsym.Symtype = terminalType
+	lrsym.tokval = tokval
 	g.terminals[lrsym.GetID()] = lrsym
+	if g.terminalsByToken[tokval] != nil {
+		T.Errorf("duplicate terminal symbol for token value = %d", tokval)
+		// proceed with fingers crossed
+	}
+	g.terminalsByToken[tokval] = lrsym
 	return lrsym
 }
 
@@ -405,10 +428,8 @@ func (rb *RuleBuilder) T(s string, tokval int) *RuleBuilder {
 		T.Errorf("illegal token value parameter (%d), must be > %d", tokval, nonTermType)
 		panic(fmt.Sprintf("illegal token value parameter (%d)", tokval))
 	}
-	sym := rb.gb.g.resolveOrDefineTerminal(s)
+	sym := rb.gb.g.resolveOrDefineTerminal(s, tokval)
 	lrs := sym.(*lrSymbol)
-	lrs.Symtype = terminalType
-	lrs.tokval = tokval
 	rb.rule.rhs = append(rb.rule.rhs, lrs)
 	return rb
 }
