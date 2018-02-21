@@ -9,6 +9,10 @@ import (
 
 // --- Rules -----------------------------------------------------------------
 
+// REMARK: the left hand side of rules is an array, although they consist
+// of just one symbol. This is due to the fact that I intended to have
+// context sensitive rules, too (not for LR-parsing of course).
+
 // An interface for symbols of grammars, i.e. terminals and non-terminals.
 type Symbol interface {
 	IsTerminal() bool // is this symbol a terminal?
@@ -47,6 +51,13 @@ func (r *Rule) GetRHS() []Symbol {
 	dup := make([]Symbol, len(r.rhs))
 	copy(dup, r.rhs)
 	return dup
+}
+
+/*
+Get the LHS symbol of a rule.
+*/
+func (r *Rule) GetLHSSymbol() Symbol {
+	return r.lhs[0]
 }
 
 // Check if two RHS are identical. If parameter prefix is true, this function
