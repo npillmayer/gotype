@@ -47,6 +47,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 package sparse
 
+import "fmt"
+
 /*
 Type for a spare matrix of integer values. Construct with
 
@@ -118,7 +120,7 @@ func (m *IntMatrix) Value(i, j int) int32 {
 	for _, t := range m.values {
 		if !t.storedLeftOf(i, j) { // have skipped all lesser indices
 			if t.storedAt(i, j) {
-				return t.value.first()
+				return t.value.a
 			}
 			break
 		}
@@ -131,7 +133,7 @@ func (m *IntMatrix) Values(i, j int) (int32, int32) {
 	for _, t := range m.values {
 		if !t.storedLeftOf(i, j) { // have skipped all lesser indices
 			if t.storedAt(i, j) {
-				return t.value.first(), t.value.second()
+				return t.value.a, t.value.b
 			}
 			break
 		}
@@ -157,7 +159,7 @@ func (m *IntMatrix) setOrAdd(i, j int, value int32, doAdd bool) *IntMatrix {
 					v := m.values[k].value
 					m.values[k].value = addIntValue(v, value, m.nullval) // add new value
 				} else {
-					m.values[k].value = newIntPair(value, 0) // set new value
+					m.values[k].value = newIntPair(value, m.nullval) // set new value
 				}
 				return m // and done
 			}
@@ -165,7 +167,7 @@ func (m *IntMatrix) setOrAdd(i, j int, value int32, doAdd bool) *IntMatrix {
 		}
 		at++
 	}
-	tnew := triplet{row: i, col: j, value: newIntPair(value, 0)}
+	tnew := triplet{row: i, col: j, value: newIntPair(value, m.nullval)}
 	// the following 3 lines have to work for k being the right edge of v or not
 	m.values = append(m.values, tnew)    // make room
 	copy(m.values[at+1:], m.values[at:]) // copy remainder values one index to right
@@ -174,14 +176,15 @@ func (m *IntMatrix) setOrAdd(i, j int, value int32, doAdd bool) *IntMatrix {
 }
 
 func addIntValue(v intPair, n int32, nullval int32) intPair {
-	if v.first() == nullval {
-		return newIntPair(n, 0)
-	} else if v.second() == nullval {
-		return v.setSecond(n)
+	if v.a == nullval {
+		v.a = n
+	} else if v.b == nullval {
+		v.b = n
 	} else {
 		// entry is full. what to do?
-		return v.setSecond(n) // overwrite second
+		v.b = n // overwrite second
 	}
+	return v
 }
 
 func (t *triplet) storedLeftOf(i, j int) bool {
@@ -193,28 +196,15 @@ func (t *triplet) storedAt(i, j int) bool {
 }
 
 // we will store 2 int32 in one position
-type intPair int64
+type intPair struct {
+	a int32
+	b int32
+}
+
+func (pr intPair) String() string {
+	return fmt.Sprintf("[%d,%d]", pr.a, pr.b)
+}
 
 func newIntPair(a, b int32) intPair {
-	pr := int64(b)
-	pr = pr<<32 + int64(a)
-	return intPair(pr)
-}
-
-func (pr intPair) first() int32 {
-	return int32(pr)
-}
-
-func (pr intPair) second() int32 {
-	return int32(pr >> 32)
-}
-
-func (pr intPair) setFirst(a int32) intPair {
-	pr = pr + intPair(int64(a))
-	return pr
-}
-
-func (pr intPair) setSecond(b int32) intPair {
-	pr = pr + intPair(int64(b)<<32)
-	return pr
+	return intPair{a, b}
 }
