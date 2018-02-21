@@ -28,7 +28,7 @@ The main API of this DSS consists of
 	stack         = NewStack(root)
 	state, symbol = stack.Peek()                 // peek at top state and symbol of stack
 	newstack      = stack.Fork()                 // duplicate stack
-	stacks        = stack.Reduce(handle, false)  // reduce with RHS of a production
+	stacks        = stack.Reduce(handle)         // reduce with RHS of a production
 	stack         = stack.Push(state, symbol)    // transition to new parse state, i.e. a shift
 	                stack.Die()                  // end of life for this stack
 

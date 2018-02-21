@@ -624,6 +624,10 @@ then
 
 The table is returned as a sparse matrix, where every entry may consist of up
 to 2 entries, thus allowing for shift/reduce- or reduce/reduce-conflicts.
+
+Shift entries are represented as -1.  Reduce entries are encoded as the
+ordinal no. of the grammar rule to reduce. 0 means reducing the start rule,
+i.e., accept.
 */
 func (lrgen *LRTableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bool) *sparse.IntMatrix {
 	states := lrgen.dfa.states.Iterator()
@@ -634,15 +638,14 @@ func (lrgen *LRTableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 
 			i, _ := v.(*item)
 			A := i.peekSymbol()
 			prefix := i.getPrefix()
-			//sid := state.ID
 			T.Debugf("symbol at dot = %v, prefix = %v", A, prefix)
 			if A != nil && A.IsTerminal() { // create a shift entry
 				if slr1 {
 					T.Debugf("    creating shift action entry --%v-->", A)
-					actions.Add(state.ID, A.Token(), 1) // general shift (no lookahead)
+					actions.Add(state.ID, A.Token(), -1) // general shift (no lookahead)
 				} else {
 					T.Debug("    creating shift action entry")
-					actions.Add(state.ID, 1, 1) // general shift (no lookahead)
+					actions.Add(state.ID, 1, -1) // general shift (no lookahead)
 				}
 			}
 			if len(prefix) > 0 && A == nil { // we are at the end of a non-eps rule
@@ -652,12 +655,15 @@ func (lrgen *LRTableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 
 						lookaheads := lrgen.ga.Follow(rule.lhs[0])
 						T.Debugf("    Follow(%v) = %v", rule.lhs[0], lookaheads)
 						for _, la := range lookaheads {
-							actions.Add(state.ID, la, int32(-inx)) // reduce rule[inx]
+							actions.Add(state.ID, la, int32(inx))  // reduce rule[inx]
+							if rule.no == 0 && la == epsilonType { // start rule reduced
+								T.Debugf("    accepting") // TODO
+							}
 							T.Debugf("    creating reduce_%d action entry @ %v for %v", inx, la, rule)
 						}
 					} else {
 						T.Debugf("    creating reduce_%d action entry for %v", inx, rule)
-						actions.Add(state.ID, 1, int32(-inx)) // reduce rule[inx]
+						actions.Add(state.ID, 1, int32(inx)) // reduce rule[inx]
 					}
 				}
 			}
