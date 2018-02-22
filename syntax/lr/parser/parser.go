@@ -243,15 +243,15 @@ func (p *Parser) reducesAndShiftsForToken(stack *dss.Stack, tokval int) {
 				headcnt = 2
 			}
 			for i := 0; i < headcnt; i++ {
-				if actions[0] >= 0 { // reduce action
-					stacks := p.reduce(stateID, p.G.Rule(int(actions[0])), heads[0])
+				if actions[i] >= 0 { // reduce action
+					stacks := p.reduce(stateID, p.G.Rule(int(actions[i])), heads[i])
 					R = R.add(stacks...)
 				} else { // shift action
-					S = S.add(heads[0])
+					S = S.add(heads[i])
 				}
 			}
 		}
-		T.Debugf("%d shift operations in S", len(S))
+		T.Infof("%d shift operations in S", len(S))
 		for !S.empty() {
 			heads[0] = S.get()
 			p.shift(stateID, tokval, heads[0])
@@ -260,8 +260,8 @@ func (p *Parser) reducesAndShiftsForToken(stack *dss.Stack, tokval int) {
 }
 
 func (p *Parser) shift(stateID int, tokval int, stack *dss.Stack) []*dss.Stack {
-	T.Infof("shifting %v", tokenString(tokval))
 	nextstate := p.gotoT.Value(stateID, tokval)
+	T.Infof("shifting %v to %d", tokenString(tokval), nextstate)
 	terminal := p.G.GetTerminalSymbolFor(tokval)
 	head := stack.Push(int(nextstate), terminal)
 	return []*dss.Stack{head}

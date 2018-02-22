@@ -14,6 +14,48 @@ func traceOn() {
 	T.SetLevel(tracing.LevelDebug)
 }
 
+/*
+  0: S ::= [A a #eof]
+  1: A ::= [B]
+  2: A ::= [C]
+  3: B ::= [+]
+  4: B ::= []
+  5: C ::= [-]
+  6: C ::= []
+*/
+func makeGrammar1() *lr.Grammar { // un-ambiguous
+	b := lr.NewGrammarBuilder("G1")
+	b.LHS("S").N("A").T("a", scanner.Ident).EOF()
+	b.LHS("A").N("B").End()
+	b.LHS("A").N("C").End()
+	b.LHS("B").T("+", '+').End()
+	b.LHS("B").Epsilon()
+	b.LHS("C").T("-", '-').End()
+	b.LHS("C").Epsilon()
+	return b.Grammar()
+}
+
+/*
+https://cs.au.dk/~amoeller/papers/ambiguity/ambiguity.pdf  -> Example 4
+
+  0: S' ::= [S #eof]
+  1: S  ::= [A -]
+  2: S  ::= [+ B]
+  3: A  ::= [+ a]
+  4: B  ::= [a -]
+*/
+func makeGrammar2() *lr.Grammar { // ambiguous
+	b := lr.NewGrammarBuilder("G2")
+	b.LHS("S'").N("S").EOF()
+	b.LHS("S").N("A").T("-", '-').End()
+	b.LHS("S").T("+", '+').N("B").End()
+	b.LHS("A").T("+", '+').T("a", scanner.Ident).End()
+	b.LHS("B").T("a", scanner.Ident).T("-", '-').End()
+	return b.Grammar()
+}
+
+// --- Test Cases ------------------------------------------------------------
+
 func TestStackSet1(t *testing.T) {
 	set1 := newStackSet()
 	r := dss.NewRoot("G", -999)
@@ -26,16 +68,19 @@ func TestStackSet1(t *testing.T) {
 }
 
 func TestParser1(t *testing.T) {
-	b := lr.NewGrammarBuilder("G")
-	b.LHS("S").N("A").T("a", scanner.Ident).EOF()
-	b.LHS("A").N("B").End()
-	b.LHS("A").N("C").End()
-	b.LHS("B").T("+", '+').End()
-	b.LHS("B").Epsilon()
-	b.LHS("C").T("-", '-').End()
-	b.LHS("C").Epsilon()
-	g := b.Grammar()
-	g.Dump()
+	g := makeGrammar1()
+	ga := lr.NewGrammarAnalysis(g)
+	lrgen := lr.NewLRTableGenerator(ga)
+	lrgen.CreateTables()
+	parser := Create(g, lrgen.GotoTable(), lrgen.ActionTable(), lrgen.AcceptingStates())
+	r := strings.NewReader("a")
+	scanner := NewStdScanner(r)
+	parser.Parse(lrgen.CFSM().S0, scanner)
+}
+
+func TestParser2(t *testing.T) {
+	g := makeGrammar1()
+	//g.Dump()
 	ga := lr.NewGrammarAnalysis(g)
 	lrgen := lr.NewLRTableGenerator(ga)
 	lrgen.CreateTables()
@@ -45,11 +90,24 @@ func TestParser1(t *testing.T) {
 	//traceOn()
 	parser.Parse(lrgen.CFSM().S0, scanner)
 	/*
-		lrgen.CFSM().CFSM2GraphViz("/tmp/cfsm-" + "G1" + ".dot")
-		tmp, _ := ioutil.TempFile("", "lr_")
-		T.Infof("writing HTML to %s", tmp.Name())
-		lr.ActionTableAsHTML(lrgen, tmp)
-		lr.GotoTableAsHTML(lrgen, tmp)
-		tmp.Close()
+	   lrgen.CFSM().CFSM2GraphViz("/tmp/cfsm-" + "G1" + ".dot")
+	   tmp, _ := ioutil.TempFile("", "lr_")
+	   T.Infof("writing HTML to %s", tmp.Name())
+	   lr.ActionTableAsHTML(lrgen, tmp)
+	   lr.GotoTableAsHTML(lrgen, tmp)
+	   tmp.Close()
 	*/
+}
+
+func TestParser3(t *testing.T) {
+	g := makeGrammar2()
+	g.Dump()
+	ga := lr.NewGrammarAnalysis(g)
+	lrgen := lr.NewLRTableGenerator(ga)
+	lrgen.CreateTables()
+	parser := Create(g, lrgen.GotoTable(), lrgen.ActionTable(), lrgen.AcceptingStates())
+	r := strings.NewReader("+a-")
+	scanner := NewStdScanner(r)
+	//traceOn()
+	parser.Parse(lrgen.CFSM().S0, scanner)
 }

@@ -529,14 +529,18 @@ func parserTableAsHTML(lrgen *LRTableGenerator, tname string, table *sparse.IntM
 	})
 	io.WriteString(w, "</tr>\n")
 	states := lrgen.dfa.states.Iterator()
+	var td string // table cell
 	for states.Next() {
 		state := states.Value().(*CFSMState)
 		io.WriteString(w, fmt.Sprintf("<tr><td>state %d</td>\n", state.ID))
 		for _, A := range symvec {
-			v := table.Value(state.ID, symvalue(A))
-			td := fmt.Sprintf("%d", v)
-			if v == table.NullValue() {
+			v1, v2 := table.Values(state.ID, symvalue(A))
+			if v1 == table.NullValue() {
 				td = "&nbsp;"
+			} else if v2 == table.NullValue() {
+				td = fmt.Sprintf("%d", v1)
+			} else {
+				td = fmt.Sprintf("%d/%d", v1, v2)
 			}
 			io.WriteString(w, "<td>")
 			io.WriteString(w, td)
@@ -581,38 +585,6 @@ func (lrgen *LRTableGenerator) BuildSLR1ActionTable() *sparse.IntMatrix {
 }
 
 /*
-	states := lrgen.dfa.states.Iterator()
-	for states.Next() {
-		state := states.Value().(*CFSMState)
-		for _, v := range state.items.Values() {
-			T.Infof("item in s%d = %v", state.ID, v)
-			i, _ := v.(*item)
-			sym := i.peekSymbol()
-			prefix := i.getPrefix()
-			//sid := state.ID
-			T.Infof("    symbol at dot = %v, prefix = %v", sym, prefix)
-			if sym != nil && sym.IsTerminal() { // create a shift entry
-				T.Info("    creating shift action entry")
-				actions.Add(state.ID, 1, 1) // general shift (no lookahead)
-			}
-			if len(prefix) > 0 && sym == nil {
-				rule, inx := lrgen.g.matchesRHS(prefix, false)
-				if inx >= 0 { // create a reduce entry
-					lookaheads := lrgen.ga.Follow(rule.lhs[0])
-					T.Infof("    Follow(%v) = %v", rule.lhs[0], lookaheads)
-					for _, la := range lookaheads {
-						actions.Add(state.ID, la, int32(-inx)) // reduce rule[inx]
-						T.Infof("    creating reduce_%d action entry @ %v for %v", inx, la, rule)
-					}
-				}
-			}
-		}
-	}
-	return actions
-}
-*/
-
-/*
 For building an ACTION table we iterate over all the states of the CFSM.
 An inner loop iterates over alle the Earley items within a CFSM-state.
 If an item has a non-terminal immediately after the dot, we produce a shift
@@ -642,7 +614,10 @@ func (lrgen *LRTableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 
 			if A != nil && A.IsTerminal() { // create a shift entry
 				if slr1 {
 					T.Debugf("    creating shift action entry --%v-->", A)
-					actions.Add(state.ID, A.Token(), -1) // general shift (no lookahead)
+					a := actions.Value(state.ID, A.Token())
+					if a != -1 { // already shift present ?
+						actions.Add(state.ID, A.Token(), -1)
+					}
 				} else {
 					T.Debug("    creating shift action entry")
 					actions.Add(state.ID, 1, -1) // general shift (no lookahead)
