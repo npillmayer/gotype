@@ -359,6 +359,10 @@ func NewStack(root *DSSRoot) *Stack {
 	return s
 }
 
+func (stack *Stack) String() string {
+	return fmt.Sprintf("stack{tos=%v}", stack.tos)
+}
+
 // Calculate the height of a stack
 /*
 func (stack *Stack) calculateHeight() {
