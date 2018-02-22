@@ -3,6 +3,15 @@ Package parser implements a simple GLR-parser.
 It is mainly intended for Markdown parsing, but may be of use for
 other purposes, too.
 
+The parser relies on tables built from an lr.Grammar object (see
+package documentation there).
+
+Note: The API is still very much in flux! Currently it is something like
+
+	scanner := parser.NewStdScanner(strings.NewReader("some input text"))
+	p := parser.Create(grammar, gotoTable, actionTable, acceptingStates)
+	p.Parse(startState, scanner)
+
 ----------------------------------------------------------------------
 
 BSD License
@@ -45,7 +54,6 @@ package parser
 import (
 	"fmt"
 	"io"
-	"strings"
 	"text/scanner"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
@@ -75,42 +83,71 @@ regular expression to DFA
 http://www.cse.unt.edu/~sweany/CSCE3650/HANDOUTS/LRParseAlg.pdf
 */
 
-var testscanner scanner.Scanner
-
-func init() {
-	const src = `+a b a a`
-	testscanner.Init(strings.NewReader(src))
-	testscanner.Filename = "example"
-}
-
+// A token type, if you want to use it. Tokens of this type are returned
+// by StdScanner.
+//
+// Clients may provide their own token data type.
 type Token struct {
 	Value  int
-	Lexeme string
+	Lexeme []byte
 }
 
-func TokenString(tok int) string {
+// The scanner interface which the parser relies on.
+type Scanner interface {
+	MoveTo(position uint64)
+	NextToken(expected []int) (tokval int, token interface{})
+}
+
+func tokenString(tok int) string {
 	return scanner.TokenString(rune(tok))
 }
 
 func (token *Token) String() string {
-	return fmt.Sprintf("(%s:%d|\"%s\")", TokenString(token.Value), token.Value, token.Lexeme)
+	return fmt.Sprintf("(%s:%d|\"%s\")", tokenString(token.Value), token.Value,
+		string(token.Lexeme))
 }
 
-type Scanner struct {
+/*
+We provide a default scanner implementation, but clients are free (and
+even encouraged) to provide their own. This implementation is based on
+stdlib's text/scanner.
+*/
+type StdScanner struct {
+	reader io.Reader // will be io.ReaderAt in the future
+	scan   scanner.Scanner
 }
 
-func NewScanner(r io.Reader) *Scanner {
-	return &Scanner{}
+// Create a new default scanner from a Reader.
+func NewStdScanner(r io.Reader) *StdScanner {
+	s := &StdScanner{reader: r}
+	s.scan.Init(r)
+	s.scan.Filename = "Go symbols"
+	return s
 }
 
-func (s *Scanner) NextToken(expected []int) (int, interface{}) {
-	tok := testscanner.Scan()
-	token := &Token{Value: int(tok), Lexeme: testscanner.TokenText()}
-	T.P("token", TokenString(int(tok))).Debugf("scanned token at %s = \"%s\"",
-		testscanner.Position, testscanner.TokenText())
-	return int(tok), token
+// This is not functional for default scanners.
+// Default scanners allow sequential processing only.
+func (s *StdScanner) MoveTo(position uint64) {
+	T.Error("MoveTo() not yet supported by parser.StdScanner")
 }
 
+/*
+Get the next token scanned from the input source. Returns the token
+value and a user-defined token type.
+
+Clients may provide an array of token values, one of which is expected
+at the current parse position. For the default scanner, as of now this is
+unused. In the future it will help with error-repair.
+*/
+func (s *StdScanner) NextToken(expected []int) (int, interface{}) {
+	tokval := int(s.scan.Scan())
+	token := &Token{Value: tokval, Lexeme: []byte(s.scan.TokenText())}
+	T.P("token", tokenString(tokval)).Debugf("scanned token at %s = \"%s\"",
+		s.scan.Position, s.scan.TokenText())
+	return tokval, token
+}
+
+// The parser type. Create and initialize one with parser.Create(...)
 type Parser struct {
 	G         *lr.Grammar
 	dss       *dss.DSSRoot      // stack
@@ -119,6 +156,11 @@ type Parser struct {
 	accepting []int             // slice of accepting states
 }
 
+/*
+Create and initialize a parser object, providing information from an
+lr.LRTableGenerator. Clients have to provide a link to the grammar and the
+parser tables.
+*/
 func Create(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntMatrix,
 	acceptingStates []int) *Parser {
 	parser := &Parser{
@@ -134,7 +176,7 @@ func Create(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntM
 Start a new parse, given a start state and a scanner tokenizing the input.
 The parser must have been initialized.
 */
-func (p *Parser) Parse(S *lr.CFSMState, scanner *Scanner) {
+func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) {
 	if p.G == nil {
 		T.Error("parser not initialized")
 		return
@@ -144,47 +186,154 @@ func (p *Parser) Parse(S *lr.CFSMState, scanner *Scanner) {
 	start.Push(S.ID, p.G.Epsilon()) // push the start state onto the stack
 	// http://www.cse.unt.edu/~sweany/CSCE3650/HANDOUTS/LRParseAlg.pdf
 	for {
-		tval, token := scanner.NextToken(nil)
+		tval, token := scan.NextToken(nil)
 		if token == nil {
-			break // EOF
+			tval = scanner.EOF
 		}
 		T.Debugf("got token %v from scanner", token)
 		activeStacks := p.dss.ActiveStacks()
 		T.P("lr", "parse").Debugf("currently %d active stack(s)", len(activeStacks))
 		for _, stack := range activeStacks {
-			stateID, sym := stack.Peek()
-			T.P("dss", "TOS").Debugf("state = %d, symbol = %v", stateID, sym)
-			action1, action2 := p.actionT.Values(stateID, tval)
-			if action1 == p.actionT.NullValue() {
-				T.Info("no entry in ACTION table found, parser dies")
-				stack.Die()
-			} else {
-				conflict := action2 != 0 // conflict, resolve with stack.fork()
-				if conflict {
-					T.Info("conflict")
-				}
-				if action1 < 0 {
-					p.reduce(p.G.Rule(int(-action1)), stack)
-				} else {
-					p.shift(tval, stack)
-				}
-				if action2 < 0 {
-					p.reduce(p.G.Rule(int(-action2)), stack)
-				} else if action2 > 0 {
-					p.shift(tval, stack)
-				}
-			}
+			p.reducesAndShiftsForToken(stack, tval)
 		}
-		break
+		if p.checkAccepted() {
+			T.Errorln("ACCEPT")
+		}
+		if tval == scanner.EOF {
+			break
+		}
+		fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~~")
 	}
 }
 
-func (p *Parser) shift(tokval int, stack *dss.Stack) int {
-	T.Infof("shift %v", tokval)
-	return 0
+/*
+With a new lookahead (tokval): execute all possible reduces and shifts,
+cascading. The general outline is as follows:
+
+  1. do until no more reduces:
+     1.a if action(s) =
+          | shift: store stack and params in set S
+          | reduce: do reduce and store stack and params in set R
+          | conflict: shift/reduce or reduce/reduce
+             | do reduce(s) and store stack(s) in S or R respectively
+     1.b iterate again with R
+  2. shifts are now collected in S => execute
+*/
+func (p *Parser) reducesAndShiftsForToken(stack *dss.Stack, tokval int) {
+	var heads [2]*dss.Stack
+	var actions [2]int32
+	S := newStackSet() // will collect shift actions
+	R := newStackSet() // re-consider stack/action for reduce
+	R = R.add(stack)   // start with this active stack
+	for !R.empty() {
+		heads[0] = R.get()
+		stateID, sym := heads[0].Peek()
+		T.P("dss", "TOS").Debugf("state = %d, symbol = %v", stateID, sym)
+		actions[0], actions[1] = p.actionT.Values(stateID, tokval)
+		if actions[0] == p.actionT.NullValue() {
+			T.Info("no entry in ACTION table found, parser dies")
+			heads[0].Die()
+		} else {
+			headcnt := 1
+			T.Debugf("action 1 = %d, action 2 = %d", actions[0], actions[1])
+			conflict := actions[1] != p.actionT.NullValue()
+			if conflict { // shift/reduce or reduce/reduce conflict
+				T.Info("conflict, forking stack")
+				heads[1] = stack.Fork() // must happen before action 1 !
+				headcnt = 2
+			}
+			for i := 0; i < headcnt; i++ {
+				if actions[0] >= 0 { // reduce action
+					stacks := p.reduce(stateID, p.G.Rule(int(actions[0])), heads[0])
+					R = R.add(stacks...)
+				} else { // shift action
+					S = S.add(heads[0])
+				}
+			}
+		}
+		T.Debugf("%d shift operations in S", len(S))
+		for !S.empty() {
+			heads[0] = S.get()
+			p.shift(stateID, tokval, heads[0])
+		}
+	}
 }
 
-func (p *Parser) reduce(rule *lr.Rule, stack *dss.Stack) int {
+func (p *Parser) shift(stateID int, tokval int, stack *dss.Stack) []*dss.Stack {
+	T.Infof("shifting %v", tokenString(tokval))
+	nextstate := p.gotoT.Value(stateID, tokval)
+	terminal := p.G.GetTerminalSymbolFor(tokval)
+	head := stack.Push(int(nextstate), terminal)
+	return []*dss.Stack{head}
+}
+
+func (p *Parser) reduce(stateID int, rule *lr.Rule, stack *dss.Stack) []*dss.Stack {
 	T.Infof("reduce %v", rule)
-	return 0
+	handle := rule.GetRHS()
+	heads := stack.Reduce(handle)
+	if heads != nil {
+		T.Debugf("reduce resulted in %d stacks", len(heads))
+		lhs := rule.GetLHSSymbol()
+		for i, head := range heads {
+			state, _ := head.Peek()
+			T.Debugf("state on stack#%d is %d", i, state)
+			nextstate := p.gotoT.Value(state, lhs.GetID())
+			newhead := head.Push(int(nextstate), lhs)
+			T.Debugf("new head = %v", newhead)
+		}
+	}
+	return heads
+}
+
+func (p *Parser) checkAccepted() bool {
+	for _, stack := range p.dss.ActiveStacks() {
+		state, _ := stack.Peek()
+		for _, accstate := range p.accepting {
+			if state == accstate {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ---------------------------------------------------------------------------
+
+// helper: set of stacks
+type stackSet []*dss.Stack
+
+// TODO use sync.pool
+func newStackSet() stackSet {
+	s := make([]*dss.Stack, 0, 2)
+	return stackSet(s)
+}
+
+// add a stack to the set
+func (sset stackSet) add(stack ...*dss.Stack) stackSet {
+	return append(sset, stack...)
+}
+
+// get a stack from the set
+func (sset *stackSet) get() *dss.Stack {
+	l := len(*sset)
+	if l == 0 {
+		return nil
+	}
+	s := (*sset)[l-1]
+	(*sset)[l-1] = nil
+	*sset = (*sset)[:l-1]
+	return s
+}
+
+// is this set empty?
+func (sset stackSet) empty() bool {
+	return len(sset) == 0
+}
+
+// make a stack set empty
+func (sset *stackSet) clear() {
+	for k := len(*sset) - 1; k >= 0; k-- {
+		(*sset)[k] = nil
+	}
+	*sset = (*sset)[:1]
 }

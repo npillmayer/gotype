@@ -1,15 +1,28 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 	"text/scanner"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
 	"github.com/npillmayer/gotype/syntax/lr"
+	"github.com/npillmayer/gotype/syntax/lr/dss"
 )
 
 func traceOn() {
 	T.SetLevel(tracing.LevelDebug)
+}
+
+func TestStackSet1(t *testing.T) {
+	set1 := newStackSet()
+	r := dss.NewRoot("G", -999)
+	s1 := dss.NewStack(r)
+	set1 = set1.add(s1)
+	T.Debugf("set = %v", set1)
+	if set1.get() != s1 {
+		t.Fail()
+	}
 }
 
 func TestParser1(t *testing.T) {
@@ -27,8 +40,9 @@ func TestParser1(t *testing.T) {
 	lrgen := lr.NewLRTableGenerator(ga)
 	lrgen.CreateTables()
 	parser := Create(g, lrgen.GotoTable(), lrgen.ActionTable(), lrgen.AcceptingStates())
-	scanner := NewScanner(nil)
-	traceOn()
+	r := strings.NewReader("+a")
+	scanner := NewStdScanner(r)
+	//traceOn()
 	parser.Parse(lrgen.CFSM().S0, scanner)
 	/*
 		lrgen.CFSM().CFSM2GraphViz("/tmp/cfsm-" + "G1" + ".dot")
