@@ -7,6 +7,8 @@ import (
 	"github.com/npillmayer/gotype/syntax/runtime"
 )
 
+// http://scottmcpeak.com/elkhound/
+
 // --- Rules -----------------------------------------------------------------
 
 // REMARK: the left hand side of rules is an array, although they consist

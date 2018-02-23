@@ -10,6 +10,8 @@ import (
 	"github.com/npillmayer/gotype/syntax/lr/dss"
 )
 
+// https://github.com/golang/go/wiki/Performance
+
 func traceOn() {
 	T.SetLevel(tracing.LevelDebug)
 }
@@ -87,7 +89,6 @@ func TestParser2(t *testing.T) {
 	parser := Create(g, lrgen.GotoTable(), lrgen.ActionTable(), lrgen.AcceptingStates())
 	r := strings.NewReader("+a")
 	scanner := NewStdScanner(r)
-	//traceOn()
 	parser.Parse(lrgen.CFSM().S0, scanner)
 	/*
 	   lrgen.CFSM().CFSM2GraphViz("/tmp/cfsm-" + "G1" + ".dot")
