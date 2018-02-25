@@ -36,6 +36,8 @@ which uses frames to place text on a page.
 The DSL borrows concepts from MetaFont / MetaPost. See the project
 documentation for details.
 
+https://blog.gopheracademy.com/advent-2017/parsing-with-antlr4-and-go/
+
 */
 
 grammar Gallery;
