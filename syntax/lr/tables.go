@@ -15,6 +15,7 @@ import (
 // TODO: Improve documentation...
 // https://stackoverflow.com/questions/12968048/what-is-the-closure-of-a-left-recursive-lr0-item-with-epsilon-transitions
 // = optimization
+// https://www.cs.bgu.ac.il/~comp151/wiki.files/ps6.html#sec-2-7-3
 
 // === Items and Item Sets ===================================================
 
