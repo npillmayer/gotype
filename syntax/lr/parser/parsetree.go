@@ -1,6 +1,6 @@
 package parser
 
-import "strconv"
+import "fmt"
 
 /*
 ----------------------------------------------------------------------
@@ -80,12 +80,12 @@ const (
 )
 
 type Span interface {
-	Start() uint64
-	End() uint64
+	Start() int64
+	End() int64
 }
 
 type Delta interface {
-	Version() uint64
+	Version() int64
 	Inserted() Span
 	Removed() Span
 }
@@ -97,17 +97,19 @@ type NodeID int64
 
 // A node in a parse tree (which is in fact a forest/DAG)
 type ParseNode struct {
-	id         NodeID // unique ID
-	Rank       int    // height of subtree up to node
-	PreSpanLen uint64 // for rope-like bookkeeping
-	Payload    interface{}
+	ids               []NodeID // unique ID or list of IDs (for merged nodes)
+	leftPos, rightPos int64    // span of lexeme
+	//Payload           interface{}
+	//PreSpanLen        int64 // for rope-like bookkeeping
+	//Rank              int    // height of subtree up to node
 }
 
 func (pnode *ParseNode) String() string {
-	if pnode.id == 0 {
+	if pnode.ids[0] == 0 {
 		return "root"
 	}
-	return strconv.FormatInt(int64(pnode.id), 10)
+	return fmt.Sprintf("N%v", pnode.ids)
+	//return strconv.FormatInt(int64(pnode.ids[0]), 10)
 }
 
 type daglinks []*ParseNode
@@ -125,8 +127,8 @@ func NewParseTree() *ParseTree {
 	ptree := &ParseTree{}
 	r := ptree.NewNode()
 	ptree.root = r
-	ptree.edgesfrom = make(map[NodeID]daglinks)
-	ptree.edgesto = make(map[NodeID]daglinks)
+	ptree.children = make(map[NodeID]daglinks)
+	ptree.parents = make(map[NodeID]daglinks)
 	return ptree
 }
 
@@ -138,48 +140,68 @@ func (ptree *ParseTree) Root() *ParseNode {
 // Create a node for a tree
 func (ptree *ParseTree) NewNode() *ParseNode {
 	pnode := &ParseNode{}
-	pnode.id = ptree.seqcnt
+	pnode.ids = make([]NodeID, 1)
+	pnode.ids[0] = ptree.seqcnt
 	ptree.seqcnt++
 	return pnode
 }
 
 // Number of parents for a node.
-func (ptree *ParseTree) ParentCount(pnode *ParseNode) int {
-	return len(ptree.edgesto[pnode.id])
+func (ptree *ParseTree) ParentCount(nid NodeID) int {
+	return len(ptree.parents[nid])
 }
 
 // Get all parents of a node.
-func (ptree *ParseTree) Parents(pnode *ParseNode) []*ParseNode {
-	plinks := ptree.edgesto[pnode.id]
+func (ptree *ParseTree) Parents(nid NodeID) []*ParseNode {
+	plinks := ptree.parents[nid]
 	return plinks.asNodeList()
 }
 
-func (ptree *ParseTree) ChildCount(pnode *ParseNode) int {
-	return len(ptree.edgesfrom[pnode.id])
+func (ptree *ParseTree) ChildCount(nid NodeID) int {
+	return len(ptree.children[nid])
 }
 
 // Get all children of a node.
-func (ptree *ParseTree) Children(pnode *ParseNode) []*ParseNode {
-	plinks := ptree.edgesfrom[pnode.id]
+func (ptree *ParseTree) Children(nid NodeID) []*ParseNode {
+	plinks := ptree.children[nid]
 	return plinks.asNodeList()
 }
 
 // Add a child to a node. The node will be added as a parent to the child.
-func (ptree *ParseTree) AddChild(pnode *ParseNode, ch *ParseNode) {
-	addLink(ptree.edgesfrom, pnode, ch)
-	addLink(ptree.edgesto, ch, pnode)
+func (ptree *ParseTree) AddChild(pnid NodeID, chnid NodeID) {
+	addLink(ptree.children, pnode.ids[0], pnid, chnid)
+	addLink(ptree.parents, ch.ids[0], chnid, pnid) // TODO
 }
 
-func addLink(m map[NodeID]daglinks, outnode *ParseNode, target *ParseNode) {
-	plinks := m[outnode.id]
+func addLink(m map[NodeID]daglinks, outID NodeID, outnode *ParseNode, target *ParseNode) {
+	plinks := m[outID]
 	if plinks == nil {
 		plinks = make(daglinks, 0, 3)
 		plinks = append(plinks, target)
-		m[outnode.id] = plinks
+		m[outID] = plinks
 	} else {
 		plinks = append(plinks, target)
-		delete(m, outnode.id)
-		m[outnode.id] = plinks
+		delete(m, outID)
+		m[outID] = plinks
+	}
+}
+
+// Pack nodes 1 and 2 into 1.
+func (ptree *ParseTree) packNodes(pn1 *ParseNode, pn2 *ParseNode) {
+	pn1.ids = append(pn1.ids, pn2.ids...)
+	for _, id := range pn2.ids {
+		T.Debugf("node %v has id = %v", pn2, id)
+		for _, pnode := range ptree.edgesto[id] { // all nodes pointing to an ID of pn2
+			T.Debugf("node %v points to %v", pnode, pn2)
+			for _, otherid := range pnode.ids {
+				for i := 0; i < len(ptree.edgesfrom[otherid]); i++ {
+					target := ptree.edgesfrom[otherid][i]
+					if target == pn2 { // that's a back link to pn2
+						ptree.edgesfrom[otherid][i] = pn1 // now link to the packed node
+					}
+				}
+			}
+		}
 	}
 }
 

@@ -1,6 +1,19 @@
 package gtlocate
 
-import "os"
+/*
+TODO for fonts:
+
+- use "fontconfig" CLIs (via shell)
+
+- use Google fonts API to locate remote fonts
+
+- use some webfont library interface
+*/
+
+import (
+	"os"
+	"path/filepath"
+)
 
 func gtrootdir() string {
 	gtroot := os.Getenv("GTROOT")
@@ -22,6 +35,8 @@ func FileResource(item string, typ string) string {
 	switch typ {
 	case "lua":
 		path = gtroot + "/lib/lua/" + item + ".lua"
+	case "font":
+		path = filepath.Join(os.Getenv("HOME"), "Library", "Fonts", item)
 	}
 	return path
 }
