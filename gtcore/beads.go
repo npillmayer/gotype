@@ -3,7 +3,8 @@ package gtcore
 import (
 	"bytes"
 	"fmt"
-	"math"
+
+	p "github.com/npillmayer/gotype/gtcore/parameters"
 )
 
 /*
@@ -38,24 +39,24 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----------------------------------------------------------------------
 
-/* Nodes implement items for typesetting paragraphs. The various node
- * types more or less implement the corresponding types from the TeX
+/* Beads implement items for typesetting paragraphs. The various bead
+ * types more or less implement the corresponding bead types from the TeX
  * typesetting system.
 
 */
 
-// === Nodes =================================================================
+// === Beads =================================================================
 
-// A node has a width and may be discardable
-type Node interface {
+// A bead has a width and may be discardable
+type Bead interface {
 	fmt.Stringer
-	W() Dimen            // width
-	MinW() Dimen         // minimum width
-	MaxW() Dimen         // maximum width
-	IsDiscardable() bool // is this node discardable?
+	W() p.Dimen          // width
+	MinW() p.Dimen       // minimum width
+	MaxW() p.Dimen       // maximum width
+	IsDiscardable() bool // is this bead discardable?
 }
 
-// Node types
+// Bead types
 const (
 	NTKern int = iota
 	NTGlue
@@ -64,10 +65,10 @@ const (
 	NTDiscretionary
 )
 
-/* Factory method to create a node. Parameter is a valid node type.
+/* Factory method to create a bead. Parameter is a valid bead type.
  */
-func NewNode(nodetype int) Node {
-	switch nodetype {
+func NewBead(beadtype int) Bead {
+	switch beadtype {
 	case NTKern:
 		return &Kern{0}
 	case NTGlue:
@@ -89,87 +90,87 @@ func NewNode(nodetype int) Node {
 
 // A kern is an unshrinkable space
 type Kern struct {
-	Width Dimen // fixed width
+	Width p.Dimen // fixed width
 }
 
-/* Interface Node. Prints the dimension (width) of the kern.
+/* Interface Bead. Prints the dimension (width) of the kern.
  */
 func (k *Kern) String() string {
 	return fmt.Sprintf("[kern %s]", k.Width.String())
 }
 
-/* Interface Node. Width of the kern.
+/* Interface Bead. Width of the kern.
  */
-func (k *Kern) W() Dimen {
+func (k *Kern) W() p.Dimen {
 	return k.Width
 }
 
-/* Interface Node. Kerns do not shrink.
+/* Interface Bead. Kerns do not shrink.
  */
-func (k *Kern) MinW() Dimen {
+func (k *Kern) MinW() p.Dimen {
 	return k.Width
 }
 
-/* Interface Node. Kerns do not stretch.
+/* Interface Bead. Kerns do not stretch.
  */
-func (k *Kern) MaxW() Dimen {
+func (k *Kern) MaxW() p.Dimen {
 	return k.Width
 }
 
-/* Interface Node. Kerns are discardable.
+/* Interface Bead. Kerns are discardable.
  */
 func (k *Kern) IsDiscardable() bool {
 	return true
 }
 
-var _ Node = &Kern{}
+var _ Bead = &Kern{}
 
 // --- Glue ------------------------------------------------------------------
 
 // A glue is a space which can shrink and expand
 type Glue struct {
-	Width    Dimen // natural width
-	MaxWidth Dimen // maximum width
-	MinWidth Dimen // minimum width
+	Width    p.Dimen // natural width
+	MaxWidth p.Dimen // maximum width
+	MinWidth p.Dimen // minimum width
 }
 
-/* Interface Node.
+/* Interface Bead.
  */
 func (g *Glue) String() string {
 	return fmt.Sprintf("[glue %s <%s >%s]", g.W().String(), g.MaxW().String(),
 		g.MinW().String())
 }
 
-/* Interface Node. Natural width of the glue.
+/* Interface Bead. Natural width of the glue.
  */
-func (g *Glue) W() Dimen {
+func (g *Glue) W() p.Dimen {
 	return g.Width
 }
 
-/* Interface Node. Minimum width of the glue.
+/* Interface Bead. Minimum width of the glue.
  */
-func (g *Glue) MinW() Dimen {
+func (g *Glue) MinW() p.Dimen {
 	return g.MinWidth
 }
 
-/* Interface Node. Maximum width of the glue.
+/* Interface Bead. Maximum width of the glue.
  */
-func (g *Glue) MaxW() Dimen {
+func (g *Glue) MaxW() p.Dimen {
 	return g.MaxWidth
 }
 
-/* Interface Node. Glue is discardable.
+/* Interface Bead. Glue is discardable.
  */
 func (g *Glue) IsDiscardable() bool {
 	return true
 }
 
-var _ Node = &Glue{}
+var _ Bead = &Glue{}
 
 /* Create a new drop of glue with stretch and shrink.
  */
-func NewGlue(w Dimen, stretch Dimen, shrink Dimen) *Glue {
-	glue := NewNode(NTGlue).(*Glue)
+func NewGlue(w p.Dimen, stretch p.Dimen, shrink p.Dimen) *Glue {
+	glue := NewBead(NTGlue).(*Glue)
 	glue.Width = w
 	glue.MaxWidth = w + stretch
 	glue.MinWidth = w - shrink
@@ -179,14 +180,14 @@ func NewGlue(w Dimen, stretch Dimen, shrink Dimen) *Glue {
 /* Create a drop of infinitely stretchable glue.
  */
 func NewFill(f int) *Glue {
-	var stretch Dimen
+	var stretch p.Dimen
 	switch f {
 	case 2:
-		stretch = Fill
+		stretch = p.Fill
 	case 3:
-		stretch = Fill
+		stretch = p.Filll
 	default:
-		stretch = Fil
+		stretch = p.Fil
 	}
 	return NewGlue(0, stretch, 0)
 }
@@ -200,81 +201,81 @@ type Discretionary struct {
 	post    Box // post-hyphen text
 }
 
-/* Interface Node. Prints the dimension (width) of the kern.
+/* Interface Bead. Prints the dimension (width) of the kern.
  */
 func (d *Discretionary) String() string {
 	return fmt.Sprintf("\\discretionary{%s}{%s}{%s}", d.nobreak.text,
 		d.pre.text, d.post.text)
 }
 
-/* Interface Node. Returns the width of the un-hyphenated text.
+/* Interface Bead. Returns the width of the un-hyphenated text.
  */
-func (d *Discretionary) W() Dimen {
+func (d *Discretionary) W() p.Dimen {
 	return d.nobreak.W()
 }
 
-/* Interface Node. Returns the width of the pre-hyphen text.
+/* Interface Bead. Returns the width of the pre-hyphen text.
  */
-func (d *Discretionary) MinW() Dimen {
+func (d *Discretionary) MinW() p.Dimen {
 	return d.pre.W()
 }
 
-/* Interface Node. Returns the width of the post-hyphen text.
+/* Interface Bead. Returns the width of the post-hyphen text.
  */
-func (d *Discretionary) MaxW() Dimen {
+func (d *Discretionary) MaxW() p.Dimen {
 	return d.post.W()
 }
 
-/* Interface Node. Discretionaries are not discardable.
+/* Interface Bead. Discretionaries are not discardable.
  */
 func (d *Discretionary) IsDiscardable() bool {
 	return false
 }
 
-var _ Node = &Discretionary{}
+var _ Bead = &Discretionary{}
 
 // --- Boxes -----------------------------------------------------------------
 
 // A Box is a fixed unit of text
 type Box struct {
-	Width  Dimen  // width
-	Height Dimen  // height
-	Depth  Dimen  // depth
-	text   string // text, if available
-	//nodelist Nodelist // content, if available
+	Width  p.Dimen // width
+	Height p.Dimen // height
+	Depth  p.Dimen // depth
+	text   string  // text, if available
+	//beadlist BeadChain // content, if available
 }
 
-/* Interface Node.
+/* Interface Bead.
  */
 func (b *Box) String() string {
 	return fmt.Sprintf("\\box{%s}", b.text)
 }
 
-/* Interface Node. Width of the glue.
+/* Interface Bead. Width of the glue.
  */
-func (b *Box) W() Dimen {
+func (b *Box) W() p.Dimen {
 	return b.Width
 }
 
-/* Interface Node. Width of the glue.
+/* Interface Bead. Width of the glue.
  */
-func (b *Box) MinW() Dimen {
+func (b *Box) MinW() p.Dimen {
 	return b.Width
 }
 
-/* Interface Node. Width of the glue.
+/* Interface Bead. Width of the glue.
  */
-func (b *Box) MaxW() Dimen {
+func (b *Box) MaxW() p.Dimen {
 	return b.Width
 }
 
-/* Interface Node. Glue is discardable.
+/* Interface Bead. Glue is discardable.
  */
 func (b *Box) IsDiscardable() bool {
 	return false
 }
 
-var _ Node = &Box{}
+var _ Bead = &Box{}
 
 // --- Penalty ---------------------------------------------------------------
 
@@ -283,44 +284,44 @@ type Penalty struct {
 	P int
 }
 
-/* Interface Node.
+/* Interface Bead.
  */
 func (p *Penalty) String() string {
 	return fmt.Sprintf("[penalty %d]", p.P)
 }
 
-/* Interface Node. Returns 0.
+/* Interface Bead. Returns 0.
  */
-func (p *Penalty) W() Dimen {
+func (p *Penalty) W() p.Dimen {
 	return 0
 }
 
-/* Interface Node. Returns 0.
+/* Interface Bead. Returns 0.
  */
-func (p *Penalty) MinW() Dimen {
+func (p *Penalty) MinW() p.Dimen {
 	return 0
 }
 
-/* Interface Node. Returns 0.
+/* Interface Bead. Returns 0.
  */
-func (p *Penalty) MaxW() Dimen {
+func (p *Penalty) MaxW() p.Dimen {
 	return 0
 }
 
-/* Interface Node. Penalties are discardable.
+/* Interface Bead. Penalties are discardable.
  */
 func (p *Penalty) IsDiscardable() bool {
 	return true
 }
 
-var _ Node = &Penalty{}
+var _ Bead = &Penalty{}
 
-// === Node lists ============================================================
+// === Bead lists ============================================================
 
-// We handle text/paragraphcs as a list of nodes
-type Nodelist struct {
+// We handle text/paragraphcs as a list of beads
+type BeadChain struct {
 	Listtype int    // hlist, vlist or mlist
-	Nodes    []Node // array of nodes of different type
+	Beads    []Bead // array of beads of different type
 }
 
 // List types
@@ -330,56 +331,56 @@ const (
 	MList
 )
 
-/* Create a new node list.
+/* Create a new bead list.
  */
-func NewNodelist() *Nodelist {
-	nl := &Nodelist{}
-	nl.Nodes = make([]Node, 0, 50)
+func NewBeadChain() *BeadChain {
+	nl := &BeadChain{}
+	nl.Beads = make([]Bead, 0, 50)
 	return nl
 }
 
-/* Number of nodes in the list.
+/* Number of beads in the list.
  */
-func (nl *Nodelist) Length() int {
-	return len(nl.Nodes)
+func (nl *BeadChain) Length() int {
+	return len(nl.Beads)
 }
 
-/* Append a node at the end of the list.
+/* Append a bead at the end of the list.
  */
-func (nl *Nodelist) AppendNode(node Node) *Nodelist {
-	nl.Nodes = append(nl.Nodes, node)
+func (nl *BeadChain) AppendBead(bead Bead) *BeadChain {
+	nl.Beads = append(nl.Beads, bead)
 	return nl
 }
 
-/* Return the widths of a subset of this node list. The subset runs from
+/* Return the widths of a subset of this bead list. The subset runs from
  * index [from ... to-1]. The method returns natural, maximum and minimum
  * width.
  */
-func (nl *Nodelist) Measure(from, to int) (Dimen, Dimen, Dimen) {
-	var w, max, min Dimen
-	to = math.Max(to, len(nl.Nodes))
+func (nl *BeadChain) Measure(from, to int) (p.Dimen, p.Dimen, p.Dimen) {
+	var w, max, min p.Dimen
+	to = iMax(to, len(nl.Beads))
 	for i := from; i < to; i++ {
-		node := nl.Nodes[i]
-		w += node.W()
-		max += node.MaxW()
-		min += node.MinW()
+		bead := nl.Beads[i]
+		w += bead.W()
+		max += bead.MaxW()
+		min += bead.MinW()
 	}
 	return w, max, min
 }
 
-/* Starting from a node (index), return a set of nodes which mark possible
- * endpoints for a sequence of nodes to cover a certain width distance.
- * The node set is returned as a pair (from,to) of indices.
+/* Starting from a bead (index), return a set of beads which mark possible
+ * endpoints for a sequence of beads to cover a certain width distance.
+ * The bead set is returned as a pair (from,to) of indices.
  * If the distance cannot be covered, (-1,-1) is returned.
  */
-func (nl *Nodelist) Reach(start int, distance Dimen) (int, int) {
-	l := len(nl.Nodes)
-	var max, min Dimen
+func (nl *BeadChain) Reach(start int, distance p.Dimen) (int, int) {
+	l := len(nl.Beads)
+	var max, min p.Dimen
 	var from, to int = -1, -1
 	for i := start; i < l; i++ {
-		node := nl.Nodes[i]
-		max += node.MaxW()
-		min += node.MinW()
+		bead := nl.Beads[i]
+		max += bead.MaxW()
+		min += bead.MinW()
 		if from == -1 && max >= distance {
 			from = i
 		}
@@ -390,42 +391,42 @@ func (nl *Nodelist) Reach(start int, distance Dimen) (int, int) {
 	return from, to
 }
 
-/* Find the maximum width of the nodes in the range [from ... to-1].
+/* Find the maximum width of the beads in the range [from ... to-1].
  */
-func (nl *Nodelist) MaxWidth(from, to int) Dimen {
-	to = math.Max(to, len(nl.Nodes))
-	var w Dimen
+func (nl *BeadChain) MaxWidth(from, to int) p.Dimen {
+	to = iMax(to, len(nl.Beads))
+	var w p.Dimen
 	for i := from; i < to; i++ {
-		node := nl.Nodes[i]
-		if node.W() > w {
-			w = node.W()
+		bead := nl.Beads[i]
+		if bead.W() > w {
+			w = bead.W()
 		}
 	}
 	return w
 }
 
-/* Find the maximum height and depth of the nodes in the range [from ... to-1].
- * Only nodes of type Box are considered.
+/* Find the maximum height and depth of the beads in the range [from ... to-1].
+ * Only beads of type Box are considered.
  */
-func (nl *Nodelist) MaxHeightAndDepth(from, to int) (Dimen, Dimen) {
-	to = math.Max(to, len(nl.Nodes))
-	var h, d Dimen
+func (nl *BeadChain) MaxHeightAndDepth(from, to int) (p.Dimen, p.Dimen) {
+	to = iMax(to, len(nl.Beads))
+	var h, d p.Dimen
 	for i := from; i < to; i++ {
-		if node, ok := nl.Nodes[i].(*Box); ok {
-			if node.Height > h {
-				h = node.Height
+		if bead, ok := nl.Beads[i].(*Box); ok {
+			if bead.Height > h {
+				h = bead.Height
 			}
-			if node.Depth > d {
-				d = node.Depth
+			if bead.Depth > d {
+				d = bead.Depth
 			}
 		}
 	}
 	return h, d
 }
 
-/* Debug representation of a node list.
+/* Debug representation of a bead list.
  */
-func (nl *Nodelist) String() string {
+func (nl *BeadChain) String() string {
 	buf := make([]byte, 30)
 	w := bytes.NewBuffer(buf)
 	switch nl.Listtype {
@@ -436,9 +437,25 @@ func (nl *Nodelist) String() string {
 	case MList:
 		w.WriteString("\\mlist{")
 	}
-	for _, node := range nl.Nodes {
-		w.WriteString(node.String())
+	for _, bead := range nl.Beads {
+		w.WriteString(bead.String())
 	}
 	w.WriteString("}")
 	return w.String()
+}
+
+// ----------------------------------------------------------------------
+
+func iMin(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
+func iMax(x, y int) int {
+	if x > y {
+		return x
+	}
+	return y
 }

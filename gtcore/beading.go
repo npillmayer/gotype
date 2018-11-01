@@ -1,8 +1,17 @@
 package gtcore
 
-// Beading
+/*
+Interfaces and methods to create "beadings" of typesetting items.
+Beadings are lists of items, such as glyphs, kerns, glue, etc.
+Sometimes we will call these kinds of items "beads".
 
-/* Interface und Methoden, um eine Perlenschnur (Bead) an Nodes
-   zu erzeugen. Beads sind sozusagen der AST für Text.
-   Sie sind u.a. der Input für Linebreaker.
+Beadings are the input for linebreakers.
 */
+
+import (
+	"github.com/npillmayer/gotype/gtcore/parameters"
+)
+
+type BeadingDriver interface {
+	Thread(text string, regs *parameters.TypesettingRegisters)
+}

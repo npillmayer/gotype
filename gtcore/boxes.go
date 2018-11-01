@@ -3,6 +3,9 @@ package gtcore
 import (
 	"fmt"
 	"image/color"
+
+	"github.com/npillmayer/gotype/gtcore/font"
+	p "github.com/npillmayer/gotype/gtcore/parameters"
 )
 
 /*
@@ -73,15 +76,15 @@ type ContentStyling struct {
 type StyledBox struct {
 	Box
 	ContentStyling
-	Padding Dimen // inside of border
-	Spacing Dimen // outside of border
+	Padding p.Dimen // inside of border
+	Spacing p.Dimen // outside of border
 	Border  BorderStyle
 }
 
 // A type for simple borders. Currently no line styles are supported.
 type BorderStyle struct {
 	LineColor     color.Color
-	LineThickness Dimen
+	LineThickness p.Dimen
 }
 
 /* Wikipedia: In typography, a glyph [...] is an elemental symbol within
@@ -93,14 +96,14 @@ type BorderStyle struct {
 type Glyph struct {
 	Box
 	ContentStyling
-	Font    *Font
-	CharPos unicode.Rune
+	Typecase *font.TypeCase
+	CharPos  rune
 }
 
 // Boxed for typesetting, similar to TeX's \hbox and \vbox.
 type TypesetBox struct {
 	StyledBox
-	Nodes *Nodelist
+	Beads *BeadChain
 }
 
 /* Method for boxing content into a horizontal box. Content is given as a
@@ -108,19 +111,18 @@ type TypesetBox struct {
  * The box may be set to a target size.
  * Parameters for styling class and/or identifier may be provided.
  */
-func HBoxNodelist(nl *Nodelist, target Dimen, identifier string, class string) *Box {
-	box := &TypesetBox{
-		Nodes:             nl,
-		StylingIdentifier: identifier,
-		StylingClass:      class,
-	}
+func HBoxBeadChain(nl *BeadChain, target p.Dimen, identifier string, class string) *TypesetBox {
+	box := &TypesetBox{}
+	box.Beads = nl
+	box.StylingIdentifier = identifier
+	box.StylingClass = class
 	box.Width = target
-	w, max, min := nl.Measure(0, Infty)
+	_, max, min := nl.Measure(0, -1)
 	if min > target {
 		fmt.Println("overfull hbox")
 	} else if max < target {
 		fmt.Println("underfull hbox")
 	}
-	box.Height, box.Depth = nl.MaxHeightAndDepth(0, Infty)
+	box.Height, box.Depth = nl.MaxHeightAndDepth(0, -1)
 	return box
 }
