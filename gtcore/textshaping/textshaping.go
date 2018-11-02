@@ -167,6 +167,7 @@ const (
 )
 
 // Direction to typeset text in.
+// TODO: substitute https://godoc.org/golang.org/x/text/unicode/bidi#Direction
 type TextDirection int32
 
 // Direction to typeset text in. We use a generator to produce a stringer
