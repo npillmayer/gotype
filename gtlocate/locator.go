@@ -3,7 +3,8 @@ package gtlocate
 /*
 TODO for fonts:
 
-- use "fontconfig" CLIs (via shell)
+- use "fontconfig" CLIs (via shell):
+https://www.freedesktop.org/wiki/Software/fontconfig/
 
 - use Google fonts API to locate remote fonts
 
