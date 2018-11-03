@@ -167,8 +167,7 @@ const (
 )
 
 // Direction to typeset text in.
-// TODO: substitute https://godoc.org/golang.org/x/text/unicode/bidi#Direction
-type TextDirection int32
+type TextDirection int
 
 // Direction to typeset text in. We use a generator to produce a stringer
 // for this enum.

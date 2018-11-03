@@ -4,9 +4,9 @@ package textshaping
 
 import "strconv"
 
-const _TextDirection_name = "LeftToRightRightToLeftTopToBottomBottomToTop"
+const _TextDirection_name = "LeftToRight"
 
-var _TextDirection_index = [...]uint8{0, 11, 22, 33, 44}
+var _TextDirection_index = [...]uint8{0, 11}
 
 func (i TextDirection) String() string {
 	if i < 0 || i >= TextDirection(len(_TextDirection_index)-1) {
