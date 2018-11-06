@@ -103,7 +103,7 @@ type Glyph struct {
 // Boxed for typesetting, similar to TeX's \hbox and \vbox.
 type TypesetBox struct {
 	StyledBox
-	Beads *BeadChain
+	Cord *Khipu
 }
 
 /* Method for boxing content into a horizontal box. Content is given as a
@@ -111,9 +111,9 @@ type TypesetBox struct {
  * The box may be set to a target size.
  * Parameters for styling class and/or identifier may be provided.
  */
-func HBoxBeadChain(nl *BeadChain, target p.Dimen, identifier string, class string) *TypesetBox {
+func HBoxKhipu(nl *Khipu, target p.Dimen, identifier string, class string) *TypesetBox {
 	box := &TypesetBox{}
-	box.Beads = nl
+	box.Cord = nl
 	box.StylingIdentifier = identifier
 	box.StylingClass = class
 	box.Width = target
