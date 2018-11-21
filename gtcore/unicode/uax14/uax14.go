@@ -309,9 +309,7 @@ func (uax14 *UAX14LineWrap) LongestMatch() int {
 
 // --- Recognizer Rules -------------------------------------------------
 
-func accept(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
-	uax14c := UAX14Class(cpClass)
-	fmt.Printf("-> accept %s with lookahead = %s\n", UAX14Class(rec.Expect), uax14c)
+func doAbort(rec *u.Recognizer) u.NfaStateFn {
 	rec.DistanceToGo = 0
 	rec.MatchLen = 0
 	return abort
@@ -324,6 +322,14 @@ func abort(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
 	return abort
 }
 
+func accept(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
+	uax14c := UAX14Class(cpClass)
+	fmt.Printf("-> accept %s with lookahead = %s\n", UAX14Class(rec.Expect), uax14c)
+	rec.DistanceToGo = 0
+	rec.MatchLen = 0
+	return abort
+}
+
 func UAX14NewLine(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
 	uax14c := UAX14Class(cpClass)
 	fmt.Printf("fire rule NewLine for lookahead = %s\n", uax14c)
@@ -332,24 +338,31 @@ func UAX14NewLine(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
 		rec.MatchLen++
 		return accept
 	}
-	return abort
+	return doAbort(rec)
 }
 
 func UAX14Quote(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
 	uax14c := UAX14Class(cpClass)
 	fmt.Printf("fire rule Quote for lookahead = %s\n", uax14c)
-	rec.DistanceToGo = 2
-	rec.MatchLen++
-	rec.Expect = int(OPClass)
-	return UAX14OptSpaces
+	if uax14c == QUClass {
+		rec.DistanceToGo = 2
+		rec.MatchLen++
+		rec.Expect = int(OPClass)
+		return UAX14OptSpaces
+	}
+	return doAbort(rec)
 }
 
 func UAX14ThisClass(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
 	uax14c := UAX14Class(cpClass)
 	fmt.Printf("fire generic rule for %s with lookahead = %s\n", UAX14Class(rec.Expect), uax14c)
-	rec.DistanceToGo--
-	rec.MatchLen++
-	return accept
+	if uax14c == UAX14Class(rec.Expect) {
+		rec.DistanceToGo--
+		rec.MatchLen++
+		return accept
+	}
+	rec.MatchLen = 0
+	return doAbort(rec)
 }
 
 func UAX14OptSpaces(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
@@ -362,36 +375,8 @@ func UAX14OptSpaces(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
 		rec.MatchLen++
 		return accept // accept rec.Expect in next rec
 	}
-	return abort
+	return doAbort(rec)
 }
-
-/*
-type ruleset []*rule
-
-var rules ruleset
-var ruleStarts map[int][]int
-
-func setupRules() {
-	rulecnt := 3
-	rules = make(ruleset, rulecnt)
-	rules[0] = newRule(1, 0, 1000, QUClass, optSpaces, OPClass)
-	rules[1] = newRule(0, 0, -1000, NLClass)
-	rules[2] = newRule(0, 1000, 1000, OPClass)
-	ruleStarts = make(map[int][]int)
-	for i := 0; i < rulecnt; i++ {
-		rule := rules[i]
-		starter := rule.lbcs[0]
-		rs := ruleStarts[starter]
-		if rs == nil {
-			rs = make([]int, 1, 1)
-			rs[0] = i
-		} else {
-			rs = append(rs, i)
-		}
-		ruleStarts[starter] = rs
-	}
-}
-*/
 
 // --- Util -------------------------------------------------------------
 

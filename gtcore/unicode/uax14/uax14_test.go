@@ -2,6 +2,8 @@ package unicode
 
 import (
 	"fmt"
+	"io"
+	"strings"
 	"testing"
 
 	"github.com/npillmayer/gotype/gtcore/unicode"
@@ -48,4 +50,43 @@ func TestLineWrapQU(t *testing.T) {
 	lw.ProceedWithRune(' ', int(SPClass))
 	lw.ProceedWithRune('(', int(OPClass))
 	lw.ProceedWithRune(' ', int(SPClass))
+}
+
+func TestSegmenterUAX14Init(t *testing.T) {
+	SetupUAX14Classes()
+	lw := NewUAX14LineWrap()
+	segm := unicode.NewSegmenter(lw)
+	_, _, err := segm.Next()
+	fmt.Println(err)
+	if err == nil {
+		t.Fail()
+	}
+}
+
+func TestSegmenterUAX14RecognizeRule1(t *testing.T) {
+	SetupUAX14Classes()
+	lw := NewUAX14LineWrap()
+	segm := unicode.NewSegmenter(lw)
+	segm.Init(strings.NewReader("\" ("))
+	_, _, err := segm.Next()
+	if err != io.EOF {
+		fmt.Println(err)
+		t.Fail()
+	}
+}
+
+func TestSegmenterUAX14Match1(t *testing.T) {
+	SetupUAX14Classes()
+	lw := NewUAX14LineWrap()
+	segm := unicode.NewSegmenter(lw)
+	segm.Init(strings.NewReader("\" ("))
+	match, _, err := segm.Next()
+	if err != io.EOF {
+		fmt.Println(err)
+		t.Fail()
+	}
+	if match == nil {
+		t.Fail()
+	}
+	fmt.Printf("matched segment = \"%s\"\n", match)
 }

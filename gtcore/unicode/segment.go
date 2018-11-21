@@ -1,23 +1,15 @@
 package unicode
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/emirpasic/gods/trees/binaryheap"
 	godsutils "github.com/emirpasic/gods/utils"
 	"github.com/gammazero/deque"
 )
-
-/*
-type rule struct {
-	breakAt       int
-	penaltyBefore int
-	penaltyAfter  int
-	lbcs          []int
-}
-
-*/
 
 type UnicodeBreaker interface {
 	InitFor(RunePublisher)
@@ -53,17 +45,35 @@ func NewSegmenter(breakers ...UnicodeBreaker) *Segmenter {
 }
 
 func (s *Segmenter) Init(reader io.RuneReader) {
+	if reader == nil {
+		reader = strings.NewReader("")
+	}
 	s.reader = reader
-	s.deque = &deque.Deque{}         // Q of atoms
-	s.publisher = NewRunePublisher() // for publishing rune events to breakers
-	for _, breaker := range s.breakers {
-		breaker.InitFor(s.publisher)
+	if s.deque == nil {
+		s.deque = &deque.Deque{}         // Q of atoms
+		s.publisher = NewRunePublisher() // for publishing rune events to breakers
+		for _, breaker := range s.breakers {
+			breaker.InitFor(s.publisher)
+		}
+	} else {
+		s.deque.Clear()
+		s.longestActiveMatch = 0
+		s.atEOF = false
 	}
 }
 
 func (s *Segmenter) Next() ([]byte, int, error) {
+	if s.reader == nil {
+		return nil, 0, errors.New("segmenter not initialized: no input; must call Init()")
+	}
+	var match []byte
+	l := 0
 	err := s.readEnoughInput()
-	return nil, 0, err
+	if err != io.EOF {
+		return nil, 0, err
+	}
+	match, l, err = s.getTrailMatch()
+	return match, l, err
 }
 
 func (s *Segmenter) frontAtom() *atom {
@@ -77,7 +87,8 @@ func (s *Segmenter) trailAtom() *atom {
 func (s *Segmenter) readRune() (err error) {
 	fmt.Println("-------- reading next rune -----------")
 	if !s.atEOF {
-		r, _, err := s.reader.ReadRune()
+		var r rune
+		r, _, err = s.reader.ReadRune()
 		fmt.Printf("rune = %+q\n", r)
 		if err == nil {
 			a := &atom{}
@@ -107,7 +118,7 @@ func (s *Segmenter) readEnoughInput() (err error) {
 				cpClass := breaker.CodePointClassFor(a.r)
 				breaker.StartRulesFor(a.r, cpClass)
 				breaker.ProceedWithRune(a.r, cpClass)
-				if breaker.LongestMatch() > s.LongestActiveMatch() {
+				if breaker.LongestMatch() > s.longestActiveMatch {
 					s.longestActiveMatch = breaker.LongestMatch()
 				}
 			}
@@ -115,11 +126,15 @@ func (s *Segmenter) readEnoughInput() (err error) {
 			fmt.Println("Q empty")
 		}
 		i++
-		if i > 7 {
+		if i > 20 { // TODO eliminate (used for debugging purposes only)
 			break
 		}
 	}
 	return err
+}
+
+func (s *Segmenter) getTrailMatch() ([]byte, int, error) {
+	return []byte("abc"), 3, io.EOF
 }
 
 func (s *Segmenter) printQ() {
