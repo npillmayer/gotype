@@ -62,28 +62,28 @@ type Knot interface {
 
 // Knot types
 const (
-	NTKern int = iota
-	NTGlue
-	NTBox
-	NTPenalty
-	NTDiscretionary
+	KTKern int = iota
+	KTGlue
+	KTBox
+	KTPenalty
+	KTDiscretionary
 )
 
 /* Factory method to create a knot. Parameter is a valid knot type.
  */
 func NewKnot(knottype int) Knot {
 	switch knottype {
-	case NTKern:
+	case KTKern:
 		return &Kern{0}
-	case NTGlue:
+	case KTGlue:
 		return &Glue{}
-	case NTPenalty:
+	case KTPenalty:
 		return &Penalty{0}
-	case NTDiscretionary:
+	case KTDiscretionary:
 		d := &Discretionary{}
 		//d.pre = "-"
 		return d
-	case NTBox:
+	case KTBox:
 		box := &Box{}
 		return box
 	}
@@ -174,7 +174,7 @@ var _ Knot = &Glue{}
 /* Create a new drop of glue with stretch and shrink.
  */
 func NewGlue(w p.Dimen, stretch p.Dimen, shrink p.Dimen) *Glue {
-	glue := NewKnot(NTGlue).(*Glue)
+	glue := NewKnot(KTGlue).(*Glue)
 	glue.Width = w
 	glue.MaxWidth = w + stretch
 	glue.MinWidth = w - shrink
@@ -247,6 +247,12 @@ type Box struct {
 	Depth  p.Dimen // depth
 	text   string  // text, if available
 	//knotlist Khipu // content, if available
+}
+
+func NewWordBox(s string) *Box {
+	box := &Box{}
+	box.text = s
+	return box
 }
 
 /* Interface Knot.

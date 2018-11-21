@@ -1,13 +1,14 @@
 package gtcore
 
 import (
+	"bufio"
 	"fmt"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/blevesearch/segment"
-	p "github.com/npillmayer/gotype/gtcore/parameters"
+	params "github.com/npillmayer/gotype/gtcore/parameters"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -23,8 +24,10 @@ http://unicode.org/reports/tr14/
 
 JavaScript implementation: https://github.com/foliojs/linebreak (basiert
 auf deprecated pair table)
+Besser: https://github.com/niklasvh/css-line-break  (JavaScript)
 Python: https://uniseg-python.readthedocs.io/en/latest/ bzw.
 https://bitbucket.org/emptypage/uniseg-python/src/e4077d17d026c36999b89c10081a85b219e1fb7b/uniseg/?at=default
+online: http://unicode.org/cldr/utility/breaks.jsp
 
 Golang package unicode provides all sorts of code-point ranges:
 https://golang.org/pkg/unicode/
@@ -45,6 +48,7 @@ man nicht so viel Aufwand in eine Eigenlösung investieren sollte.
 // -----------------------------------------------------------------------
 
 (0) Normalize -> Word Boundaries
+    Graphemes ?
 
 A: Finding feasible break positions
 
@@ -97,19 +101,29 @@ type TypesettingPipeline struct {
 }
 
 type Khipukamayuq interface {
-	KnotEncode(text string, pipeline *TypesettingPipeline, regs *p.TypesettingRegisters) *Khipu
+	KnotEncode(text string, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) *Khipu
 }
 
-func UAX14(text string, regs *p.TypesettingRegisters) *Khipu {
+func UAX14LineWrap(text string, regs *params.TypesettingRegisters) *Khipu {
+	sread := strings.NewReader(text)     // wrap a reader around the CDATA string
+	nfcread := norm.NFC.Reader(sread)    // wrap a normalization-reader around it
+	scanner := bufio.NewScanner(nfcread) // wrap a buffered scanner around it
+	scanner.Split(segment.SplitWords)    // split on words according to UAX#29
+	for scanner.Scan() {
+		tokenBytes := scanner.Bytes()
+		fmt.Printf("%s \n", tokenBytes)
+	}
+	if err := scanner.Err(); err != nil {
+		fmt.Printf("ERROR") // TODO
+	}
+
+	// TODO: line wrap
+	// https://github.com/gorilla/i18n/blob/master/linebreak/linebreak.go
+
 	return nil
 }
 
-// https://github.com/blevesearch/segment
-/*
-A Go library for performing Unicode Text Segmentation as described in
-Unicode Standard Annex #29
-*/
-
+// Simple Lösung. Unvollständig.
 // Erkennt Emoji-Zeichenketten nicht; nur Zeichen + diakr. Zeichen
 func grLen(s string) int { // length in terms of graphemes
 	if len(s) == 0 {
@@ -126,12 +140,11 @@ func grLen(s string) int { // length in terms of graphemes
 }
 
 func graphemes(s string) int {
-	str := "Héllsô, 世界"
 	n := 0
-	for len(str) > 0 {
-		r, size := utf8.DecodeRuneInString(str)
+	for len(s) > 0 {
+		r, size := utf8.DecodeRuneInString(s)
 		fmt.Printf("%c %v\n", r, size)
-		str = str[size:]
+		s = s[size:]
 		n++
 	}
 	return n
@@ -147,6 +160,13 @@ func iterateOverGraphemes(s string) {
 	}
 }
 
+// https://github.com/blevesearch/segment
+/*
+A Go library for performing Unicode Text Segmentation as described in
+Unicode Standard Annex #29
+*/
+// Alternativen: https://github.com/go-ego/gse
+//
 func iterateOverWords(s *strings.Reader) {
 	segmenter := segment.NewWordSegmenter(s)
 	for segmenter.Segment() {
