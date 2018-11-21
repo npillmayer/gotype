@@ -1,355 +1,92 @@
 package unicode
 
 import (
-	"bytes"
 	"fmt"
 	"io"
-	"log"
-	"os"
-	"time"
-	"unicode"
 
-	"github.com/emirpasic/gods/lists/arraylist"
 	"github.com/emirpasic/gods/trees/binaryheap"
 	godsutils "github.com/emirpasic/gods/utils"
 	"github.com/gammazero/deque"
-	"golang.org/x/text/unicode/rangetable"
 )
 
-type LineBreakingClass int
-
-//go:generate stringer -type=LineBreakingClass
-const (
-	CMClass LineBreakingClass = iota
-	BAClass
-	LFClass
-	BKClass
-	CRClass
-	NLClass
-	SPClass
-	EXClass
-	QUClass
-	ALClass
-	PRClass
-	POClass
-	OPClass
-	CPClass
-	ISClass
-	HYClass
-	SYClass
-	NUClass
-	AIClass
-	BBClass
-	GLClass
-	SAClass
-	JTClass
-	JVClass
-	JLClass
-	NSClass
-	ZWClass
-	ZWJClass
-	WJClass
-	CLClass
-	IDClass
-	CJClass
-	H2Class
-	H3Class
-	EBClass
-	EMClass
-	HLClass
-	RIClass
-	XXClass
-)
-
-var CM, BA, LF, BK, CR, NL, SP, EX, QU, AL, PR, PO,
-	OP, CP, IS, HY, SY, NU, AI, BB, GL, SA, JT,
-	JV, JL, NS, ZW, ZWJ, WJ, CL, ID, CJ, H2, H3,
-	EB, EM, HL, RI, XX *unicode.RangeTable
-
-var lbcFromString = map[string]LineBreakingClass{
-	"CM": CMClass, "BA": BAClass, "LF": LFClass, "BK": BKClass, "CR": CRClass, "NL": NLClass,
-	"SP": SPClass, "EX": EXClass, "QU": QUClass, "AL": ALClass, "PR": PRClass,
-	"PO": POClass, "OP": OPClass, "CP": CPClass, "IS": ISClass, "HY": HYClass,
-	"SY": SYClass, "NU": NUClass, "AI": AIClass, "BB": BBClass, "GL": GLClass,
-	"SA": SAClass, "JT": JTClass, "JV": JVClass, "JL": JLClass, "NS": NSClass,
-	"ZW": ZWClass, "ZWJ": ZWJClass, "WJ": WJClass, "CL": CLClass, "ID": IDClass,
-	"CJ": CJClass, "H2": H2Class, "H3": H3Class, "EB": EBClass, "EM": EMClass,
-	"HL": HLClass, "RI": RIClass, "XX": XXClass,
-}
-
-var rangeFromLineBreakingClass []*unicode.RangeTable
-
-func LineBreakingClassForRune(r rune) LineBreakingClass {
-	for lbc := CMClass; lbc < XXClass; lbc++ {
-		urange := rangeFromLineBreakingClass[lbc]
-		if urange == nil {
-			fmt.Printf("-- no range for class %s\n", lbc)
-		}
-		if unicode.Is(urange, r) {
-			return lbc
-		}
-	}
-	return XXClass
-}
-
-func setupLineBreakingClasses() error {
-	defer timeTrack(time.Now(), "setup of line breaking classes")
-	if rangeFromLineBreakingClass != nil {
-		return nil
-	}
-	lbcs, err := loadUnicodeLineBreakFile()
-	if err != nil {
-		return err
-	}
-	createRangesForClassesGlobal(lbcs)
-	rangeFromLineBreakingClass = []*unicode.RangeTable{
-		CM, BA, LF, BK, CR, NL, SP, EX, QU, AL, PR, PO,
-		OP, CP, IS, HY, SY, NU, AI, BB, GL, SA, JT,
-		JV, JL, NS, ZW, ZWJ, WJ, CL, ID, CJ, H2, H3,
-		EB, EM, HL, RI, XX,
-	}
-	return nil
-}
-
-func loadUnicodeLineBreakFile() ([]*arraylist.List, error) {
-	f, err := os.Open("/Users/npi/prg/go/gotype/etc/LineBreak.txt")
-	if err != nil {
-		fmt.Printf("ERROR\n")
-		return nil, err
-	}
-	defer f.Close()
-	p := NewUCDParser(f)
-	lbcs := make([]*arraylist.List, XXClass+1)
-	i := 0
-	for p.Next() {
-		from, to := p.Range(0)
-		brclzstr := p.String(1)
-		brclz := lbcFromString[brclzstr]
-		list := lbcs[brclz]
-		if list == nil {
-			list = arraylist.New()
-		}
-		for r := from; r <= to; r++ {
-			list.Add(r)
-		}
-		lbcs[brclz] = list
-		i++
-	}
-	err = p.Err()
-	if err != nil {
-		log.Fatal(err)
-	}
-	/*
-		for cl := CMClass; cl <= XXClass; cl++ {
-			fmt.Printf("class %s = %v\n", cl, lbcs[cl])
-		}
-	*/
-	return lbcs, err
-}
-
-func createRangesForClassesGlobal(lbcs []*arraylist.List) {
-	CM = createRangeTableFor(CMClass, lbcs)
-	BA = createRangeTableFor(BAClass, lbcs)
-	LF = createRangeTableFor(LFClass, lbcs)
-	BK = createRangeTableFor(BKClass, lbcs)
-	CR = createRangeTableFor(CRClass, lbcs)
-	NL = createRangeTableFor(NLClass, lbcs)
-	SP = createRangeTableFor(SPClass, lbcs)
-	EX = createRangeTableFor(EXClass, lbcs)
-	QU = createRangeTableFor(QUClass, lbcs)
-	AL = createRangeTableFor(ALClass, lbcs)
-	PR = createRangeTableFor(PRClass, lbcs)
-	PO = createRangeTableFor(POClass, lbcs)
-	OP = createRangeTableFor(OPClass, lbcs)
-	CP = createRangeTableFor(CPClass, lbcs)
-	IS = createRangeTableFor(ISClass, lbcs)
-	HY = createRangeTableFor(HYClass, lbcs)
-	SY = createRangeTableFor(SYClass, lbcs)
-	NU = createRangeTableFor(NUClass, lbcs)
-	AI = createRangeTableFor(AIClass, lbcs)
-	BB = createRangeTableFor(BBClass, lbcs)
-	GL = createRangeTableFor(GLClass, lbcs)
-	SA = createRangeTableFor(SAClass, lbcs)
-	JT = createRangeTableFor(JTClass, lbcs)
-	JV = createRangeTableFor(JVClass, lbcs)
-	JL = createRangeTableFor(JLClass, lbcs)
-	NS = createRangeTableFor(NSClass, lbcs)
-	ZW = createRangeTableFor(ZWClass, lbcs)
-	ZWJ = createRangeTableFor(WJClass, lbcs)
-	WJ = createRangeTableFor(WJClass, lbcs)
-	CL = createRangeTableFor(CLClass, lbcs)
-	ID = createRangeTableFor(IDClass, lbcs)
-	CJ = createRangeTableFor(CJClass, lbcs)
-	H2 = createRangeTableFor(H2Class, lbcs)
-	H3 = createRangeTableFor(H3Class, lbcs)
-	EB = createRangeTableFor(EBClass, lbcs)
-	EM = createRangeTableFor(EMClass, lbcs)
-	HL = createRangeTableFor(HLClass, lbcs)
-	RI = createRangeTableFor(RIClass, lbcs)
-	XX = createRangeTableFor(XXClass, lbcs)
-}
-
-func createRangeTableFor(lbc LineBreakingClass, lbcs []*arraylist.List) *unicode.RangeTable {
-	listOfRunes := lbcs[lbc]
-	var rtable *unicode.RangeTable
-	if listOfRunes != nil {
-		runes := make([]rune, listOfRunes.Size())
-		bag := listOfRunes.Values()
-		for i := 0; i < len(bag); i++ {
-			runes[i] = bag[i].(rune)
-		}
-		rtable = rangetable.New([]rune(runes)...)
-	} else {
-		rtable = rangetable.New()
-	}
-	return rtable
-}
-
-func timeTrack(start time.Time, name string) {
-	elapsed := time.Since(start)
-	log.Printf(">>> timing: %s took %s\n", name, elapsed)
-}
-
+/*
 type rule struct {
 	breakAt       int
 	penaltyBefore int
 	penaltyAfter  int
-	lbcs          []LineBreakingClass
+	lbcs          []int
 }
 
-func newRule(at int, penB int, penA int, lbcs ...LineBreakingClass) *rule {
-	r := &rule{}
-	r.breakAt = at
-	r.penaltyBefore = penB
-	r.penaltyAfter = penA
-	r.lbcs = make([]LineBreakingClass, len(lbcs))
-	for i, lbc := range lbcs {
-		r.lbcs[i] = lbc
-	}
-	return r
+*/
+
+type UnicodeBreaker interface {
+	InitFor(RunePublisher)
+	CodePointClassFor(rune) int
+	StartRulesFor(rune, int)
+	ProceedWithRune(rune, int)
+	LongestMatch() int
 }
 
-func (rule *rule) String() string {
-	var b bytes.Buffer
-	var i int
-	for i = 0; i < rule.breakAt; i++ {
-		b.WriteString(" ")
-		b.WriteString(rule.lbcs[i].String())
-	}
-	b.WriteString(" -->")
-	for ; i < len(rule.lbcs); i++ {
-		b.WriteString(" ")
-		b.WriteString(rule.lbcs[i].String())
-	}
-	return b.String()
-}
-
-type ruleset []*rule
-
-var rules ruleset
-var ruleStarts map[LineBreakingClass][]int
-
-const (
-	optSpaces LineBreakingClass = iota + XXClass
-	anyClass
-	sot
-	eot
-)
-
-func setupRules() {
-	rulecnt := 3
-	rules = make(ruleset, rulecnt)
-	rules[0] = newRule(1, 0, 1000, QUClass, optSpaces, OPClass)
-	rules[1] = newRule(0, 0, -1000, NLClass)
-	rules[2] = newRule(0, 1000, 1000, OPClass)
-	ruleStarts = make(map[LineBreakingClass][]int)
-	for i := 0; i < rulecnt; i++ {
-		rule := rules[i]
-		starter := rule.lbcs[0]
-		rs := ruleStarts[starter]
-		if rs == nil {
-			rs = make([]int, 1, 1)
-			rs[0] = i
-		} else {
-			rs = append(rs, i)
-		}
-		ruleStarts[starter] = rs
-	}
-}
-
-type rulestate struct {
-	rule *rule
-	at   int
-}
-
-type segment struct {
-	lbc       LineBreakingClass
+type atom struct {
 	penalties [10]int
 	r         rune
 	length    int
 }
 
-func (seg *segment) String() string {
-	return fmt.Sprintf("[%+q #%d (%s)]", seg.r, seg.length, seg.lbc)
+func (a *atom) String() string {
+	return fmt.Sprintf("[%+q #%d]", a.r, a.length)
 }
 
-type LineWrap struct {
-	deque     *deque.Deque
-	publisher RunePublisher
-	//trailPosDist int
-	reader io.RuneReader
-	atEOF  bool
+type Segmenter struct {
+	deque              *deque.Deque
+	publisher          RunePublisher
+	breakers           []UnicodeBreaker
+	reader             io.RuneReader
+	longestActiveMatch int
+	atEOF              bool
 }
 
-func NewLineWrap() *LineWrap {
-	lw := &LineWrap{}
-	lw.deque = &deque.Deque{}
-	lw.publisher = NewRunePublisher()
-	return lw
+func NewSegmenter(breakers ...UnicodeBreaker) *Segmenter {
+	s := &Segmenter{}
+	s.breakers = breakers
+	return s
 }
 
-func (lw *LineWrap) Init(reader io.RuneReader) {
-	lw.reader = reader
+func (s *Segmenter) Init(reader io.RuneReader) {
+	s.reader = reader
+	s.deque = &deque.Deque{}         // Q of atoms
+	s.publisher = NewRunePublisher() // for publishing rune events to breakers
+	for _, breaker := range s.breakers {
+		breaker.InitFor(s.publisher)
+	}
 }
 
-func (lw *LineWrap) Next() ([]byte, int, error) {
-	err := lw.readEnoughInput()
-	/*
-		if bytes, penalty := lw.getSegment(); bytes != nil {
-			return bytes, penalty, err
-		} else {
-			return lw.flush(), 0, err
-		}
-	*/
+func (s *Segmenter) Next() ([]byte, int, error) {
+	err := s.readEnoughInput()
 	return nil, 0, err
 }
 
-func (lw *LineWrap) frontSegment() *segment {
-	return lw.deque.Front().(*segment)
+func (s *Segmenter) frontAtom() *atom {
+	return s.deque.Front().(*atom)
 }
 
-func (lw *LineWrap) trailSegment() *segment {
-	return lw.deque.Back().(*segment)
+func (s *Segmenter) trailAtom() *atom {
+	return s.deque.Back().(*atom)
 }
 
-func (lw *LineWrap) readRune() (err error) {
-	fmt.Println("--------------------")
-	fmt.Printf("reading next rune\n")
-	if !lw.atEOF {
-		r, _, err := lw.reader.ReadRune()
-		fmt.Printf("r = %+q\n", r)
+func (s *Segmenter) readRune() (err error) {
+	fmt.Println("-------- reading next rune -----------")
+	if !s.atEOF {
+		r, _, err := s.reader.ReadRune()
+		fmt.Printf("rune = %+q\n", r)
 		if err == nil {
-			lbc := LineBreakingClassForRune(r)
-			if !lw.collectSpace(r, lbc) {
-				seg := &segment{}
-				seg.r = r
-				seg.lbc = lbc
-				seg.length = 1
-				lw.deque.PushFront(seg)
-			}
+			a := &atom{}
+			a.r = r
+			a.length = 1
+			s.deque.PushFront(a)
 		} else {
 			fmt.Printf("ReadRune() returned error = %s\n", err)
-			lw.atEOF = true
+			s.atEOF = true
 		}
 	} else {
 		err = io.EOF
@@ -357,43 +94,22 @@ func (lw *LineWrap) readRune() (err error) {
 	return err
 }
 
-func (lw *LineWrap) collectSpace(r rune, lbc LineBreakingClass) bool {
-	collected := false
-	fmt.Printf("checking for space: %+q = %s\n", r, lbc)
-	if lw.deque.Len() > 0 {
-		if lbc == SPClass {
-			front := lw.frontSegment()
-			fmt.Printf("front = %s\n", front)
-			if lbc == SPClass && front.lbc == SPClass {
-				front.length++
-				fmt.Printf("|SP| = %d\n", front.length)
-				collected = true // TODO: conserve apppended space rune
-			}
-		}
-	}
-	return collected
-}
-
-func (lw *LineWrap) maxActiveRuleTrailLength() int {
-	return 5
-}
-
-func (lw *LineWrap) readEnoughInput() (err error) {
-	for i := 0; lw.deque.Len()-lw.maxActiveRuleTrailLength() <= 0; {
-		err = lw.readRune()
+func (s *Segmenter) readEnoughInput() (err error) {
+	for i := 0; s.deque.Len()-s.longestActiveMatch <= 0; {
+		err = s.readRune()
 		if err != nil {
 			break
 		}
-		if lw.deque.Len() > 0 {
-			seg := lw.frontSegment()
-			brclass := LineBreakingClassForRune(seg.r)
-			// start up rules with brclass as first step
-			inxs := ruleStarts[brclass]
-			fmt.Printf("starting rules: %v\n", inxs)
-			for inx, r := range inxs {
-				fmt.Printf("  rule #%d: %s\n", inx, rules[r])
-				rule := rules[r]
-				lw.startRule(rule)
+		if s.deque.Len() > 0 {
+			s.longestActiveMatch = 0
+			a := s.frontAtom()
+			for _, breaker := range s.breakers {
+				cpClass := breaker.CodePointClassFor(a.r)
+				breaker.StartRulesFor(a.r, cpClass)
+				breaker.ProceedWithRune(a.r, cpClass)
+				if breaker.LongestMatch() > s.LongestActiveMatch() {
+					s.longestActiveMatch = breaker.LongestMatch()
+				}
 			}
 		} else {
 			fmt.Println("Q empty")
@@ -406,71 +122,69 @@ func (lw *LineWrap) readEnoughInput() (err error) {
 	return err
 }
 
-func (lw *LineWrap) printQ() {
-	fmt.Printf("Q #%d: ", lw.deque.Len())
-	for i := 0; i < lw.deque.Len(); i++ {
-		fmt.Printf(" - %s", lw.deque.At(i))
+func (s *Segmenter) printQ() {
+	fmt.Printf("Q #%d: ", s.deque.Len())
+	for i := 0; i < s.deque.Len(); i++ {
+		fmt.Printf(" - %s", s.deque.At(i))
 	}
 	fmt.Println(" .")
 }
 
 // ----------------------------------------------------------------------
 
-//const nStates int = 5
-//const nClasses int = int(XXClass) + 1
+type NfaStateFn func(*Recognizer, rune, int) NfaStateFn
 
-//type stateFn func(*lexer) stateFn
+type Recognizer struct {
+	Expect       int
+	DistanceToGo int
+	MatchLen     int
+	nextStep     NfaStateFn
+}
 
-/*
-func run() {
-	for state := startState; state != nil; {
-		state = state(lexer)
+func NewRecognizer(codePointClass int, distance int, next NfaStateFn) *Recognizer {
+	rec := &Recognizer{}
+	rec.Expect = codePointClass
+	rec.DistanceToGo = distance
+	rec.nextStep = next
+	return rec
+}
+
+func (rec *Recognizer) String() string {
+	if rec == nil {
+		return "[nil rule]"
 	}
-}
-*/
-
-type stateFn func(*nfaStep) *nfaStep
-
-type nfaStep struct {
-	expect       LineBreakingClass
-	distanceToGo int
-	nextStep     stateFn
+	return fmt.Sprintf("[%s -> %d]", rec.Expect, rec.DistanceToGo)
 }
 
-func newNfaStep(lbc LineBreakingClass, distance int, next stateFn) *nfaStep {
-	step := &nfaStep{}
-	step.expect = lbc
-	step.distanceToGo = distance
-	step.nextStep = next
-	return step
+func (rec *Recognizer) Distance() int {
+	return rec.DistanceToGo
 }
 
-func (step *nfaStep) String() string {
-	return fmt.Sprintf("[%s -> %d]", step.expect, step.distanceToGo)
+func (rec *Recognizer) MatchLength() int {
+	return rec.MatchLen
 }
 
-func (step *nfaStep) Distance() int {
-	return step.distanceToGo
-}
-
-func (step *nfaStep) RuneEvent(r rune, breakingClass int) {
-	d := step.distanceToGo
-	if step.distanceToGo > 0 {
-		step.distanceToGo--
+func (rec *Recognizer) RuneEvent(r rune, codePointClass int) {
+	fmt.Printf("received rune event: %+q / %d\n", r, codePointClass)
+	//d := rec.DistanceToGo
+	if rec.nextStep == nil {
+		rec.DistanceToGo = 0
+	} else {
+		rec.nextStep = rec.nextStep(rec, r, codePointClass)
 	}
-	fmt.Printf("received rune event; distance = %d -> %d\n", d, step.distanceToGo)
 }
 
 // ----------------------------------------------------------------------
 
 type RuneSubscriber interface {
-	RuneEvent(r rune, breakingClass int)
+	RuneEvent(r rune, codePointClass int)
 	Distance() int
+	MatchLength() int
 }
 
 type RunePublisher interface {
 	SubscribeMe(RuneSubscriber) RunePublisher
-	PublishRuneEvent(r rune, breakingClass int) (longestDistance int)
+	PublishRuneEvent(r rune, codePointClass int) (longestDistance int)
 	GetLowestDistance() int
 }
 
@@ -506,13 +220,13 @@ func (rpub *runePublisherHeap) Size() int {
 	return rpub.pqueue.Size()
 }
 
-func (rpub *runePublisherHeap) PublishRuneEvent(r rune, breakingClass int) int {
+func (rpub *runePublisherHeap) PublishRuneEvent(r rune, codePointClass int) int {
 	longest := 0
 	it := rpub.pqueue.Iterator()
 	for it.Next() {
 		subscr := it.Value().(RuneSubscriber)
-		subscr.RuneEvent(r, breakingClass)
-		d := subscr.Distance()
+		subscr.RuneEvent(r, codePointClass)
+		d := subscr.MatchLength()
 		if d > longest {
 			longest = d
 		}
@@ -546,7 +260,7 @@ func (rpub *runePublisherHeap) Print() {
 }
 
 func nfaStepComparator(s1, s2 interface{}) int {
-	step1 := s1.(*nfaStep)
-	step2 := s2.(*nfaStep)
-	return godsutils.IntComparator(step1.distanceToGo, step2.distanceToGo) // '<'
+	rec1 := s1.(*Recognizer)
+	rec2 := s2.(*Recognizer)
+	return godsutils.IntComparator(rec1.DistanceToGo, rec2.DistanceToGo) // '<'
 }

@@ -6,27 +6,6 @@ import (
 	"testing"
 )
 
-func TestUCDReadLineWrap(t *testing.T) {
-	loadUnicodeLineBreakFile()
-}
-
-func TestLBC1(t *testing.T) {
-	setupLineBreakingClasses()
-	var r rune
-	r = 'A'
-	c := LineBreakingClassForRune(r)
-	fmt.Printf("%+q = %s\n", r, c)
-}
-
-func TestLBC2(t *testing.T) {
-	setupLineBreakingClasses()
-	var r rune
-	//r = 'A'
-	r = '世'
-	c := LineBreakingClassForRune(r)
-	fmt.Printf("%+q = %s\n", r, c)
-}
-
 func TestRules1(t *testing.T) {
 	setupRules()
 	fmt.Printf("starts for %s = %d\n", QUClass, ruleStarts[QUClass])
