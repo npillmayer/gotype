@@ -1,6 +1,7 @@
 package unicode
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -17,25 +18,30 @@ type UnicodeBreaker interface {
 	StartRulesFor(rune, int)
 	ProceedWithRune(rune, int)
 	LongestMatch() int
+	Penalties() []int
 }
 
 type atom struct {
-	penalties [10]int
-	r         rune
-	length    int
+	r       rune
+	length  int
+	penalty int
 }
 
+var eotAtom atom = atom{rune(0), 0, 0}
+
 func (a *atom) String() string {
-	return fmt.Sprintf("[%+q #%d]", a.r, a.length)
+	return fmt.Sprintf("[%+q p=%d]", a.r, a.penalty)
 }
 
 type Segmenter struct {
-	deque              *deque.Deque
-	publisher          RunePublisher
-	breakers           []UnicodeBreaker
-	reader             io.RuneReader
-	longestActiveMatch int
-	atEOF              bool
+	deque                 *deque.Deque
+	publisher             RunePublisher
+	breakers              []UnicodeBreaker
+	reader                io.RuneReader
+	nullPenalty           int
+	longestActiveMatch    int
+	distanceToNextPenalty int
+	atEOF                 bool
 }
 
 func NewSegmenter(breakers ...UnicodeBreaker) *Segmenter {
@@ -60,6 +66,11 @@ func (s *Segmenter) Init(reader io.RuneReader) {
 		s.longestActiveMatch = 0
 		s.atEOF = false
 	}
+	s.distanceToNextPenalty = 10000
+}
+
+func (s *Segmenter) SetNullPenalty(null int) {
+	s.nullPenalty = null
 }
 
 func (s *Segmenter) Next() ([]byte, int, error) {
@@ -69,10 +80,13 @@ func (s *Segmenter) Next() ([]byte, int, error) {
 	var match []byte
 	l := 0
 	err := s.readEnoughInput()
-	if err != io.EOF {
+	if err != nil && err != io.EOF {
 		return nil, 0, err
 	}
-	match, l, err = s.getTrailMatch()
+	if s.distanceToNextPenalty < 1000 {
+		fmt.Printf("distance to next penalty (%d) = %d\n", s.deque.At(s.distanceToNextPenalty-1), s.distanceToNextPenalty)
+	}
+	match, l = s.getTrailSegment()
 	return match, l, err
 }
 
@@ -86,27 +100,32 @@ func (s *Segmenter) trailAtom() *atom {
 
 func (s *Segmenter) readRune() (err error) {
 	fmt.Println("-------- reading next rune -----------")
-	if !s.atEOF {
+	if s.atEOF {
+		err = io.EOF
+	} else {
 		var r rune
 		r, _, err = s.reader.ReadRune()
 		fmt.Printf("rune = %+q\n", r)
 		if err == nil {
-			a := &atom{}
+			a := &atom{} // TODO get from pool
 			a.r = r
 			a.length = 1
 			s.deque.PushFront(a)
+		} else if err == io.EOF {
+			s.deque.PushFront(&eotAtom)
+			s.atEOF = true
+			err = nil
 		} else {
 			fmt.Printf("ReadRune() returned error = %s\n", err)
 			s.atEOF = true
 		}
-	} else {
-		err = io.EOF
 	}
 	return err
 }
 
 func (s *Segmenter) readEnoughInput() (err error) {
-	for i := 0; s.deque.Len()-s.longestActiveMatch <= 0; {
+	//for i := 0; s.deque.Len()-s.longestActiveMatch <= 0; {
+	for i := 0; s.distanceToNextPenalty+s.longestActiveMatch >= s.deque.Len(); {
 		err = s.readRune()
 		if err != nil {
 			break
@@ -121,7 +140,9 @@ func (s *Segmenter) readEnoughInput() (err error) {
 				if breaker.LongestMatch() > s.longestActiveMatch {
 					s.longestActiveMatch = breaker.LongestMatch()
 				}
+				s.insertPenalties(breaker.Penalties())
 			}
+			s.printQ()
 		} else {
 			fmt.Println("Q empty")
 		}
@@ -133,8 +154,40 @@ func (s *Segmenter) readEnoughInput() (err error) {
 	return err
 }
 
-func (s *Segmenter) getTrailMatch() ([]byte, int, error) {
-	return []byte("abc"), 3, io.EOF
+func (s *Segmenter) insertPenalties(penalties []int) {
+	l := s.deque.Len()
+	for i, p := range penalties {
+		atom := s.deque.At(i + 1).(*atom)
+		atom.penalty += p
+		fmt.Printf("l = %d, i = %d\n", l, i)
+		if atom.penalty != s.nullPenalty && l-(i+1) < s.distanceToNextPenalty {
+			s.distanceToNextPenalty = l - (i + 1)
+			fmt.Printf("=> distance to penalty = %d\n", s.distanceToNextPenalty)
+		}
+	}
+}
+
+func (s *Segmenter) getTrailSegment() ([]byte, int) {
+	fmt.Println("Collecting trail match:")
+	buf := new(bytes.Buffer)
+	l := s.deque.Len() - 1 // index of last
+	var last *atom
+	seglen := 0
+	for i := 0; i < s.distanceToNextPenalty; i++ {
+		fmt.Printf(".at[%d] = %s\n", l-i, s.deque.At(l-i))
+		last = s.deque.PopBack().(*atom)
+		written, _ := buf.WriteRune(last.r)
+		seglen += written
+	}
+	s.distanceToNextPenalty = 10000
+	for i := 0; i < s.deque.Len(); i++ {
+		atom := s.deque.At(i).(*atom)
+		if atom.penalty != s.nullPenalty {
+			s.distanceToNextPenalty = s.deque.Len() - i // TODO may be off by 1
+		}
+	}
+	fmt.Printf("new distance to penalty = %d\n", s.distanceToNextPenalty)
+	return buf.Bytes(), seglen
 }
 
 func (s *Segmenter) printQ() {
@@ -153,13 +206,15 @@ type Recognizer struct {
 	Expect       int
 	DistanceToGo int
 	MatchLen     int
+	Penalties    []int
 	nextStep     NfaStateFn
 }
 
-func NewRecognizer(codePointClass int, distance int, next NfaStateFn) *Recognizer {
+func NewRecognizer(codePointClass int, distance int, p []int, next NfaStateFn) *Recognizer {
 	rec := &Recognizer{}
 	rec.Expect = codePointClass
 	rec.DistanceToGo = distance
+	rec.Penalties = p
 	rec.nextStep = next
 	return rec
 }
@@ -179,27 +234,30 @@ func (rec *Recognizer) MatchLength() int {
 	return rec.MatchLen
 }
 
-func (rec *Recognizer) RuneEvent(r rune, codePointClass int) {
+func (rec *Recognizer) RuneEvent(r rune, codePointClass int) []int {
 	fmt.Printf("received rune event: %+q / %d\n", r, codePointClass)
-	//d := rec.DistanceToGo
 	if rec.nextStep == nil {
 		rec.DistanceToGo = 0
 	} else {
 		rec.nextStep = rec.nextStep(rec, r, codePointClass)
+		if rec.MatchLen > 0 && rec.DistanceToGo == 0 { // accepted a match
+			return rec.Penalties
+		}
 	}
+	return nil
 }
 
 // ----------------------------------------------------------------------
 
 type RuneSubscriber interface {
-	RuneEvent(r rune, codePointClass int)
+	RuneEvent(r rune, codePointClass int) []int
 	Distance() int
 	MatchLength() int
 }
 
 type RunePublisher interface {
 	SubscribeMe(RuneSubscriber) RunePublisher
-	PublishRuneEvent(r rune, codePointClass int) (longestDistance int)
+	PublishRuneEvent(r rune, codePointClass int) (longestDistance int, penalties []int)
 	GetLowestDistance() int
 }
 
@@ -235,12 +293,14 @@ func (rpub *runePublisherHeap) Size() int {
 	return rpub.pqueue.Size()
 }
 
-func (rpub *runePublisherHeap) PublishRuneEvent(r rune, codePointClass int) int {
+func (rpub *runePublisherHeap) PublishRuneEvent(r rune, codePointClass int) (int, []int) {
 	longest := 0
 	it := rpub.pqueue.Iterator()
+	penaltiesTotal := make([]int, 0, 2)
 	for it.Next() {
 		subscr := it.Value().(RuneSubscriber)
-		subscr.RuneEvent(r, codePointClass)
+		penalties := subscr.RuneEvent(r, codePointClass)
+		penaltiesTotal = AddPenalties(penaltiesTotal, penalties)
 		d := subscr.MatchLength()
 		if d > longest {
 			longest = d
@@ -250,7 +310,20 @@ func (rpub *runePublisherHeap) PublishRuneEvent(r rune, codePointClass int) int 
 	for rpub.GetLowestDistance() == 0 {
 		rpub.Pop() // drop all subscribers with distance == 0
 	}
-	return longest
+	return longest, penaltiesTotal
+}
+
+// The default function to aggregate break-penalties.
+// Simply adds up all penalties.
+func AddPenalties(total []int, penalties []int) []int {
+	for i, p := range penalties {
+		if i >= len(total) {
+			total = append(total, p)
+		} else {
+			total[i] += p
+		}
+	}
+	return total
 }
 
 func (rpub *runePublisherHeap) SubscribeMe(rsub RuneSubscriber) RunePublisher {

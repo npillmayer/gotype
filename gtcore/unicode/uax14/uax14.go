@@ -133,6 +133,9 @@ var rangeFromUAX14Class []*unicode.RangeTable
 // Top-level client function:
 // Get the line breaking/wrap class for a Unicode code-point
 func UAX14ClassForRune(r rune) UAX14Class {
+	if r == rune(0) {
+		return eot
+	}
 	for lbc := CMClass; lbc < XXClass; lbc++ {
 		urange := rangeFromUAX14Class[lbc]
 		if urange == nil {
@@ -266,15 +269,16 @@ func createRangeTableFor(lbc UAX14Class, lbcs []*arraylist.List) *unicode.RangeT
 type UAX14LineWrap struct {
 	publisher    u.RunePublisher
 	longestMatch int
-	rules        map[UAX14Class][]*u.Recognizer
+	penalties    []int
+	rules        map[UAX14Class][]*u.Recognizer // TODO map of StateFn s
 }
 
 func NewUAX14LineWrap() *UAX14LineWrap {
 	uax14 := &UAX14LineWrap{}
 	uax14.rules = map[UAX14Class][]*u.Recognizer{
-		NLClass:   {u.NewRecognizer(int(NLClass), 2, UAX14NewLine)},
-		QUClass:   {u.NewRecognizer(int(QUClass), 2, UAX14Quote)},
-		optSpaces: {u.NewRecognizer(int(SPClass), 1, UAX14OptSpaces)},
+		NLClass:   {u.NewRecognizer(int(NLClass), 2, []int{-1000}, UAX14NewLine)}, // TODO: create new one for every StartRulesFor(...), even better from pool
+		QUClass:   {u.NewRecognizer(int(QUClass), 2, []int{1000}, UAX14Quote)},    // just keep StateFn here
+		optSpaces: {u.NewRecognizer(int(SPClass), 1, nil, UAX14OptSpaces)},
 	}
 	return uax14
 }
@@ -289,8 +293,10 @@ func (uax14 *UAX14LineWrap) CodePointClassFor(r rune) int {
 
 func (uax14 *UAX14LineWrap) StartRulesFor(r rune, cpClass int) {
 	uax14c := UAX14Class(cpClass)
-	fmt.Printf("starting rules for class = %s\n", uax14c)
 	rules := uax14.rules[uax14c]
+	if len(rules) > 0 {
+		fmt.Printf("starting rules for class = %s\n", uax14c)
+	}
 	for _, rule := range rules {
 		uax14.publisher.SubscribeMe(rule)
 	}
@@ -299,12 +305,16 @@ func (uax14 *UAX14LineWrap) StartRulesFor(r rune, cpClass int) {
 func (uax14 *UAX14LineWrap) ProceedWithRune(r rune, cpClass int) {
 	uax14c := UAX14Class(cpClass)
 	fmt.Printf("proceeding with rune = %+q / %s\n", r, uax14c)
-	uax14.longestMatch = uax14.publisher.PublishRuneEvent(r, int(uax14c))
+	uax14.longestMatch, uax14.penalties = uax14.publisher.PublishRuneEvent(r, int(uax14c))
 	fmt.Printf("longest match = %d\n", uax14.LongestMatch())
 }
 
 func (uax14 *UAX14LineWrap) LongestMatch() int {
 	return uax14.longestMatch
+}
+
+func (uax14 *UAX14LineWrap) Penalties() []int {
+	return uax14.penalties
 }
 
 // --- Recognizer Rules -------------------------------------------------
@@ -326,7 +336,6 @@ func accept(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
 	uax14c := UAX14Class(cpClass)
 	fmt.Printf("-> accept %s with lookahead = %s\n", UAX14Class(rec.Expect), uax14c)
 	rec.DistanceToGo = 0
-	rec.MatchLen = 0
 	return abort
 }
 
@@ -361,7 +370,6 @@ func UAX14ThisClass(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
 		rec.MatchLen++
 		return accept
 	}
-	rec.MatchLen = 0
 	return doAbort(rec)
 }
 

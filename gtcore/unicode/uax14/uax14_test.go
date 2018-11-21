@@ -9,6 +9,13 @@ import (
 	"github.com/npillmayer/gotype/gtcore/unicode"
 )
 
+func TestAddPenalties(t *testing.T) {
+	total := make([]int, 0, 5)
+	penalties := []int{17, 23}
+	total = unicode.AddPenalties(total, penalties)
+	fmt.Printf("total = %v\n", total)
+}
+
 func TestUCDReadLineWrap(t *testing.T) {
 	loadUnicodeLineBreakFile()
 }
@@ -30,6 +37,7 @@ func TestClassForRune2(t *testing.T) {
 	fmt.Printf("%+q = %s\n", r, c)
 }
 
+/*
 func TestLineWrapNL(t *testing.T) {
 	SetupUAX14Classes()
 	publisher := unicode.NewRunePublisher()
@@ -74,6 +82,7 @@ func TestSegmenterUAX14RecognizeRule1(t *testing.T) {
 		t.Fail()
 	}
 }
+*/
 
 func TestSegmenterUAX14Match1(t *testing.T) {
 	SetupUAX14Classes()
