@@ -1,4 +1,4 @@
-package unicode
+package uax14
 
 import (
 	"fmt"
@@ -14,10 +14,6 @@ func TestAddPenalties(t *testing.T) {
 	penalties := []int{17, 23}
 	total = unicode.AddPenalties(total, penalties)
 	fmt.Printf("total = %v\n", total)
-}
-
-func TestUCDReadLineWrap(t *testing.T) {
-	loadUnicodeLineBreakFile()
 }
 
 func TestClassForRune1(t *testing.T) {
@@ -37,7 +33,6 @@ func TestClassForRune2(t *testing.T) {
 	fmt.Printf("%+q = %s\n", r, c)
 }
 
-/*
 func TestLineWrapNL(t *testing.T) {
 	SetupUAX14Classes()
 	publisher := unicode.NewRunePublisher()
@@ -46,6 +41,9 @@ func TestLineWrapNL(t *testing.T) {
 	lw.StartRulesFor('\n', int(NLClass))
 	lw.ProceedWithRune('\n', int(NLClass))
 	lw.ProceedWithRune('A', int(ALClass))
+	if lw.LongestMatch() != 1 {
+		t.Fail()
+	}
 }
 
 func TestLineWrapQU(t *testing.T) {
@@ -82,7 +80,6 @@ func TestSegmenterUAX14RecognizeRule1(t *testing.T) {
 		t.Fail()
 	}
 }
-*/
 
 func TestSegmenterUAX14Match1(t *testing.T) {
 	SetupUAX14Classes()
