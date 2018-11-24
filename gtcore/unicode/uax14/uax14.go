@@ -1,5 +1,5 @@
 /*
-Package for implemeting Unicode Annex #14 line breaking.
+Package uax14 implements Unicode Annex #14 line breaking.
 
 ---------------------------------------------------------------------------
 
@@ -43,14 +43,24 @@ for how to place break points / break inhibitors.
 
 Typical Usage
 
-Clients instantiate a line wrapper object and use it as the
+Clients instantiate a UAX#14 line breaker object and use it as the
 breaking engine for a segmenter.
 
-  linewrap := NewUAX14LineWrap()
-  segmenter := unicode.NewSegmenter(linewrap)
+  breaker := uax14.NewLineWrap()
+  segmenter := unicode.NewSegmenter(breaker)
   segmenter.Init(...)
   match, length, err := segmenter.Next()
 
+Attention
+
+Before using line breakers, clients will have to initialize the UAX#14
+classes and rules.
+
+  SetupUAX14Classes()
+
+This initializes all the code-point range tables. Initialization is
+not done beforehand, as it consumes quite some memory, and using UAX#14
+is not mandatory for line breaking.
 */
 package uax14
 
@@ -90,13 +100,14 @@ func UAX14ClassForRune(r rune) UAX14Class {
 var setupOnce sync.Once
 
 // Top-level preparation function:
-// Create 'constants' for UAX#14 line breaking/wrap.
+// Create code-point classes for UAX#14 line breaking/wrap.
+// (Concurrency-safe).
 func SetupUAX14Classes() {
 	defer timeTrack(time.Now(), "setup of UAX#14 code-point ranges")
 	setupOnce.Do(setupUAX14Classes)
 }
 
-// === UAX#14 Rules =====================================================
+// === UAX#14 Line Breaker ==============================================
 
 // Objects of this type are used by a unicode.Segmenter to break lines
 // up according to UAX#14. It implements the unicode.UnicodeBreaker interface.
@@ -104,7 +115,7 @@ type UAX14LineWrap struct {
 	publisher    u.RunePublisher
 	longestMatch int
 	penalties    []int
-	rules        map[UAX14Class][]*u.Recognizer // TODO map of StateFn s
+	rules        map[UAX14Class][]u.NfaStateFn
 }
 
 // Create a new (un-initialized) UAX#14 line breaker.
@@ -116,26 +127,34 @@ type UAX14LineWrap struct {
 //   segmenter.Init(...)
 //   match, length, err := segmenter.Next()
 //
-func NewUAX14LineWrap() *UAX14LineWrap {
+func NewLineWrap() *UAX14LineWrap {
 	uax14 := &UAX14LineWrap{}
-	uax14.rules = map[UAX14Class][]*u.Recognizer{
-		NLClass:   {u.NewRecognizer(int(NLClass), 2, []int{-1000}, UAX14NewLine)}, // TODO: create new one for every StartRulesFor(...), even better from pool
-		QUClass:   {u.NewRecognizer(int(QUClass), 2, []int{1000}, UAX14Quote)},    // just keep StateFn here
-		optSpaces: {u.NewRecognizer(int(SPClass), 1, nil, UAX14OptSpaces)},
+	uax14.rules = map[UAX14Class][]u.NfaStateFn{
+		NLClass: {Rule05_NewLine},
+		CRClass: {Rule05_NewLine},
 	}
 	return uax14
 }
 
 // Initialize a line breaker for a rune-publisher (normally from a
 // unicode.Segmenter).
+//
+// Interface unicode.UnicodeBreaker
 func (uax14 *UAX14LineWrap) InitFor(rpub u.RunePublisher) {
 	uax14.publisher = rpub
 }
 
+// Return the UAX#14 code-point class for a rune (= code-point).
+//
+// Interface unicode.UnicodeBreaker
 func (uax14 *UAX14LineWrap) CodePointClassFor(r rune) int {
 	return int(UAX14ClassForRune(r))
 }
 
+// Start all recognizers where the starting symbol is rune r.
+// r is of code-point-class cpClass.
+//
+// Interface unicode.UnicodeBreaker
 func (uax14 *UAX14LineWrap) StartRulesFor(r rune, cpClass int) {
 	uax14c := UAX14Class(cpClass)
 	rules := uax14.rules[uax14c]
@@ -143,10 +162,15 @@ func (uax14 *UAX14LineWrap) StartRulesFor(r rune, cpClass int) {
 		fmt.Printf("starting rules for class = %s\n", uax14c)
 	}
 	for _, rule := range rules {
-		uax14.publisher.SubscribeMe(rule)
+		rec := u.NewPooledRecognizer(cpClass, rule)
+		uax14.publisher.SubscribeMe(rec)
 	}
 }
 
+// A new code-point has been read and this breaker receives a message to
+// consume it.
+//
+// Interface unicode.UnicodeBreaker
 func (uax14 *UAX14LineWrap) ProceedWithRune(r rune, cpClass int) {
 	uax14c := UAX14Class(cpClass)
 	fmt.Printf("proceeding with rune = %+q / %s\n", r, uax14c)
@@ -154,15 +178,20 @@ func (uax14 *UAX14LineWrap) ProceedWithRune(r rune, cpClass int) {
 	fmt.Printf("longest match = %d\n", uax14.LongestMatch())
 }
 
+// Interface unicode.UnicodeBreaker
 func (uax14 *UAX14LineWrap) LongestMatch() int {
 	return uax14.longestMatch
 }
 
+// Get all active penalties for all active recognizers combined.
+// Index 0 belongs to the most recently read rune.
+//
+// Interface unicode.UnicodeBreaker
 func (uax14 *UAX14LineWrap) Penalties() []int {
 	return uax14.penalties
 }
 
-// --- Recognizer Rules -------------------------------------------------
+// --- Standard Recognizer Rules ----------------------------------------
 
 func doAbort(rec *u.Recognizer) u.NfaStateFn {
 	rec.DistanceToGo = 0
@@ -174,7 +203,13 @@ func abort(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
 	rec.DistanceToGo = 0
 	rec.MatchLen = 0
 	fmt.Println("-> abort")
-	return abort
+	return nil
+}
+
+func doAccept(rec *u.Recognizer, penalties ...int) u.NfaStateFn {
+	fmt.Printf("-> ACCEPT %s\n", UAX14Class(rec.Expect))
+	fmt.Printf("   penalties: %v", penalties)
+	return nil
 }
 
 func accept(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
@@ -182,53 +217,6 @@ func accept(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
 	fmt.Printf("-> accept %s with lookahead = %s\n", UAX14Class(rec.Expect), uax14c)
 	rec.DistanceToGo = 0
 	return abort
-}
-
-func UAX14NewLine(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
-	uax14c := UAX14Class(cpClass)
-	fmt.Printf("fire rule NewLine for lookahead = %s\n", uax14c)
-	if uax14c == NLClass || uax14c == LFClass {
-		rec.DistanceToGo = 1
-		rec.MatchLen++
-		return accept
-	}
-	return doAbort(rec)
-}
-
-func UAX14Quote(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
-	uax14c := UAX14Class(cpClass)
-	fmt.Printf("fire rule Quote for lookahead = %s\n", uax14c)
-	if uax14c == QUClass {
-		rec.DistanceToGo = 2
-		rec.MatchLen++
-		rec.Expect = int(OPClass)
-		return UAX14OptSpaces
-	}
-	return doAbort(rec)
-}
-
-func UAX14ThisClass(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
-	uax14c := UAX14Class(cpClass)
-	fmt.Printf("fire generic rule for %s with lookahead = %s\n", UAX14Class(rec.Expect), uax14c)
-	if uax14c == UAX14Class(rec.Expect) {
-		rec.DistanceToGo--
-		rec.MatchLen++
-		return accept
-	}
-	return doAbort(rec)
-}
-
-func UAX14OptSpaces(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
-	uax14c := UAX14Class(cpClass)
-	if uax14c == SPClass {
-		fmt.Println("ignoring optional space")
-		rec.MatchLen++
-		return UAX14OptSpaces // repeat
-	} else if uax14c == UAX14Class(rec.Expect) {
-		rec.MatchLen++
-		return accept // accept rec.Expect in next rec
-	}
-	return doAbort(rec)
 }
 
 // --- Util -------------------------------------------------------------

@@ -36,7 +36,7 @@ func TestClassForRune2(t *testing.T) {
 func TestLineWrapNL(t *testing.T) {
 	SetupUAX14Classes()
 	publisher := unicode.NewRunePublisher()
-	lw := NewUAX14LineWrap()
+	lw := NewLineWrap()
 	lw.InitFor(publisher)
 	lw.StartRulesFor('\n', int(NLClass))
 	lw.ProceedWithRune('\n', int(NLClass))
@@ -49,7 +49,7 @@ func TestLineWrapNL(t *testing.T) {
 func TestLineWrapQU(t *testing.T) {
 	SetupUAX14Classes()
 	publisher := unicode.NewRunePublisher()
-	lw := NewUAX14LineWrap()
+	lw := NewLineWrap()
 	lw.InitFor(publisher)
 	lw.StartRulesFor('"', int(QUClass))
 	lw.ProceedWithRune('"', int(QUClass))
@@ -60,7 +60,7 @@ func TestLineWrapQU(t *testing.T) {
 
 func TestSegmenterUAX14Init(t *testing.T) {
 	SetupUAX14Classes()
-	lw := NewUAX14LineWrap()
+	lw := NewLineWrap()
 	segm := unicode.NewSegmenter(lw)
 	_, _, err := segm.Next()
 	fmt.Println(err)
@@ -71,7 +71,7 @@ func TestSegmenterUAX14Init(t *testing.T) {
 
 func TestSegmenterUAX14RecognizeRule1(t *testing.T) {
 	SetupUAX14Classes()
-	lw := NewUAX14LineWrap()
+	lw := NewLineWrap()
 	segm := unicode.NewSegmenter(lw)
 	segm.Init(strings.NewReader("\" ("))
 	_, _, err := segm.Next()
@@ -83,7 +83,7 @@ func TestSegmenterUAX14RecognizeRule1(t *testing.T) {
 
 func TestSegmenterUAX14Match1(t *testing.T) {
 	SetupUAX14Classes()
-	lw := NewUAX14LineWrap()
+	lw := NewLineWrap()
 	segm := unicode.NewSegmenter(lw)
 	segm.Init(strings.NewReader("\" ("))
 	match, _, err := segm.Next()

@@ -1,3 +1,61 @@
+/*
+Package for a generator for UAX#14 classes.
+
+---------------------------------------------------------------------------
+
+BSD License
+
+Copyright (c) 2017-18, Norbert Pillmayer (norbert@pillmayer.com)
+
+All rights reserved.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+3. Neither the name of Norbert Pillmayer nor the names of its contributors
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+----------------------------------------------------------------------
+
+Generator for Unicode UAX#14 code-point classes.
+UAX#14 is about line break/wrap. For more information see
+http://unicode.org/reports/tr14/
+
+Classes are generated from a UAX#14 companion file: "LineBreak.txt".
+This is the definite source for UAX#14 code-point classes. The
+generator looks for it in a directory "$GOPATH/etc/".
+
+
+Usage
+
+The generator has just one option, a "verbose" flag. It should usually
+be turned on.
+
+   generator [-v]
+
+This creates a file "uax14classes.go" in the current directory. It is designed
+to be called from the "uax14" directory.
+*/
 package main
 
 import (
@@ -15,18 +73,6 @@ import (
 	"github.com/npillmayer/gotype/gtcore/unicode/ucd"
 )
 
-/*
-----------------------------------------------------------------------
-Generator for Unicode UAX#14 code-point classes.
-UAX#14 is about line break/wrap. For more information see
-http://unicode.org/reports/tr14/
-
-Classes are generated from a UAX#14 companion file: "LineBreak.txt".
-This is the definite source for UAX#14 code-point classes. The
-generator looks for it in a directory "$GOPATH/etc/".
-----------------------------------------------------------------------
-*/
-
 var logger = log.New(os.Stderr, "UAX#14 generator: ", log.LstdFlags)
 
 // flag: verbose output ?
@@ -36,66 +82,6 @@ var uax14classnames = []string{"AI", "AL", "B2", "BA", "BB", "BK", "CB", "CJ",
 	"CL", "CM", "CP", "CR", "EB", "EM", "EX", "GL", "H2", "H3", "HL", "HY",
 	"ID", "IN", "IS", "JL", "JT", "JV", "LF", "NL", "NS", "NU", "OP", "PO",
 	"PR", "QU", "RI", "SA", "SG", "SP", "SY", "WJ", "XX", "ZW", "ZWJ"}
-
-/*
-//go:generate stringer -type=UAX14Class
-const (
-	// sequence matters!
-	AIClass UAX14Class = iota
-	ALClass
-	BAClass
-	BBClass
-	BKClass
-	CJClass
-	CLClass
-	CMClass
-	CPClass
-	CRClass
-	EBClass
-	EMClass
-	EXClass
-	GLClass
-	H2Class
-	H3Class
-	HLClass
-	HYClass
-	IDClass
-	ISClass
-	JLClass
-	JTClass
-	JVClass
-	LFClass
-	NLClass
-	NSClass
-	NUClass
-	OPClass
-	POClass
-	PRClass
-	QUClass
-	RIClass
-	SAClass
-	SPClass
-	SYClass
-	WJClass
-	XXClass
-	ZWClass
-	ZWJClass
-	sot       // pseudo class
-	eot       // pseudo class
-	optSpaces // pseudo class
-)
-
-var uax14ClassFromString = map[string]UAX14Class{
-	"CM": CMClass, "BA": BAClass, "LF": LFClass, "BK": BKClass, "CR": CRClass,
-	"NL": NLClass, "SP": SPClass, "EX": EXClass, "QU": QUClass, "AL": ALClass,
-	"PR": PRClass, "PO": POClass, "OP": OPClass, "CP": CPClass, "IS": ISClass,
-	"HY": HYClass, "SY": SYClass, "NU": NUClass, "AI": AIClass, "BB": BBClass,
-	"GL": GLClass, "SA": SAClass, "JT": JTClass, "JV": JVClass, "JL": JLClass,
-	"NS": NSClass, "ZW": ZWClass, "ZWJ": ZWJClass, "WJ": WJClass, "CL": CLClass,
-	"ID": IDClass, "CJ": CJClass, "H2": H2Class, "H3": H3Class, "EB": EBClass,
-	"EM": EMClass, "HL": HLClass, "RI": RIClass, "XX": XXClass,
-}
-*/
 
 // Load the Unicode UAX#14 definition file: LineBreak.txt
 func loadUnicodeLineBreakFile() (map[string][]rune, error) {
@@ -146,9 +132,9 @@ func loadUnicodeLineBreakFile() (map[string][]rune, error) {
 
 var header string = `package uax14
 
-// This file has been generated -- you probably should not edit it.
+// This file has been generated -- you probably should NOT EDIT IT !
 // 
-// BSD License, Copyright (c) 2017-18, Norbert Pillmayer
+// BSD License, Copyright (c) 2018, Norbert Pillmayer (norbert@pillmayer.com)
 
 import (
     "strconv"
@@ -169,7 +155,7 @@ var rangeFromUAX14Class []*unicode.RangeTable
 
 var templateRangeTableVars string = `
 // Range tables for UAX#14 code-point classes.
-// Will be initialized with setupUAX14Classes().
+// Will be initialized with SetupUAX14Classes().
 // Clients can check with unicode.Is(..., rune){{$i:=0}}
 var {{range .}}{{$i = inc $i}}{{.}}, {{if modten $i}}
     {{end}}{{end}}unused *unicode.RangeTable
@@ -192,6 +178,7 @@ var _UAX14Class_index = [...]uint16{0, 7, 14, 21, 28, 35, 42, 49, 56, 63, 70,
     189, 196, 203, 210, 217, 224, 231, 238, 245, 252, 259, 266, 273, 280, 287,
     294, 302}
 
+// Stringer for type UAX14Class
 func (c UAX14Class) String() string {
     if c == sot {
         return "sot"

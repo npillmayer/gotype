@@ -1,7 +1,63 @@
+/*
+Package unicode is about Unicode and text segmenting.
+
+---------------------------------------------------------------------------
+
+BSD License
+
+Copyright (c) 2017-18, Norbert Pillmayer
+
+All rights reserved.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+3. Neither the name of Norbert Pillmayer nor the names of its contributors
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+----------------------------------------------------------------------
+
+Typical Usage
+
+Clients instantiate a UnicodeBreaker object and use it as the
+breaking engine for a segmenter. Multiple breaking engines may be
+supplied.
+
+  breaker1 := ...
+  breaker2 := ...
+  segmenter := unicode.NewSegmenter(breaker1, breaker2)
+  segmenter.Init(...)
+  match, length, err := segmenter.Next()
+
+An example for an UnicodeBreaker is "uax14.LineWrap", a breaker
+implementing the UAX#14 line breaking algorithm.
+
+*/
 package unicode
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +66,7 @@ import (
 	"github.com/emirpasic/gods/trees/binaryheap"
 	godsutils "github.com/emirpasic/gods/utils"
 	"github.com/gammazero/deque"
+	pool "github.com/jolestar/go-commons-pool"
 )
 
 type UnicodeBreaker interface {
@@ -157,7 +214,7 @@ func (s *Segmenter) readEnoughInput() (err error) {
 func (s *Segmenter) insertPenalties(penalties []int) {
 	l := s.deque.Len()
 	for i, p := range penalties {
-		atom := s.deque.At(i + 1).(*atom)
+		atom := s.deque.At(i).(*atom)
 		atom.penalty += p
 		fmt.Printf("l = %d, i = %d\n", l, i)
 		if atom.penalty != s.nullPenalty && l-(i+1) < s.distanceToNextPenalty {
@@ -210,6 +267,8 @@ type Recognizer struct {
 	nextStep     NfaStateFn
 }
 
+// Create a new Recognizer. This is rarely used, as clients rather should
+// call NewPooledRecognizer().
 func NewRecognizer(codePointClass int, distance int, p []int, next NfaStateFn) *Recognizer {
 	rec := &Recognizer{}
 	rec.Expect = codePointClass
@@ -219,11 +278,58 @@ func NewRecognizer(codePointClass int, distance int, p []int, next NfaStateFn) *
 	return rec
 }
 
+type recognizerPool struct {
+	opool *pool.ObjectPool
+	ctx   context.Context
+}
+
+var globalRecognizerPool *recognizerPool
+
+func init() {
+	globalRecognizerPool = &recognizerPool{}
+	factory := pool.NewPooledObjectFactorySimple(
+		func(context.Context) (interface{}, error) {
+			rec := &Recognizer{}
+			rec.Penalties = make([]int, 5)
+			return rec, nil
+		})
+	globalRecognizerPool.ctx = context.Background()
+	config := pool.NewDefaultPoolConfig()
+	config.LIFO = false
+	config.MaxTotal = -1 // infinity
+	config.BlockWhenExhausted = false
+	globalRecognizerPool.opool = pool.NewObjectPool(globalRecognizerPool.ctx, factory, config)
+}
+
+func NewPooledRecognizer(cpClass int, stateFn NfaStateFn) *Recognizer {
+	o, _ := globalRecognizerPool.opool.BorrowObject(globalRecognizerPool.ctx)
+	rec := o.(*Recognizer)
+	rec.Expect = cpClass
+	rec.nextStep = stateFn
+	return rec
+}
+
+// Clears the Recognizer and puts it back into the pool.
+func (rec *Recognizer) releaseMe() {
+	if rec.Penalties != nil {
+		rec.Penalties = rec.Penalties[:0]
+	}
+	rec.Expect = 0
+	rec.DistanceToGo = 0
+	rec.MatchLen = 0
+	rec.nextStep = nil
+	_ = globalRecognizerPool.opool.ReturnObject(globalRecognizerPool.ctx, rec)
+}
+
 func (rec *Recognizer) String() string {
 	if rec == nil {
 		return "[nil rule]"
 	}
 	return fmt.Sprintf("[%s -> %d]", rec.Expect, rec.DistanceToGo)
+}
+
+func (rec *Recognizer) Unsubscribed() {
+	rec.releaseMe()
 }
 
 func (rec *Recognizer) Distance() int {
@@ -236,20 +342,22 @@ func (rec *Recognizer) MatchLength() int {
 
 func (rec *Recognizer) RuneEvent(r rune, codePointClass int) []int {
 	fmt.Printf("received rune event: %+q / %d\n", r, codePointClass)
+	var penalties []int
 	if rec.nextStep == nil {
 		rec.DistanceToGo = 0
 	} else {
 		rec.nextStep = rec.nextStep(rec, r, codePointClass)
 		if rec.MatchLen > 0 && rec.DistanceToGo == 0 { // accepted a match
-			return rec.Penalties
+			penalties = rec.Penalties
 		}
 	}
-	return nil
+	return penalties
 }
 
 // ----------------------------------------------------------------------
 
 type RuneSubscriber interface {
+	Unsubscribed()
 	RuneEvent(r rune, codePointClass int) []int
 	Distance() int
 	MatchLength() int
@@ -265,31 +373,31 @@ type runePublisherHeap struct {
 	pqueue *binaryheap.Heap
 }
 
-func NewRunePublisher() *runePublisherHeap {
+func NewRunePublisher() RunePublisher {
 	rpub := &runePublisherHeap{}
-	rpub.pqueue = binaryheap.NewWith(nfaStepComparator)
+	rpub.pqueue = binaryheap.NewWith(recognizerComparator)
 	return rpub
 }
 
-func (rpub *runePublisherHeap) Peek() RuneSubscriber {
+func (rpub *runePublisherHeap) peek() RuneSubscriber {
 	subscr, _ := rpub.pqueue.Peek()
 	return subscr.(RuneSubscriber)
 }
 
-func (rpub *runePublisherHeap) Push(subscr RuneSubscriber) {
+func (rpub *runePublisherHeap) push(subscr RuneSubscriber) {
 	rpub.pqueue.Push(subscr)
 }
 
-func (rpub *runePublisherHeap) Pop() RuneSubscriber {
+func (rpub *runePublisherHeap) pop() RuneSubscriber {
 	subscr, _ := rpub.pqueue.Pop()
 	return subscr.(RuneSubscriber)
 }
 
-func (rpub *runePublisherHeap) Empty() bool {
+func (rpub *runePublisherHeap) empty() bool {
 	return rpub.pqueue.Empty()
 }
 
-func (rpub *runePublisherHeap) Size() int {
+func (rpub *runePublisherHeap) size() int {
 	return rpub.pqueue.Size()
 }
 
@@ -308,7 +416,8 @@ func (rpub *runePublisherHeap) PublishRuneEvent(r rune, codePointClass int) (int
 	}
 	fmt.Printf("lowest distance = %d\n", rpub.GetLowestDistance())
 	for rpub.GetLowestDistance() == 0 {
-		rpub.Pop() // drop all subscribers with distance == 0
+		subscr := rpub.pop() // drop all subscribers with distance == 0
+		subscr.Unsubscribed()
 	}
 	return longest, penaltiesTotal
 }
@@ -327,19 +436,19 @@ func AddPenalties(total []int, penalties []int) []int {
 }
 
 func (rpub *runePublisherHeap) SubscribeMe(rsub RuneSubscriber) RunePublisher {
-	rpub.Push(rsub)
+	rpub.push(rsub)
 	return rpub
 }
 
 func (rpub *runePublisherHeap) GetLowestDistance() int {
-	if rpub.Empty() {
+	if rpub.empty() {
 		return -1
 	}
-	return rpub.Peek().Distance()
+	return rpub.peek().Distance()
 }
 
-func (rpub *runePublisherHeap) Print() {
-	fmt.Printf("Publisher of length %d:\n", rpub.Size())
+func (rpub *runePublisherHeap) print() {
+	fmt.Printf("Publisher of length %d:\n", rpub.size())
 	it := rpub.pqueue.Iterator()
 	for it.Next() {
 		subscr := it.Value().(RuneSubscriber)
@@ -347,7 +456,7 @@ func (rpub *runePublisherHeap) Print() {
 	}
 }
 
-func nfaStepComparator(s1, s2 interface{}) int {
+func recognizerComparator(s1, s2 interface{}) int {
 	rec1 := s1.(*Recognizer)
 	rec2 := s2.(*Recognizer)
 	return godsutils.IntComparator(rec1.DistanceToGo, rec2.DistanceToGo) // '<'
