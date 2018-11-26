@@ -66,12 +66,10 @@ package uax14
 
 import (
 	"fmt"
-	"log"
 	"sync"
-	"time"
 	"unicode"
 
-	u "github.com/npillmayer/gotype/gtcore/unicode"
+	"github.com/npillmayer/gotype/gtcore/unicode/segment"
 )
 
 const (
@@ -103,7 +101,6 @@ var setupOnce sync.Once
 // Create code-point classes for UAX#14 line breaking/wrap.
 // (Concurrency-safe).
 func SetupUAX14Classes() {
-	defer timeTrack(time.Now(), "setup of UAX#14 code-point ranges")
 	setupOnce.Do(setupUAX14Classes)
 }
 
@@ -112,10 +109,10 @@ func SetupUAX14Classes() {
 // Objects of this type are used by a unicode.Segmenter to break lines
 // up according to UAX#14. It implements the unicode.UnicodeBreaker interface.
 type UAX14LineWrap struct {
-	publisher    u.RunePublisher
+	publisher    segment.RunePublisher
 	longestMatch int
 	penalties    []int
-	rules        map[UAX14Class][]u.NfaStateFn
+	rules        map[UAX14Class][]segment.NfaStateFn
 }
 
 // Create a new (un-initialized) UAX#14 line breaker.
@@ -129,7 +126,8 @@ type UAX14LineWrap struct {
 //
 func NewLineWrap() *UAX14LineWrap {
 	uax14 := &UAX14LineWrap{}
-	uax14.rules = map[UAX14Class][]u.NfaStateFn{
+	uax14.publisher = segment.NewRunePublisher()
+	uax14.rules = map[UAX14Class][]segment.NfaStateFn{
 		NLClass: {Rule05_NewLine},
 		CRClass: {Rule05_NewLine},
 	}
@@ -140,9 +138,11 @@ func NewLineWrap() *UAX14LineWrap {
 // unicode.Segmenter).
 //
 // Interface unicode.UnicodeBreaker
-func (uax14 *UAX14LineWrap) InitFor(rpub u.RunePublisher) {
-	uax14.publisher = rpub
+/*
+func (uax14 *UAX14LineWrap) InitFor(rpub segment.RunePublisher) {
+	uax14.publisher = rpub // TODO this is wrong
 }
+*/
 
 // Return the UAX#14 code-point class for a rune (= code-point).
 //
@@ -162,7 +162,7 @@ func (uax14 *UAX14LineWrap) StartRulesFor(r rune, cpClass int) {
 		fmt.Printf("starting rules for class = %s\n", uax14c)
 	}
 	for _, rule := range rules {
-		rec := u.NewPooledRecognizer(cpClass, rule)
+		rec := segment.NewPooledRecognizer(cpClass, rule)
 		uax14.publisher.SubscribeMe(rec)
 	}
 }
@@ -193,36 +193,28 @@ func (uax14 *UAX14LineWrap) Penalties() []int {
 
 // --- Standard Recognizer Rules ----------------------------------------
 
-func doAbort(rec *u.Recognizer) u.NfaStateFn {
+func doAbort(rec *segment.Recognizer) segment.NfaStateFn {
 	rec.DistanceToGo = 0
 	rec.MatchLen = 0
 	return abort
 }
 
-func abort(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
+func abort(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	rec.DistanceToGo = 0
 	rec.MatchLen = 0
 	fmt.Println("-> abort")
 	return nil
 }
 
-func doAccept(rec *u.Recognizer, penalties ...int) u.NfaStateFn {
+func doAccept(rec *segment.Recognizer, penalties ...int) segment.NfaStateFn {
 	fmt.Printf("-> ACCEPT %s\n", UAX14Class(rec.Expect))
 	fmt.Printf("   penalties: %v", penalties)
 	return nil
 }
 
-func accept(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
+func accept(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	uax14c := UAX14Class(cpClass)
 	fmt.Printf("-> accept %s with lookahead = %s\n", UAX14Class(rec.Expect), uax14c)
 	rec.DistanceToGo = 0
 	return abort
-}
-
-// --- Util -------------------------------------------------------------
-
-// Little helper for testing
-func timeTrack(start time.Time, name string) {
-	elapsed := time.Since(start)
-	log.Printf("timing: %s took %s\n", name, elapsed)
 }

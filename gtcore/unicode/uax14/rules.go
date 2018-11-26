@@ -3,7 +3,7 @@ package uax14
 import (
 	"fmt"
 
-	u "github.com/npillmayer/gotype/gtcore/unicode"
+	"github.com/npillmayer/gotype/gtcore/unicode/segment"
 )
 
 /*
@@ -133,7 +133,7 @@ var penaltyForOp = map[string]int{
 
 // ----------------------------------------------------------------------
 
-func Rule05_NewLine(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
+func Rule05_NewLine(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	uax14c := UAX14Class(cpClass)
 	fmt.Printf("fire rule 05_NewLine for lookahead = %s\n", uax14c)
 	if uax14c == BKClass || uax14c == NLClass || uax14c == LFClass {
@@ -148,7 +148,7 @@ func Rule05_NewLine(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
 	return doAbort(rec)
 }
 
-func Rule05_CRLF(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
+func Rule05_CRLF(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	uax14c := UAX14Class(cpClass)
 	fmt.Printf("fire rule 05_CRLF for lookahead = %s\n", uax14c)
 	if uax14c == LFClass {
@@ -157,7 +157,7 @@ func Rule05_CRLF(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
 	return doAccept(rec, 0, GlueBANG, GlueJOIN)
 }
 
-func UAX14Quote(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
+func UAX14Quote(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	uax14c := UAX14Class(cpClass)
 	fmt.Printf("fire rule Quote for lookahead = %s\n", uax14c)
 	if uax14c == QUClass {
@@ -169,7 +169,7 @@ func UAX14Quote(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
 	return doAbort(rec)
 }
 
-func UAX14ThisClass(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
+func UAX14ThisClass(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	uax14c := UAX14Class(cpClass)
 	fmt.Printf("fire generic rule for %s with lookahead = %s\n", UAX14Class(rec.Expect), uax14c)
 	if uax14c == UAX14Class(rec.Expect) {
@@ -180,7 +180,7 @@ func UAX14ThisClass(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
 	return doAbort(rec)
 }
 
-func UAX14OptSpaces(rec *u.Recognizer, r rune, cpClass int) u.NfaStateFn {
+func UAX14OptSpaces(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	uax14c := UAX14Class(cpClass)
 	if uax14c == SPClass {
 		fmt.Println("ignoring optional space")

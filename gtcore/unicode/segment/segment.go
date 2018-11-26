@@ -1,5 +1,5 @@
 /*
-Package unicode is about Unicode and text segmenting.
+Package segment is about Unicode and text segmenting.
 
 ---------------------------------------------------------------------------
 
@@ -52,8 +52,10 @@ supplied.
 An example for an UnicodeBreaker is "uax14.LineWrap", a breaker
 implementing the UAX#14 line breaking algorithm.
 
+This package provides a variety of types to support authors of
+UnicodeBreakers: RunePublisher/RuneSubscriber and Recognizer.
 */
-package unicode
+package segment
 
 import (
 	"bytes"
@@ -63,14 +65,14 @@ import (
 	"io"
 	"strings"
 
-	"github.com/emirpasic/gods/trees/binaryheap"
-	godsutils "github.com/emirpasic/gods/utils"
 	"github.com/gammazero/deque"
 	pool "github.com/jolestar/go-commons-pool"
 )
 
+// Object of type UnicodeBreaker represent logic components to split up
+// Unicode sequences into smaller parts. They are used by Segmenters
+// to supply breaking logic.
 type UnicodeBreaker interface {
-	InitFor(RunePublisher)
 	CodePointClassFor(rune) int
 	StartRulesFor(rune, int)
 	ProceedWithRune(rune, int)
@@ -90,9 +92,11 @@ func (a *atom) String() string {
 	return fmt.Sprintf("[%+q p=%d]", a.r, a.penalty)
 }
 
+// A Segmenter receives a sequence of code-points from an io.RuneReader and
+// segments it into smaller parts.
 type Segmenter struct {
-	deque                 *deque.Deque
-	publisher             RunePublisher
+	deque *deque.Deque
+	//publisher             RunePublisher
 	breakers              []UnicodeBreaker
 	reader                io.RuneReader
 	nullPenalty           int
@@ -101,23 +105,25 @@ type Segmenter struct {
 	atEOF                 bool
 }
 
+// Create a new Segmenter by providing breaking logic (UnicodeBreaker).
 func NewSegmenter(breakers ...UnicodeBreaker) *Segmenter {
 	s := &Segmenter{}
 	s.breakers = breakers
 	return s
 }
 
+// Initialize a Segmenter with an io.RuneReader to read from.
 func (s *Segmenter) Init(reader io.RuneReader) {
 	if reader == nil {
 		reader = strings.NewReader("")
 	}
 	s.reader = reader
 	if s.deque == nil {
-		s.deque = &deque.Deque{}         // Q of atoms
-		s.publisher = NewRunePublisher() // for publishing rune events to breakers
-		for _, breaker := range s.breakers {
-			breaker.InitFor(s.publisher)
-		}
+		s.deque = &deque.Deque{} // Q of atoms
+		//s.publisher = NewRunePublisher() // for publishing rune events to breakers
+		//for _, breaker := range s.breakers {
+		//breaker.InitFor(s.publisher)
+		//}
 	} else {
 		s.deque.Clear()
 		s.longestActiveMatch = 0
@@ -130,6 +136,7 @@ func (s *Segmenter) SetNullPenalty(null int) {
 	s.nullPenalty = null
 }
 
+// Get the next segment, together with the accumulated penalty for this break.
 func (s *Segmenter) Next() ([]byte, int, error) {
 	if s.reader == nil {
 		return nil, 0, errors.New("segmenter not initialized: no input; must call Init()")
@@ -182,7 +189,7 @@ func (s *Segmenter) readRune() (err error) {
 
 func (s *Segmenter) readEnoughInput() (err error) {
 	//for i := 0; s.deque.Len()-s.longestActiveMatch <= 0; {
-	for i := 0; s.distanceToNextPenalty+s.longestActiveMatch >= s.deque.Len(); {
+	for s.distanceToNextPenalty+s.longestActiveMatch >= s.deque.Len() {
 		err = s.readRune()
 		if err != nil {
 			break
@@ -202,10 +209,6 @@ func (s *Segmenter) readEnoughInput() (err error) {
 			s.printQ()
 		} else {
 			fmt.Println("Q empty")
-		}
-		i++
-		if i > 20 { // TODO eliminate (used for debugging purposes only)
-			break
 		}
 	}
 	return err
@@ -301,6 +304,8 @@ func init() {
 	globalRecognizerPool.opool = pool.NewObjectPool(globalRecognizerPool.ctx, factory, config)
 }
 
+// Returns a new Recognizer, pre-filled with an expected code-point class
+// and a state function. The Recognizer is pooled for efficiency.
 func NewPooledRecognizer(cpClass int, stateFn NfaStateFn) *Recognizer {
 	o, _ := globalRecognizerPool.opool.BorrowObject(globalRecognizerPool.ctx)
 	rec := o.(*Recognizer)
@@ -310,7 +315,7 @@ func NewPooledRecognizer(cpClass int, stateFn NfaStateFn) *Recognizer {
 }
 
 // Clears the Recognizer and puts it back into the pool.
-func (rec *Recognizer) releaseMe() {
+func (rec *Recognizer) releaseIntoPool() {
 	if rec.Penalties != nil {
 		rec.Penalties = rec.Penalties[:0]
 	}
@@ -325,21 +330,25 @@ func (rec *Recognizer) String() string {
 	if rec == nil {
 		return "[nil rule]"
 	}
-	return fmt.Sprintf("[%s -> %d]", rec.Expect, rec.DistanceToGo)
+	return fmt.Sprintf("[%d -> %d steps]", rec.Expect, rec.DistanceToGo)
 }
 
+// Interface RuneSubscriber
 func (rec *Recognizer) Unsubscribed() {
-	rec.releaseMe()
+	rec.releaseIntoPool()
 }
 
-func (rec *Recognizer) Distance() int {
-	return rec.DistanceToGo
+// Interface RuneSubscriber
+func (rec *Recognizer) Done() bool {
+	return rec.nextStep == nil
 }
 
+// Interface RuneSubscriber
 func (rec *Recognizer) MatchLength() int {
 	return rec.MatchLen
 }
 
+// Interface RuneSubscriber
 func (rec *Recognizer) RuneEvent(r rune, codePointClass int) []int {
 	fmt.Printf("received rune event: %+q / %d\n", r, codePointClass)
 	var penalties []int
@@ -354,69 +363,59 @@ func (rec *Recognizer) RuneEvent(r rune, codePointClass int) []int {
 	return penalties
 }
 
-// ----------------------------------------------------------------------
+// --- Rune Publishing and Subscription ---------------------------------
 
+// RuneSubscribers are receivers of rune events, i.e. messages to
+// process a new code-point (rune). If they can match the rune, they
+// will expect further runes, otherwise they abort. To abort, they
+// set Done() to true.
 type RuneSubscriber interface {
-	Unsubscribed()
-	RuneEvent(r rune, codePointClass int) []int
-	Distance() int
-	MatchLength() int
+	RuneEvent(r rune, codePointClass int) []int // receive a new code-point
+	MatchLength() int                           // length (in # of code-point) of the match up to now
+	Done() bool                                 // is this subscriber done?
+	Unsubscribed()                              // this subscriber has been unsubscribed
 }
 
+// RunePublishers notify subscribers with rune events: a new rune has been read
+// and the subscriber – usually a recognizer rule – has to react to it.
+//
+// UnicodeBreakers are not required to use the RunePublisher/RuneSubscriber
+// pattern, but it is convenient to stick to it. UnicodeBreakers often
+// rely on sets of rules, which are tested interleavingly. To releave
+// UnicodeBreakers from managing rune-distribution to all the rules, it
+// may be advantageous hold a RunePublisher within a UnicodeBreaker and
+// let all rules implement the RuneSubscriber interface.
 type RunePublisher interface {
 	SubscribeMe(RuneSubscriber) RunePublisher
 	PublishRuneEvent(r rune, codePointClass int) (longestDistance int, penalties []int)
-	GetLowestDistance() int
 }
 
-type runePublisherHeap struct {
-	pqueue *binaryheap.Heap
-}
+// Create a new default RunePublisher.
+func NewRunePublisher() *DefaultRunePublisher { return &DefaultRunePublisher{} }
 
-func NewRunePublisher() RunePublisher {
-	rpub := &runePublisherHeap{}
-	rpub.pqueue = binaryheap.NewWith(recognizerComparator)
-	return rpub
-}
-
-func (rpub *runePublisherHeap) peek() RuneSubscriber {
-	subscr, _ := rpub.pqueue.Peek()
-	return subscr.(RuneSubscriber)
-}
-
-func (rpub *runePublisherHeap) push(subscr RuneSubscriber) {
-	rpub.pqueue.Push(subscr)
-}
-
-func (rpub *runePublisherHeap) pop() RuneSubscriber {
-	subscr, _ := rpub.pqueue.Pop()
-	return subscr.(RuneSubscriber)
-}
-
-func (rpub *runePublisherHeap) empty() bool {
-	return rpub.pqueue.Empty()
-}
-
-func (rpub *runePublisherHeap) size() int {
-	return rpub.pqueue.Size()
-}
-
-func (rpub *runePublisherHeap) PublishRuneEvent(r rune, codePointClass int) (int, []int) {
+// Trigger a rune event notification to all subscribers. Rune events
+// include the rune (code-point) and an optional code-point class for
+// the rune.
+//
+// Return values are: the longest active match and a slice of penalties.
+// These values usually are collected from the RuneSubscribers.
+//
+// Interface RunePublisher
+func (rpub DefaultRunePublisher) PublishRuneEvent(r rune, codePointClass int) (int, []int) {
 	longest := 0
-	it := rpub.pqueue.Iterator()
 	penaltiesTotal := make([]int, 0, 2)
-	for it.Next() {
-		subscr := it.Value().(RuneSubscriber)
+	// pre-condition: no subscriber is Done()
+	for i := rpub.Len() - 1; i >= 0; i++ {
+		subscr := rpub.at(i)
 		penalties := subscr.RuneEvent(r, codePointClass)
 		penaltiesTotal = AddPenalties(penaltiesTotal, penalties)
-		d := subscr.MatchLength()
-		if d > longest {
+		if d := subscr.MatchLength(); d > longest {
 			longest = d
 		}
+		rpub.Fix(i) // re-order heap if subscr.Done()
 	}
-	fmt.Printf("lowest distance = %d\n", rpub.GetLowestDistance())
-	for rpub.GetLowestDistance() == 0 {
-		subscr := rpub.pop() // drop all subscribers with distance == 0
+	// no unsubscribe all done subscribers
+	for subscr := rpub.PopDone(); subscr != nil; {
 		subscr.Unsubscribed()
 	}
 	return longest, penaltiesTotal
@@ -435,29 +434,8 @@ func AddPenalties(total []int, penalties []int) []int {
 	return total
 }
 
-func (rpub *runePublisherHeap) SubscribeMe(rsub RuneSubscriber) RunePublisher {
-	rpub.push(rsub)
+// Interface RunePublisher
+func (rpub *DefaultRunePublisher) SubscribeMe(rsub RuneSubscriber) RunePublisher {
+	rpub.Push(rsub)
 	return rpub
-}
-
-func (rpub *runePublisherHeap) GetLowestDistance() int {
-	if rpub.empty() {
-		return -1
-	}
-	return rpub.peek().Distance()
-}
-
-func (rpub *runePublisherHeap) print() {
-	fmt.Printf("Publisher of length %d:\n", rpub.size())
-	it := rpub.pqueue.Iterator()
-	for it.Next() {
-		subscr := it.Value().(RuneSubscriber)
-		fmt.Printf(" - %s\n", subscr)
-	}
-}
-
-func recognizerComparator(s1, s2 interface{}) int {
-	rec1 := s1.(*Recognizer)
-	rec2 := s2.(*Recognizer)
-	return godsutils.IntComparator(rec1.DistanceToGo, rec2.DistanceToGo) // '<'
 }

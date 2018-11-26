@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/npillmayer/gotype/gtcore/unicode"
+	"github.com/npillmayer/gotype/gtcore/unicode/segment"
 )
 
 func TestAddPenalties(t *testing.T) {
 	total := make([]int, 0, 5)
 	penalties := []int{17, 23}
-	total = unicode.AddPenalties(total, penalties)
+	total = segment.AddPenalties(total, penalties)
 	fmt.Printf("total = %v\n", total)
 }
 
@@ -35,9 +35,7 @@ func TestClassForRune2(t *testing.T) {
 
 func TestLineWrapNL(t *testing.T) {
 	SetupUAX14Classes()
-	publisher := unicode.NewRunePublisher()
 	lw := NewLineWrap()
-	lw.InitFor(publisher)
 	lw.StartRulesFor('\n', int(NLClass))
 	lw.ProceedWithRune('\n', int(NLClass))
 	lw.ProceedWithRune('A', int(ALClass))
@@ -48,9 +46,7 @@ func TestLineWrapNL(t *testing.T) {
 
 func TestLineWrapQU(t *testing.T) {
 	SetupUAX14Classes()
-	publisher := unicode.NewRunePublisher()
 	lw := NewLineWrap()
-	lw.InitFor(publisher)
 	lw.StartRulesFor('"', int(QUClass))
 	lw.ProceedWithRune('"', int(QUClass))
 	lw.ProceedWithRune(' ', int(SPClass))
@@ -61,7 +57,7 @@ func TestLineWrapQU(t *testing.T) {
 func TestSegmenterUAX14Init(t *testing.T) {
 	SetupUAX14Classes()
 	lw := NewLineWrap()
-	segm := unicode.NewSegmenter(lw)
+	segm := segment.NewSegmenter(lw)
 	_, _, err := segm.Next()
 	fmt.Println(err)
 	if err == nil {
@@ -72,7 +68,7 @@ func TestSegmenterUAX14Init(t *testing.T) {
 func TestSegmenterUAX14RecognizeRule1(t *testing.T) {
 	SetupUAX14Classes()
 	lw := NewLineWrap()
-	segm := unicode.NewSegmenter(lw)
+	segm := segment.NewSegmenter(lw)
 	segm.Init(strings.NewReader("\" ("))
 	_, _, err := segm.Next()
 	if err != io.EOF {
@@ -84,7 +80,7 @@ func TestSegmenterUAX14RecognizeRule1(t *testing.T) {
 func TestSegmenterUAX14Match1(t *testing.T) {
 	SetupUAX14Classes()
 	lw := NewLineWrap()
-	segm := unicode.NewSegmenter(lw)
+	segm := segment.NewSegmenter(lw)
 	segm.Init(strings.NewReader("\" ("))
 	match, _, err := segm.Next()
 	if err != io.EOF {
