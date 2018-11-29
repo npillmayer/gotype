@@ -6,14 +6,18 @@ All rights reserved.
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
 are met:
+
 1. Redistributions of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
+notice, this list of conditions and the following disclaimer.
+
 2. Redistributions in binary form must reproduce the above copyright
-   notice, this list of conditions and the following disclaimer in the
-   documentation and/or other materials provided with the distribution.
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
 3. Neither the name of Norbert Pillmayer nor the names of its contributors
-   may be used to endorse or promote products derived from this software
-   without specific prior written permission.
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -32,7 +36,6 @@ Tracing: TODO clean this up. This is only a first draft to get
 things going.
 
 */
-
 package tracing
 
 import (
@@ -76,7 +79,6 @@ var levelMap map[string]log.Level = make(map[string]log.Level)
 func InitTracingBootstrap() {
 	levelMap["DEBUG"] = log.DebugLevel
 	levelMap["INFO"] = log.InfoLevel
-	//levelMap["WARN"] = log.WarnLevel
 	levelMap["ERROR"] = log.ErrorLevel
 
 	equationsTracer := log.New()
@@ -108,6 +110,11 @@ func InitTracingBootstrap() {
 	scriptingTracer.SetLevel(log.InfoLevel)
 	ScriptingTracer = Trace{scriptingTracer, "LS"}
 	packageTracers["LS"] = ScriptingTracer
+
+	coreTracer := log.New()
+	coreTracer.SetLevel(log.InfoLevel)
+	coreTracer = Trace{coreTracer, "TC"}
+	packageTracers["TC"] = CoreTracer
 }
 
 func SetTraceLevel(p string) {
@@ -123,6 +130,7 @@ func ConfigTracing(inputfilename string) *os.File {
 	SyntaxTracer.SetLevel(levelMap[viper.GetString("tracingsyntax")])
 	GraphicsTracer.SetLevel(levelMap[viper.GetString("tracinggraphics")])
 	ScriptingTracer.SetLevel(levelMap[viper.GetString("tracingscripting")])
+	CoreTracer.SetLevel(levelMap[viper.GetString("tracingcore")])
 
 	if !viper.GetBool("tracingonline") {
 		//tracefiledir := viper.GetString("outputdir")
@@ -145,6 +153,8 @@ func ConfigTracing(inputfilename string) *os.File {
 			GraphicsTracer.Formatter = &log.TextFormatter{}
 			ScriptingTracer.Out = file
 			ScriptingTracer.Formatter = &log.TextFormatter{}
+			CoreTracer.Out = file
+			CoreTracer.Formatter = &log.TextFormatter{}
 		}
 	}
 
@@ -154,6 +164,7 @@ func ConfigTracing(inputfilename string) *os.File {
 	SyntaxTracer.P("level", SyntaxTracer.Level).Info("Syntax-Trace is alive")
 	GraphicsTracer.P("level", GraphicsTracer.Level).Info("Graphics-Trace is alive")
 	ScriptingTracer.P("level", ScriptingTracer.Level).Info("Scripting-Trace is alive")
+	CoreTracer.P("level", CoreTracer.Level).Info("Core-Trace is alive")
 
 	return Tracefile
 }
