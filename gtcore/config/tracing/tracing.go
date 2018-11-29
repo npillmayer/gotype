@@ -72,6 +72,7 @@ var SyntaxTracer Trace
 var CommandTracer Trace
 var GraphicsTracer Trace
 var ScriptingTracer Trace
+var CoreTracer Trace
 
 var packageTracers map[string]Trace = make(map[string]Trace)
 var levelMap map[string]log.Level = make(map[string]log.Level)
@@ -113,7 +114,7 @@ func InitTracingBootstrap() {
 
 	coreTracer := log.New()
 	coreTracer.SetLevel(log.InfoLevel)
-	coreTracer = Trace{coreTracer, "TC"}
+	CoreTracer = Trace{coreTracer, "TC"}
 	packageTracers["TC"] = CoreTracer
 }
 
