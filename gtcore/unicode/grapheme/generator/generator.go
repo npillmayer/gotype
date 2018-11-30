@@ -178,7 +178,7 @@ const ( {{$i:=0}}
 {{end}}
 	Any GraphemeClass = 999
     sot GraphemeClass = 1000 // pseudo class "start of text"
-    eot GraphemeClass = 1000 // pseudo class "end of text"
+    eot GraphemeClass = 1001 // pseudo class "end of text"
 )
 `
 
@@ -195,6 +195,8 @@ func (c GraphemeClass) String() string {
         return "sot"
     } else if c == eot {
         return "eot"
+    } else if c == Any {
+    	return "Any"
     } else if c < 0 || c >= GraphemeClass(len(_GraphemeClass_index)-1) {
         return "GraphemeClass(" + strconv.FormatInt(int64(c), 10) + ")"
     }
