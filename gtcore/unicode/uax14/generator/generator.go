@@ -173,10 +173,7 @@ const ( {{$i:=0}}
 var templateClassStringer string = `
 const _UAX14Class_name = "{{range $c,$name := .}}{{$name}}Class{{end}}"
 
-var _UAX14Class_index = [...]uint16{0, 7, 14, 21, 28, 35, 42, 49, 56, 63, 70,
-    77, 84, 91, 98, 105, 112, 119, 126, 133, 140, 147, 154, 161, 168, 175, 182,
-    189, 196, 203, 210, 217, 224, 231, 238, 245, 252, 259, 266, 273, 280, 287,
-    294, 302}
+var _UAX14Class_index = [...]uint16{0{{startinxs .}} }
 
 // Stringer for type UAX14Class
 func (c UAX14Class) String() string {
@@ -207,6 +204,20 @@ var funcMap template.FuncMap = template.FuncMap{
 	},
 	"notfirst": func(i int) bool {
 		return i > 0
+	},
+	"startinxs": func(str []string) string {
+		out := ""
+		total := 0
+		for _, s := range str {
+			l := len(s) + 5
+			total += l
+			if (38+len(out))%80 > 72 {
+				out += fmt.Sprintf(",\n    %d", total)
+			} else {
+				out += fmt.Sprintf(", %d", total)
+			}
+		}
+		return out
 	},
 }
 

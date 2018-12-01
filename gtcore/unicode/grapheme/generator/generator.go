@@ -1,11 +1,9 @@
 /*
 Package for a generator for UAX#29 Grapheme classes.
 
----------------------------------------------------------------------------
-
 BSD License
 
-Copyright (c) 2017-18, Norbert Pillmayer (norbert@pillmayer.com)
+Copyright (c) 2017–18, Norbert Pillmayer (norbert@pillmayer.com)
 
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
@@ -35,7 +33,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-----------------------------------------------------------------------
+Contents
 
 Generator for Unicode UAX#29 grapheme code-point classes.
 For more information see https://unicode.org/reports/tr29/.

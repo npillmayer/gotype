@@ -3,7 +3,7 @@ Package grapheme implements Unicode Annex #29 grapheme breaking.
 
 BSD License
 
-Copyright (c) 2017-18, Norbert Pillmayer
+Copyright (c) 2017–18, Norbert Pillmayer
 
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
@@ -65,6 +65,8 @@ SetupGraphemeClasses() will in turn call
 
   SetupEmojisClasses()
 
+This UnicodeBreaker successfully passes all 672 tests for grapheme
+breaking of UAX#29 (GraphemeBreakTest.txt).
 */
 package grapheme
 
@@ -122,7 +124,7 @@ type GraphemeBreaker struct {
 	blocked      map[GraphemeClass]bool
 }
 
-// Create a new (un-initialized) UAX#14 line breaker.
+// Create a new UAX#14 line breaker.
 //
 // Usage:
 //
@@ -161,8 +163,7 @@ func NewBreaker() *GraphemeBreaker {
 const emojiPictographic GraphemeClass = ZWJClass + 1
 
 // Return the grapheme code-point class for a rune (= code-point).
-//
-// Interface segment.UnicodeBreaker
+// (Interface segment.UnicodeBreaker)
 func (gb *GraphemeBreaker) CodePointClassFor(r rune) int {
 	c := GraphemeClassForRune(r)
 	if c == Any {
@@ -175,8 +176,7 @@ func (gb *GraphemeBreaker) CodePointClassFor(r rune) int {
 
 // Start all recognizers where the starting symbol is rune r.
 // r is of code-point-class cpClass.
-//
-// Interface segment.UnicodeBreaker
+// (Interface segment.UnicodeBreaker)
 //
 // TODO merge this with ProceedWithRune(), it is unnecessary
 func (gb *GraphemeBreaker) StartRulesFor(r rune, cpClass int) {
@@ -193,18 +193,20 @@ func (gb *GraphemeBreaker) StartRulesFor(r rune, cpClass int) {
 	}
 }
 
+// Helper: do not start any recognizers for this grapheme class, until
+// unblocked again.
 func (gb *GraphemeBreaker) block(c GraphemeClass) {
 	gb.blocked[c] = true
 }
 
+// Helper: stop blocking new recognizers for this grapheme class.
 func (gb *GraphemeBreaker) unblock(c GraphemeClass) {
 	gb.blocked[c] = false
 }
 
 // A new code-point has been read and this breaker receives a message to
 // consume it.
-//
-// Interface segment.UnicodeBreaker
+// (Interface segment.UnicodeBreaker)
 func (gb *GraphemeBreaker) ProceedWithRune(r rune, cpClass int) {
 	c := GraphemeClass(cpClass)
 	TC.P("class", c).Infof("proceeding with rune %+q", r)
@@ -223,7 +225,9 @@ func (gb *GraphemeBreaker) ProceedWithRune(r rune, cpClass int) {
 	*/
 }
 
-// Interface segment.UnicodeBreaker
+// Collect form all active recognizers information about current match length
+// and return the longest one for all still active recognizers.
+// (Interface segment.UnicodeBreaker)
 func (gb *GraphemeBreaker) LongestActiveMatch() int {
 	return gb.longestMatch
 }
@@ -231,8 +235,7 @@ func (gb *GraphemeBreaker) LongestActiveMatch() int {
 // Get all active penalties for all active recognizers combined.
 // Index 0 belongs to the most recently read rune, i.e., represents
 // the penalty for breaking after it.
-//
-// Interface segment.UnicodeBreaker
+// (Interface segment.UnicodeBreaker)
 func (gb *GraphemeBreaker) Penalties() []int {
 	return gb.penalties
 }

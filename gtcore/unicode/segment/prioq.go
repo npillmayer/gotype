@@ -2,10 +2,10 @@ package segment
 
 import "fmt"
 
-// DefaultRunePblisher is a type to organize RuneSubscribers.
+// DefaultRunePublisher is a type to organize RuneSubscribers.
 //
 // Rune publishers have to maintain a list of subscribers. Subscribers are
-// then notified on the arrival of new new runes (code-points) by sending
+// then notified on the arrival of new runes (code-points) by sending
 // them rune-events. When a subscriber is done with consuming runes (subscribers
 // are often short-lived), it signals Done()=true.
 //
@@ -14,10 +14,12 @@ import "fmt"
 // It maintains a "gap" position between done and not-done. The queue grows as
 // needed.
 //
-// A DefaultRunePublisher implements RunePublisher
+// A DefaultRunePublisher implements RunePublisher.
 type DefaultRunePublisher struct {
-	q   []RuneSubscriber // queue is slice of subscribers
-	gap int              // index of first subscriber which is Done(), may be out of range
+	q              []RuneSubscriber  // queue is slice of subscribers
+	gap            int               // index of first subscriber which is Done(), may be out of range
+	aggregate      PenaltyAggregator // see declaration of RunePublisher
+	penaltiesTotal []int             // set of penalties collected from subscribers
 }
 
 // Number of subscribers held.
@@ -61,10 +63,14 @@ func (pq *DefaultRunePublisher) Push(subscr RuneSubscriber) {
 
 // Pop the topmost subscriber.
 func (pq *DefaultRunePublisher) Pop() RuneSubscriber {
+	if pq == nil || pq.Len() == 0 {
+		return nil
+	}
 	old := pq.q
 	n := len(old)
 	subscr := old[n-1]
 	pq.q = old[0 : n-1]
+	old[n-1] = nil
 	if pq.gap > pq.Len() {
 		pq.gap--
 	}
@@ -72,7 +78,12 @@ func (pq *DefaultRunePublisher) Pop() RuneSubscriber {
 }
 
 // Pop the topmost subscriber if it is Done(), otherwise return nil.
+// If the method returns nil, the queue either is empty or holds
+// subscribers with Done()=false only (i.e., subscribers still active).
 func (pq *DefaultRunePublisher) PopDone() RuneSubscriber {
+	if pq == nil || pq.Len() == 0 {
+		return nil
+	}
 	if pq.Top().Done() {
 		return pq.Pop()
 	}
@@ -106,6 +117,6 @@ func (rpub *DefaultRunePublisher) print() {
 	fmt.Printf("Publisher of length %d:\n", rpub.Len())
 	for i := rpub.Len() - 1; i >= 0; i++ {
 		subscr := rpub.at(i)
-		fmt.Printf(" - [%d] %s\n", i, subscr)
+		fmt.Printf(" - [%d] %s done=%v\n", i, subscr, subscr.Done())
 	}
 }

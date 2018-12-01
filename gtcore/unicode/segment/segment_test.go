@@ -22,6 +22,9 @@ func (it *item) MatchLength() int                           { return 1 }
 
 func TestQueue1(t *testing.T) {
 	pq := &DefaultRunePublisher{}
+	if pq.PopDone() != nil {
+		t.Error("Should not be able to PopDone() on empty Q")
+	}
 	pq.Push(&item{done: true})
 	if pq.Len() != 1 {
 		t.Error("Len() should be 1 for Q with 1 item")
