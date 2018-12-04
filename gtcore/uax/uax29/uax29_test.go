@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	"github.com/npillmayer/gotype/gtcore/unicode/segment"
+	"github.com/npillmayer/gotype/gtcore/uax/segment"
 )
 
 func Test0(t *testing.T) {
