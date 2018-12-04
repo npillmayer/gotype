@@ -1,5 +1,7 @@
 package segment
 
+import "fmt"
+
 // This is an adaption of an elegant queue data structure by
 // Andrew J. Gillis (gammazero). The original is found under
 // https://github.com/gammazero/deque :
@@ -16,6 +18,18 @@ type deque struct {
 	head  int
 	tail  int
 	count int
+}
+
+// Internal type atom holds a rune and a penalty (for a break opportunity).
+type atom struct {
+	r       rune
+	penalty int
+}
+
+var eotAtom atom = atom{rune(0), 0} // the atom denoting End of Text
+
+func (a *atom) String() string {
+	return fmt.Sprintf("[%+q p=%d]", a.r, a.penalty)
 }
 
 // minCapacity is the smallest capacity that deque may have.

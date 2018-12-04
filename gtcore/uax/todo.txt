@@ -1,7 +1,7 @@
 X  RI-variable
 X  Setup Classes in Init() au0erhalb if(...)
-   Package unicode -> uax
-   RunePublisher et al in uax herausziehen
+X  Package unicode -> uax
+X  RunePublisher et al in uax herausziehen
    Code für unicode tests in ucd ziehen
    unicode test files in current dir pro uax... ziehen
 X  cont_... -> finish_...  und cont2_... -> cont_...

@@ -47,7 +47,7 @@ Clients instantiate a grapheme object and use it as the
 breaking engine for a segmenter.
 
   onGraphemes := grapheme.NewBreaker()
-  segmenter := segment.NewSegmenter(onGraphemes)
+  segmenter := uax.NewSegmenter(onGraphemes)
   segmenter.Init(...)
   for segmenter.Next() ...
 
@@ -75,8 +75,8 @@ import (
 	"unicode"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	"github.com/npillmayer/gotype/gtcore/unicode/emoji"
-	"github.com/npillmayer/gotype/gtcore/unicode/segment"
+	"github.com/npillmayer/gotype/gtcore/uax"
+	"github.com/npillmayer/gotype/gtcore/uax/emoji"
 )
 
 // We trace to the core-tracer.
@@ -112,15 +112,15 @@ func SetupGraphemeClasses() {
 
 // === Grapheme Breaker ==============================================
 
-// Objects of this type are used by a segment.Segmenter to break text
+// Objects of this type are used by a uax.Segmenter to break text
 // up according to UAX#29 / Graphemes.
-// It implements the segment.UnicodeBreaker interface.
+// It implements the uax.UnicodeBreaker interface.
 type GraphemeBreaker struct {
-	publisher    segment.RunePublisher
+	publisher    uax.RunePublisher
 	longestMatch int
 	penalties    []int
-	rules        map[GraphemeClass][]segment.NfaStateFn
-	emojirules   map[int][]segment.NfaStateFn
+	rules        map[GraphemeClass][]uax.NfaStateFn
+	emojirules   map[int][]uax.NfaStateFn
 	blocked      map[GraphemeClass]bool
 }
 
@@ -129,15 +129,15 @@ type GraphemeBreaker struct {
 // Usage:
 //
 //   onGraphemes := NewBreaker()
-//   segmenter := segment.NewSegmenter(onGraphemes)
+//   segmenter := uax.NewSegmenter(onGraphemes)
 //   segmenter.Init(...)
 //   for segmenter.Next() ...
 //
 func NewBreaker() *GraphemeBreaker {
 	gb := &GraphemeBreaker{}
-	gb.publisher = segment.NewRunePublisher()
-	//gb.publisher.SetPenaltyAggregator(segment.MaxPenalties)
-	gb.rules = map[GraphemeClass][]segment.NfaStateFn{
+	gb.publisher = uax.NewRunePublisher()
+	//gb.publisher.SetPenaltyAggregator(uax.MaxPenalties)
+	gb.rules = map[GraphemeClass][]uax.NfaStateFn{
 		//eot:                   {rule_GB2},
 		CRClass:                 {rule_NewLine},
 		LFClass:                 {rule_NewLine},
@@ -163,7 +163,7 @@ func NewBreaker() *GraphemeBreaker {
 const emojiPictographic GraphemeClass = ZWJClass + 1
 
 // Return the grapheme code-point class for a rune (= code-point).
-// (Interface segment.UnicodeBreaker)
+// (Interface uax.UnicodeBreaker)
 func (gb *GraphemeBreaker) CodePointClassFor(r rune) int {
 	c := GraphemeClassForRune(r)
 	if c == Any {
@@ -176,7 +176,7 @@ func (gb *GraphemeBreaker) CodePointClassFor(r rune) int {
 
 // Start all recognizers where the starting symbol is rune r.
 // r is of code-point-class cpClass.
-// (Interface segment.UnicodeBreaker)
+// (Interface uax.UnicodeBreaker)
 //
 // TODO merge this with ProceedWithRune(), it is unnecessary
 func (gb *GraphemeBreaker) StartRulesFor(r rune, cpClass int) {
@@ -185,7 +185,7 @@ func (gb *GraphemeBreaker) StartRulesFor(r rune, cpClass int) {
 		if rules := gb.rules[c]; len(rules) > 0 {
 			TC.P("class", c).Debugf("starting %d rule(s)", c)
 			for _, rule := range rules {
-				rec := segment.NewPooledRecognizer(cpClass, rule)
+				rec := uax.NewPooledRecognizer(cpClass, rule)
 				rec.UserData = gb
 				gb.publisher.SubscribeMe(rec)
 			}
@@ -206,7 +206,7 @@ func (gb *GraphemeBreaker) unblock(c GraphemeClass) {
 
 // A new code-point has been read and this breaker receives a message to
 // consume it.
-// (Interface segment.UnicodeBreaker)
+// (Interface uax.UnicodeBreaker)
 func (gb *GraphemeBreaker) ProceedWithRune(r rune, cpClass int) {
 	c := GraphemeClass(cpClass)
 	TC.P("class", c).Infof("proceeding with rune %+q", r)
@@ -215,7 +215,7 @@ func (gb *GraphemeBreaker) ProceedWithRune(r rune, cpClass int) {
 	/*
 		if c == Any { // rule GB999
 			if len(gb.penalties) > 1 {
-				gb.penalties[1] = segment.AddPenalties(gb.penalties[1], penaltyForAny)
+				gb.penalties[1] = uax.AddPenalties(gb.penalties[1], penaltyForAny)
 			} else if len(gb.penalties) > 0 {
 				gb.penalties = append(gb.penalties, penaltyForAny)
 			} else {
@@ -227,7 +227,7 @@ func (gb *GraphemeBreaker) ProceedWithRune(r rune, cpClass int) {
 
 // Collect form all active recognizers information about current match length
 // and return the longest one for all still active recognizers.
-// (Interface segment.UnicodeBreaker)
+// (Interface uax.UnicodeBreaker)
 func (gb *GraphemeBreaker) LongestActiveMatch() int {
 	return gb.longestMatch
 }
@@ -235,7 +235,7 @@ func (gb *GraphemeBreaker) LongestActiveMatch() int {
 // Get all active penalties for all active recognizers combined.
 // Index 0 belongs to the most recently read rune, i.e., represents
 // the penalty for breaking after it.
-// (Interface segment.UnicodeBreaker)
+// (Interface uax.UnicodeBreaker)
 func (gb *GraphemeBreaker) Penalties() []int {
 	return gb.penalties
 }
@@ -255,106 +255,106 @@ var penaltyForAnyAsSlice = []int{0, penaltyForAny}
 
 // unnecessary ?!
 /*
-func rule_GB2(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
-	return segment.DoAccept(rec, 0, GlueBREAK)
+func rule_GB2(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
+	return uax.DoAccept(rec, 0, GlueBREAK)
 }
 */
 
-func rule_NewLine(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_NewLine(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := GraphemeClass(cpClass)
 	TC.P("class", c).Infof("fire rule NewLine")
 	if c == LFClass {
-		return segment.DoAccept(rec, GlueBANG, GlueBANG)
+		return uax.DoAccept(rec, GlueBANG, GlueBANG)
 	} else if c == CRClass {
 		rec.MatchLen++
 		return rule_CRLF
 	}
-	return segment.DoAbort(rec)
+	return uax.DoAbort(rec)
 }
 
-func rule_CRLF(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_CRLF(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := GraphemeClass(cpClass)
 	TC.P("class", c).Infof("fire rule 05_CRLF")
 	if c == LFClass {
-		return segment.DoAccept(rec, GlueBANG, 3*GlueJOIN) // accept CR+LF
+		return uax.DoAccept(rec, GlueBANG, 3*GlueJOIN) // accept CR+LF
 	}
-	return segment.DoAccept(rec, 0, GlueBANG, GlueBANG) // accept CR
+	return uax.DoAccept(rec, 0, GlueBANG, GlueBANG) // accept CR
 }
 
-func rule_Control(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_Control(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := GraphemeClass(cpClass)
 	TC.P("class", c).Infof("fire rule Control")
-	return segment.DoAccept(rec, GlueBANG, GlueBANG)
+	return uax.DoAccept(rec, GlueBANG, GlueBANG)
 }
 
-func rule_GB6(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_GB6(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	//c := GraphemeClass(cpClass)
 	rec.MatchLen++
 	return rule_GB6_L_V_LV_LVT
 }
 
-func rule_GB6_L_V_LV_LVT(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_GB6_L_V_LV_LVT(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := GraphemeClass(cpClass)
 	if c == LClass || c == VClass || c == LVClass || c == LVTClass {
-		return segment.DoAccept(rec, 0, GlueJOIN)
+		return uax.DoAccept(rec, 0, GlueJOIN)
 	}
-	return segment.DoAbort(rec)
+	return uax.DoAbort(rec)
 }
 
-func rule_GB7(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_GB7(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	//c := GraphemeClass(cpClass)
 	rec.MatchLen++
 	return rule_GB7_V_T
 }
 
-func rule_GB7_V_T(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_GB7_V_T(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := GraphemeClass(cpClass)
 	if c == VClass || c == TClass {
-		return segment.DoAccept(rec, 0, GlueJOIN)
+		return uax.DoAccept(rec, 0, GlueJOIN)
 	}
-	return segment.DoAbort(rec)
+	return uax.DoAbort(rec)
 }
 
-func rule_GB8(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_GB8(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := GraphemeClass(cpClass)
 	TC.P("class", c).Infof("start rule GB8 LVT|T x T")
 	rec.MatchLen++
 	return rule_GB8_T
 }
 
-func rule_GB8_T(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_GB8_T(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := GraphemeClass(cpClass)
 	TC.P("class", c).Infof("accept rule GB8 T")
 	if c == TClass {
-		return segment.DoAccept(rec, 0, GlueJOIN)
+		return uax.DoAccept(rec, 0, GlueJOIN)
 	}
-	return segment.DoAbort(rec)
+	return uax.DoAbort(rec)
 }
 
-func rule_GB9(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_GB9(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := GraphemeClass(cpClass)
 	TC.P("class", c).Infof("fire rule ZWJ|Extend")
-	return segment.DoAccept(rec, 0, GlueJOIN)
+	return uax.DoAccept(rec, 0, GlueJOIN)
 }
 
-func rule_GB9a(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_GB9a(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := GraphemeClass(cpClass)
 	TC.P("class", c).Infof("fire rule SpacingMark")
-	return segment.DoAccept(rec, 0, GlueJOIN)
+	return uax.DoAccept(rec, 0, GlueJOIN)
 }
 
-func rule_GB9b(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_GB9b(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := GraphemeClass(cpClass)
 	TC.P("class", c).Infof("fire rule Preprend")
-	return segment.DoAccept(rec, GlueJOIN)
+	return uax.DoAccept(rec, GlueJOIN)
 }
 
-func rule_GB11(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_GB11(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	TC.P("class", cpClass).Infof("fire rule Emoji Pictographic")
 	return rule_GB11Cont
 }
 
-func rule_GB11Cont(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_GB11Cont(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	if cpClass == int(ZWJClass) {
 		rec.MatchLen++
 		return rule_GB11Finish
@@ -362,29 +362,29 @@ func rule_GB11Cont(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStat
 		rec.MatchLen++
 		return rule_GB11Cont
 	}
-	return segment.DoAbort(rec)
+	return uax.DoAbort(rec)
 }
 
-func rule_GB11Finish(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_GB11Finish(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	if cpClass == int(emojiPictographic) {
-		return segment.DoAccept(rec, 0, GlueJOIN)
+		return uax.DoAccept(rec, 0, GlueJOIN)
 	}
-	return segment.DoAbort(rec)
+	return uax.DoAbort(rec)
 }
 
-func rule_GB12(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_GB12(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	TC.P("class", cpClass).Infof("fire rule RI")
 	gb := rec.UserData.(*GraphemeBreaker)
 	gb.block(Regional_IndicatorClass)
 	return rule_GB12Cont
 }
 
-func rule_GB12Cont(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func rule_GB12Cont(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := GraphemeClass(cpClass)
 	gb := rec.UserData.(*GraphemeBreaker)
 	gb.unblock(Regional_IndicatorClass)
 	if c == Regional_IndicatorClass {
-		return segment.DoAccept(rec, 0, GlueJOIN)
+		return uax.DoAccept(rec, 0, GlueJOIN)
 	}
-	return segment.DoAbort(rec)
+	return uax.DoAbort(rec)
 }

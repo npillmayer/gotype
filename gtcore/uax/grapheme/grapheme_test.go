@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	u "unicode"
+	"unicode"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	"github.com/npillmayer/gotype/gtcore/unicode/segment"
+	"github.com/npillmayer/gotype/gtcore/uax/segment"
 )
 
 func TestGraphemeClasses(t *testing.T) {
@@ -19,7 +19,7 @@ func TestGraphemeClasses(t *testing.T) {
 		t.Errorf("String(LClass) should be 'LClass', is %s", c1)
 	}
 	SetupGraphemeClasses()
-	if !u.Is(Control, '\t') {
+	if !unicode.Is(Control, '\t') {
 		t.Error("<TAB> should be identified as control character")
 	}
 	hangsyl := '\uac1c'
