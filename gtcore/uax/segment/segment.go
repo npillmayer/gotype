@@ -36,6 +36,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Typical Usage
 
+Segmenter provides an interface similar to bufio.Scanner for reading data
+such as a file of Unicode text.
+Similar to Scanner's Scan() function, successive calls to a segmenter's
+Next() method will step through the 'segments' of a file.
+Clients are able to get runes of the segment by calling Bytes() or Text().
+Unlike Scanner, segmenters are calculating a 'penalty' for breaking
+at this segment. Penalties are numeric values and reflect costs, where
+negative values are to be interpreted as negative costs, i.e. merits.
+
 Clients instantiate a UnicodeBreaker object and use it as the
 breaking engine for a segmenter. Multiple breaking engines may be
 supplied.
@@ -48,9 +57,6 @@ supplied.
 
 An example for an UnicodeBreaker is "uax29.WordBreak", a breaker
 implementing the UAX#29 word breaking algorithm.
-
-This package provides a variety of types to support authors of
-UnicodeBreakers: RunePublisher/RuneSubscriber and Recognizer.
 */
 package segment
 
@@ -64,6 +70,7 @@ import (
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
 	"github.com/npillmayer/gotype/gtcore/uax"
+	"github.com/npillmayer/gotype/gtcore/uax/uax29"
 )
 
 // We trace to the core-tracer.
@@ -72,20 +79,9 @@ var CT tracing.Trace = tracing.CoreTracer
 // A Segmenter receives a sequence of code-points from an io.RuneReader and
 // segments it into smaller parts, called segments.
 //
-// Segmenter provides an interface similar to bufio.Scanner for reading data
-// such as a file of Unicode text.
-// Successive calls to the Next() method will
-// step through the 'segments' of a file, calculating a 'penalty' for breaking
-// at this segment. Penalties are numeric values and reflect costs, where
-// negative values are to be interpreted as negative costs, i.e. merits.
-//
 // The specification of a segment is defined by a breaker function of type
 // UnicodeBreaker; the default split function breaks the input into words
 // (see package uax29).
-// Clients may provide more than one UnicodeBreaker.
-//
-// Segmenting stops unrecoverably at EOF, the first I/O error, or a token too
-// large to fit in the buffer.
 type Segmenter struct {
 	deque                      *deque
 	breakers                   []uax.UnicodeBreaker
@@ -115,10 +111,15 @@ var (
 )
 
 // Create a new Segmenter by providing breaking logic (UnicodeBreaker).
+// Clients may provide more than one UnicodeBreaker. Specifying no
+// UnicodeBreaker results in using a word breaker.
 //
 // Before using new segmenters, clients will have to call Init(...) on them.
 func NewSegmenter(breakers ...uax.UnicodeBreaker) *Segmenter {
 	s := &Segmenter{}
+	if len(breakers) == 0 {
+		breakers = []uax.UnicodeBreaker{uax29.NewWordBreaker()}
+	}
 	s.breakers = breakers
 	return s
 }
