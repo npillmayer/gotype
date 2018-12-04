@@ -61,6 +61,8 @@ func (c UAX29Class) String() string {
         return "sot"
     } else if c == eot {
         return "eot"
+    } else if c == Other {
+        return "Other"
     } else if c < 0 || c >= UAX29Class(len(_UAX29Class_index)-1) {
         return "UAX29Class(" + strconv.FormatInt(int64(c), 10) + ")"
     }
@@ -70,15 +72,38 @@ func (c UAX29Class) String() string {
 func setupUAX29Classes() {
     rangeFromUAX29Class = make([]*unicode.RangeTable, int(ZWJClass)+1)
 
-    // Range for UAX#29 class Format
-    Format = rangetable.New('\u00ad', '\u0600', '\u0601', '\u0602', '\u0603', '\u0604', 
-    '\u0605', '\u061c', '\u06dd', '\u070f', '\u08e2', '\u180e', '\u200e', '\u200f', 
-    '\u202a', '\u202b', '\u202c', '\u202d', '\u202e', '\u2060', '\u2061', '\u2062', 
-    '\u2063', '\u2064', '\u2066', '\u2067', '\u2068', '\u2069', '\u206a', '\u206b', 
-    '\u206c', '\u206d', '\u206e', '\u206f', '\ufeff', '\ufff9', '\ufffa', '\ufffb', 
-    '\U000110bd', '\U000110cd', '\U0001bca0', '\U0001bca1', '\U0001bca2', '\U0001bca3', '\U0001d173', '\U0001d174', 
-    '\U0001d175', '\U0001d176', '\U0001d177', '\U0001d178', '\U0001d179', '\U0001d17a', '\U000e0001')
-    rangeFromUAX29Class[int(FormatClass)] = Format
+    // Range for UAX#29 class CR
+    CR = rangetable.New('\r')
+    rangeFromUAX29Class[int(CRClass)] = CR
+
+    // Range for UAX#29 class ExtendNumLet
+    ExtendNumLet = rangetable.New('_', '\u202f', '\u203f', '\u2040', '\u2054', '\ufe33', 
+    '\ufe34', '\ufe4d', '\ufe4e', '\ufe4f', '\uff3f')
+    rangeFromUAX29Class[int(ExtendNumLetClass)] = ExtendNumLet
+
+    // Range for UAX#29 class LF
+    LF = rangetable.New('\n')
+    rangeFromUAX29Class[int(LFClass)] = LF
+
+    // Range for UAX#29 class Regional_Indicator
+    Regional_Indicator = rangetable.New('\U0001f1e6', '\U0001f1e7', '\U0001f1e8', '\U0001f1e9', '\U0001f1ea', '\U0001f1eb', 
+    '\U0001f1ec', '\U0001f1ed', '\U0001f1ee', '\U0001f1ef', '\U0001f1f0', '\U0001f1f1', '\U0001f1f2', '\U0001f1f3', 
+    '\U0001f1f4', '\U0001f1f5', '\U0001f1f6', '\U0001f1f7', '\U0001f1f8', '\U0001f1f9', '\U0001f1fa', '\U0001f1fb', 
+    '\U0001f1fc', '\U0001f1fd', '\U0001f1fe', '\U0001f1ff')
+    rangeFromUAX29Class[int(Regional_IndicatorClass)] = Regional_Indicator
+
+    // Range for UAX#29 class Hebrew_Letter
+    Hebrew_Letter = rangetable.New('\u05d0', '\u05d1', '\u05d2', '\u05d3', '\u05d4', '\u05d5', 
+    '\u05d6', '\u05d7', '\u05d8', '\u05d9', '\u05da', '\u05db', '\u05dc', '\u05dd', 
+    '\u05de', '\u05df', '\u05e0', '\u05e1', '\u05e2', '\u05e3', '\u05e4', '\u05e5', 
+    '\u05e6', '\u05e7', '\u05e8', '\u05e9', '\u05ea', '\u05ef', '\u05f0', '\u05f1', 
+    '\u05f2', '\ufb1d', '\ufb1f', '\ufb20', '\ufb21', '\ufb22', '\ufb23', '\ufb24', 
+    '\ufb25', '\ufb26', '\ufb27', '\ufb28', '\ufb2a', '\ufb2b', '\ufb2c', '\ufb2d', 
+    '\ufb2e', '\ufb2f', '\ufb30', '\ufb31', '\ufb32', '\ufb33', '\ufb34', '\ufb35', 
+    '\ufb36', '\ufb38', '\ufb39', '\ufb3a', '\ufb3b', '\ufb3c', '\ufb3e', '\ufb40', 
+    '\ufb41', '\ufb43', '\ufb44', '\ufb46', '\ufb47', '\ufb48', '\ufb49', '\ufb4a', 
+    '\ufb4b', '\ufb4c', '\ufb4d', '\ufb4e', '\ufb4f')
+    rangeFromUAX29Class[int(Hebrew_LetterClass)] = Hebrew_Letter
 
     // Range for UAX#29 class Numeric
     Numeric = rangetable.New('0', '1', '2', '3', '4', '5', 
@@ -159,22 +184,6 @@ func setupUAX29Classes() {
     '\U0001e957', '\U0001e958', '\U0001e959')
     rangeFromUAX29Class[int(NumericClass)] = Numeric
 
-    // Range for UAX#29 class ExtendNumLet
-    ExtendNumLet = rangetable.New('_', '\u202f', '\u203f', '\u2040', '\u2054', '\ufe33', 
-    '\ufe34', '\ufe4d', '\ufe4e', '\ufe4f', '\uff3f')
-    rangeFromUAX29Class[int(ExtendNumLetClass)] = ExtendNumLet
-
-    // Range for UAX#29 class Regional_Indicator
-    Regional_Indicator = rangetable.New('\U0001f1e6', '\U0001f1e7', '\U0001f1e8', '\U0001f1e9', '\U0001f1ea', '\U0001f1eb', 
-    '\U0001f1ec', '\U0001f1ed', '\U0001f1ee', '\U0001f1ef', '\U0001f1f0', '\U0001f1f1', '\U0001f1f2', '\U0001f1f3', 
-    '\U0001f1f4', '\U0001f1f5', '\U0001f1f6', '\U0001f1f7', '\U0001f1f8', '\U0001f1f9', '\U0001f1fa', '\U0001f1fb', 
-    '\U0001f1fc', '\U0001f1fd', '\U0001f1fe', '\U0001f1ff')
-    rangeFromUAX29Class[int(Regional_IndicatorClass)] = Regional_Indicator
-
-    // Range for UAX#29 class Newline
-    Newline = rangetable.New('\v', '\f', '\u0085', '\u2028', '\u2029')
-    rangeFromUAX29Class[int(NewlineClass)] = Newline
-
     // Range for UAX#29 class ZWJ
     ZWJ = rangetable.New('\u200d')
     rangeFromUAX29Class[int(ZWJClass)] = ZWJ
@@ -184,88 +193,6 @@ func setupUAX29Classes() {
     '\u066c', '\u07f8', '\u2044', '\ufe10', '\ufe14', '\ufe50', '\ufe54', '\uff0c', 
     '\uff1b')
     rangeFromUAX29Class[int(MidNumClass)] = MidNum
-
-    // Range for UAX#29 class Hebrew_Letter
-    Hebrew_Letter = rangetable.New('\u05d0', '\u05d1', '\u05d2', '\u05d3', '\u05d4', '\u05d5', 
-    '\u05d6', '\u05d7', '\u05d8', '\u05d9', '\u05da', '\u05db', '\u05dc', '\u05dd', 
-    '\u05de', '\u05df', '\u05e0', '\u05e1', '\u05e2', '\u05e3', '\u05e4', '\u05e5', 
-    '\u05e6', '\u05e7', '\u05e8', '\u05e9', '\u05ea', '\u05ef', '\u05f0', '\u05f1', 
-    '\u05f2', '\ufb1d', '\ufb1f', '\ufb20', '\ufb21', '\ufb22', '\ufb23', '\ufb24', 
-    '\ufb25', '\ufb26', '\ufb27', '\ufb28', '\ufb2a', '\ufb2b', '\ufb2c', '\ufb2d', 
-    '\ufb2e', '\ufb2f', '\ufb30', '\ufb31', '\ufb32', '\ufb33', '\ufb34', '\ufb35', 
-    '\ufb36', '\ufb38', '\ufb39', '\ufb3a', '\ufb3b', '\ufb3c', '\ufb3e', '\ufb40', 
-    '\ufb41', '\ufb43', '\ufb44', '\ufb46', '\ufb47', '\ufb48', '\ufb49', '\ufb4a', 
-    '\ufb4b', '\ufb4c', '\ufb4d', '\ufb4e', '\ufb4f')
-    rangeFromUAX29Class[int(Hebrew_LetterClass)] = Hebrew_Letter
-
-    // Range for UAX#29 class CR
-    CR = rangetable.New('\r')
-    rangeFromUAX29Class[int(CRClass)] = CR
-
-    // Range for UAX#29 class Double_Quote
-    Double_Quote = rangetable.New('"')
-    rangeFromUAX29Class[int(Double_QuoteClass)] = Double_Quote
-
-    // Range for UAX#29 class Katakana
-    Katakana = rangetable.New('\u3031', '\u3032', '\u3033', '\u3034', '\u3035', '\u309b', 
-    '\u309c', '\u30a0', '\u30a1', '\u30a2', '\u30a3', '\u30a4', '\u30a5', '\u30a6', 
-    '\u30a7', '\u30a8', '\u30a9', '\u30aa', '\u30ab', '\u30ac', '\u30ad', '\u30ae', 
-    '\u30af', '\u30b0', '\u30b1', '\u30b2', '\u30b3', '\u30b4', '\u30b5', '\u30b6', 
-    '\u30b7', '\u30b8', '\u30b9', '\u30ba', '\u30bb', '\u30bc', '\u30bd', '\u30be', 
-    '\u30bf', '\u30c0', '\u30c1', '\u30c2', '\u30c3', '\u30c4', '\u30c5', '\u30c6', 
-    '\u30c7', '\u30c8', '\u30c9', '\u30ca', '\u30cb', '\u30cc', '\u30cd', '\u30ce', 
-    '\u30cf', '\u30d0', '\u30d1', '\u30d2', '\u30d3', '\u30d4', '\u30d5', '\u30d6', 
-    '\u30d7', '\u30d8', '\u30d9', '\u30da', '\u30db', '\u30dc', '\u30dd', '\u30de', 
-    '\u30df', '\u30e0', '\u30e1', '\u30e2', '\u30e3', '\u30e4', '\u30e5', '\u30e6', 
-    '\u30e7', '\u30e8', '\u30e9', '\u30ea', '\u30eb', '\u30ec', '\u30ed', '\u30ee', 
-    '\u30ef', '\u30f0', '\u30f1', '\u30f2', '\u30f3', '\u30f4', '\u30f5', '\u30f6', 
-    '\u30f7', '\u30f8', '\u30f9', '\u30fa', '\u30fc', '\u30fd', '\u30fe', '\u30ff', 
-    '\u31f0', '\u31f1', '\u31f2', '\u31f3', '\u31f4', '\u31f5', '\u31f6', '\u31f7', 
-    '\u31f8', '\u31f9', '\u31fa', '\u31fb', '\u31fc', '\u31fd', '\u31fe', '\u31ff', 
-    '\u32d0', '\u32d1', '\u32d2', '\u32d3', '\u32d4', '\u32d5', '\u32d6', '\u32d7', 
-    '\u32d8', '\u32d9', '\u32da', '\u32db', '\u32dc', '\u32dd', '\u32de', '\u32df', 
-    '\u32e0', '\u32e1', '\u32e2', '\u32e3', '\u32e4', '\u32e5', '\u32e6', '\u32e7', 
-    '\u32e8', '\u32e9', '\u32ea', '\u32eb', '\u32ec', '\u32ed', '\u32ee', '\u32ef', 
-    '\u32f0', '\u32f1', '\u32f2', '\u32f3', '\u32f4', '\u32f5', '\u32f6', '\u32f7', 
-    '\u32f8', '\u32f9', '\u32fa', '\u32fb', '\u32fc', '\u32fd', '\u32fe', '\u3300', 
-    '\u3301', '\u3302', '\u3303', '\u3304', '\u3305', '\u3306', '\u3307', '\u3308', 
-    '\u3309', '\u330a', '\u330b', '\u330c', '\u330d', '\u330e', '\u330f', '\u3310', 
-    '\u3311', '\u3312', '\u3313', '\u3314', '\u3315', '\u3316', '\u3317', '\u3318', 
-    '\u3319', '\u331a', '\u331b', '\u331c', '\u331d', '\u331e', '\u331f', '\u3320', 
-    '\u3321', '\u3322', '\u3323', '\u3324', '\u3325', '\u3326', '\u3327', '\u3328', 
-    '\u3329', '\u332a', '\u332b', '\u332c', '\u332d', '\u332e', '\u332f', '\u3330', 
-    '\u3331', '\u3332', '\u3333', '\u3334', '\u3335', '\u3336', '\u3337', '\u3338', 
-    '\u3339', '\u333a', '\u333b', '\u333c', '\u333d', '\u333e', '\u333f', '\u3340', 
-    '\u3341', '\u3342', '\u3343', '\u3344', '\u3345', '\u3346', '\u3347', '\u3348', 
-    '\u3349', '\u334a', '\u334b', '\u334c', '\u334d', '\u334e', '\u334f', '\u3350', 
-    '\u3351', '\u3352', '\u3353', '\u3354', '\u3355', '\u3356', '\u3357', '\uff66', 
-    '\uff67', '\uff68', '\uff69', '\uff6a', '\uff6b', '\uff6c', '\uff6d', '\uff6e', 
-    '\uff6f', '\uff70', '\uff71', '\uff72', '\uff73', '\uff74', '\uff75', '\uff76', 
-    '\uff77', '\uff78', '\uff79', '\uff7a', '\uff7b', '\uff7c', '\uff7d', '\uff7e', 
-    '\uff7f', '\uff80', '\uff81', '\uff82', '\uff83', '\uff84', '\uff85', '\uff86', 
-    '\uff87', '\uff88', '\uff89', '\uff8a', '\uff8b', '\uff8c', '\uff8d', '\uff8e', 
-    '\uff8f', '\uff90', '\uff91', '\uff92', '\uff93', '\uff94', '\uff95', '\uff96', 
-    '\uff97', '\uff98', '\uff99', '\uff9a', '\uff9b', '\uff9c', '\uff9d', '\U0001b000')
-    rangeFromUAX29Class[int(KatakanaClass)] = Katakana
-
-    // Range for UAX#29 class MidLetter
-    MidLetter = rangetable.New(':', '\u00b7', '\u0387', '\u05f4', '\u2027', '\ufe13', 
-    '\ufe55', '\uff1a')
-    rangeFromUAX29Class[int(MidLetterClass)] = MidLetter
-
-    // Range for UAX#29 class WSegSpace
-    WSegSpace = rangetable.New(' ', '\u1680', '\u2000', '\u2001', '\u2002', '\u2003', 
-    '\u2004', '\u2005', '\u2006', '\u2008', '\u2009', '\u200a', '\u205f', '\u3000')
-    rangeFromUAX29Class[int(WSegSpaceClass)] = WSegSpace
-
-    // Range for UAX#29 class LF
-    LF = rangetable.New('\n')
-    rangeFromUAX29Class[int(LFClass)] = LF
-
-    // Range for UAX#29 class MidNumLet
-    MidNumLet = rangetable.New('.', '\u2018', '\u2019', '\u2024', '\ufe52', '\uff07', 
-    '\uff0e')
-    rangeFromUAX29Class[int(MidNumLetClass)] = MidNumLet
 
     // Range for UAX#29 class Extend
     Extend = rangetable.New('\u0300', '\u0301', '\u0302', '\u0303', '\u0304', '\u0305', 
@@ -562,6 +489,10 @@ func setupUAX29Classes() {
     '\U000e01e5', '\U000e01e6', '\U000e01e7', '\U000e01e8', '\U000e01e9', '\U000e01ea', '\U000e01eb', '\U000e01ec', 
     '\U000e01ed', '\U000e01ee', '\U000e01ef')
     rangeFromUAX29Class[int(ExtendClass)] = Extend
+
+    // Range for UAX#29 class Double_Quote
+    Double_Quote = rangetable.New('"')
+    rangeFromUAX29Class[int(Double_QuoteClass)] = Double_Quote
 
     // Range for UAX#29 class ALetter
     ALetter = rangetable.New('A', 'B', 'C', 'D', 'E', 'F', 
@@ -4129,7 +4060,78 @@ func setupUAX29Classes() {
     '\U0001f188', '\U0001f189')
     rangeFromUAX29Class[int(ALetterClass)] = ALetter
 
+    // Range for UAX#29 class WSegSpace
+    WSegSpace = rangetable.New(' ', '\u1680', '\u2000', '\u2001', '\u2002', '\u2003', 
+    '\u2004', '\u2005', '\u2006', '\u2008', '\u2009', '\u200a', '\u205f', '\u3000')
+    rangeFromUAX29Class[int(WSegSpaceClass)] = WSegSpace
+
     // Range for UAX#29 class Single_Quote
     Single_Quote = rangetable.New('\'')
     rangeFromUAX29Class[int(Single_QuoteClass)] = Single_Quote
+
+    // Range for UAX#29 class Newline
+    Newline = rangetable.New('\v', '\f', '\u0085', '\u2028', '\u2029')
+    rangeFromUAX29Class[int(NewlineClass)] = Newline
+
+    // Range for UAX#29 class Katakana
+    Katakana = rangetable.New('\u3031', '\u3032', '\u3033', '\u3034', '\u3035', '\u309b', 
+    '\u309c', '\u30a0', '\u30a1', '\u30a2', '\u30a3', '\u30a4', '\u30a5', '\u30a6', 
+    '\u30a7', '\u30a8', '\u30a9', '\u30aa', '\u30ab', '\u30ac', '\u30ad', '\u30ae', 
+    '\u30af', '\u30b0', '\u30b1', '\u30b2', '\u30b3', '\u30b4', '\u30b5', '\u30b6', 
+    '\u30b7', '\u30b8', '\u30b9', '\u30ba', '\u30bb', '\u30bc', '\u30bd', '\u30be', 
+    '\u30bf', '\u30c0', '\u30c1', '\u30c2', '\u30c3', '\u30c4', '\u30c5', '\u30c6', 
+    '\u30c7', '\u30c8', '\u30c9', '\u30ca', '\u30cb', '\u30cc', '\u30cd', '\u30ce', 
+    '\u30cf', '\u30d0', '\u30d1', '\u30d2', '\u30d3', '\u30d4', '\u30d5', '\u30d6', 
+    '\u30d7', '\u30d8', '\u30d9', '\u30da', '\u30db', '\u30dc', '\u30dd', '\u30de', 
+    '\u30df', '\u30e0', '\u30e1', '\u30e2', '\u30e3', '\u30e4', '\u30e5', '\u30e6', 
+    '\u30e7', '\u30e8', '\u30e9', '\u30ea', '\u30eb', '\u30ec', '\u30ed', '\u30ee', 
+    '\u30ef', '\u30f0', '\u30f1', '\u30f2', '\u30f3', '\u30f4', '\u30f5', '\u30f6', 
+    '\u30f7', '\u30f8', '\u30f9', '\u30fa', '\u30fc', '\u30fd', '\u30fe', '\u30ff', 
+    '\u31f0', '\u31f1', '\u31f2', '\u31f3', '\u31f4', '\u31f5', '\u31f6', '\u31f7', 
+    '\u31f8', '\u31f9', '\u31fa', '\u31fb', '\u31fc', '\u31fd', '\u31fe', '\u31ff', 
+    '\u32d0', '\u32d1', '\u32d2', '\u32d3', '\u32d4', '\u32d5', '\u32d6', '\u32d7', 
+    '\u32d8', '\u32d9', '\u32da', '\u32db', '\u32dc', '\u32dd', '\u32de', '\u32df', 
+    '\u32e0', '\u32e1', '\u32e2', '\u32e3', '\u32e4', '\u32e5', '\u32e6', '\u32e7', 
+    '\u32e8', '\u32e9', '\u32ea', '\u32eb', '\u32ec', '\u32ed', '\u32ee', '\u32ef', 
+    '\u32f0', '\u32f1', '\u32f2', '\u32f3', '\u32f4', '\u32f5', '\u32f6', '\u32f7', 
+    '\u32f8', '\u32f9', '\u32fa', '\u32fb', '\u32fc', '\u32fd', '\u32fe', '\u3300', 
+    '\u3301', '\u3302', '\u3303', '\u3304', '\u3305', '\u3306', '\u3307', '\u3308', 
+    '\u3309', '\u330a', '\u330b', '\u330c', '\u330d', '\u330e', '\u330f', '\u3310', 
+    '\u3311', '\u3312', '\u3313', '\u3314', '\u3315', '\u3316', '\u3317', '\u3318', 
+    '\u3319', '\u331a', '\u331b', '\u331c', '\u331d', '\u331e', '\u331f', '\u3320', 
+    '\u3321', '\u3322', '\u3323', '\u3324', '\u3325', '\u3326', '\u3327', '\u3328', 
+    '\u3329', '\u332a', '\u332b', '\u332c', '\u332d', '\u332e', '\u332f', '\u3330', 
+    '\u3331', '\u3332', '\u3333', '\u3334', '\u3335', '\u3336', '\u3337', '\u3338', 
+    '\u3339', '\u333a', '\u333b', '\u333c', '\u333d', '\u333e', '\u333f', '\u3340', 
+    '\u3341', '\u3342', '\u3343', '\u3344', '\u3345', '\u3346', '\u3347', '\u3348', 
+    '\u3349', '\u334a', '\u334b', '\u334c', '\u334d', '\u334e', '\u334f', '\u3350', 
+    '\u3351', '\u3352', '\u3353', '\u3354', '\u3355', '\u3356', '\u3357', '\uff66', 
+    '\uff67', '\uff68', '\uff69', '\uff6a', '\uff6b', '\uff6c', '\uff6d', '\uff6e', 
+    '\uff6f', '\uff70', '\uff71', '\uff72', '\uff73', '\uff74', '\uff75', '\uff76', 
+    '\uff77', '\uff78', '\uff79', '\uff7a', '\uff7b', '\uff7c', '\uff7d', '\uff7e', 
+    '\uff7f', '\uff80', '\uff81', '\uff82', '\uff83', '\uff84', '\uff85', '\uff86', 
+    '\uff87', '\uff88', '\uff89', '\uff8a', '\uff8b', '\uff8c', '\uff8d', '\uff8e', 
+    '\uff8f', '\uff90', '\uff91', '\uff92', '\uff93', '\uff94', '\uff95', '\uff96', 
+    '\uff97', '\uff98', '\uff99', '\uff9a', '\uff9b', '\uff9c', '\uff9d', '\U0001b000')
+    rangeFromUAX29Class[int(KatakanaClass)] = Katakana
+
+    // Range for UAX#29 class MidLetter
+    MidLetter = rangetable.New(':', '\u00b7', '\u0387', '\u05f4', '\u2027', '\ufe13', 
+    '\ufe55', '\uff1a')
+    rangeFromUAX29Class[int(MidLetterClass)] = MidLetter
+
+    // Range for UAX#29 class Format
+    Format = rangetable.New('\u00ad', '\u0600', '\u0601', '\u0602', '\u0603', '\u0604', 
+    '\u0605', '\u061c', '\u06dd', '\u070f', '\u08e2', '\u180e', '\u200e', '\u200f', 
+    '\u202a', '\u202b', '\u202c', '\u202d', '\u202e', '\u2060', '\u2061', '\u2062', 
+    '\u2063', '\u2064', '\u2066', '\u2067', '\u2068', '\u2069', '\u206a', '\u206b', 
+    '\u206c', '\u206d', '\u206e', '\u206f', '\ufeff', '\ufff9', '\ufffa', '\ufffb', 
+    '\U000110bd', '\U000110cd', '\U0001bca0', '\U0001bca1', '\U0001bca2', '\U0001bca3', '\U0001d173', '\U0001d174', 
+    '\U0001d175', '\U0001d176', '\U0001d177', '\U0001d178', '\U0001d179', '\U0001d17a', '\U000e0001')
+    rangeFromUAX29Class[int(FormatClass)] = Format
+
+    // Range for UAX#29 class MidNumLet
+    MidNumLet = rangetable.New('.', '\u2018', '\u2019', '\u2024', '\ufe52', '\uff07', 
+    '\uff0e')
+    rangeFromUAX29Class[int(MidNumLetClass)] = MidNumLet
 }

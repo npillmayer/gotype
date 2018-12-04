@@ -11,7 +11,7 @@ package segment
 // allocation strategy of Deque. Many thanks to gammazero for the great work!
 //
 // Deque represents a single instance of the deque data structure.
-type Deque struct {
+type deque struct {
 	buf   []atom
 	head  int
 	tail  int
@@ -23,14 +23,14 @@ type Deque struct {
 const minCapacity = 16
 
 // Len returns the number of elements currently stored in the queue.
-func (q *Deque) Len() int {
+func (q *deque) Len() int {
 	return q.count
 }
 
 // PushBack appends an element to the back of the queue.  Implements FIFO when
 // elements are removed with PopFront(), and LIFO when elements are removed
 // with PopBack().
-func (q *Deque) PushBack(r rune, penalty int) {
+func (q *deque) PushBack(r rune, penalty int) {
 	q.growIfFull()
 	q.buf[q.tail].r = r
 	q.buf[q.tail].penalty = penalty
@@ -40,7 +40,7 @@ func (q *Deque) PushBack(r rune, penalty int) {
 }
 
 // PushFront prepends an element to the front of the queue.
-func (q *Deque) PushFront(r rune, penalty int) {
+func (q *deque) PushFront(r rune, penalty int) {
 	q.growIfFull()
 
 	// Calculate new head position.
@@ -53,7 +53,7 @@ func (q *Deque) PushFront(r rune, penalty int) {
 // PopFront removes and returns the element from the front of the queue.
 // Implements FIFO when used with PushBack().  If the queue is empty, the call
 // panics.
-func (q *Deque) PopFront() (rune, int) {
+func (q *deque) PopFront() (rune, int) {
 	if q.count <= 0 {
 		panic("deque: PopFront() called on empty queue")
 	}
@@ -73,7 +73,7 @@ func (q *Deque) PopFront() (rune, int) {
 // PopBack removes and returns the element from the back of the queue.
 // Implements LIFO when used with PushBack().  If the queue is empty, the call
 // panics.
-func (q *Deque) PopBack() (rune, int) {
+func (q *deque) PopBack() (rune, int) {
 	if q.count <= 0 {
 		panic("deque: PopBack() called on empty queue")
 	}
@@ -96,7 +96,7 @@ func (q *Deque) PopBack() (rune, int) {
 // Front returns the element at the front of the queue.  This is the element
 // that would be returned by PopFront().  This call panics if the queue is
 // empty.
-func (q *Deque) Front() (rune, int) {
+func (q *deque) Front() (rune, int) {
 	if q.count <= 0 {
 		panic("deque: Front() called when empty")
 	}
@@ -108,7 +108,7 @@ func (q *Deque) Front() (rune, int) {
 // Back returns the element at the back of the queue.  This is the element
 // that would be returned by PopBack().  This call panics if the queue is
 // empty.
-func (q *Deque) Back() (rune, int) {
+func (q *deque) Back() (rune, int) {
 	if q.count <= 0 {
 		panic("deque: Back() called when empty")
 	}
@@ -129,7 +129,7 @@ func (q *Deque) Back() (rune, int) {
 // case of a fixed-size circular log buffer: A new entry is pushed onto one end
 // and when full the oldest is popped from the other end.  All the log entries
 // in the buffer must be readable without altering the buffer contents.
-func (q *Deque) At(i int) (rune, int) {
+func (q *deque) At(i int) (rune, int) {
 	if i < 0 || i >= q.count {
 		panic("deque: At() called with index out of range")
 	}
@@ -141,7 +141,7 @@ func (q *Deque) At(i int) (rune, int) {
 
 // SetAt modifies the element at index i in the queue. This method accepts
 // only non-negative index values.
-func (q *Deque) SetAt(i int, r rune, penalty int) {
+func (q *deque) SetAt(i int, r rune, penalty int) {
 	if i < 0 || i >= q.count {
 		panic("deque: At() called with index out of range")
 	}
@@ -155,7 +155,7 @@ func (q *Deque) SetAt(i int, r rune, penalty int) {
 // GC during reuse.  The queue will not be resized smaller as long as items are
 // only added.  Only when items are removed is the queue subject to getting
 // resized smaller.
-func (q *Deque) Clear() {
+func (q *deque) Clear() {
 	// bitwise modulus
 	modBits := len(q.buf) - 1
 	for h := q.head; h != q.tail; h = (h + 1) & modBits {
@@ -170,7 +170,7 @@ func (q *Deque) Clear() {
 // Rotate rotates the deque n steps front-to-back.  If n is negative, rotates
 // back-to-front.  Having Deque provide Rotate() avoids resizing that could
 // happen if implementing rotation using only Pop and Push methods.
-func (q *Deque) Rotate(n int) {
+func (q *deque) Rotate(n int) {
 	if q.count <= 1 {
 		return
 	}
@@ -216,17 +216,17 @@ func (q *Deque) Rotate(n int) {
 }
 
 // prev returns the previous buffer position wrapping around buffer.
-func (q *Deque) prev(i int) int {
+func (q *deque) prev(i int) int {
 	return (i - 1) & (len(q.buf) - 1) // bitwise modulus
 }
 
 // next returns the next buffer position wrapping around buffer.
-func (q *Deque) next(i int) int {
+func (q *deque) next(i int) int {
 	return (i + 1) & (len(q.buf) - 1) // bitwise modulus
 }
 
 // growIfFull resizes up if the buffer is full.
-func (q *Deque) growIfFull() {
+func (q *deque) growIfFull() {
 	if len(q.buf) == 0 {
 		q.buf = make([]atom, minCapacity)
 		return
@@ -237,7 +237,7 @@ func (q *Deque) growIfFull() {
 }
 
 // shrinkIfExcess resize down if the buffer 1/4 full.
-func (q *Deque) shrinkIfExcess() {
+func (q *deque) shrinkIfExcess() {
 	if len(q.buf) > minCapacity && (q.count<<2) == len(q.buf) {
 		q.resize()
 	}
@@ -246,7 +246,7 @@ func (q *Deque) shrinkIfExcess() {
 // resize resizes the deque to fit exactly twice its current contents.  This is
 // used to grow the queue when it is full, and also to shrink it when it is
 // only a quarter full.
-func (q *Deque) resize() {
+func (q *deque) resize() {
 	newBuf := make([]atom, q.count<<1)
 	if q.tail > q.head {
 		copy(newBuf, q.buf[q.head:q.tail])

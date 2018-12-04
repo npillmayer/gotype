@@ -1,5 +1,5 @@
 /*
-Package segment is about Unicode and text segmenting.
+Package segment is about Unicode text segmenting.
 
 BSD License
 
@@ -46,8 +46,8 @@ supplied.
   segmenter.Init(...)
   for segmenter.Next() ...
 
-An example for an UnicodeBreaker is "uax14.LineWrap", a breaker
-implementing the UAX#14 line breaking algorithm.
+An example for an UnicodeBreaker is "uax29.WordBreak", a breaker
+implementing the UAX#29 word breaking algorithm.
 
 This package provides a variety of types to support authors of
 UnicodeBreakers: RunePublisher/RuneSubscriber and Recognizer.
@@ -97,7 +97,7 @@ func (a *atom) String() string {
 //
 // Segmenter provides an interface similar to bufio.Scanner for reading data
 // such as a file of Unicode text.
-// Successive calls to the Scan() method will
+// Successive calls to the Next() method will
 // step through the 'segments' of a file, calculating a 'penalty' for breaking
 // at this segment. Penalties are numeric values and reflect costs, where
 // negative values are to be interpreted as negative costs, i.e. merits.
@@ -107,10 +107,10 @@ func (a *atom) String() string {
 // (see package uax29).
 // Clients may provide more than one UnicodeBreaker.
 //
-// Scanning stops unrecoverably at EOF, the first I/O error, or a token too
+// Segmenting stops unrecoverably at EOF, the first I/O error, or a token too
 // large to fit in the buffer.
 type Segmenter struct {
-	deque                      *Deque
+	deque                      *deque
 	breakers                   []UnicodeBreaker
 	reader                     io.RuneReader
 	buffer                     *bytes.Buffer
@@ -127,12 +127,10 @@ type Segmenter struct {
 	voidCount                  int
 }
 
-const (
-	// MaxScanSegmentSize is the maximum size used to buffer a segment
-	// unless the user provides an explicit buffer with Segmenter.Buffer().
-	MaxScanTokenSize = 64 * 1024
-	startBufSize     = 4096 // Size of initial allocation for buffer.
-)
+// MaxSegmentSize is the maximum size used to buffer a segment
+// unless the user provides an explicit buffer with Segmenter.Buffer().
+const MaxSegmentSize = 64 * 1024
+const startBufSize = 4096 // Size of initial allocation for buffer.
 
 var (
 	ErrTooLong        = errors.New("segment.Segmenter: segment too long for buffer")
@@ -141,7 +139,7 @@ var (
 
 // Create a new Segmenter by providing breaking logic (UnicodeBreaker).
 //
-// Before using new segmenters, cliens will have to call Init(...) on them.
+// Before using new segmenters, clients will have to call Init(...) on them.
 func NewSegmenter(breakers ...UnicodeBreaker) *Segmenter {
 	s := &Segmenter{}
 	s.breakers = breakers
@@ -156,9 +154,9 @@ func (s *Segmenter) Init(reader io.RuneReader) {
 	}
 	s.reader = reader
 	if s.deque == nil {
-		s.deque = &Deque{} // Q of atoms
+		s.deque = &deque{} // Q of atoms
 		s.buffer = bytes.NewBuffer(make([]byte, 0, startBufSize))
-		s.maxSegmentLen = MaxScanTokenSize
+		s.maxSegmentLen = MaxSegmentSize
 	} else {
 		s.deque.Clear()
 		s.longestActiveMatch = 0
@@ -180,8 +178,8 @@ func (s *Segmenter) Init(reader io.RuneReader) {
 // The maximum segment size is the larger of max and cap(buf).
 // If max <= cap(buf), Next() will use this buffer only and do no allocation.
 //
-// By default, Scan uses an internal buffer and sets the maximum token size
-// to MaxScanSegmentSize.
+// By default, Segmenter uses an internal buffer and sets the maximum token size
+// to MaxSegmentntSize.
 //
 // Buffer panics if it is called after scanning has started. Clients will have
 // to call Init(...) again to permit re-setting the buffer.
@@ -245,7 +243,7 @@ func (s *Segmenter) Next() bool {
 	if s.positionOfBreakOpportunity >= 0 { // found a break opportunity
 		l := s.getFrontSegment(s.buffer)
 		s.activeSegment = s.buffer.Bytes()
-		CT.P("length", strconv.Itoa(l)).Infof("Next() = %v", s.activeSegment)
+		CT.P("length", strconv.Itoa(l)).Debugf("Next() = %v", s.activeSegment)
 		return true
 	} else {
 		s.activeSegment = nil
@@ -368,6 +366,17 @@ func (s *Segmenter) getFrontSegment(buf *bytes.Buffer) int {
 	buf.Reset()
 	l := min(s.deque.Len()-1, s.positionOfBreakOpportunity)
 	CT.Debugf("cutting front segment of length 0..%d", l)
+	if l > buf.Len() {
+		if l > s.maxSegmentLen {
+			s.setErr(ErrTooLong)
+			return 0
+		}
+		newSize := max(buf.Len()+startBufSize, l+1)
+		if newSize > s.maxSegmentLen {
+			newSize = s.maxSegmentLen
+		}
+		buf.Grow(newSize)
+	}
 	cnt := 0
 	for i := 0; i <= l; i++ {
 		r, p := s.deque.PopFront()
@@ -431,7 +440,7 @@ type NfaStateFn func(*Recognizer, rune, int) NfaStateFn
 // use a UnicodePublisher to interact with them.
 type Recognizer struct {
 	Expect    int         // next code-point to expect; semantics are up to the client
-	MatchLen  int         // longest active match
+	MatchLen  int         // length of active match
 	UserData  interface{} // clients may need to store additional information
 	penalties []int       // penalties to return, used internally in DoAccept()
 	nextStep  NfaStateFn  // next step of a DFA
@@ -524,11 +533,15 @@ func (rec *Recognizer) RuneEvent(r rune, codePointClass int) []int {
 	//fmt.Printf("received rune event: %+q / %d\n", r, codePointClass)
 	var penalties []int
 	if rec.nextStep != nil {
+		//CT.Infof("  calling func = %v", rec.nextStep)
 		rec.nextStep = rec.nextStep(rec, r, codePointClass)
+	} else {
+		//CT.Info("  not calling func = nil")
 	}
 	if rec.Done() && rec.MatchLen > 0 { // accepted a match
 		penalties = rec.penalties
 	}
+	//CT.Infof("    subscriber:      penalites = %v, done = %v, match len = %d", penalties, rec.Done(), rec.MatchLength())
 	return penalties
 }
 
@@ -545,7 +558,7 @@ func DoAbort(rec *Recognizer) NfaStateFn {
 func DoAccept(rec *Recognizer, penalties ...int) NfaStateFn {
 	rec.MatchLen++
 	rec.penalties = penalties
-	CT.Infof("ACCEPT with %v", rec.penalties)
+	CT.Debugf("ACCEPT with %v", rec.penalties)
 	return nil
 }
 
@@ -602,11 +615,14 @@ func (rpub *DefaultRunePublisher) PublishRuneEvent(r rune, codePointClass int) (
 	if rpub.penaltiesTotal == nil {
 		rpub.penaltiesTotal = make([]int, 1024)
 	}
+	//CT.Infof("pre-publish(): total penalites = %v", rpub.penaltiesTotal)
 	rpub.penaltiesTotal = rpub.penaltiesTotal[:0]
+	//CT.Infof("pre-publish(): total penalites = %v", rpub.penaltiesTotal)
 	// pre-condition: no subscriber is Done()
 	for i := rpub.Len() - 1; i >= 0; i-- {
 		subscr := rpub.at(i)
 		penalties := subscr.RuneEvent(r, codePointClass)
+		//CT.Infof("    publish():       penalites = %v", penalties)
 		for j, p := range penalties { // aggregate all penalties
 			if j >= len(rpub.penaltiesTotal) {
 				rpub.penaltiesTotal = append(rpub.penaltiesTotal, p)
@@ -614,6 +630,7 @@ func (rpub *DefaultRunePublisher) PublishRuneEvent(r rune, codePointClass int) (
 				rpub.penaltiesTotal[j] = rpub.aggregate(rpub.penaltiesTotal[j], p)
 			}
 		}
+		//CT.Infof("    publish(): total penalites = %v", rpub.penaltiesTotal)
 		if !subscr.Done() { // compare against longest active match
 			if d := subscr.MatchLength(); d > longest {
 				longest = d
@@ -621,6 +638,7 @@ func (rpub *DefaultRunePublisher) PublishRuneEvent(r rune, codePointClass int) (
 		}
 		rpub.Fix(i) // re-order heap if subscr.Done()
 	}
+	//CT.Infof("pre-publish(): total penalites = %v", rpub.penaltiesTotal)
 	// now unsubscribe all done subscribers
 	for subscr := rpub.PopDone(); subscr != nil; subscr = rpub.PopDone() {
 		subscr.Unsubscribed()
@@ -631,8 +649,8 @@ func (rpub *DefaultRunePublisher) PublishRuneEvent(r rune, codePointClass int) (
 // Function type for methods of penalty-aggregation. Aggregates all the
 // break penalties each a break-point to a single penalty value at that point.
 //
-// [0, 1, 2, 4, ...]total + [0, 1, 2, ...]new -> [0, 1, 2, 3, ...]new_total
-//type PenaltyAggregator func([]int, []int) []int
+// TODO: for segmenters: add argument for *UnicodeBreaker.
+// For unicodeBreakers: leave it this way.
 type PenaltyAggregator func(int, int) int
 
 // Interface RunePublisher
@@ -650,37 +668,11 @@ func AddPenalties(total int, p int) int {
 	return total + p
 }
 
-/*
-func AddPenalties(total []int, penalties []int) []int {
-	for i, p := range penalties {
-		if i >= len(total) {
-			total = append(total, p)
-		} else {
-			total[i] += p
-		}
-	}
-	return total
-}
-*/
-
 // Alternative function to aggregate break-penalties.
 // Returns maximum of all penalties at each break position.
 func MaxPenalties(total int, p int) int {
 	return max(total, p)
 }
-
-/*
-func MaxPenalties(total []int, penalties []int) []int {
-	for i, p := range penalties {
-		if i >= len(total) {
-			total = append(total, p)
-		} else if p > total[i] {
-			total[i] = p
-		}
-	}
-	return total
-}
-*/
 
 // Interface RunePublisher
 func (rpub *DefaultRunePublisher) SubscribeMe(rsub RuneSubscriber) RunePublisher {

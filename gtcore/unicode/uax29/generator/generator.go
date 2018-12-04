@@ -180,6 +180,8 @@ func (c UAX29Class) String() string {
         return "sot"
     } else if c == eot {
         return "eot"
+    } else if c == Other {
+        return "Other"
     } else if c < 0 || c >= UAX29Class(len(_UAX29Class_index)-1) {
         return "UAX29Class(" + strconv.FormatInt(int64(c), 10) + ")"
     }

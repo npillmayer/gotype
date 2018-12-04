@@ -44,10 +44,18 @@ func (pq DefaultRunePublisher) Top() RuneSubscriber {
 // it re-organize.
 func (pq *DefaultRunePublisher) Fix(at int) {
 	if at < pq.Len() {
+		//pq.print()
 		if pq.q[at].Done() {
 			pq.bubbleUp(at)
 		} else {
 			pq.bubbleDown(at)
+		}
+		for i := 0; i < pq.gap; i++ {
+			if pq.q[i].Done() {
+				CT.Errorf("prioq.Fix(%d) failed", at)
+				pq.print()
+				panic("internal queue order compromised")
+			}
 		}
 	}
 }
@@ -92,30 +100,34 @@ func (pq *DefaultRunePublisher) PopDone() RuneSubscriber {
 
 // Pre-requisite: subscriber at positition is Done().
 func (pq *DefaultRunePublisher) bubbleUp(i int) {
-	if i < pq.gap {
+	if i < pq.gap-1 {
 		if pq.gap < pq.Len() {
-			pq.q[i], pq.q[pq.gap] = pq.q[pq.gap], pq.q[i] // swap
+			pq.q[i], pq.q[pq.gap-1] = pq.q[pq.gap-1], pq.q[i] // swap
 		} else if i < pq.Len()-1 { // gap is out of range
 			last := pq.Len() - 1
 			pq.q[i], pq.q[last] = pq.q[last], pq.q[i] // swap with topmost
 		}
+	}
+	if pq.gap > 0 && pq.q[pq.gap-1].Done() {
 		pq.gap--
 	}
 }
 
 // Pre-requisite: subscriber at positition is not Done().
 func (pq *DefaultRunePublisher) bubbleDown(i int) {
-	if pq.gap <= i {
+	if i >= pq.gap {
 		if pq.gap < i {
 			pq.q[i], pq.q[pq.gap] = pq.q[pq.gap], pq.q[i] // swap
 		}
+	}
+	if pq.gap < pq.Len() && !pq.q[pq.gap].Done() {
 		pq.gap++
 	}
 }
 
 func (rpub *DefaultRunePublisher) print() {
-	fmt.Printf("Publisher of length %d:\n", rpub.Len())
-	for i := rpub.Len() - 1; i >= 0; i++ {
+	fmt.Printf("Publisher of length %d (gap = %d):\n", rpub.Len(), rpub.gap)
+	for i := rpub.Len() - 1; i >= 0; i-- {
 		subscr := rpub.at(i)
 		fmt.Printf(" - [%d] %s done=%v\n", i, subscr, subscr.Done())
 	}

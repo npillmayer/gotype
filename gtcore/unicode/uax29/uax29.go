@@ -41,6 +41,9 @@ It defines code-point classes and sets of rules
 for how to place break points and break inhibitors.
 This file is about word breaking.
 
+This segmenter passes all 1823 tests of the Unicode UAX#29 test suite
+for word breaking.
+
 Typical Usage
 
 Clients instantiate a WordBreaker object and use it as the
@@ -53,13 +56,13 @@ breaking engine for a segmenter.
 
 Attention
 
-Before using word breakers, clients will have to initialize the
-classes and rules.
+Before using word breakers, clients usually should initialize the classes and rules:
 
   SetupUAX29Classes()
 
 This initializes all the code-point range tables. Initialization is
-not done beforehand, as it consumes quite some memory.
+not done beforehand, as it consumes quite some memory. However, the
+word breaker will call it if range tables are not yet initialized.
 */
 package uax29
 
@@ -84,7 +87,7 @@ func UAX29ClassForRune(r rune) UAX29Class {
 	for c := UAX29Class(0); c <= ZWJClass; c++ {
 		urange := rangeFromUAX29Class[c]
 		if urange == nil {
-			TC.P("class", c).Errorf("no range for UAX29 class")
+			//TC.P("class", c).Errorf("no range for UAX29 class")
 		} else if unicode.Is(urange, r) {
 			return c
 		}
@@ -98,6 +101,8 @@ var setupOnce sync.Once
 // Create code-point classes for word breaking.
 // Will in turn set up emoji classes as well.
 // (Concurrency-safe).
+//
+// The word breaker will call this if it has not been called beforehand.
 func SetupUAX29Classes() {
 	setupOnce.Do(setupUAX29Classes)
 	emoji.SetupEmojisClasses()
@@ -109,48 +114,52 @@ func SetupUAX29Classes() {
 // up according to UAX#29 / Words.
 // It implements the segment.UnicodeBreaker interface.
 type WordBreaker struct {
-	publisher    segment.RunePublisher
-	longestMatch int
-	penalties    []int
+	publisher    segment.RunePublisher // we use the rune publishing mechanism
+	longestMatch int                   // longest active match for any rule of this word breaker
+	penalties    []int                 // returned to the segmenter: penalties to insert
 	rules        map[UAX29Class][]segment.NfaStateFn
-	emojirules   map[int][]segment.NfaStateFn
-	blocked      map[UAX29Class]bool
+	blockedRI    bool // are rules for Regional_Indicator currently blocked?
 }
 
-// Create a new UAX#14 line breaker.
+// Create a new UAX#29 word breaker.
 //
 // Usage:
 //
-//   onWords := NewBreaker()
+//   onWords := NewWordBreaker()
 //   segmenter := segment.NewSegmenter(onWords)
 //   segmenter.Init(...)
 //   for segmenter.Next() ...
 //
-func NewBreaker() *WordBreaker {
+func NewWordBreaker() *WordBreaker {
 	gb := &WordBreaker{}
 	gb.publisher = segment.NewRunePublisher()
-	//gb.publisher.SetPenaltyAggregator(segment.MaxPenalties)
 	gb.rules = map[UAX29Class][]segment.NfaStateFn{
-		//eot:                   {rule_GB2},
 		CRClass:                 {rule_NewLine},
 		LFClass:                 {rule_NewLine},
 		NewlineClass:            {rule_NewLine},
-		ZWJClass:                {rule_WB3c},
+		ZWJClass:                {rule_WB3c, rule_WB4},
 		WSegSpaceClass:          {rule_WB3d},
-		ALetterClass:            {rule_WB5, rule_WB6_7, rule_WB13a},
-		Hebrew_LetterClass:      {rule_WB5, rule_WB6_7, rule_WB7a, rule_WB7bc, rule_WB13a},
+		ExtendClass:             {rule_WB4},
+		FormatClass:             {rule_WB4},
+		ALetterClass:            {rule_WB5, rule_WB6_7, rule_WB9, rule_WB13a},
+		Hebrew_LetterClass:      {rule_WB5, rule_WB6_7, rule_WB7a, rule_WB7bc, rule_WB9, rule_WB13a},
 		NumericClass:            {rule_WB8, rule_WB10, rule_WB11, rule_WB13a},
-		ExtendNumLetClass:       {rule_WB13a},
+		ExtendNumLetClass:       {rule_WB13a, rule_WB13b},
 		KatakanaClass:           {rule_WB13, rule_WB13a},
 		Regional_IndicatorClass: {rule_WB15},
 	}
-	gb.blocked = make(map[UAX29Class]bool)
+	if rangeFromUAX29Class == nil {
+		TC.Info("UAX#29 classes not yet initialized -> initializing")
+	}
+	SetupUAX29Classes()
 	return gb
 }
 
+// For word breaking we need just a single emoji class.
+// We append it after the last UAX#29 class, which is ZWJ.
 const emojiPictographic UAX29Class = ZWJClass + 1
 
-// Return the word code-point class for a rune (= code-point).
+// Return the UAX#29 word code-point class for a rune (= code-point).
 // (Interface segment.UnicodeBreaker)
 func (gb *WordBreaker) CodePointClassFor(r rune) int {
 	c := UAX29ClassForRune(r)
@@ -165,17 +174,16 @@ func (gb *WordBreaker) CodePointClassFor(r rune) int {
 // Start all recognizers where the starting symbol is rune r.
 // r is of code-point-class cpClass.
 // (Interface segment.UnicodeBreaker)
-//
-// TODO merge this with ProceedWithRune(), it is unnecessary
 func (gb *WordBreaker) StartRulesFor(r rune, cpClass int) {
 	c := UAX29Class(cpClass)
-	if !gb.blocked[c] {
+	if c != Regional_IndicatorClass || !gb.blockedRI {
 		if rules := gb.rules[c]; len(rules) > 0 {
-			TC.P("class", c).Debugf("starting %d rule(s)", c)
+			TC.P("class", c).Debugf("starting %d rule(s) for class %s", len(rules), c)
 			for _, rule := range rules {
 				rec := segment.NewPooledRecognizer(cpClass, rule)
 				rec.UserData = gb
 				gb.publisher.SubscribeMe(rec)
+				//TC.Debugf(" - %s / %v", rec, rec)
 			}
 		}
 	}
@@ -184,12 +192,12 @@ func (gb *WordBreaker) StartRulesFor(r rune, cpClass int) {
 // Helper: do not start any recognizers for this word class, until
 // unblocked again.
 func (gb *WordBreaker) block(c UAX29Class) {
-	gb.blocked[c] = true
+	gb.blockedRI = true
 }
 
 // Helper: stop blocking new recognizers for this word class.
 func (gb *WordBreaker) unblock(c UAX29Class) {
-	gb.blocked[c] = false
+	gb.blockedRI = false
 }
 
 // A new code-point has been read and this breaker receives a message to
@@ -197,9 +205,9 @@ func (gb *WordBreaker) unblock(c UAX29Class) {
 // (Interface segment.UnicodeBreaker)
 func (gb *WordBreaker) ProceedWithRune(r rune, cpClass int) {
 	c := UAX29Class(cpClass)
-	TC.P("class", c).Infof("proceeding with rune %+q", r)
+	//TC.P("class", c).Infof("proceeding with rune %+q ...", r)
 	gb.longestMatch, gb.penalties = gb.publisher.PublishRuneEvent(r, int(c))
-	TC.P("class", c).Infof("...done with |match|=%d and %v", gb.longestMatch, gb.penalties)
+	//TC.P("class", c).Infof("...done with |match|=%d and %v", gb.longestMatch, gb.penalties)
 }
 
 // Collect form all active recognizers information about current match length
@@ -217,18 +225,20 @@ func (gb *WordBreaker) Penalties() []int {
 	return gb.penalties
 }
 
-// --- Rules ------------------------------------------------------------
-
-const (
-	GlueBREAK int = -500
-	GlueJOIN  int = 5000
-	GlueBANG  int = -10000
+// Penalties (inter-word optional break, suppress break and mandatory break).
+var (
+	PenaltyForBreak        int = 50
+	PenaltyToSuppressBreak int = 5000
+	PenaltyForMustBreak    int = -10000
 )
+
+// --- Rules ------------------------------------------------------------
 
 func rule_NewLine(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
 	if c == LFClass || c == NewlineClass {
-		return segment.DoAccept(rec, GlueBANG, GlueBANG)
+		//TC.Infof("ACCEPT of Rule for Newline")
+		return segment.DoAccept(rec, PenaltyForMustBreak, PenaltyForMustBreak)
 	} else if c == CRClass {
 		rec.MatchLen++
 		return rule_CRLF
@@ -239,9 +249,11 @@ func rule_NewLine(rec *segment.Recognizer, r rune, cpClass int) segment.NfaState
 func rule_CRLF(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
 	if c == LFClass {
-		return segment.DoAccept(rec, GlueBANG, 3*GlueJOIN) // accept CR+LF
+		//TC.Infof("ACCEPT of Rule for CRLF")
+		return segment.DoAccept(rec, PenaltyForMustBreak, 3*PenaltyToSuppressBreak) // accept CR+LF
 	}
-	return segment.DoAccept(rec, 0, GlueBANG, GlueBANG) // accept CR
+	//TC.Infof("ACCEPT of Rule for CR")
+	return segment.DoAccept(rec, 0, PenaltyForMustBreak, PenaltyForMustBreak) // accept CR
 }
 
 func rule_WB3c(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
@@ -252,20 +264,24 @@ func rule_WB3c(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn 
 func rule_Pictography(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
 	if c == emojiPictographic {
-		return segment.DoAccept(rec, 0, GlueJOIN)
+		//TC.Infof("ACCEPT of Rule for Emoji")
+		return segment.DoAccept(rec, 0, PenaltyToSuppressBreak)
 	}
 	return segment.DoAbort(rec)
 }
 
 func rule_WB3d(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("start WB 3d")
 	rec.MatchLen++
-	return WB3dCont
+	return finish_WB3d
 }
 
-func WB3dCont(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func finish_WB3d(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("WB3d cont")
 	c := UAX29Class(cpClass)
 	if c == WSegSpaceClass {
-		return segment.DoAccept(rec, 0, GlueJOIN)
+		//TC.Infof("ACCEPT of Rule WB 3d")
+		return segment.DoAccept(rec, 0, PenaltyToSuppressBreak)
 	}
 	return segment.DoAbort(rec)
 }
@@ -280,225 +296,278 @@ func checkIgnoredCharacters(rec *segment.Recognizer, c UAX29Class) bool {
 
 // start AHLetter x AHLetter
 func rule_WB5(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("start WB 5")
 	rec.MatchLen++
-	return WB5_10Cont
+	return finish_WB5_10
 }
 
 // ... x AHLetter
-func WB5_10Cont(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func finish_WB5_10(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
 	if checkIgnoredCharacters(rec, c) {
-		return WB5_10Cont
+		return finish_WB5_10
 	}
 	if c == ALetterClass || c == Hebrew_LetterClass {
-		rec.MatchLen++
-		return segment.DoAccept(rec, 0, GlueJOIN)
+		//TC.Infof("ACCEPT of Rule WB 5/10")
+		return segment.DoAccept(rec, 0, PenaltyToSuppressBreak)
 	}
 	return segment.DoAbort(rec)
 }
 
-// AHLetter x (MidLetter | MidNumLet | Single_Quote) x AHLetter
+// start AHLetter x (MidLetter | MidNumLet | Single_Quote) x AHLetter
 func rule_WB6_7(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("start WB 6/7")
 	rec.MatchLen++
-	return WB6_7Cont1
+	return cont_WB6_7
 }
 
-func WB6_7Cont1(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+// ... x  (MidLetter | MidNumLet | Single_Quote) x AHLetter
+func cont_WB6_7(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
 	if checkIgnoredCharacters(rec, c) {
-		return WB6_7Cont1
+		return cont_WB6_7
 	}
 	if c == MidLetterClass || c == MidNumLetClass || c == Single_QuoteClass {
+		//TC.Info("MID LETTER IN RULE 6/7 cont 1")
 		rec.MatchLen++
-		return WB6_7Cont2
+		rec.Expect = rec.MatchLen // misuse of expect field: mark position of single quote
+		return finish_WB6_7
 	}
 	return segment.DoAbort(rec)
 }
 
-func WB6_7Cont2(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+// ... x ... x AHLetter
+func finish_WB6_7(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
 	if checkIgnoredCharacters(rec, c) {
-		return WB6_7Cont2
+		return finish_WB6_7
 	}
 	if c == ALetterClass || c == Hebrew_LetterClass {
-		return segment.DoAccept(rec, 0, GlueJOIN, GlueJOIN)
+		//TC.Infof("ACCEPT of Rule WB 6/7")
+		p := make([]int, rec.MatchLen-rec.Expect+1+2)
+		p[len(p)-1] = PenaltyToSuppressBreak
+		p[1] = PenaltyToSuppressBreak
+		//return segment.DoAccept(rec, 0, PenaltyToSuppressBreak, PenaltyToSuppressBreak)
+		return segment.DoAccept(rec, p...)
 	}
 	return segment.DoAbort(rec)
 }
 
-// Hebrew_Letter x Single_Quote
+// start Hebrew_Letter x Single_Quote
 func rule_WB7a(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("start WB 7a")
 	rec.MatchLen++
-	return WB7aCont
+	return finish_WB7a
 }
 
-func WB7aCont(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+// ... x Single_Quote
+func finish_WB7a(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
 	if checkIgnoredCharacters(rec, c) {
-		return WB7aCont
+		return finish_WB7a
 	}
-	if c == Hebrew_LetterClass {
-		return segment.DoAccept(rec, 0, GlueJOIN)
+	if c == Single_QuoteClass {
+		//TC.Infof("ACCEPT of Rule WB 7 a")
+		return segment.DoAccept(rec, 0, PenaltyToSuppressBreak)
 	}
 	return segment.DoAbort(rec)
 }
 
-// Hebrew_Letter x Double_Quote x Hebrew_Letter
+// start Hebrew_Letter x Double_Quote x Hebrew_Letter
 func rule_WB7bc(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("start WB 7c")
 	rec.MatchLen++
-	return WB7bcCont1
+	return cont_WB7bc
 }
 
-func WB7bcCont1(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func cont_WB7bc(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
 	if checkIgnoredCharacters(rec, c) {
-		return WB7bcCont1
+		return cont_WB7bc
 	}
 	if c == Double_QuoteClass {
 		rec.MatchLen++
-		return WB7bcCont2
+		return finish_WB7bc
 	}
 	return segment.DoAbort(rec)
 }
 
-func WB7bcCont2(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func finish_WB7bc(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
 	if checkIgnoredCharacters(rec, c) {
-		return WB7bcCont2
+		return finish_WB7bc
 	}
 	if c == Hebrew_LetterClass {
-		return segment.DoAccept(rec, 0, GlueJOIN, GlueJOIN)
+		//TC.Infof("ACCEPT of Rule WB 7b,c")
+		return segment.DoAccept(rec, 0, PenaltyToSuppressBreak, PenaltyToSuppressBreak)
 	}
 	return segment.DoAbort(rec)
 }
 
 // start Numeric x Numeric
 func rule_WB8(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("start WB 8")
 	rec.MatchLen++
-	return WB89Cont
-}
-
-// ... x Numeric
-func WB89Cont(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
-	c := UAX29Class(cpClass)
-	if checkIgnoredCharacters(rec, c) {
-		return WB89Cont
-	}
-	if c == NumericClass {
-		return segment.DoAccept(rec, 0, GlueJOIN)
-	}
-	return segment.DoAbort(rec)
+	return finish_WB8_9
 }
 
 // start (ALetter | Hebrew_Letter) x Numeric
 func rule_WB9(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("start WB 9")
 	rec.MatchLen++
-	return WB89Cont
+	return finish_WB8_9
+}
+
+// ... x Numeric
+func finish_WB8_9(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	c := UAX29Class(cpClass)
+	if checkIgnoredCharacters(rec, c) {
+		return finish_WB8_9
+	}
+	if c == NumericClass {
+		//TC.Infof("ACCEPT of Rule WB 8/9")
+		return segment.DoAccept(rec, 0, PenaltyToSuppressBreak)
+	}
+	return segment.DoAbort(rec)
 }
 
 // start Numeric x AHLetter
 func rule_WB10(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("start WB 10")
 	rec.MatchLen++
-	return WB5_10Cont
+	return finish_WB5_10
 }
 
 // start Numeric x (MidNum | MidNumLet | Single_Quote) x Numeric
 func rule_WB11(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("start WB 11")
 	rec.MatchLen++
-	return WB11Cont1
+	return cont_WB11
 }
 
 // ... x (MidNum | MidNumLet | Single_Quote) x Numeric
-func WB11Cont1(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func cont_WB11(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
 	if checkIgnoredCharacters(rec, c) {
-		return WB11Cont1
+		return cont_WB11
 	}
 	if c == MidNumClass || c == MidNumLetClass || c == Single_QuoteClass {
 		rec.MatchLen++
-		return WB11Cont2
+		rec.Expect = rec.MatchLen // misuse of expect field: mark position of middle character
+		return finish_WB11
 	}
 	return segment.DoAbort(rec)
 }
 
 // ... x ... x Numeric
-func WB11Cont2(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func finish_WB11(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
 	if checkIgnoredCharacters(rec, c) {
-		return WB11Cont2
+		return finish_WB11
 	}
 	if c == NumericClass {
-		return segment.DoAccept(rec, 0, GlueJOIN, GlueJOIN)
+		//TC.Infof("ACCEPT of Rule WB 11")
+		p := make([]int, rec.MatchLen-rec.Expect+1+2)
+		p[len(p)-1] = PenaltyToSuppressBreak
+		p[1] = PenaltyToSuppressBreak
+		//return segment.DoAccept(rec, 0, PenaltyToSuppressBreak, PenaltyToSuppressBreak)
+		return segment.DoAccept(rec, p...)
+		//return segment.DoAccept(rec, 0, PenaltyToSuppressBreak, PenaltyToSuppressBreak)
 	}
 	return segment.DoAbort(rec)
 }
 
 // start Katakana x Katakana
 func rule_WB13(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("start WB 13")
 	rec.MatchLen++
-	return WB13Cont
+	return finish_WB13
 }
 
 // ... x Katakana
-func WB13Cont(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func finish_WB13(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
 	if checkIgnoredCharacters(rec, c) {
-		return WB89Cont
+		return finish_WB13
 	}
 	if c == KatakanaClass {
-		return segment.DoAccept(rec, 0, GlueJOIN)
+		//TC.Infof("ACCEPT of Rule WB 13")
+		return segment.DoAccept(rec, 0, PenaltyToSuppressBreak)
 	}
 	return segment.DoAbort(rec)
 }
 
-// start (AHLetter | Numeric | Katakana | ExtendNumLet) xExtendNumLet x (AHLetter | Numeric | Katakana)
+// start (AHLetter | Numeric | Katakana | ExtendNumLet) x ExtendNumLet
 func rule_WB13a(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("start WB 13a")
 	rec.MatchLen++
-	return WB13aCont1
+	return finish_WB13a
 }
 
-// ... x (MidNum | MidNumLet | Single_Quote) x Numeric
-func WB13aCont1(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+// ... x ExtendNumLet
+func finish_WB13a(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
 	if checkIgnoredCharacters(rec, c) {
-		return WB13aCont1
+		return finish_WB13a
 	}
 	if c == ExtendNumLetClass {
-		rec.MatchLen++
-		return WB13aCont2
+		//TC.Infof("ACCEPT of Rule WB 13 a")
+		return segment.DoAccept(rec, 0, PenaltyToSuppressBreak)
 	}
 	return segment.DoAbort(rec)
 }
 
-// ... x ... x Numeric
-func WB13aCont2(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+// start ExtendNumLet x (AHLetter | Numeric | Katakana)
+func rule_WB13b(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("start WB 13b")
+	rec.MatchLen++
+	return finish_WB13b
+}
+
+// ... x (AHLetter | Numeric | Katakana)
+func finish_WB13b(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
 	if checkIgnoredCharacters(rec, c) {
-		return WB13aCont2
+		return finish_WB13b
 	}
 	if c == ALetterClass || c == Hebrew_LetterClass || c == NumericClass || c == KatakanaClass {
-		return segment.DoAccept(rec, 0, GlueJOIN, GlueJOIN)
+		//TC.Infof("ACCEPT of Rule WB 13 b")
+		return segment.DoAccept(rec, 0, PenaltyToSuppressBreak)
 	}
 	return segment.DoAbort(rec)
 }
 
 // start RI x RI (blocking)
 func rule_WB15(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("start WB 15")
 	gb := rec.UserData.(*WordBreaker)
 	gb.block(Regional_IndicatorClass)
-	return WB15Cont
+	return finish_WB15
 }
 
 // ... x RI
-func WB15Cont(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+func finish_WB15(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
 	c := UAX29Class(cpClass)
+	if checkIgnoredCharacters(rec, c) {
+		return finish_WB15
+	}
 	gb := rec.UserData.(*WordBreaker)
 	gb.unblock(Regional_IndicatorClass)
-	if checkIgnoredCharacters(rec, c) {
-		return WB15Cont
-	}
 	if c == Regional_IndicatorClass {
-		return segment.DoAccept(rec, 0, GlueJOIN)
+		//TC.Infof("ACCEPT of Rule WB 15")
+		return segment.DoAccept(rec, 0, PenaltyToSuppressBreak)
+	}
+	return segment.DoAbort(rec)
+}
+
+// Rule WB4: Ignore Format and Extend characters, except after sot, CR,
+// LF, and Newline.
+func rule_WB4(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
+	//TC.Debug("start WB 4")
+	c := UAX29Class(cpClass)
+	if c == ExtendClass || c == FormatClass || c == ZWJClass {
+		//TC.Infof("ACCEPT of Rule WB 4")
+		return segment.DoAccept(rec, 0, PenaltyToSuppressBreak)
 	}
 	return segment.DoAbort(rec)
 }

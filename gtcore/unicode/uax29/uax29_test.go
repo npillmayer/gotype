@@ -1,74 +1,49 @@
-package grapheme
+package uax29
 
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
-	u "unicode"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
 	"github.com/npillmayer/gotype/gtcore/unicode/segment"
 )
 
-func TestGraphemeClasses(t *testing.T) {
-	c1 := LClass
-	if c1.String() != "LClass" {
-		t.Errorf("String(LClass) should be 'LClass', is %s", c1)
-	}
-	SetupGraphemeClasses()
-	if !u.Is(Control, '\t') {
-		t.Error("<TAB> should be identified as control character")
-	}
-	hangsyl := '\uac1c'
-	if c := GraphemeClassForRune(hangsyl); c != LVClass {
-		t.Errorf("Hang syllable GAE should be of class LV, is %s", c)
-	}
-	if c := GraphemeClassForRune(0); c != eot {
-		t.Errorf("\\0x00 should be of class eot, is %s", c)
-	}
+func Test0(t *testing.T) {
+	TC.SetLevel(tracing.LevelError)
 }
 
-func TestGraphemes1(t *testing.T) {
-	onGraphemes := NewBreaker()
-	input := bytes.NewReader([]byte("Hello\tWorld"))
-	seg := segment.NewSegmenter(onGraphemes)
-	seg.Init(input)
-	seg.Next()
-	t.Logf("Next() = %s\n", seg.Text())
-	if seg.Err() != nil {
-		t.Errorf("segmenter.Next() failed with error: %s", seg.Err())
+func ExampleWordBreaker() {
+	onWords := NewWordBreaker()
+	segmenter := segment.NewSegmenter(onWords)
+	segmenter.Init(strings.NewReader("Hello World🇩🇪!"))
+	for segmenter.Next() {
+		fmt.Printf("'%s'\n", segmenter.Text())
 	}
+	// Output: 'Hello'
+	// ' '
+	// 'World'
+	// '🇩🇪'
+	// '!'
 }
 
-func TestGraphemes2(t *testing.T) {
-	onGraphemes := NewBreaker()
-	input := bytes.NewReader([]byte("Hello\tWorld"))
-	seg := segment.NewSegmenter(onGraphemes)
-	seg.Init(input)
-	for seg.Next() {
-		t.Logf("Next() = %s\n", seg.Text())
-	}
-	if seg.Err() != nil {
-		t.Errorf("segmenter.Next() failed with error: %s", seg.Err())
-	}
-}
-
-func TestGraphemesTestFile(t *testing.T) {
+func TestWordBreakTestFile(t *testing.T) {
 	//TC.SetLevel(tracing.LevelDebug)
 	TC.SetLevel(tracing.LevelError)
-	SetupGraphemeClasses()
-	onGraphemes := NewBreaker()
-	seg := segment.NewSegmenter(onGraphemes)
+	SetupUAX29Classes()
+	onWordBreak := NewWordBreaker()
+	seg := segment.NewSegmenter(onWordBreak)
 	gopath := os.Getenv("GOPATH")
-	f, err := os.Open(gopath + "/etc/GraphemeBreakTest.txt")
+	f, err := os.Open(gopath + "/etc/WordBreakTest.txt")
 	if err != nil {
-		t.Errorf("ERROR loading " + gopath + "/etc/GraphemeBreakTest.txt\n")
+		t.Errorf("ERROR loading " + gopath + "/etc/WordBreakTest.txt\n")
 	}
 	defer f.Close()
-	failcnt, i, from, to := 0, 0, 1, 1000
+	failcnt, i, from, to := 0, 0, 1, 1900
 	scan := bufio.NewScanner(f)
 	for scan.Scan() {
 		line := scan.Text()
@@ -128,7 +103,9 @@ func executeSingleTest(t *testing.T, seg *segment.Segmenter, tno int, in string,
 	i := 0
 	ok := true
 	for seg.Next() {
-		if out[i] != seg.Text() {
+		if len(out) <= i {
+			t.Errorf("test #%d: number of segments too large: %d > %d", tno, i+1, len(out))
+		} else if out[i] != seg.Text() {
 			t.Errorf("test #%d: '%+q' should be '%+q'", tno, seg.Bytes(), out[i])
 			ok = false
 		}
