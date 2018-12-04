@@ -1,24 +1,24 @@
-package uax29
+package uax29_test
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
-	"os"
-	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
 	"github.com/npillmayer/gotype/gtcore/uax/segment"
+	"github.com/npillmayer/gotype/gtcore/uax/uax29"
+	"github.com/npillmayer/gotype/gtcore/uax/ucd"
 )
+
+var TC tracing.Trace = tracing.CoreTracer
 
 func Test0(t *testing.T) {
 	TC.SetLevel(tracing.LevelError)
 }
 
 func ExampleWordBreaker() {
-	onWords := NewWordBreaker()
+	onWords := uax29.NewWordBreaker()
 	segmenter := segment.NewSegmenter(onWords)
 	segmenter.Init(strings.NewReader("Hello World🇩🇪!"))
 	for segmenter.Next() {
@@ -34,29 +34,16 @@ func ExampleWordBreaker() {
 func TestWordBreakTestFile(t *testing.T) {
 	//TC.SetLevel(tracing.LevelDebug)
 	TC.SetLevel(tracing.LevelError)
-	SetupUAX29Classes()
-	onWordBreak := NewWordBreaker()
+	onWordBreak := uax29.NewWordBreaker()
 	seg := segment.NewSegmenter(onWordBreak)
-	gopath := os.Getenv("GOPATH")
-	f, err := os.Open(gopath + "/etc/WordBreakTest.txt")
-	if err != nil {
-		t.Errorf("ERROR loading " + gopath + "/etc/WordBreakTest.txt\n")
-	}
-	defer f.Close()
+	tf := ucd.OpenTestFile("./WordBreakTest.txt", t)
+	defer tf.Close()
 	failcnt, i, from, to := 0, 0, 1, 1900
-	scan := bufio.NewScanner(f)
-	for scan.Scan() {
-		line := scan.Text()
-		line = strings.TrimSpace(line)
-		if line[0] == '#' { // ignore comment lines
-			continue
-		}
+	for tf.Scan() {
 		i++
 		if i >= from {
-			parts := strings.Split(line, "#")
-			testInput, comment := parts[0], parts[1]
-			TC.Infoln(comment)
-			in, out := breakTestInput(testInput)
+			TC.Infoln(tf.Comment())
+			in, out := ucd.BreakTestInput(tf.Text())
 			if !executeSingleTest(t, seg, i, in, out) {
 				failcnt++
 			}
@@ -65,37 +52,10 @@ func TestWordBreakTestFile(t *testing.T) {
 			break
 		}
 	}
-	if err := scan.Err(); err != nil {
+	if err := tf.Err(); err != nil {
 		TC.Errorf("reading input:", err)
 	}
 	t.Logf("%d TEST CASES OUT of %d FAILED", failcnt, i-from+1)
-}
-
-func breakTestInput(ti string) (string, []string) {
-	//fmt.Printf("breaking up %s\n", ti)
-	sc := bufio.NewScanner(strings.NewReader(ti))
-	sc.Split(bufio.ScanWords)
-	out := make([]string, 0, 5)
-	inp := bytes.NewBuffer(make([]byte, 0, 20))
-	run := bytes.NewBuffer(make([]byte, 0, 20))
-	for sc.Scan() {
-		token := sc.Text()
-		if token == "÷" {
-			if run.Len() > 0 {
-				out = append(out, run.String())
-				run.Reset()
-			}
-		} else if token == "×" {
-			// do nothing
-		} else {
-			n, _ := strconv.ParseUint(token, 16, 64)
-			run.WriteRune(rune(n))
-			inp.WriteRune(rune(n))
-		}
-	}
-	//fmt.Printf("input = '%s'\n", inp.String())
-	//fmt.Printf("output = %#v\n", out)
-	return inp.String(), out
 }
 
 func executeSingleTest(t *testing.T, seg *segment.Segmenter, tno int, in string, out []string) bool {

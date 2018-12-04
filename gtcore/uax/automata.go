@@ -25,15 +25,15 @@ type UnicodeBreaker interface {
 // Functions of type NfaStateFn try to match a rune (Unicode code-point).
 // The caller may provide a third argument, which should be a rune class.
 // Rune (code-point) classes are described in various Unicode standards
-// and annexes. One such standard (UAX#29) desribes classes to help
+// and annexes. One such annex, UAX#29, describes classes to help
 // splitting up text into graphemes or words. An example class may be
-// a class of western language alphabetic characters AL, of which runes
+// a class of western language alphabetic characters "AL", of which runes
 // 'A' and 'é' would be part of.
 //
 // The first argument is a Recognizer (see the definition of
 // type Recognizer in this package), which carries this state function.
 //
-// NfaStateFn – after they matched a rune – must return another NfaStateFn,
+// NfaStateFn – after matching a rune – must return another NfaStateFn,
 // which will then in turn be called to process the next rune. The process
 // of matching a string will stop as soon as a NfaStateFn returns nil.
 type NfaStateFn func(*Recognizer, rune, int) NfaStateFn
@@ -144,7 +144,7 @@ func (rec *Recognizer) MatchLength() int {
 	return rec.MatchLen
 }
 
-// Interface RuneSubscriberyy
+// Interface RuneSubscriber
 func (rec *Recognizer) RuneEvent(r rune, codePointClass int) []int {
 	//fmt.Printf("received rune event: %+q / %d\n", r, codePointClass)
 	var penalties []int
