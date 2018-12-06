@@ -1,6 +1,10 @@
 /*
 Package uax14 implements Unicode Annex #14 line breaking.
 
+Status
+
+Under active development; not useable in practice.
+
 BSD License
 
 Copyright (c) 2017-18, Norbert Pillmayer
