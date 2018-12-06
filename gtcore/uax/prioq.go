@@ -67,6 +67,7 @@ func (pq *DefaultRunePublisher) Push(subscr RuneSubscriber) {
 	if !pq.Top().Done() {
 		pq.bubbleDown(l)
 	}
+	//fmt.Printf("#### length of prio queue = %d\n", pq.Len())
 }
 
 // Pop the topmost subscriber.

@@ -1,94 +1,59 @@
-package uax14
+package uax14_test
 
 import (
-	"fmt"
-	"io"
 	"strings"
 	"testing"
 
-	"github.com/npillmayer/gotype/gtcore/unicode/segment"
+	"github.com/npillmayer/gotype/gtcore/config/tracing"
+	"github.com/npillmayer/gotype/gtcore/uax/segment"
+	"github.com/npillmayer/gotype/gtcore/uax/uax14"
+	"github.com/npillmayer/gotype/gtcore/uax/ucd"
 )
 
-func TestAddPenalties(t *testing.T) {
-	total := make([]int, 0, 5)
-	penalties := []int{17, 23}
-	total = segment.AddPenalties(total, penalties)
-	fmt.Printf("total = %v\n", total)
+var TC tracing.Trace = tracing.CoreTracer
+
+func Test0(t *testing.T) {
+	TC.SetLevel(tracing.LevelError)
+	//TC.SetLevel(tracing.LevelDebug)
 }
 
-func TestClassForRune1(t *testing.T) {
-	SetupUAX14Classes()
-	var r rune
-	r = 'A'
-	c := UAX14ClassForRune(r)
-	fmt.Printf("%+q = %s\n", r, c)
-}
-
-func TestClassForRune2(t *testing.T) {
-	SetupUAX14Classes()
-	var r rune
-	//r = 'A'
-	r = '世'
-	c := UAX14ClassForRune(r)
-	fmt.Printf("%+q = %s\n", r, c)
-}
-
-func TestLineWrapNL(t *testing.T) {
-	SetupUAX14Classes()
-	lw := NewLineWrap()
-	lw.StartRulesFor('\n', int(NLClass))
-	lw.ProceedWithRune('\n', int(NLClass))
-	lw.ProceedWithRune('A', int(ALClass))
-	if lw.LongestMatch() != 1 {
-		t.Fail()
+func TestWordBreakTestFile(t *testing.T) {
+	linewrap := uax14.NewLineWrap()
+	seg := segment.NewSegmenter(linewrap)
+	tf := ucd.OpenTestFile("./LineBreakTest.txt", t)
+	defer tf.Close()
+	failcnt, i, from, to := 0, 0, 1, 50
+	for tf.Scan() {
+		i++
+		if i >= from {
+			TC.Infoln(tf.Comment())
+			in, out := ucd.BreakTestInput(tf.Text())
+			if !executeSingleTest(t, seg, i, in, out) {
+				failcnt++
+			}
+		}
+		if i >= to {
+			break
+		}
 	}
+	if err := tf.Err(); err != nil {
+		TC.Errorf("reading input:", err)
+	}
+	t.Logf("%d TEST CASES OUT of %d FAILED", failcnt, i-from+1)
 }
 
-func TestLineWrapQU(t *testing.T) {
-	SetupUAX14Classes()
-	lw := NewLineWrap()
-	lw.StartRulesFor('"', int(QUClass))
-	lw.ProceedWithRune('"', int(QUClass))
-	lw.ProceedWithRune(' ', int(SPClass))
-	lw.ProceedWithRune('(', int(OPClass))
-	lw.ProceedWithRune(' ', int(SPClass))
-}
-
-func TestSegmenterUAX14Init(t *testing.T) {
-	SetupUAX14Classes()
-	lw := NewLineWrap()
-	segm := segment.NewSegmenter(lw)
-	_, _, err := segm.Next()
-	fmt.Println(err)
-	if err == nil {
-		t.Fail()
+func executeSingleTest(t *testing.T, seg *segment.Segmenter, tno int, in string, out []string) bool {
+	seg.Init(strings.NewReader(in))
+	i := 0
+	ok := true
+	for seg.Next() {
+		if len(out) <= i {
+			t.Errorf("test #%d: number of segments too large: %d > %d", tno, i+1, len(out))
+		} else if out[i] != seg.Text() {
+			t.Errorf("test #%d: '%+q' should be '%+q'", tno, seg.Bytes(), out[i])
+			ok = false
+		}
+		i++
 	}
-}
-
-func TestSegmenterUAX14RecognizeRule1(t *testing.T) {
-	SetupUAX14Classes()
-	lw := NewLineWrap()
-	segm := segment.NewSegmenter(lw)
-	segm.Init(strings.NewReader("\" ("))
-	_, _, err := segm.Next()
-	if err != io.EOF {
-		fmt.Println(err)
-		t.Fail()
-	}
-}
-
-func TestSegmenterUAX14Match1(t *testing.T) {
-	SetupUAX14Classes()
-	lw := NewLineWrap()
-	segm := segment.NewSegmenter(lw)
-	segm.Init(strings.NewReader("\" ("))
-	match, _, err := segm.Next()
-	if err != io.EOF {
-		fmt.Println(err)
-		t.Fail()
-	}
-	if match == nil {
-		t.Fail()
-	}
-	fmt.Printf("matched segment = \"%s\"\n", match)
+	return ok
 }

@@ -1,8 +1,6 @@
 /*
 Package uax14 implements Unicode Annex #14 line breaking.
 
----------------------------------------------------------------------------
-
 BSD License
 
 Copyright (c) 2017-18, Norbert Pillmayer
@@ -35,7 +33,8 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-----------------------------------------------------------------------
+
+Contents
 
 UAX#14 is the Unicode Annex for Line Breaking (Line Wrap).
 It defines a bunch of code-point classes and a set of rules
@@ -53,7 +52,7 @@ breaking engine for a segmenter.
 
 Attention
 
-Before using line breakers, clients will have to initialize the UAX#14
+Before using line breakers, clients usually will want to initialize the UAX#14
 classes and rules.
 
   SetupUAX14Classes()
@@ -66,10 +65,12 @@ package uax14
 
 import (
 	"fmt"
+	"math"
 	"sync"
 	"unicode"
 
-	"github.com/npillmayer/gotype/gtcore/unicode/segment"
+	"github.com/npillmayer/gotype/gtcore/config/tracing"
+	"github.com/npillmayer/gotype/gtcore/uax"
 )
 
 const (
@@ -77,6 +78,9 @@ const (
 	eot       UAX14Class = 1001 // pseudo class
 	optSpaces UAX14Class = 1002 // pseudo class
 )
+
+// We trace to the core-tracer.
+var TC tracing.Trace = tracing.CoreTracer
 
 // Top-level client function:
 // Get the line breaking/wrap class for a Unicode code-point
@@ -109,46 +113,72 @@ func SetupUAX14Classes() {
 // Objects of this type are used by a unicode.Segmenter to break lines
 // up according to UAX#14. It implements the unicode.UnicodeBreaker interface.
 type UAX14LineWrap struct {
-	publisher    segment.RunePublisher
-	longestMatch int
-	penalties    []int
-	rules        map[UAX14Class][]segment.NfaStateFn
+	publisher    uax.RunePublisher
+	longestMatch int   // longest active match of a rule
+	penalties    []int // returned to the segmenter: penalties to insert
+	rules        map[UAX14Class][]uax.NfaStateFn
+	lastClass    UAX14Class // we have to remember the last code-point class
+	blockedRI    bool       // are rules for Regional_Indicator currently blocked?
 }
 
-// Create a new (un-initialized) UAX#14 line breaker.
+// Create a new UAX#14 line breaker.
 //
 // Usage:
 //
 //   linewrap := NewUAX14LineWrap()
-//   segmenter := unicode.NewSegmenter(linewrap)
+//   segmenter := segment.NewSegmenter(linewrap)
 //   segmenter.Init(...)
-//   match, length, err := segmenter.Next()
+//   for segmenter.Next() ...
 //
 func NewLineWrap() *UAX14LineWrap {
 	uax14 := &UAX14LineWrap{}
-	uax14.publisher = segment.NewRunePublisher()
-	uax14.rules = map[UAX14Class][]segment.NfaStateFn{
-		NLClass: {Rule05_NewLine},
-		CRClass: {Rule05_NewLine},
+	uax14.publisher = uax.NewRunePublisher()
+	uax14.rules = map[UAX14Class][]uax.NfaStateFn{
+		NLClass: {rule_05_NewLine},
+		LFClass: {rule_05_NewLine},
+		BKClass: {rule_05_NewLine},
+		CRClass: {rule_05_NewLine},
+		SPClass: {rule_LB7, rule_LB18},
+		ZWClass: {rule_LB7, rule_LB8},
+		WJClass: {rule_LB11},
+		GLClass: {rule_LB12},
+		CLClass: {rule_LB13, rule_LB16},
+		CPClass: {rule_LB13, rule_LB16, rule_LB30_2},
+		EXClass: {rule_LB13, rule_LB22},
+		ISClass: {rule_LB13, rule_LB29},
+		SYClass: {rule_LB13, rule_LB21b},
+		OPClass: {rule_LB14},
+		QUClass: {rule_LB15, rule_LB19},
+		B2Class: {rule_LB17},
+		BAClass: {rule_LB21},
+		HYClass: {rule_LB21},
+		NSClass: {rule_LB21},
+		BBClass: {rule_LB21x},
+		ALClass: {rule_LB22, rule_LB23_1, rule_LB24_2, rule_LB28, rule_LB30_1},
+		HLClass: {rule_LB21a, rule_LB22, rule_LB23_1, rule_LB24_2, rule_LB28, rule_LB30_1},
+		IDClass: {rule_LB22},
+		EBClass: {rule_LB22, rule_LB23a_2, rule_LB30b},
+		EMClass: {rule_LB22, rule_LB23a_2},
+		INClass: {rule_LB22},
+		NUClass: {rule_LB22, rule_LB23_2, rule_LB30_1},
+		RIClass: {rule_LB30a},
+		PRClass: {rule_LB23a_2},
 	}
+	if rangeFromUAX14Class == nil {
+		TC.Info("UAX#14 classes not yet initialized -> initializing")
+	}
+	SetupUAX14Classes()
+	uax14.lastClass = sot
 	return uax14
 }
-
-// Initialize a line breaker for a rune-publisher (normally from a
-// unicode.Segmenter).
-//
-// Interface unicode.UnicodeBreaker
-/*
-func (uax14 *UAX14LineWrap) InitFor(rpub segment.RunePublisher) {
-	uax14.publisher = rpub // TODO this is wrong
-}
-*/
 
 // Return the UAX#14 code-point class for a rune (= code-point).
 //
 // Interface unicode.UnicodeBreaker
 func (uax14 *UAX14LineWrap) CodePointClassFor(r rune) int {
-	return int(UAX14ClassForRune(r))
+	c := UAX14ClassForRune(r)
+	c = substitueSomeClasses(c, uax14.lastClass)
+	return int(c)
 }
 
 // Start all recognizers where the starting symbol is rune r.
@@ -156,15 +186,46 @@ func (uax14 *UAX14LineWrap) CodePointClassFor(r rune) int {
 //
 // Interface unicode.UnicodeBreaker
 func (uax14 *UAX14LineWrap) StartRulesFor(r rune, cpClass int) {
-	uax14c := UAX14Class(cpClass)
-	rules := uax14.rules[uax14c]
-	if len(rules) > 0 {
-		fmt.Printf("starting rules for class = %s\n", uax14c)
+	c := UAX14Class(cpClass)
+	if c != RIClass || !uax14.blockedRI {
+		if rules := uax14.rules[c]; len(rules) > 0 {
+			TC.P("class", c).Debugf("starting %d rule(s) for class %s", len(rules), c)
+			for _, rule := range rules {
+				rec := uax.NewPooledRecognizer(cpClass, rule)
+				rec.UserData = uax14
+				uax14.publisher.SubscribeMe(rec)
+			}
+		} else {
+			TC.P("class", c).Debugf("starting no rule")
+		}
 	}
-	for _, rule := range rules {
-		rec := segment.NewPooledRecognizer(cpClass, rule)
-		uax14.publisher.SubscribeMe(rec)
+}
+
+// LB9: Do not break a combining character sequence;
+// treat it as if it has the line breaking class of the base character in all
+// of the following rules. Treat ZWJ as if it were CM.
+//
+//    X (CM | ZWJ)* ⟼ X.
+//
+// where X is any line break class except BK, CR, LF, NL, SP, or ZW.
+//
+// LB10: Treat any remaining combining mark or ZWJ as AL.
+func substitueSomeClasses(c UAX14Class, lastClass UAX14Class) UAX14Class {
+	orig := c
+	switch lastClass {
+	case sot, BKClass, CRClass, LFClass, NLClass, SPClass, ZWClass:
+		if c == CMClass || c == ZWJClass {
+			c = ALClass
+		}
+	default:
+		if c == CMClass || c == ZWJClass {
+			c = lastClass
+		}
 	}
+	if orig != c {
+		TC.Debugf("subst %+q -> %+q", orig, c)
+	}
+	return c
 }
 
 // A new code-point has been read and this breaker receives a message to
@@ -172,14 +233,20 @@ func (uax14 *UAX14LineWrap) StartRulesFor(r rune, cpClass int) {
 //
 // Interface unicode.UnicodeBreaker
 func (uax14 *UAX14LineWrap) ProceedWithRune(r rune, cpClass int) {
-	uax14c := UAX14Class(cpClass)
-	fmt.Printf("proceeding with rune = %+q / %s\n", r, uax14c)
-	uax14.longestMatch, uax14.penalties = uax14.publisher.PublishRuneEvent(r, int(uax14c))
-	fmt.Printf("longest match = %d\n", uax14.LongestMatch())
+	c := UAX14Class(cpClass)
+	uax14.longestMatch, uax14.penalties = uax14.publisher.PublishRuneEvent(r, int(c))
+	x := uax14.penalties
+	for i, p := range uax14.penalties {
+		if p > 0 {
+			p += 1000
+			x[i] = p
+		}
+	}
+	uax14.lastClass = c
 }
 
 // Interface unicode.UnicodeBreaker
-func (uax14 *UAX14LineWrap) LongestMatch() int {
+func (uax14 *UAX14LineWrap) LongestActiveMatch() int {
 	return uax14.longestMatch
 }
 
@@ -191,30 +258,37 @@ func (uax14 *UAX14LineWrap) Penalties() []int {
 	return uax14.penalties
 }
 
-// --- Standard Recognizer Rules ----------------------------------------
-
-func doAbort(rec *segment.Recognizer) segment.NfaStateFn {
-	rec.DistanceToGo = 0
-	rec.MatchLen = 0
-	return abort
+// Helper: do not start any recognizers for class RI, until
+// unblocked again.
+func (uax14 *UAX14LineWrap) block() {
+	uax14.blockedRI = true
 }
 
-func abort(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
-	rec.DistanceToGo = 0
-	rec.MatchLen = 0
-	fmt.Println("-> abort")
-	return nil
+// Helper: stop blocking new recognizers for class RI.
+func (uax14 *UAX14LineWrap) unblock() {
+	uax14.blockedRI = false
 }
 
-func doAccept(rec *segment.Recognizer, penalties ...int) segment.NfaStateFn {
-	fmt.Printf("-> ACCEPT %s\n", UAX14Class(rec.Expect))
-	fmt.Printf("   penalties: %v", penalties)
-	return nil
+// Penalties (optional break, suppress break and mandatory break).
+var (
+	PenaltyForBreak        int = 50
+	PenaltyToSuppressBreak int = 5000
+	PenaltyForMustBreak    int = -10000
+)
+
+// TODO temporaty penalty function
+func p(w int) int {
+	q := 31 - w
+	r := int(math.Pow(1.3, float64(q)))
+	TC.P("rule", w).Infof("penalty %d => %d", w, r)
+	return r
 }
 
-func accept(rec *segment.Recognizer, r rune, cpClass int) segment.NfaStateFn {
-	uax14c := UAX14Class(cpClass)
-	fmt.Printf("-> accept %s with lookahead = %s\n", UAX14Class(rec.Expect), uax14c)
-	rec.DistanceToGo = 0
-	return abort
+func ps(w int, first int, l int) []int {
+	pp := make([]int, l)
+	pp[0] = first
+	for i := 1; i < l; i++ {
+		pp[i] = p(w)
+	}
+	return pp
 }
