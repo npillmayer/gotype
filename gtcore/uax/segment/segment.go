@@ -192,7 +192,7 @@ func (s *Segmenter) SetNullPenalty(isNull func(int) bool) {
 }
 
 func tooBad(p int) bool {
-	return p > 1000
+	return p >= 1000
 }
 
 // Get the next segment, together with the accumulated penalty for this break.

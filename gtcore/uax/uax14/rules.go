@@ -301,6 +301,10 @@ func rule_LB19(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 //
 // + CB +
 func rule_LB20(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
+	uax14 := rec.UserData.(*UAX14LineWrap)
+	if uax14.lastClass == CBClass && uax14.substituted {
+		return uax.DoAccept(rec, -p(20), p(20))
+	}
 	return uax.DoAccept(rec, -p(20), -p(20))
 }
 
@@ -444,13 +448,13 @@ func finish_LB23a_2(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 // (PR | PO) x (AL | HL)
 func rule_LB24_1(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	rec.MatchLen++
-	return finish_LB23a_1
+	return finish_LB24a_1
 }
 
 // (AL | HL) x (PR | PO)
 func rule_LB24_2(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	rec.MatchLen++
-	return finish_LB23a_2
+	return finish_LB24a_2
 }
 
 // ... x (AL | HL)
@@ -528,10 +532,48 @@ func finish_LB25(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 // LB26 Do not break a Korean syllable.
 //
 // JL x (JL | JV | H2 | H3)
+func rule_LB26_1(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
+	rec.MatchLen++
+	return finish_LB26_1
+}
+
 // (JV | H2) x (JV | JT)
+func rule_LB26_2(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
+	rec.MatchLen++
+	return finish_LB26_2
+}
+
 // (JT | H3) x JT
-func rule_LB26(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
-	panic("rule 26 not implemented")
+func rule_LB26_3(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
+	rec.MatchLen++
+	return finish_LB26_3
+}
+
+// ... x (JL | JV | H2 | H3)
+func finish_LB26_1(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
+	c := UAX14Class(cpClass)
+	if c == JLClass || c == JVClass || c == H2Class || c == H3Class {
+		return uax.DoAccept(rec, 0, p(26))
+	}
+	return uax.DoAbort(rec)
+}
+
+// ... x (JV | JT)
+func finish_LB26_2(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
+	c := UAX14Class(cpClass)
+	if c == JVClass || c == JTClass {
+		return uax.DoAccept(rec, 0, p(26))
+	}
+	return uax.DoAbort(rec)
+}
+
+// ... x JT
+func finish_LB26_3(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
+	c := UAX14Class(cpClass)
+	if c == JTClass {
+		return uax.DoAccept(rec, 0, p(26))
+	}
+	return uax.DoAbort(rec)
 }
 
 // LB27 Treat a Korean Syllable Block the same as ID.
@@ -539,6 +581,10 @@ func rule_LB26(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 // (JL | JV | JT | H2 | H3) x IN
 // (JL | JV | JT | H2 | H3) x PO
 // PR x (JL | JV | JT | H2 | H3)
+//
+// When Korean uses SPACE for line breaking, the classes in rule LB26,
+// as well as characters of class ID, are often tailored to AL;
+// see Section 8, Customization.
 func rule_LB27(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	panic("rule 27 not implemented")
 }

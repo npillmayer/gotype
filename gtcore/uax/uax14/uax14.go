@@ -123,6 +123,7 @@ type UAX14LineWrap struct {
 	rules        map[UAX14Class][]uax.NfaStateFn
 	lastClass    UAX14Class // we have to remember the last code-point class
 	blockedRI    bool       // are rules for Regional_Indicator currently blocked?
+	substituted  bool       // has the code-point class been substituted?
 }
 
 // Create a new UAX#14 line breaker.
@@ -151,11 +152,12 @@ func NewLineWrap() *UAX14LineWrap {
 		EXClass: {rule_LB13, rule_LB22},
 		ISClass: {rule_LB13, rule_LB29},
 		SYClass: {rule_LB13, rule_LB21b},
-		OPClass: {rule_LB14},
+		OPClass: {rule_LB14, step2_LB25},
 		QUClass: {rule_LB15, rule_LB19},
 		B2Class: {rule_LB17},
 		BAClass: {rule_LB21},
-		HYClass: {rule_LB21},
+		CBClass: {rule_LB20},
+		HYClass: {rule_LB21, step2_LB25},
 		NSClass: {rule_LB21},
 		BBClass: {rule_LB21x},
 		ALClass: {rule_LB22, rule_LB23_1, rule_LB24_2, rule_LB28, rule_LB30_1},
@@ -164,9 +166,15 @@ func NewLineWrap() *UAX14LineWrap {
 		EBClass: {rule_LB22, rule_LB23a_2, rule_LB30b},
 		EMClass: {rule_LB22, rule_LB23a_2},
 		INClass: {rule_LB22},
-		NUClass: {rule_LB22, rule_LB23_2, rule_LB30_1},
+		NUClass: {rule_LB22, rule_LB23_2, step3_LB25, rule_LB30_1},
 		RIClass: {rule_LB30a},
-		PRClass: {rule_LB23a_2},
+		PRClass: {rule_LB23a_2, rule_LB25},
+		POClass: {rule_LB25},
+		JLClass: {rule_LB26_1},
+		JVClass: {rule_LB26_2},
+		H2Class: {rule_LB26_2},
+		JTClass: {rule_LB26_3},
+		H3Class: {rule_LB26_3},
 	}
 	if rangeFromUAX14Class == nil {
 		TC.Info("UAX#14 classes not yet initialized -> initializing")
@@ -181,8 +189,10 @@ func NewLineWrap() *UAX14LineWrap {
 // Interface unicode.UnicodeBreaker
 func (uax14 *UAX14LineWrap) CodePointClassFor(r rune) int {
 	c := UAX14ClassForRune(r)
-	c = substitueSomeClasses(c, uax14.lastClass)
-	return int(c)
+	c = resolveSomeClasses(r, c)
+	cnew := substitueSomeClasses(c, uax14.lastClass)
+	uax14.substituted = (c != cnew)
+	return int(cnew)
 }
 
 // Start all recognizers where the starting symbol is rune r.
@@ -203,6 +213,34 @@ func (uax14 *UAX14LineWrap) StartRulesFor(r rune, cpClass int) {
 			TC.P("class", c).Debugf("starting no rule")
 		}
 	}
+}
+
+// LB1 Assign a line breaking class to each code point of the input.
+// Resolve AI, CB, CJ, SA, SG, and XX into other line breaking classes
+// depending on criteria outside the scope of this algorithm.
+//
+// In the absence of such criteria all characters with a specific combination of
+// original class and General_Category property value are resolved as follows:
+//
+//   Resolved 	Original 	 General_Category
+//   AL         AI, SG, XX  Any
+//   CM         SA          Only Mn or Mc
+//   AL         SA          Any except Mn and Mc
+//   NS         CJ          Any
+//
+func resolveSomeClasses(r rune, c UAX14Class) UAX14Class {
+	if c == AIClass || c == SGClass || c == XXClass {
+		return ALClass
+	} else if c == SAClass {
+		if unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Mc, r) {
+			return CMClass
+		} else {
+			return ALClass
+		}
+	} else if c == CJClass {
+		return NSClass
+	}
+	return c
 }
 
 // LB9: Do not break a combining character sequence;
