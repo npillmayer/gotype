@@ -79,7 +79,7 @@ Contents
 
 Implementations of specific UAX algorithms is done in the various
 sub-packages of uax. The driver type sits in sub-package segment and will
-use breaking algorithms from the other sub-package.
+use breaking algorithms from the other sub-packages.
 
 Base package uax provides some of the necessary
 means to implement UAX breaking algorithms. Please note that it is

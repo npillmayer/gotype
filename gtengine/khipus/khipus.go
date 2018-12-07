@@ -1,4 +1,4 @@
-package gtcore
+package khipus
 
 import (
 	"bytes"
