@@ -13,8 +13,8 @@ import (
 var TC tracing.Trace = tracing.CoreTracer
 
 func Test0(t *testing.T) {
-	//TC.SetLevel(tracing.LevelError)
-	TC.SetLevel(tracing.LevelDebug)
+	TC.SetLevel(tracing.LevelError)
+	//TC.SetLevel(tracing.LevelDebug)
 }
 
 func TestWordBreakTestFile(t *testing.T) {
@@ -22,7 +22,8 @@ func TestWordBreakTestFile(t *testing.T) {
 	seg := segment.NewSegmenter(linewrap)
 	tf := ucd.OpenTestFile("./LineBreakTest.txt", t)
 	defer tf.Close()
-	failcnt, i, from, to := 0, 0, 901, 1000
+	//failcnt, i, from, to := 0, 0, 6263, 6263
+	failcnt, i, from, to := 0, 0, 1, 8000
 	for tf.Scan() {
 		i++
 		if i >= from {

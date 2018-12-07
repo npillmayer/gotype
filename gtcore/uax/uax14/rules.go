@@ -114,9 +114,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // ----------------------------------------------------------------------
 
+// LB2: Never break at the start of text.
+// No longer used.
+/*
+func rule_LB2(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
+	return uax.DoAccept(rec, PenaltyToSuppressBreak)
+}
+*/
+
 func rule_05_NewLine(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := UAX14Class(cpClass)
-	//fmt.Printf("fire rule 05_NewLine for lookahead = %s\n", c)
 	if c == BKClass || c == NLClass || c == LFClass {
 		rec.MatchLen++
 		return uax.DoAccept(rec, PenaltyForMustBreak, PenaltyToSuppressBreak)
@@ -129,7 +136,6 @@ func rule_05_NewLine(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 
 func rule_05_CRLF(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := UAX14Class(cpClass)
-	//fmt.Printf("fire rule 05_CRLF for lookahead = %s\n", uax14c)
 	if c == LFClass {
 		return uax.DoAccept(rec, PenaltyForMustBreak, PenaltyToSuppressBreak, PenaltyToSuppressBreak)
 	}
@@ -156,7 +162,7 @@ func finish_LB8(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	if c == SPClass {
 		return finish_LB8
 	}
-	return uax.DoAccept(rec, -p(8))
+	return uax.DoAccept(rec, 0, -p(8))
 }
 
 // LB8a Do not break after a zero width joiner.
@@ -219,7 +225,7 @@ func finish_LB14(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	if c == SPClass {
 		return finish_LB14
 	}
-	return uax.DoAccept(rec, p(14))
+	return uax.DoAccept(rec, 0, p(14))
 }
 
 // LB15: Do not break within ‘”[’, even with intervening spaces.
@@ -492,6 +498,9 @@ func step2_LB25(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	if c == OPClass || c == HYClass {
 		rec.MatchLen++
 		return step3_LB25
+	} else if c == NUClass {
+		rec.MatchLen++
+		return step4_LB25
 	}
 	return uax.DoAbort(rec)
 }
@@ -513,6 +522,8 @@ func step4_LB25(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	} else if c == CLClass || c == CPClass {
 		rec.MatchLen++
 		return step5_LB25
+	} else if c == PRClass || c == POClass {
+		return uax.DoAccept(rec, ps(25, p(25), rec.MatchLen)...)
 	}
 	return uax.DoAccept(rec, ps(25, 0, rec.MatchLen)...)
 }
@@ -580,13 +591,37 @@ func finish_LB26_3(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 //
 // (JL | JV | JT | H2 | H3) x IN
 // (JL | JV | JT | H2 | H3) x PO
-// PR x (JL | JV | JT | H2 | H3)
 //
 // When Korean uses SPACE for line breaking, the classes in rule LB26,
 // as well as characters of class ID, are often tailored to AL;
 // see Section 8, Customization.
 func rule_LB27(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
-	panic("rule 27 not implemented")
+	rec.MatchLen++
+	return finish_LB27_1
+}
+
+// PR x (JL | JV | JT | H2 | H3)
+func rule_LB27_2(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
+	rec.MatchLen++
+	return finish_LB27_2
+}
+
+// ... x (IN | PO)
+func finish_LB27_1(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
+	c := UAX14Class(cpClass)
+	if c == INClass || c == POClass {
+		return uax.DoAccept(rec, 0, p(27))
+	}
+	return uax.DoAbort(rec)
+}
+
+// ... x (JL | JV | JT | H2 | H3)
+func finish_LB27_2(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
+	c := UAX14Class(cpClass)
+	if c == JLClass || c == JVClass || c == JTClass || c == H2Class || c == H3Class {
+		return uax.DoAccept(rec, 0, p(27))
+	}
+	return uax.DoAbort(rec)
 }
 
 // LB28 Do not break between alphabetics.
@@ -676,10 +711,14 @@ func rule_LB30a(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 func finish_LB30a(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := UAX14Class(cpClass)
 	lw := rec.UserData.(*UAX14LineWrap)
-	lw.unblock()
 	if c == RIClass {
+		if lw.substituted {
+			return finish_LB30a
+		}
+		lw.unblock()
 		return uax.DoAccept(rec, 0, p(30))
 	}
+	lw.unblock()
 	return uax.DoAbort(rec)
 }
 

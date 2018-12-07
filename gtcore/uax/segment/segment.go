@@ -1,6 +1,8 @@
 /*
 Package segment is about Unicode text segmenting.
 
+Under active development; use at your own risk
+
 BSD License
 
 Copyright (c) 2017–18, Norbert Pillmayer
@@ -57,6 +59,18 @@ supplied.
 
 An example for an UnicodeBreaker is "uax29.WordBreak", a breaker
 implementing the UAX#29 word breaking algorithm.
+
+How it works
+
+The segmenter uses a double-ended queue to collect runes and the
+breaking opportunities between them. The front of the queue keeps
+adding new runes, while at the end of the queue we withdraw segments
+as soon as they are available.
+(see https://github.com/npillmayer/gotype/wiki).
+
+For every rune r read, the segmenter will fire up all the rules which
+start with r. It is not uncommon that the lifetime of a lot of rules
+overlaps and all those rules are adding breaking information.
 */
 package segment
 

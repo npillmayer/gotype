@@ -1,9 +1,7 @@
 /*
 Package uax14 implements Unicode Annex #14 line breaking.
 
-Status
-
-Under active development; not useable in practice.
+Under active development; use at your own risk
 
 BSD License
 
@@ -52,9 +50,9 @@ breaking engine for a segmenter.
   breaker := uax14.NewLineWrap()
   segmenter := unicode.NewSegmenter(breaker)
   segmenter.Init(...)
-  match, length, err := segmenter.Next()
-
-Attention
+  for segmenter.Next() {
+    ... // do something with segmenter.Text() or segmenter.Bytes()
+  }
 
 Before using line breakers, clients usually will want to initialize the UAX#14
 classes and rules.
@@ -63,12 +61,35 @@ classes and rules.
 
 This initializes all the code-point range tables. Initialization is
 not done beforehand, as it consumes quite some memory, and using UAX#14
-is not mandatory for line breaking.
+is not mandatory. SetupUAX14Classes() is called automatically, however,
+if clients call NewLineWrap().
+
+Status
+
+The current implementation does not pass all tests from the UAX#14
+test file. The reason is the interpretation of rules involving ZWJ.
+I am a bit at a loss about ZWJ rules, as from my
+point of view they aren't consistent.
+
+	=== RUN   TestWordBreakTestFile
+	--- FAIL: TestWordBreakTestFile (0.36s)
+		uax14_test.go:54: test #6263: '"\u200d"' should be '"\u200d\u231a"'
+		...
+		uax14_test.go:54: test #6339: '"\u200d"' should be '"\u200d\u261d"'
+		...
+		uax14_test.go:54: test #6343: '"\u200d"' should be '"\u200d\U0001f3fb"'
+		...
+		uax14_test.go:43: 3 TEST CASES OUT of 7282 FAILED
+	FAIL
+
+3 out of the 7282 test cases fail. That doesn't sound too much of a problem,
+but I'm afraid the interpretation I chose is not the best one. Nevertheless,
+at this point I'm inclined to postpone the problem and to first seek some
+practical experience with real-life multi-lingual texts.
 */
 package uax14
 
 import (
-	"fmt"
 	"math"
 	"sync"
 	"unicode"
@@ -95,7 +116,7 @@ func UAX14ClassForRune(r rune) UAX14Class {
 	for lbc := UAX14Class(0); lbc <= ZWJClass; lbc++ {
 		urange := rangeFromUAX14Class[lbc]
 		if urange == nil {
-			fmt.Printf("-- no range for class %s\n", lbc)
+			TC.Errorf("-- no range for class %s\n", lbc)
 		} else if unicode.Is(urange, r) {
 			return lbc
 		}
@@ -124,6 +145,7 @@ type UAX14LineWrap struct {
 	lastClass    UAX14Class // we have to remember the last code-point class
 	blockedRI    bool       // are rules for Regional_Indicator currently blocked?
 	substituted  bool       // has the code-point class been substituted?
+	shadow       UAX14Class // class before substitution
 }
 
 // Create a new UAX#14 line breaker.
@@ -139,42 +161,44 @@ func NewLineWrap() *UAX14LineWrap {
 	uax14 := &UAX14LineWrap{}
 	uax14.publisher = uax.NewRunePublisher()
 	uax14.rules = map[UAX14Class][]uax.NfaStateFn{
-		NLClass: {rule_05_NewLine},
-		LFClass: {rule_05_NewLine},
-		BKClass: {rule_05_NewLine},
-		CRClass: {rule_05_NewLine},
-		SPClass: {rule_LB7, rule_LB18},
-		ZWClass: {rule_LB7, rule_LB8},
-		WJClass: {rule_LB11},
-		GLClass: {rule_LB12},
-		CLClass: {rule_LB13, rule_LB16},
-		CPClass: {rule_LB13, rule_LB16, rule_LB30_2},
-		EXClass: {rule_LB13, rule_LB22},
-		ISClass: {rule_LB13, rule_LB29},
-		SYClass: {rule_LB13, rule_LB21b},
-		OPClass: {rule_LB14, step2_LB25},
-		QUClass: {rule_LB15, rule_LB19},
-		B2Class: {rule_LB17},
-		BAClass: {rule_LB21},
-		CBClass: {rule_LB20},
-		HYClass: {rule_LB21, step2_LB25},
-		NSClass: {rule_LB21},
-		BBClass: {rule_LB21x},
-		ALClass: {rule_LB22, rule_LB23_1, rule_LB24_2, rule_LB28, rule_LB30_1},
-		HLClass: {rule_LB21a, rule_LB22, rule_LB23_1, rule_LB24_2, rule_LB28, rule_LB30_1},
-		IDClass: {rule_LB22},
-		EBClass: {rule_LB22, rule_LB23a_2, rule_LB30b},
-		EMClass: {rule_LB22, rule_LB23a_2},
-		INClass: {rule_LB22},
-		NUClass: {rule_LB22, rule_LB23_2, step3_LB25, rule_LB30_1},
-		RIClass: {rule_LB30a},
-		PRClass: {rule_LB23a_2, rule_LB25},
-		POClass: {rule_LB25},
-		JLClass: {rule_LB26_1},
-		JVClass: {rule_LB26_2},
-		H2Class: {rule_LB26_2},
-		JTClass: {rule_LB26_3},
-		H3Class: {rule_LB26_3},
+		//sot:      {rule_LB2},
+		NLClass:  {rule_05_NewLine},
+		LFClass:  {rule_05_NewLine},
+		BKClass:  {rule_05_NewLine},
+		CRClass:  {rule_05_NewLine},
+		SPClass:  {rule_LB7, rule_LB18},
+		ZWClass:  {rule_LB7, rule_LB8},
+		WJClass:  {rule_LB11},
+		GLClass:  {rule_LB12},
+		CLClass:  {rule_LB13, rule_LB16},
+		CPClass:  {rule_LB13, rule_LB16, rule_LB30_2},
+		EXClass:  {rule_LB13, rule_LB22},
+		ISClass:  {rule_LB13, rule_LB29},
+		SYClass:  {rule_LB13, rule_LB21b},
+		OPClass:  {rule_LB14, step2_LB25},
+		QUClass:  {rule_LB15, rule_LB19},
+		B2Class:  {rule_LB17},
+		BAClass:  {rule_LB21},
+		CBClass:  {rule_LB20},
+		HYClass:  {rule_LB21, step2_LB25},
+		NSClass:  {rule_LB21},
+		BBClass:  {rule_LB21x},
+		ALClass:  {rule_LB22, rule_LB23_1, rule_LB24_2, rule_LB28, rule_LB30_1},
+		HLClass:  {rule_LB21a, rule_LB22, rule_LB23_1, rule_LB24_2, rule_LB28, rule_LB30_1},
+		IDClass:  {rule_LB22, rule_LB23a_2},
+		EBClass:  {rule_LB22, rule_LB23a_2, rule_LB30b},
+		EMClass:  {rule_LB22, rule_LB23a_2},
+		INClass:  {rule_LB22},
+		NUClass:  {rule_LB22, rule_LB23_2, step3_LB25, rule_LB30_1},
+		RIClass:  {rule_LB30a},
+		PRClass:  {rule_LB23a_1, rule_LB24_1, rule_LB25, rule_LB27_2},
+		POClass:  {rule_LB24_1, rule_LB25},
+		JLClass:  {rule_LB26_1, rule_LB27},
+		JVClass:  {rule_LB26_2, rule_LB27},
+		H2Class:  {rule_LB26_2, rule_LB27},
+		JTClass:  {rule_LB26_3, rule_LB27},
+		H3Class:  {rule_LB26_3, rule_LB27},
+		ZWJClass: {rule_LB8a},
 	}
 	if rangeFromUAX14Class == nil {
 		TC.Info("UAX#14 classes not yet initialized -> initializing")
@@ -190,8 +214,9 @@ func NewLineWrap() *UAX14LineWrap {
 func (uax14 *UAX14LineWrap) CodePointClassFor(r rune) int {
 	c := UAX14ClassForRune(r)
 	c = resolveSomeClasses(r, c)
-	cnew := substitueSomeClasses(c, uax14.lastClass)
+	cnew, shadow := substitueSomeClasses(c, uax14.lastClass)
 	uax14.substituted = (c != cnew)
+	uax14.shadow = shadow
 	return int(cnew)
 }
 
@@ -212,6 +237,18 @@ func (uax14 *UAX14LineWrap) StartRulesFor(r rune, cpClass int) {
 		} else {
 			TC.P("class", c).Debugf("starting no rule")
 		}
+		/*
+			if uax14.shadow == ZWJClass {
+				if rules := uax14.rules[uax14.shadow]; len(rules) > 0 {
+					TC.P("class", c).Debugf("starting %d rule(s) for shadow class ZWJ", len(rules))
+					for _, rule := range rules {
+						rec := uax.NewPooledRecognizer(cpClass, rule)
+						rec.UserData = uax14
+						uax14.publisher.SubscribeMe(rec)
+					}
+				}
+			}
+		*/
 	}
 }
 
@@ -252,8 +289,8 @@ func resolveSomeClasses(r rune, c UAX14Class) UAX14Class {
 // where X is any line break class except BK, CR, LF, NL, SP, or ZW.
 //
 // LB10: Treat any remaining combining mark or ZWJ as AL.
-func substitueSomeClasses(c UAX14Class, lastClass UAX14Class) UAX14Class {
-	orig := c
+func substitueSomeClasses(c UAX14Class, lastClass UAX14Class) (UAX14Class, UAX14Class) {
+	shadow := c
 	switch lastClass {
 	case sot, BKClass, CRClass, LFClass, NLClass, SPClass, ZWClass:
 		if c == CMClass || c == ZWJClass {
@@ -264,10 +301,10 @@ func substitueSomeClasses(c UAX14Class, lastClass UAX14Class) UAX14Class {
 			c = lastClass
 		}
 	}
-	if orig != c {
-		TC.Debugf("subst %+q -> %+q", orig, c)
+	if shadow != c {
+		TC.Debugf("subst %+q -> %+q", shadow, c)
 	}
-	return c
+	return c, shadow
 }
 
 // A new code-point has been read and this breaker receives a message to
@@ -278,11 +315,27 @@ func (uax14 *UAX14LineWrap) ProceedWithRune(r rune, cpClass int) {
 	c := UAX14Class(cpClass)
 	uax14.longestMatch, uax14.penalties = uax14.publisher.PublishRuneEvent(r, int(c))
 	x := uax14.penalties
-	for i, p := range uax14.penalties {
+	//fmt.Printf("   x = %v\n", x)
+	if uax14.substituted && uax14.lastClass == c { // do not break between runes for rule 09
+		if len(x) > 1 && x[1] == 0 {
+			x[1] = 1000
+		} else if len(x) == 1 {
+			x = append(x, 1000)
+		} else if len(x) == 0 {
+			x = make([]int, 2)
+			x[1] = 1000
+		}
+	}
+	for i, p := range x { // positive penalties get lifted +1000
 		if p > 0 {
 			p += 1000
 			x[i] = p
 		}
+	}
+	//fmt.Printf("=> x = %v\n", x)
+	uax14.penalties = x
+	if c == eot { // start all over again
+		c = sot
 	}
 	uax14.lastClass = c
 }
@@ -311,14 +364,15 @@ func (uax14 *UAX14LineWrap) unblock() {
 	uax14.blockedRI = false
 }
 
-// Penalties (optional break, suppress break and mandatory break).
+// Penalties (suppress break and mandatory break).
 var (
-	PenaltyForBreak        int = 50
 	PenaltyToSuppressBreak int = 5000
 	PenaltyForMustBreak    int = -10000
 )
 
-// TODO temporaty penalty function
+// This is a small function to return a penalty value for a rule.
+// w is the weight of the rule (currently I use the rule number
+// directly).
 func p(w int) int {
 	q := 31 - w
 	r := int(math.Pow(1.3, float64(q)))
@@ -326,10 +380,12 @@ func p(w int) int {
 	return r
 }
 
+// Helper to create a slice of integer penalties, usually of length
+// MatchLen for an accepting rule.
 func ps(w int, first int, l int) []int {
-	pp := make([]int, l)
-	pp[0] = first
-	for i := 1; i < l; i++ {
+	pp := make([]int, l+1)
+	pp[1] = first
+	for i := 2; i <= l; i++ {
 		pp[i] = p(w)
 	}
 	return pp
