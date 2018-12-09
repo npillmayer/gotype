@@ -437,18 +437,24 @@ func (s *Segmenter) printQ() {
 
 // Type SimpleWordBreader is a UnicodeBreaker which breaks at whitespace.
 // Whitespace is determined by unicode.IsSpace(r) for any rune.
-// SimpleWordBreaker will assign the following penalties:
-//
-// (1) Before a sequence of WS runes, the penalty will be 100.
-//
-// (2) After a sequence of WS runes, the penalty will be -100 (a merit).
-//
-// (3) Before an EOT marker, the penalty will be -1000 (mandatory break).
 type SimpleWordBreaker struct {
 	penaltiesSlice []int
 	penalties      []int
 	matchLen       int
 }
+
+// SimpleWordBreaker will assign the following penalties:
+//
+// (1) Before a sequence of whitespace runes, the penalty will be 100.
+//
+// (2) After a sequence of whitespace runes, the penalty will be -100 (a merit).
+//
+// (3) Before an EOT marker, the penalty will be -1000 (mandatory break).
+const (
+	PenaltyBeforeWhitespace int = 100
+	PenaltyAfterWhitespace  int = -100
+	PenaltyBeforeEOT        int = -10000
+)
 
 // Create a new SimpleWordBreaker. Does nothing special – usually it is
 // sufficient to use an empty SimpleWordBreaker struct.
