@@ -332,8 +332,8 @@ func (p Penalty) IsDiscardable() bool {
 
 // We handle text/paragraphcs as khips, i.e. string of knots
 type Khipu struct {
-	Typ   int    // hlist, vlist or mlist
-	Knots []Knot // array of knots of different type
+	typ   int    // hlist, vlist or mlist
+	knots []Knot // array of knots of different type
 }
 
 // List types
@@ -347,20 +347,27 @@ const (
  */
 func NewKhipu() *Khipu {
 	nl := &Khipu{}
-	nl.Knots = make([]Knot, 0, 50)
+	nl.knots = make([]Knot, 0, 50)
 	return nl
 }
 
 /* Number of knots in the list.
  */
 func (nl *Khipu) Length() int {
-	return len(nl.Knots)
+	return len(nl.knots)
 }
 
 /* Append a knot at the end of the list.
  */
 func (nl *Khipu) AppendKnot(knot Knot) *Khipu {
-	nl.Knots = append(nl.Knots, knot)
+	nl.knots = append(nl.knots, knot)
+	return nl
+}
+
+func (nl *Khipu) AppendKhipu(k *Khipu) *Khipu {
+	for _, knot := range k.knots {
+		nl.knots = append(nl.knots, knot)
+	}
 	return nl
 }
 
@@ -370,9 +377,9 @@ func (nl *Khipu) AppendKnot(knot Knot) *Khipu {
  */
 func (nl *Khipu) Measure(from, to int) (p.Dimen, p.Dimen, p.Dimen) {
 	var w, max, min p.Dimen
-	to = iMax(to, len(nl.Knots))
+	to = iMax(to, len(nl.knots))
 	for i := from; i < to; i++ {
-		knot := nl.Knots[i]
+		knot := nl.knots[i]
 		w += knot.W()
 		max += knot.MaxW()
 		min += knot.MinW()
@@ -386,11 +393,11 @@ func (nl *Khipu) Measure(from, to int) (p.Dimen, p.Dimen, p.Dimen) {
  * If the distance cannot be covered, (-1,-1) is returned.
  */
 func (nl *Khipu) Reach(start int, distance p.Dimen) (int, int) {
-	l := len(nl.Knots)
+	l := len(nl.knots)
 	var max, min p.Dimen
 	var from, to int = -1, -1
 	for i := start; i < l; i++ {
-		knot := nl.Knots[i]
+		knot := nl.knots[i]
 		max += knot.MaxW()
 		min += knot.MinW()
 		if from == -1 && max >= distance {
@@ -406,10 +413,10 @@ func (nl *Khipu) Reach(start int, distance p.Dimen) (int, int) {
 /* Find the maximum width of the knots in the range [from ... to-1].
  */
 func (nl *Khipu) MaxWidth(from, to int) p.Dimen {
-	to = iMax(to, len(nl.Knots))
+	to = iMax(to, len(nl.knots))
 	var w p.Dimen
 	for i := from; i < to; i++ {
-		knot := nl.Knots[i]
+		knot := nl.knots[i]
 		if knot.W() > w {
 			w = knot.W()
 		}
@@ -421,10 +428,10 @@ func (nl *Khipu) MaxWidth(from, to int) p.Dimen {
  * Only knots of type Box are considered.
  */
 func (nl *Khipu) MaxHeightAndDepth(from, to int) (p.Dimen, p.Dimen) {
-	to = iMax(to, len(nl.Knots))
+	to = iMax(to, len(nl.knots))
 	var h, d p.Dimen
 	for i := from; i < to; i++ {
-		if knot, ok := nl.Knots[i].(*Box); ok {
+		if knot, ok := nl.knots[i].(*Box); ok {
 			if knot.Height > h {
 				h = knot.Height
 			}
@@ -441,7 +448,7 @@ func (nl *Khipu) MaxHeightAndDepth(from, to int) (p.Dimen, p.Dimen) {
 func (nl *Khipu) String() string {
 	buf := make([]byte, 30)
 	w := bytes.NewBuffer(buf)
-	switch nl.Typ {
+	switch nl.typ {
 	case HList:
 		w.WriteString("\\hlist{")
 	case VList:
@@ -449,7 +456,7 @@ func (nl *Khipu) String() string {
 	case MList:
 		w.WriteString("\\mlist{")
 	}
-	for _, knot := range nl.Knots {
+	for _, knot := range nl.knots {
 		w.WriteString(KnotString(knot))
 	}
 	w.WriteString("}")

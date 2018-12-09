@@ -24,8 +24,7 @@ func TestKhipu(t *testing.T) {
 }
 
 func TestBreaking1(t *testing.T) {
-	k := &DefaultKhipukamayuq{}
-	k.KnotEncode(strings.NewReader("Hello world!"), nil, nil)
+	KnotEncode(strings.NewReader("Hello world!"), nil, nil)
 }
 
 /*

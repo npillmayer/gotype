@@ -71,47 +71,17 @@ type Khipukamayuq interface {
 	KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) *Khipu
 }
 
-type DefaultKhipukamayuq struct {
-	//
-}
-
-func (dkq *DefaultKhipukamayuq) KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) *Khipu {
+func KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) *Khipu {
 	if regs == nil {
 		regs = params.NewTypesettingRegisters()
 	}
-	pipeline = prepareTypesettingPipeline(text, pipeline)
+	pipeline = PrepareTypesettingPipeline(text, pipeline)
 	khipu := NewKhipu()
 	seg := pipeline.segmenter
 	for seg.Next() {
 		fragment := seg.Text()
 		CT.Infof("next segment = '%s'\twith penalties %v", fragment, seg.Penalties())
-		if seg.Penalties()[0] < 1000 { // broken by primary breaker
-			// fragment is terminated by possible line wrap opportunity
-			if seg.Penalties()[1] < 1000 { // broken by secondary breaker, too
-				if seg.Penalties()[1] == segment.PenaltyAfterWhitespace {
-					g := NewGlue(5*params.PT, 1*params.PT, 2*params.PT)
-					p := Penalty(seg.Penalties()[1])
-					khipu.AppendKnot(g).AppendKnot(p)
-				} else {
-					b := NewWordBox(seg.Text())
-					p := Penalty(params.Infty)
-					khipu.AppendKnot(b).AppendKnot(p)
-				}
-			}
-		} else { // segments is broken by secondary breaker
-			// fragment is start or end of a span of whitespace
-			if seg.Penalties()[1] == segment.PenaltyBeforeWhitespace {
-				// close a text box which is not a possible line wrap position
-				b := NewWordBox(seg.Text())
-				p := Penalty(params.Infty)
-				khipu.AppendKnot(b).AppendKnot(p)
-			} else {
-				// close a span of whitespace
-				g := NewGlue(5*params.PT, 1*params.PT, 2*params.PT)
-				p := Penalty(seg.Penalties()[1])
-				khipu.AppendKnot(g).AppendKnot(p)
-			}
-		}
+		k := CreatePartialKhipuFromSegment(seg, pipeline, regs)
 		if regs.N(params.P_MINHYPHENLENGTH) < params.Infty {
 			pipeline.words.Init(strings.NewReader(fragment))
 			for pipeline.words.Next() {
@@ -123,22 +93,58 @@ func (dkq *DefaultKhipukamayuq) KnotEncode(text io.Reader, pipeline *Typesetting
 				}
 			}
 		}
-		/*
-			if endsWithSpace(fragment) {
-				spaceglue := NewGlue(5*params.PT, 1*params.PT, 1*params.PT)
-				spacepenalty := NewKnot(KTPenalty)
-				//spacepenalty.
-			}
-			khipu.AppendKnot(NewKnot(KTKern)).AppendKnot(NewKnot(KTGlue))
-		*/
+		khipu.AppendKhipu(k)
 	}
 	fmt.Printf("resulting khipu = %s\n", khipu)
 	return khipu
 }
 
-// We use a UAX#14 line wrapper as the primariy breaker and
-// use a SimpleWordBreaker to extract spans of whitespace.
-func prepareTypesettingPipeline(text io.Reader, pipeline *TypesettingPipeline) *TypesettingPipeline {
+// Call this for creating a sub-khipu from a segment. The fist parameter
+// is a segmenter which already has detected a segment, i.e. seg.Next()
+// has been called successfully.
+//
+// Calls to CreatePartialKhipuFromSegment will panic if one of its
+// arguments is invalid.
+//
+// Returns a khipu consisting of text-boxes, glues and penalties.
+func CreatePartialKhipuFromSegment(seg *segment.Segmenter, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) *Khipu {
+	khipu := NewKhipu()
+	if seg.Penalties()[0] < 1000 { // broken by primary breaker
+		// fragment is terminated by possible line wrap opportunity
+		if seg.Penalties()[1] < 1000 { // broken by secondary breaker, too
+			if seg.Penalties()[1] == segment.PenaltyAfterWhitespace {
+				g := NewGlue(5*params.PT, 1*params.PT, 2*params.PT)
+				p := Penalty(seg.Penalties()[1])
+				khipu.AppendKnot(g).AppendKnot(p)
+			} else {
+				b := NewWordBox(seg.Text())
+				p := Penalty(params.Infty)
+				khipu.AppendKnot(b).AppendKnot(p)
+			}
+		}
+	} else { // segments is broken by secondary breaker
+		// fragment is start or end of a span of whitespace
+		if seg.Penalties()[1] == segment.PenaltyBeforeWhitespace {
+			// close a text box which is not a possible line wrap position
+			b := NewWordBox(seg.Text())
+			p := Penalty(params.Infty)
+			khipu.AppendKnot(b).AppendKnot(p)
+		} else {
+			// close a span of whitespace
+			g := NewGlue(5*params.PT, 1*params.PT, 2*params.PT)
+			p := Penalty(seg.Penalties()[1])
+			khipu.AppendKnot(g).AppendKnot(p)
+		}
+	}
+	return khipu
+}
+
+// Check if a typesetting pipeline is correctly initialized and create
+// a new one if is is invalid.
+//
+// We use a uax14.LineWrapper as the primariy breaker and
+// use a segment.SimpleWordBreaker to extract spans of whitespace.
+func PrepareTypesettingPipeline(text io.Reader, pipeline *TypesettingPipeline) *TypesettingPipeline {
 	// wrap a normalization-reader around the input
 	if pipeline == nil {
 		pipeline = &TypesettingPipeline{}
