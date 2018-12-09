@@ -49,13 +49,16 @@ negative values are to be interpreted as negative costs, i.e. merits.
 
 Clients instantiate a UnicodeBreaker object and use it as the
 breaking engine for a segmenter. Multiple breaking engines may be
-supplied.
+supplied (where the first one is called the primary breaker and any
+following breaker is a secondary breaker).
 
   breaker1 := ...
   breaker2 := ...
   segmenter := unicode.NewSegmenter(breaker1, breaker2)
   segmenter.Init(...)
-  for segmenter.Next() ...
+  for segmenter.Next() {
+    // do something with segmenter.Text() or segmenter.Bytes()
+  }
 
 An example for an UnicodeBreaker is "uax29.WordBreak", a breaker
 implementing the UAX#29 word breaking algorithm.
@@ -70,7 +73,7 @@ as soon as they are available.
 
 For every rune r read, the segmenter will fire up all the rules which
 start with r. It is not uncommon that the lifetime of a lot of rules
-overlaps and all those rules are adding breaking information.
+overlap and all those rules are adding breaking information.
 */
 package segment
 
@@ -81,10 +84,10 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
 	"github.com/npillmayer/gotype/gtcore/uax"
-	"github.com/npillmayer/gotype/gtcore/uax/uax29"
 )
 
 // We trace to the core-tracer.
@@ -94,24 +97,22 @@ var CT tracing.Trace = tracing.CoreTracer
 // segments it into smaller parts, called segments.
 //
 // The specification of a segment is defined by a breaker function of type
-// UnicodeBreaker; the default split function breaks the input into words
-// (see package uax29).
+// UnicodeBreaker; the default UnicodeBreaker breaks the input into words,
+// using whitespace as boundaries. For more sophisticated breakers see
+// sub-packages of package uax.
 type Segmenter struct {
-	deque                      *deque
-	breakers                   []uax.UnicodeBreaker
-	reader                     io.RuneReader
-	buffer                     *bytes.Buffer
-	activeSegment              []byte
-	lastPenalty                int // penalty at last break opportunity
-	maxSegmentLen              int // maximum length allowed for segments
-	nullPenalty                func(int) bool
-	aggregate                  uax.PenaltyAggregator
+	deque                      *deque               // where we collect runes and penalties
+	reader                     io.RuneReader        // where we get the next runes from
+	breakers                   []uax.UnicodeBreaker // our work horses
+	activeSegment              []byte               // the most recent segment to build
+	buffer                     *bytes.Buffer        // wrapper around activeSegment
+	lastPenalties              [2]int               // penalties at last break opportunity
+	maxSegmentLen              int                  // maximum length allowed for segments
 	longestActiveMatch         int
 	positionOfBreakOpportunity int
 	atEOF                      bool
 	err                        error
 	inUse                      bool // Next() has been called; buffer is in use.
-	voidCount                  int
 }
 
 // MaxSegmentSize is the maximum size used to buffer a segment
@@ -126,20 +127,23 @@ var (
 
 // Create a new Segmenter by providing breaking logic (UnicodeBreaker).
 // Clients may provide more than one UnicodeBreaker. Specifying no
-// UnicodeBreaker results in using a word breaker.
+// UnicodeBreaker results in getting a SimpleWordBreaker, which will
+// simply break on whitespace (see SimpleWordBreaker in this package).
 //
-// Before using new segmenters, clients will have to call Init(...) on them.
+// Before using newly created segmenters, clients will have to call Init(...)
+// on them, i.e. initialize them for a rune reader.
 func NewSegmenter(breakers ...uax.UnicodeBreaker) *Segmenter {
 	s := &Segmenter{}
 	if len(breakers) == 0 {
-		breakers = []uax.UnicodeBreaker{uax29.NewWordBreaker()}
+		breakers = []uax.UnicodeBreaker{NewSimpleWordBreaker()}
 	}
 	s.breakers = breakers
 	return s
 }
 
 // Initialize a Segmenter with an io.RuneReader to read from.
-// Re-initializes a segmenter already in use.
+// s is either a newly created segmenter to be initialized, or we may
+// re-initializes a segmenter already in use.
 func (s *Segmenter) Init(reader io.RuneReader) {
 	if reader == nil {
 		reader = strings.NewReader("")
@@ -155,14 +159,18 @@ func (s *Segmenter) Init(reader io.RuneReader) {
 		s.atEOF = false
 		s.buffer.Reset()
 		s.inUse = false
+		s.lastPenalties[0] = 0
+		s.lastPenalties[1] = 0
 	}
 	s.positionOfBreakOpportunity = -1
-	if s.aggregate == nil {
-		s.aggregate = uax.AddPenalties
-	}
-	if s.nullPenalty == nil {
-		s.nullPenalty = tooBad
-	}
+	/*
+		if s.aggregate == nil {
+			s.aggregate = uax.AddPenalties
+		}
+		if s.nullPenalty == nil {
+			s.nullPenalty = tooBad
+		}
+	*/
 }
 
 // Buffer sets the initial buffer to use when scanning and the maximum size of
@@ -196,15 +204,28 @@ func (s *Segmenter) Err() error {
 // be treated as if no penalty occured (possibly resulting in the
 // suppression of a break opportunity).
 //
-// TODO: API changed
-func (s *Segmenter) SetNullPenalty(isNull func(int) bool) {
+// There is one null-value for each UnicodeBreaker. The segmenter issues
+// a break whenever one of the UnicodeBreakers signals a non-null penalty.
+// The default null-value function treats any penalty >= 1000 as a null,
+// i.e. suppresses the break opportunity.
+//
+// bInx is the position 0..n-1 of the UnicodeBreaker as provided during
+// construction of the segmenter.
+// The call to SetNullPenalty panics if bInx is out of range.
+/*
+func (s *Segmenter) SetNullPenalty(bInx int, isNull func(int) bool) {
+	if bInx < 0 || bInx >= len(s.breakers) {
+		panic("segment.SetNullPenalty: Index of UnicodeBreaker out of range!")
+	}
 	if isNull == nil {
-		s.nullPenalty = tooBad
+		s.nullPenalty[bInx] = tooBad
 	} else {
-		s.nullPenalty = isNull
+		s.nullPenalty[bInx] = isNull
 	}
 }
+*/
 
+// Penalties >= 1000 are considered too bad for being a break opportunity.
 func tooBad(p int) bool {
 	return p >= 1000
 }
@@ -223,9 +244,7 @@ func (s *Segmenter) Next() bool {
 	}
 	s.inUse = true
 	if !s.atEOF {
-		//fmt.Println("((((")
 		err := s.readEnoughInput()
-		//fmt.Println("))))")
 		if err != nil && err != io.EOF {
 			s.setErr(err)
 			s.activeSegment = nil
@@ -256,8 +275,8 @@ func (s *Segmenter) Text() string {
 	return string(s.activeSegment)
 }
 
-func (s *Segmenter) Penalty() int {
-	return s.lastPenalty
+func (s *Segmenter) Penalties() [2]int {
+	return s.lastPenalties
 }
 
 // setErr() records the first error encountered.
@@ -268,11 +287,13 @@ func (s *Segmenter) setErr(err error) {
 }
 
 // TODO
+/*
 func (s *Segmenter) SetPenaltyAggregator(pa uax.PenaltyAggregator) {
 	if pa != nil {
 		s.aggregate = pa
 	}
 }
+*/
 
 func (s *Segmenter) readRune() (err error) {
 	if s.atEOF {
@@ -282,9 +303,9 @@ func (s *Segmenter) readRune() (err error) {
 		r, _, err = s.reader.ReadRune()
 		CT.P("rune", fmt.Sprintf("%+q", r)).Debug("--------------------------------------")
 		if err == nil {
-			s.deque.PushBack(r, 0)
+			s.deque.PushBack(r, 0, 0)
 		} else if err == io.EOF {
-			s.deque.PushBack(eotAtom.r, eotAtom.penalty)
+			s.deque.PushBack(eotAtom.r, eotAtom.penalty0, eotAtom.penalty1)
 			s.atEOF = true
 			err = nil
 		} else {
@@ -306,7 +327,7 @@ func (s *Segmenter) readEnoughInput() (err error) {
 			from := max(0, l-1-s.longestActiveMatch) // old longest match limit
 			l = s.deque.Len()
 			s.longestActiveMatch = 0
-			r, _ := s.deque.Back()
+			r, _, _ := s.deque.Back()
 			for _, breaker := range s.breakers {
 				cpClass := breaker.CodePointClassFor(r)
 				breaker.StartRulesFor(r, cpClass)
@@ -314,7 +335,7 @@ func (s *Segmenter) readEnoughInput() (err error) {
 				if breaker.LongestActiveMatch() > s.longestActiveMatch {
 					s.longestActiveMatch = breaker.LongestActiveMatch()
 				}
-				s.insertPenalties(breaker.Penalties())
+				s.insertPenalties(s.inxForBreaker(breaker), breaker.Penalties())
 			}
 			s.positionOfBreakOpportunity = s.findBreakOpportunity(from, l-1-s.longestActiveMatch)
 			CT.Debugf("distance = %d, active match = %d", s.positionOfBreakOpportunity, s.longestActiveMatch)
@@ -330,8 +351,8 @@ func (s *Segmenter) findBreakOpportunity(from int, to int) int {
 	pos := -1
 	CT.Debugf("searching for break opportunity from %d to %d: ", from, to-1)
 	for i := 0; i < to; i++ {
-		_, p := s.deque.At(i)
-		if !s.nullPenalty(p) {
+		_, p0, p1 := s.deque.At(i)
+		if !tooBad(p0) && !tooBad(p1) {
 			pos = i
 			break
 		}
@@ -340,21 +361,36 @@ func (s *Segmenter) findBreakOpportunity(from int, to int) int {
 	return pos
 }
 
-func (s *Segmenter) insertPenalties(penalties []int) {
+// find out if the UnicodeBreaker b is the primary breaker
+func (s *Segmenter) inxForBreaker(b uax.UnicodeBreaker) int {
+	if b == s.breakers[0] {
+		return 0
+	}
+	return 1
+}
+
+func (s *Segmenter) insertPenalties(bInx int, penalties []int) {
 	l := s.deque.Len()
 	if len(penalties) > l {
-		penalties = penalties[0:l]
+		penalties = penalties[0:l] // drop excessive penalties
 	}
 	for i, p := range penalties {
-		r, total := s.deque.At(l - 1 - i)
-		total = s.aggregate(total, p)
-		s.deque.SetAt(l-1-i, r, total)
+		r, total0, total1 := s.deque.At(l - 1 - i)
+		//total0 = s.aggregate(total0, p)
+		//total1 = s.aggregate(total1, p)
+		if bInx == 0 {
+			total0 = total0 + p
+		} else {
+			total1 = total1 + p
+		}
+		s.deque.SetAt(l-1-i, r, total0, total1)
 	}
 }
 
 func (s *Segmenter) getFrontSegment(buf *bytes.Buffer) int {
 	seglen := 0
-	s.lastPenalty = 0
+	s.lastPenalties[0] = 0
+	s.lastPenalties[1] = 0
 	buf.Reset()
 	l := min(s.deque.Len()-1, s.positionOfBreakOpportunity)
 	CT.Debugf("cutting front segment of length 0..%d", l)
@@ -371,11 +407,12 @@ func (s *Segmenter) getFrontSegment(buf *bytes.Buffer) int {
 	}
 	cnt := 0
 	for i := 0; i <= l; i++ {
-		r, p := s.deque.PopFront()
+		r, p0, p1 := s.deque.PopFront()
 		written, _ := buf.WriteRune(r)
 		seglen += written
 		cnt++
-		s.lastPenalty = p
+		s.lastPenalties[0] = p0
+		s.lastPenalties[1] = p1
 	}
 	CT.Debugf("front segment is of length %d/%d", seglen, cnt)
 	s.positionOfBreakOpportunity = s.findBreakOpportunity(0, s.deque.Len()-1-s.longestActiveMatch)
@@ -389,11 +426,79 @@ func (s *Segmenter) printQ() {
 	sb.WriteString(fmt.Sprintf("Q #%d: ", s.deque.Len()))
 	for i := 0; i < s.deque.Len(); i++ {
 		var a atom
-		a.r, a.penalty = s.deque.At(i)
+		a.r, a.penalty0, a.penalty1 = s.deque.At(i)
 		sb.WriteString(fmt.Sprintf(" <- %s", a.String()))
 	}
 	sb.WriteString(" .")
 	CT.Debugf(sb.String())
+}
+
+// ----------------------------------------------------------------------
+
+// Type SimpleWordBreader is a UnicodeBreaker which breaks at whitespace.
+// Whitespace is determined by unicode.IsSpace(r) for any rune.
+type SimpleWordBreaker struct {
+	penaltiesSlice []int
+	penalties      []int
+	matchLen       int
+}
+
+// Create a new SimpleWordBreaker. Does nothing special – usually it is
+// sufficient to use an empty SimpleWordBreaker struct.
+func NewSimpleWordBreaker() *SimpleWordBreaker {
+	swb := &SimpleWordBreaker{}
+	return swb
+}
+
+// This simple version will return 1 for whitespace and 0 otherwise.
+// (Interface UnicodeBreaker)
+func (swb *SimpleWordBreaker) CodePointClassFor(r rune) int {
+	if unicode.IsSpace(r) {
+		return 1
+	}
+	return 0
+}
+
+// Interface UnicodeBreaker
+func (swb *SimpleWordBreaker) StartRulesFor(rune, int) {
+}
+
+var immediateBreakBefore = []int{0, -2000}
+var inhibitBreakBefore = []int{1000, 0}
+
+// Interface UnicodeBreaker
+func (swb *SimpleWordBreaker) ProceedWithRune(r rune, cpClass int) {
+	if r == 0 {
+		swb.penalties = immediateBreakBefore // break before end of text
+	} else if cpClass == 1 { // rune is whitespace
+		swb.matchLen++
+		swb.penalties = nil
+	} else { // non-whitespace
+		if swb.matchLen > 0 { // previous rune(s) is/were whitespace
+			// close a match of length mathLen (= count of whitespace runes)
+			swb.penalties = swb.penaltiesSlice[:0]      // re-set penalties
+			swb.penalties = append(swb.penalties, 1000) // inhibit break before WS span
+			swb.penalties = append(swb.penalties, -100) // break point
+			for i := 2; i <= swb.matchLen; i++ {        // inhibit break between WS runes
+				swb.penalties = append(swb.penalties, 1000)
+			}
+			swb.penalties = append(swb.penalties, -900) // break point
+			swb.matchLen = 0
+		} else {
+			swb.penalties = inhibitBreakBefore // do not break between non-whitespace
+		}
+	}
+}
+
+// Interface UnicodeBreaker
+func (swb *SimpleWordBreaker) LongestActiveMatch() int {
+	return swb.matchLen
+}
+
+// Interface UnicodeBreaker
+func (swb *SimpleWordBreaker) Penalties() []int {
+	//fmt.Printf("emitting %v\n", swb.penalties)
+	return swb.penalties
 }
 
 // ----------------------------------------------------------------------

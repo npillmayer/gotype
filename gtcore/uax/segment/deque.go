@@ -20,16 +20,17 @@ type deque struct {
 	count int
 }
 
-// Internal type atom holds a rune and a penalty (for a break opportunity).
+// Internal type atom holds a rune and 2 penalties (for a break opportunity).
 type atom struct {
-	r       rune
-	penalty int
+	r        rune
+	penalty0 int // primary penalty
+	penalty1 int // penalty for all secondary breakers
 }
 
-var eotAtom atom = atom{rune(0), 0} // the atom denoting End of Text
+var eotAtom atom = atom{rune(0), 0, 0} // the atom denoting End of Text
 
 func (a *atom) String() string {
-	return fmt.Sprintf("[%+q p=%d]", a.r, a.penalty)
+	return fmt.Sprintf("[%+q p=%d|%d]", a.r, a.penalty0, a.penalty1)
 }
 
 // minCapacity is the smallest capacity that deque may have.
@@ -44,91 +45,95 @@ func (q *deque) Len() int {
 // PushBack appends an element to the back of the queue.  Implements FIFO when
 // elements are removed with PopFront(), and LIFO when elements are removed
 // with PopBack().
-func (q *deque) PushBack(r rune, penalty int) {
+func (q *deque) PushBack(r rune, p0 int, p1 int) {
 	q.growIfFull()
 	q.buf[q.tail].r = r
-	q.buf[q.tail].penalty = penalty
+	q.buf[q.tail].penalty0 = p0
+	q.buf[q.tail].penalty1 = p1
 	// Calculate new tail position.
 	q.tail = q.next(q.tail)
 	q.count++
 }
 
 // PushFront prepends an element to the front of the queue.
-func (q *deque) PushFront(r rune, penalty int) {
+func (q *deque) PushFront(r rune, p0 int, p1 int) {
 	q.growIfFull()
 
 	// Calculate new head position.
 	q.head = q.prev(q.head)
 	q.buf[q.head].r = r
-	q.buf[q.head].penalty = penalty
+	q.buf[q.head].penalty0 = p0
+	q.buf[q.head].penalty1 = p1
 	q.count++
 }
 
 // PopFront removes and returns the element from the front of the queue.
 // Implements FIFO when used with PushBack().  If the queue is empty, the call
 // panics.
-func (q *deque) PopFront() (rune, int) {
+func (q *deque) PopFront() (rune, int, int) {
 	if q.count <= 0 {
 		panic("deque: PopFront() called on empty queue")
 	}
 	r := q.buf[q.head].r
-	penalty := q.buf[q.head].penalty
-	//q.buf[q.head] = nil
-	q.buf[q.head].r = 0
-	q.buf[q.head].penalty = 0
+	p0 := q.buf[q.head].penalty0
+	p1 := q.buf[q.head].penalty1
+	q.buf[q.head].r = 0        // re-initialize atom
+	q.buf[q.head].penalty0 = 0 // re-initialize atom
+	q.buf[q.head].penalty1 = 0 // re-initialize atom
 	// Calculate new head position.
 	q.head = q.next(q.head)
 	q.count--
 
 	q.shrinkIfExcess()
-	return r, penalty
+	return r, p0, p1
 }
 
 // PopBack removes and returns the element from the back of the queue.
 // Implements LIFO when used with PushBack().  If the queue is empty, the call
 // panics.
-func (q *deque) PopBack() (rune, int) {
+func (q *deque) PopBack() (rune, int, int) {
 	if q.count <= 0 {
 		panic("deque: PopBack() called on empty queue")
 	}
-
 	// Calculate new tail position
 	q.tail = q.prev(q.tail)
-
 	// Remove value at tail.
 	r := q.buf[q.tail].r
-	penalty := q.buf[q.tail].penalty
-	//q.buf[q.tail] = nil
-	q.buf[q.tail].r = 0
-	q.buf[q.tail].penalty = 0
+	p0 := q.buf[q.tail].penalty0
+	p1 := q.buf[q.tail].penalty1
+	q.buf[q.tail].r = 0        // re-initialize atom
+	q.buf[q.tail].penalty0 = 0 // re-initialize atom
+	q.buf[q.tail].penalty1 = 0 // re-initialize atom
 	q.count--
 
 	q.shrinkIfExcess()
-	return r, penalty
+	return r, p0, p1
 }
 
 // Front returns the element at the front of the queue.  This is the element
 // that would be returned by PopFront().  This call panics if the queue is
 // empty.
-func (q *deque) Front() (rune, int) {
+func (q *deque) Front() (rune, int, int) {
 	if q.count <= 0 {
 		panic("deque: Front() called when empty")
 	}
 	r := q.buf[q.head].r
-	penalty := q.buf[q.head].penalty
-	return r, penalty
+	p0 := q.buf[q.head].penalty0
+	p1 := q.buf[q.head].penalty1
+	return r, p0, p1
 }
 
 // Back returns the element at the back of the queue.  This is the element
 // that would be returned by PopBack().  This call panics if the queue is
 // empty.
-func (q *deque) Back() (rune, int) {
+func (q *deque) Back() (rune, int, int) {
 	if q.count <= 0 {
 		panic("deque: Back() called when empty")
 	}
 	r := q.buf[q.prev(q.tail)].r
-	penalty := q.buf[q.prev(q.tail)].penalty
-	return r, penalty
+	p0 := q.buf[q.prev(q.tail)].penalty0
+	p1 := q.buf[q.prev(q.tail)].penalty1
+	return r, p0, p1
 }
 
 // At returns the element at index i in the queue without removing the element
@@ -143,25 +148,27 @@ func (q *deque) Back() (rune, int) {
 // case of a fixed-size circular log buffer: A new entry is pushed onto one end
 // and when full the oldest is popped from the other end.  All the log entries
 // in the buffer must be readable without altering the buffer contents.
-func (q *deque) At(i int) (rune, int) {
+func (q *deque) At(i int) (rune, int, int) {
 	if i < 0 || i >= q.count {
 		panic("deque: At() called with index out of range")
 	}
 	at := (q.head + i) & (len(q.buf) - 1) // bitwise modulus
 	r := q.buf[at].r
-	penalty := q.buf[at].penalty
-	return r, penalty
+	p0 := q.buf[at].penalty0
+	p1 := q.buf[at].penalty1
+	return r, p0, p1
 }
 
 // SetAt modifies the element at index i in the queue. This method accepts
 // only non-negative index values.
-func (q *deque) SetAt(i int, r rune, penalty int) {
+func (q *deque) SetAt(i int, r rune, p0 int, p1 int) {
 	if i < 0 || i >= q.count {
 		panic("deque: At() called with index out of range")
 	}
 	at := (q.head + i) & (len(q.buf) - 1) // bitwise modulus
 	q.buf[at].r = r
-	q.buf[at].penalty = penalty
+	q.buf[at].penalty0 = p0
+	q.buf[at].penalty1 = p1
 }
 
 // Clear removes all elements from the queue, but retains the current capacity.
@@ -174,7 +181,8 @@ func (q *deque) Clear() {
 	modBits := len(q.buf) - 1
 	for h := q.head; h != q.tail; h = (h + 1) & modBits {
 		q.buf[h].r = 0
-		q.buf[h].penalty = 0
+		q.buf[h].penalty0 = 0
+		q.buf[h].penalty1 = 0
 	}
 	q.head = 0
 	q.tail = 0
@@ -212,7 +220,8 @@ func (q *deque) Rotate(n int) {
 			// Put tail value at head and remove value at tail.
 			q.buf[q.head] = q.buf[q.tail]
 			q.buf[q.tail].r = 0
-			q.buf[q.tail].penalty = 0
+			q.buf[q.tail].penalty0 = 0
+			q.buf[q.tail].penalty1 = 0
 		}
 		return
 	}
@@ -222,7 +231,8 @@ func (q *deque) Rotate(n int) {
 		// Put head value at tail and remove value at head.
 		q.buf[q.tail] = q.buf[q.head]
 		q.buf[q.head].r = 0
-		q.buf[q.head].penalty = 0
+		q.buf[q.head].penalty0 = 0
+		q.buf[q.head].penalty1 = 0
 		// Calculate new head and tail using bitwise modulus.
 		q.head = (q.head + 1) & modBits
 		q.tail = (q.tail + 1) & modBits

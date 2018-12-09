@@ -1,43 +1,37 @@
 package segment
 
-/*
 import (
+	"fmt"
+	"strings"
 	"testing"
 )
 
+//var CT tracing.Trace = tracing.CoreTracer
 
-func TestRules1(t *testing.T) {
-	setupRules()
-	fmt.Printf("starts for %s = %d\n", QUClass, ruleStarts[QUClass])
-}
-
-func TestRules2(t *testing.T) {
-	setupRules()
-	fmt.Println("====================")
-	fmt.Printf("rules set up\n")
-	reader := strings.NewReader("(   (")
-	lw := NewLineWrap()
-	lw.Init(reader)
-	_, n, err := lw.Next()
-	fmt.Printf("%d bytes with err = %s\n", n, err)
-	lw.printQ()
-}
-
-func TestPublishing(t *testing.T) {
-	fmt.Println("~~~~~~~~~~~~~~~~~~~~")
-	p := NewRunePublisher()
-	step1 := newNfaStep(ALClass, 2, nil)
-	step2 := newNfaStep(CLClass, 1, nil)
-	step3 := newNfaStep(QUClass, 3, nil)
-	p.SubscribeMe(step1).SubscribeMe(step2).SubscribeMe(step3)
-	ldist := p.PublishRuneEvent('A', int(ALClass))
-	p.Print()
-	if p.Size() != 2 {
-		t.Fail()
-	}
-	fmt.Printf("longest remaining distance = %d\n", ldist)
-	if ldist != 2 {
-		t.Fail()
+func TestWhitespace1(t *testing.T) {
+	seg := NewSegmenter()
+	seg.Init(strings.NewReader("Hello World!"))
+	for seg.Next() {
+		t.Logf("segment = '%s' with p = %d", seg.Text(), seg.Penalties()[0])
 	}
 }
-*/
+
+func TestWhitespace2(t *testing.T) {
+	seg := NewSegmenter()
+	seg.Init(strings.NewReader("	for (i=0; i<5; i++)   count += i;"))
+	for seg.Next() {
+		t.Logf("segment = '%s' with p = %d", seg.Text(), seg.Penalties()[0])
+	}
+}
+
+func ExampleSegmenter() {
+	seg := NewSegmenter()
+	seg.Init(strings.NewReader("Hello World!"))
+	for seg.Next() {
+		fmt.Printf("segment = '%s' with penalty = %d\n", seg.Text(), seg.Penalties()[0])
+	}
+	// Output:
+	// segment = 'Hello' with penalty = 100
+	// segment = ' ' with penalty = -100
+	// segment = 'World!' with penalty = -1000
+}
