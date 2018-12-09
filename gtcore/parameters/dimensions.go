@@ -27,7 +27,7 @@ const Fill Dimen = 2 * BP * 10000
 const Filll Dimen = 3 * BP * 10000
 
 // An infinite numeric
-const Infty int32 = 100000000
+const Infty int = 100000000 // TODO
 
 /* Stringer implementation.
  */

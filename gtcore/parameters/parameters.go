@@ -38,7 +38,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 import (
-	"github.com/npillmayer/gotype/gtcore/textshaping"
+	"golang.org/x/text/unicode/bidi"
 )
 
 type TypesettingParameter int
@@ -53,6 +53,7 @@ const (
 	P_LINESKIP
 	P_LINESKIPLIMIT
 	P_HYPHENPENALTY
+	P_MINHYPHENLENGTH
 	P_STOPPER
 )
 
@@ -79,11 +80,12 @@ func NewTypesettingRegisters() *TypesettingRegisters {
 func initParameters(p *[P_STOPPER]interface{}) {
 	p[P_LANGUAGE] = "en_EN"
 	p[P_SCRIPT] = "Latin"
-	p[P_TEXTDIRECTION] = textshaping.LeftToRight
+	p[P_TEXTDIRECTION] = bidi.LeftToRight
 	p[P_BASELINESKIP] = 12 * PT
 	p[P_LINESKIP] = 0
 	p[P_LINESKIPLIMIT] = 0
 	p[P_HYPHENPENALTY] = 0
+	p[P_MINHYPHENLENGTH] = Infty
 }
 
 func (regs *TypesettingRegisters) Begingroup() {

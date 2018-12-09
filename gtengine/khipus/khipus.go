@@ -51,9 +51,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // === Knots =================================================================
 
+type KnotType int8
+
 // A knot has a width and may be discardable
 type Knot interface {
-	fmt.Stringer
+	Type() KnotType      // type identifier of this knot
 	W() p.Dimen          // width
 	MinW() p.Dimen       // minimum width
 	MaxW() p.Dimen       // maximum width
@@ -62,7 +64,7 @@ type Knot interface {
 
 // Knot types
 const (
-	KTKern int = iota
+	KTKern KnotType = iota
 	KTGlue
 	KTBox
 	KTPenalty
@@ -71,14 +73,14 @@ const (
 
 /* Factory method to create a knot. Parameter is a valid knot type.
  */
-func NewKnot(knottype int) Knot {
+func NewKnot(knottype KnotType) Knot {
 	switch knottype {
 	case KTKern:
-		return &Kern{0}
+		return Kern(0)
 	case KTGlue:
-		return &Glue{}
+		return Glue{0, 0, 0}
 	case KTPenalty:
-		return &Penalty{0}
+		return Penalty(0)
 	case KTDiscretionary:
 		d := &Discretionary{}
 		//d.pre = "-"
@@ -90,100 +92,99 @@ func NewKnot(knottype int) Knot {
 	return nil
 }
 
+func KnotString(k Knot) string {
+	switch k.Type() {
+	case KTKern:
+		return fmt.Sprintf("[kern %s]", k.W())
+	case KTGlue:
+		//return fmt.Sprintf("[glue %v]", k)
+		g := k.(Glue)
+		return g.String()
+	case KTPenalty:
+		p := k.(Penalty)
+		return fmt.Sprintf("[penalty %d]", p)
+	case KTBox:
+		s := k.(*Box)
+		return s.String()
+	default:
+		return "yes, it is a knot"
+	}
+	return "TODO"
+}
+
 // --- Kern ------------------------------------------------------------------
 
 // A kern is an unshrinkable space
-type Kern struct {
-	Width p.Dimen // fixed width
+type Kern p.Dimen // fixed width
+
+// Interface Knot.
+func (k Kern) Type() KnotType {
+	return KTKern
 }
 
-/* Interface Knot. Prints the dimension (width) of the kern.
- */
-func (k *Kern) String() string {
-	return fmt.Sprintf("[kern %s]", k.Width.String())
+// Interface Knot. Width of the kern.
+func (k Kern) W() p.Dimen {
+	return p.Dimen(k)
 }
 
-/* Interface Knot. Width of the kern.
- */
-func (k *Kern) W() p.Dimen {
-	return k.Width
+// Interface Knot. Kerns do not shrink.
+func (k Kern) MinW() p.Dimen {
+	return p.Dimen(k)
 }
 
-/* Interface Knot. Kerns do not shrink.
- */
-func (k *Kern) MinW() p.Dimen {
-	return k.Width
+// Interface Knot. Kerns do not stretch.
+func (k Kern) MaxW() p.Dimen {
+	return p.Dimen(k)
 }
 
-/* Interface Knot. Kerns do not stretch.
- */
-func (k *Kern) MaxW() p.Dimen {
-	return k.Width
-}
-
-/* Interface Knot. Kerns are discardable.
- */
-func (k *Kern) IsDiscardable() bool {
+// Interface Knot. Kerns are discardable.
+func (k Kern) IsDiscardable() bool {
 	return true
 }
-
-var _ Knot = &Kern{}
 
 // --- Glue ------------------------------------------------------------------
 
 // A glue is a space which can shrink and expand
-type Glue struct {
-	Width    p.Dimen // natural width
-	MaxWidth p.Dimen // maximum width
-	MinWidth p.Dimen // minimum width
+type Glue [3]p.Dimen
+
+// Interface Knot.
+func (g Glue) Type() KnotType {
+	return KTGlue
 }
 
-/* Interface Knot.
- */
-func (g *Glue) String() string {
-	return fmt.Sprintf("[glue %s <%s >%s]", g.W().String(), g.MaxW().String(),
-		g.MinW().String())
+func (g Glue) String() string {
+	return fmt.Sprintf("[glue %s <%s >%s]", g.W().String(), g.MinW().String(),
+		g.MaxW().String())
 }
 
-/* Interface Knot. Natural width of the glue.
- */
-func (g *Glue) W() p.Dimen {
-	return g.Width
+// Interface Knot. Natural width of the glue.
+func (g Glue) W() p.Dimen {
+	return g[0]
 }
 
-/* Interface Knot. Minimum width of the glue.
- */
-func (g *Glue) MinW() p.Dimen {
-	return g.MinWidth
+// Interface Knot. Minimum width of the glue.
+func (g Glue) MinW() p.Dimen {
+	return g[0] + g[1]
 }
 
-/* Interface Knot. Maximum width of the glue.
- */
-func (g *Glue) MaxW() p.Dimen {
-	return g.MaxWidth
+// Interface Knot. Maximum width of the glue.
+func (g Glue) MaxW() p.Dimen {
+	return g[0] + g[2]
 }
 
-/* Interface Knot. Glue is discardable.
- */
-func (g *Glue) IsDiscardable() bool {
+// Interface Knot. Glue is discardable.
+func (g Glue) IsDiscardable() bool {
 	return true
 }
 
-var _ Knot = &Glue{}
-
-/* Create a new drop of glue with stretch and shrink.
- */
-func NewGlue(w p.Dimen, stretch p.Dimen, shrink p.Dimen) *Glue {
-	glue := NewKnot(KTGlue).(*Glue)
-	glue.Width = w
-	glue.MaxWidth = w + stretch
-	glue.MinWidth = w - shrink
-	return glue
+// Create a new drop of glue with stretch and shrink.
+func NewGlue(w p.Dimen, shrink p.Dimen, stretch p.Dimen) Glue {
+	g := Glue{w, shrink, stretch}
+	return g
 }
 
-/* Create a drop of infinitely stretchable glue.
- */
-func NewFill(f int) *Glue {
+// Create a drop of infinitely stretchable glue.
+func NewFill(f int) Glue {
 	var stretch p.Dimen
 	switch f {
 	case 2:
@@ -193,7 +194,7 @@ func NewFill(f int) *Glue {
 	default:
 		stretch = p.Fil
 	}
-	return NewGlue(0, stretch, 0)
+	return NewGlue(0, 0, stretch)
 }
 
 // --- Discretionary ---------------------------------------------------------
@@ -205,7 +206,12 @@ type Discretionary struct {
 	post    Box // post-hyphen text
 }
 
-/* Interface Knot. Prints the dimension (width) of the kern.
+// Interface Knot.
+func (d *Discretionary) Type() KnotType {
+	return KTDiscretionary
+}
+
+/* Prints the dimension (width) of the kern.
  */
 func (d *Discretionary) String() string {
 	return fmt.Sprintf("\\discretionary{%s}{%s}{%s}", d.nobreak.text,
@@ -255,6 +261,11 @@ func NewWordBox(s string) *Box {
 	return box
 }
 
+// Interface Knot.
+func (b *Box) Type() KnotType {
+	return KTBox
+}
+
 /* Interface Knot.
  */
 func (b *Box) String() string {
@@ -290,41 +301,32 @@ var _ Knot = &Box{}
 // --- Penalty ---------------------------------------------------------------
 
 // A penalty contributes to demerits, i.e. the quality index of paragraphs
-type Penalty struct {
-	P int
+type Penalty int
+
+// Interface Knot.
+func (p Penalty) Type() KnotType {
+	return KTPenalty
 }
 
-/* Interface Knot.
- */
-func (p *Penalty) String() string {
-	return fmt.Sprintf("[penalty %d]", p.P)
-}
-
-/* Interface Knot. Returns 0.
- */
-func (p *Penalty) W() p.Dimen {
+// Interface Knot. Returns 0.
+func (p Penalty) W() p.Dimen {
 	return 0
 }
 
-/* Interface Knot. Returns 0.
- */
-func (p *Penalty) MinW() p.Dimen {
+// Interface Knot. Returns 0.
+func (p Penalty) MinW() p.Dimen {
 	return 0
 }
 
-/* Interface Knot. Returns 0.
- */
-func (p *Penalty) MaxW() p.Dimen {
+// Interface Knot. Returns 0.
+func (p Penalty) MaxW() p.Dimen {
 	return 0
 }
 
-/* Interface Knot. Penalties are discardable.
- */
-func (p *Penalty) IsDiscardable() bool {
+// Interface Knot. Penalties are discardable.
+func (p Penalty) IsDiscardable() bool {
 	return true
 }
-
-var _ Knot = &Penalty{}
 
 // === Knot lists ============================================================
 
@@ -448,7 +450,7 @@ func (nl *Khipu) String() string {
 		w.WriteString("\\mlist{")
 	}
 	for _, knot := range nl.Knots {
-		w.WriteString(knot.String())
+		w.WriteString(KnotString(knot))
 	}
 	w.WriteString("}")
 	return w.String()

@@ -1,6 +1,7 @@
 package khipus
 
 import (
+	"strings"
 	"testing"
 
 	p "github.com/npillmayer/gotype/gtcore/parameters"
@@ -12,28 +13,19 @@ func TestDimen(t *testing.T) {
 	}
 }
 
-func TestKnotFactory(t *testing.T) {
-	kern := NewKnot(KTKern).(*Kern)
-	kern.Width = p.BP
-	t.Logf("kern = %s\n", kern.String())
-	if kern.W() != p.BP {
-		t.Fail()
-	}
-	glue := NewKnot(KTGlue).(*Glue)
-	glue.Width, glue.MaxWidth, glue.MinWidth = p.BP, p.BP, p.BP
-	t.Logf("glue = %s\n", glue.String())
-	if glue.W() != p.BP {
+func TestKhipu(t *testing.T) {
+	khipu := NewKhipu()
+	khipu.AppendKnot(NewKnot(KTKern)).AppendKnot(NewKnot(KTGlue))
+	khipu.AppendKnot(NewWordBox("Hello"))
+	t.Logf("khipu = %s\n", khipu.String())
+	if khipu.Length() != 3 {
 		t.Fail()
 	}
 }
 
-func TestKhipu(t *testing.T) {
-	khipu := NewKhipu()
-	khipu.AppendKnot(NewKnot(KTKern)).AppendKnot(NewKnot(KTGlue))
-	t.Logf("khipu = %s\n", khipu.String())
-	if khipu.Length() != 2 {
-		t.Fail()
-	}
+func TestBreaking1(t *testing.T) {
+	k := &DefaultKhipukamayuq{}
+	k.KnotEncode(strings.NewReader("Hello world!"), nil, nil)
 }
 
 /*
@@ -48,8 +40,8 @@ func TestGraphemeIterator2(t *testing.T) {
 func TestWordIterator1(t *testing.T) {
 	iterateOverWords(strings.NewReader("Héllô 世界"))
 }
-*/
 
 func TestUAX14(t *testing.T) {
 	UAX14LineWrap("Title(\"Héllô\") 世界", nil)
 }
+*/
