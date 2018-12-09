@@ -25,13 +25,13 @@ func TestWhitespace2(t *testing.T) {
 }
 
 func ExampleSegmenter() {
-	seg := NewSegmenter()
+	seg := NewSegmenter() // will use a SimpleWordBreaker
 	seg.Init(strings.NewReader("Hello World!"))
 	for seg.Next() {
-		fmt.Printf("segment = '%s' with penalty = %d\n", seg.Text(), seg.Penalties()[0])
+		fmt.Printf("segment: penalty = %5d for breaking after '%s'\n", seg.Penalties()[0], seg.Text())
 	}
 	// Output:
-	// segment = 'Hello' with penalty = 100
-	// segment = ' ' with penalty = -100
-	// segment = 'World!' with penalty = -1000
+	// segment: penalty =   100 for breaking after 'Hello'
+	// segment: penalty =  -100 for breaking after ' '
+	// segment: penalty = -1000 for breaking after 'World!'
 }

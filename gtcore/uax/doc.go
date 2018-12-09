@@ -158,7 +158,9 @@ negative penalty, i.e. a merit. High enough penalties signal the complete
 suppression of a break opportunity, causing the segmenter to not report
 this break.
 
-Following this concept, rule implementors are free to differentiate between
-qualities of break opportunities or to simply express a 0/1 logic.
+The UnicodeBreakers in this package (including sub-packages)
+will apply the following logic: (1) Mandatory breaks will have a penalty/merit
+of -1000. (2) Inhibited breaks will have penalty >= 1000.
+(2) Neutral breaks will have a penalty of 0.
 */
 package uax

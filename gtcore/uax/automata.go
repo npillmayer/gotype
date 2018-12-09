@@ -264,9 +264,6 @@ func (rpub *DefaultRunePublisher) PublishRuneEvent(r rune, codePointClass int) (
 
 // Function type for methods of penalty-aggregation. Aggregates all the
 // break penalties each a break-point to a single penalty value at that point.
-//
-// TODO: for segmenters: add argument for *UnicodeBreaker.
-// For unicodeBreakers: leave it this way.
 type PenaltyAggregator func(int, int) int
 
 // Interface RunePublisher

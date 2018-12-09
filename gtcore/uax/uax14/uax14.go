@@ -376,7 +376,7 @@ var (
 func p(w int) int {
 	q := 31 - w
 	r := int(math.Pow(1.3, float64(q)))
-	TC.P("rule", w).Infof("penalty %d => %d", w, r)
+	TC.P("rule", w).Debugf("penalty %d => %d", w, r)
 	return r
 }
 
