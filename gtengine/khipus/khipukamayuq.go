@@ -147,7 +147,7 @@ func HypenateTextBoxes(khipu *Khipu, pipeline *TypesettingPipeline, regs *params
 					CT.Info("   will try to hyphenate word")
 					//splitWord := HyphenateWord(word, dict, regs)
 					splitWord := dict.HyphenationString(word)
-					CT.Info("   %s", splitWord)
+					CT.Infof("   %s", splitWord)
 				}
 			}
 		}
