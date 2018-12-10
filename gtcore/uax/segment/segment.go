@@ -352,7 +352,7 @@ func (s *Segmenter) findBreakOpportunity(from int, to int) int {
 	CT.Debugf("searching for break opportunity from %d to %d: ", from, to-1)
 	for i := 0; i < to; i++ {
 		_, p0, p1 := s.deque.At(i)
-		if !tooBad(p0) || !tooBad(p1) {
+		if !tooBad(p0) || (len(s.breakers) > 1 && !tooBad(p1)) {
 			pos = i
 			break
 		}
