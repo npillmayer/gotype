@@ -15,8 +15,8 @@ func init() {
 }
 
 func TestDEPatterns(t *testing.T) {
-	//fmt.Printf("Ausnahme = %s\n", dict.HypenationString("Ausnahme"))
-	h := germanDict.HypenationString("Ausnahme")
+	//fmt.Printf("Ausnahme = %s\n", dict.HyphenationString("Ausnahme"))
+	h := germanDict.HyphenationString("Ausnahme")
 	if h != "Aus-nah-me" {
 		t.Fail()
 	}
@@ -31,19 +31,19 @@ func TestDEPatterns2(t *testing.T) {
 }
 
 func TestUSPatterns(t *testing.T) {
-	h := usDict.HypenationString("table") // exception dictionnary
+	h := usDict.HyphenationString("table") // exception dictionnary
 	if h != "ta-ble" {
 		t.Fail()
 	}
-	h = usDict.HypenationString("computer")
+	h = usDict.HyphenationString("computer")
 	if h != "com-put-er" {
 		t.Fail()
 	}
-	h = usDict.HypenationString("algorithm")
+	h = usDict.HyphenationString("algorithm")
 	if h != "al-go-rithm" {
 		t.Fail()
 	}
-	h = usDict.HypenationString("concatenation")
+	h = usDict.HyphenationString("concatenation")
 	if h != "con-cate-na-tion" {
 		t.Fail()
 	}

@@ -12,8 +12,11 @@ https://www.freedesktop.org/wiki/Software/fontconfig/
 */
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/npillmayer/gotype/gtcore/hyphenation"
 )
 
 func gtrootdir() string {
@@ -38,6 +41,25 @@ func FileResource(item string, typ string) string {
 		path = gtroot + "/lib/lua/" + item + ".lua"
 	case "font":
 		path = filepath.Join(os.Getenv("HOME"), "Library", "Fonts", item)
+	case "pattern":
+		path = "/Users/npi/prg/go/gotype/etc/hyph-en-us.tex"
 	}
 	return path
+}
+
+var dicts map[string]*hyphenation.Dictionnary
+
+func Dictionnary(loc string) *hyphenation.Dictionnary {
+	if dicts == nil {
+		dicts = make(map[string]*hyphenation.Dictionnary)
+	}
+	if dicts[loc] == nil {
+		pname := "hyph-en-us.tex"
+		d := hyphenation.LoadPatterns(FileResource("pattern", pname))
+		dicts[loc] = d
+	}
+	if dicts[loc] == nil {
+		panic(fmt.Sprintf("No dictionnary found for %s", loc))
+	}
+	return dicts[loc]
 }

@@ -2,6 +2,7 @@ package khipus
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	p "github.com/npillmayer/gotype/gtcore/parameters"
@@ -51,6 +52,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // === Knots =================================================================
 
+// Every knot has a type
 type KnotType int8
 
 // A knot has a width and may be discardable
@@ -66,13 +68,13 @@ type Knot interface {
 const (
 	KTKern KnotType = iota
 	KTGlue
-	KTBox
+	KTTextBox
 	KTPenalty
 	KTDiscretionary
+	KTUserDefined // clients should use custom knot types above this
 )
 
-/* Factory method to create a knot. Parameter is a valid knot type.
- */
+// Factory method to create a knot. Parameter is a valid knot type.
 func NewKnot(knottype KnotType) Knot {
 	switch knottype {
 	case KTKern:
@@ -85,8 +87,8 @@ func NewKnot(knottype KnotType) Knot {
 		d := &Discretionary{}
 		//d.pre = "-"
 		return d
-	case KTBox:
-		box := &Box{}
+	case KTTextBox:
+		box := &TextBox{}
 		return box
 	}
 	return nil
@@ -103,8 +105,8 @@ func KnotString(k Knot) string {
 	case KTPenalty:
 		p := k.(Penalty)
 		return fmt.Sprintf("[penalty %d]", p)
-	case KTBox:
-		s := k.(*Box)
+	case KTTextBox:
+		s := k.(*TextBox)
 		return s.String()
 	default:
 		return "yes, it is a knot"
@@ -201,9 +203,9 @@ func NewFill(f int) Glue {
 
 // A discretionary is a hyphenation opportunity
 type Discretionary struct {
-	nobreak Box // text if not hyphenated
-	pre     Box // pre-hyphen text
-	post    Box // post-hyphen text
+	nobreak TextBox // text if not hyphenated
+	pre     TextBox // pre-hyphen text
+	post    TextBox // post-hyphen text
 }
 
 // Interface Knot.
@@ -246,8 +248,8 @@ var _ Knot = &Discretionary{}
 
 // --- Boxes -----------------------------------------------------------------
 
-// A Box is a fixed unit of text
-type Box struct {
+// A TextBox is a fixed unit of text
+type TextBox struct {
 	Width  p.Dimen // width
 	Height p.Dimen // height
 	Depth  p.Dimen // depth
@@ -255,48 +257,48 @@ type Box struct {
 	//knotlist Khipu // content, if available
 }
 
-func NewWordBox(s string) *Box {
-	box := &Box{}
+func NewWordBox(s string) *TextBox {
+	box := &TextBox{}
 	box.text = s
 	return box
 }
 
 // Interface Knot.
-func (b *Box) Type() KnotType {
-	return KTBox
+func (b *TextBox) Type() KnotType {
+	return KTTextBox
 }
 
 /* Interface Knot.
  */
-func (b *Box) String() string {
+func (b *TextBox) String() string {
 	return fmt.Sprintf("\\box{%s}", b.text)
 }
 
 /* Interface Knot. Width of the glue.
  */
-func (b *Box) W() p.Dimen {
+func (b *TextBox) W() p.Dimen {
 	return b.Width
 }
 
 /* Interface Knot. Width of the glue.
  */
-func (b *Box) MinW() p.Dimen {
+func (b *TextBox) MinW() p.Dimen {
 	return b.Width
 }
 
 /* Interface Knot. Width of the glue.
  */
-func (b *Box) MaxW() p.Dimen {
+func (b *TextBox) MaxW() p.Dimen {
 	return b.Width
 }
 
 /* Interface Knot. Glue is discardable.
  */
-func (b *Box) IsDiscardable() bool {
+func (b *TextBox) IsDiscardable() bool {
 	return false
 }
 
-var _ Knot = &Box{}
+var _ Knot = &TextBox{}
 
 // --- Penalty ---------------------------------------------------------------
 
@@ -328,9 +330,9 @@ func (p Penalty) IsDiscardable() bool {
 	return true
 }
 
-// === Knot lists ============================================================
+// === Khipus ================================================================
 
-// We handle text/paragraphcs as khips, i.e. string of knots
+// We handle text/paragraphcs as khipus, i.e. string of knots
 type Khipu struct {
 	typ   int    // hlist, vlist or mlist
 	knots []Knot // array of knots of different type
@@ -346,40 +348,40 @@ const (
 /* Create a new knot list.
  */
 func NewKhipu() *Khipu {
-	nl := &Khipu{}
-	nl.knots = make([]Knot, 0, 50)
-	return nl
+	kh := &Khipu{}
+	kh.knots = make([]Knot, 0, 50)
+	return kh
 }
 
 /* Number of knots in the list.
  */
-func (nl *Khipu) Length() int {
-	return len(nl.knots)
+func (kh *Khipu) Length() int {
+	return len(kh.knots)
 }
 
 /* Append a knot at the end of the list.
  */
-func (nl *Khipu) AppendKnot(knot Knot) *Khipu {
-	nl.knots = append(nl.knots, knot)
-	return nl
+func (kh *Khipu) AppendKnot(knot Knot) *Khipu {
+	kh.knots = append(kh.knots, knot)
+	return kh
 }
 
-func (nl *Khipu) AppendKhipu(k *Khipu) *Khipu {
+func (kh *Khipu) AppendKhipu(k *Khipu) *Khipu {
 	for _, knot := range k.knots {
-		nl.knots = append(nl.knots, knot)
+		kh.knots = append(kh.knots, knot)
 	}
-	return nl
+	return kh
 }
 
 /* Return the widths of a subset of this knot list. The subset runs from
  * index [from ... to-1]. The method returns natural, maximum and minimum
  * width.
  */
-func (nl *Khipu) Measure(from, to int) (p.Dimen, p.Dimen, p.Dimen) {
+func (kh *Khipu) Measure(from, to int) (p.Dimen, p.Dimen, p.Dimen) {
 	var w, max, min p.Dimen
-	to = iMax(to, len(nl.knots))
+	to = iMax(to, len(kh.knots))
 	for i := from; i < to; i++ {
-		knot := nl.knots[i]
+		knot := kh.knots[i]
 		w += knot.W()
 		max += knot.MaxW()
 		min += knot.MinW()
@@ -392,12 +394,12 @@ func (nl *Khipu) Measure(from, to int) (p.Dimen, p.Dimen, p.Dimen) {
  * The knot set is returned as a pair (from,to) of indices.
  * If the distance cannot be covered, (-1,-1) is returned.
  */
-func (nl *Khipu) Reach(start int, distance p.Dimen) (int, int) {
-	l := len(nl.knots)
+func (kh *Khipu) Reach(start int, distance p.Dimen) (int, int) {
+	l := len(kh.knots)
 	var max, min p.Dimen
 	var from, to int = -1, -1
 	for i := start; i < l; i++ {
-		knot := nl.knots[i]
+		knot := kh.knots[i]
 		max += knot.MaxW()
 		min += knot.MinW()
 		if from == -1 && max >= distance {
@@ -412,11 +414,11 @@ func (nl *Khipu) Reach(start int, distance p.Dimen) (int, int) {
 
 /* Find the maximum width of the knots in the range [from ... to-1].
  */
-func (nl *Khipu) MaxWidth(from, to int) p.Dimen {
-	to = iMax(to, len(nl.knots))
+func (kh *Khipu) MaxWidth(from, to int) p.Dimen {
+	to = iMax(to, len(kh.knots))
 	var w p.Dimen
 	for i := from; i < to; i++ {
-		knot := nl.knots[i]
+		knot := kh.knots[i]
 		if knot.W() > w {
 			w = knot.W()
 		}
@@ -425,13 +427,13 @@ func (nl *Khipu) MaxWidth(from, to int) p.Dimen {
 }
 
 /* Find the maximum height and depth of the knots in the range [from ... to-1].
- * Only knots of type Box are considered.
+ * Only knots of type TextBox are considered.
  */
-func (nl *Khipu) MaxHeightAndDepth(from, to int) (p.Dimen, p.Dimen) {
-	to = iMax(to, len(nl.knots))
+func (kh *Khipu) MaxHeightAndDepth(from, to int) (p.Dimen, p.Dimen) {
+	to = iMax(to, len(kh.knots))
 	var h, d p.Dimen
 	for i := from; i < to; i++ {
-		if knot, ok := nl.knots[i].(*Box); ok {
+		if knot, ok := kh.knots[i].(*TextBox); ok {
 			if knot.Height > h {
 				h = knot.Height
 			}
@@ -445,10 +447,10 @@ func (nl *Khipu) MaxHeightAndDepth(from, to int) (p.Dimen, p.Dimen) {
 
 /* Debug representation of a knot list.
  */
-func (nl *Khipu) String() string {
+func (kh *Khipu) String() string {
 	buf := make([]byte, 30)
 	w := bytes.NewBuffer(buf)
-	switch nl.typ {
+	switch kh.typ {
 	case HList:
 		w.WriteString("\\hlist{")
 	case VList:
@@ -456,11 +458,52 @@ func (nl *Khipu) String() string {
 	case MList:
 		w.WriteString("\\mlist{")
 	}
-	for _, knot := range nl.knots {
+	for _, knot := range kh.knots {
 		w.WriteString(KnotString(knot))
 	}
 	w.WriteString("}")
 	return w.String()
+}
+
+// ----------------------------------------------------------------------
+
+var (
+	errorIteratatorEnd error = errors.New("Khipu-iterator at end of knot list")
+)
+
+type khipuIterator struct {
+	khipu *Khipu
+	inx   int
+}
+
+func (kh *Khipu) Iterator() *khipuIterator {
+	return &khipuIterator{kh, -1}
+}
+
+func (khit *khipuIterator) Next() bool {
+	khit.inx++
+	return khit.inx < len(khit.khipu.knots)
+}
+
+func (khit *khipuIterator) Knot() Knot {
+	k := khit.khipu.knots[khit.inx]
+	return k
+}
+
+func (khit *khipuIterator) AsGlue() Glue {
+	return khit.Knot().(Glue)
+}
+
+func (khit *khipuIterator) AsPenalty() Penalty {
+	return khit.Knot().(Penalty)
+}
+
+func (khit *khipuIterator) AsKern() Kern {
+	return khit.Knot().(Kern)
+}
+
+func (khit *khipuIterator) AsTextBox() *TextBox {
+	return khit.Knot().(*TextBox)
 }
 
 // ----------------------------------------------------------------------

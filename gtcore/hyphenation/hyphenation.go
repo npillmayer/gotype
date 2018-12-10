@@ -187,7 +187,7 @@ Example:
    "table" => "ta-ble".
 
 */
-func (dict *Dictionnary) HypenationString(word string) string {
+func (dict *Dictionnary) HyphenationString(word string) string {
 	s := dict.Hyphenate(word)
 	return strings.Join(s, "-")
 }

@@ -24,7 +24,9 @@ func TestKhipu(t *testing.T) {
 }
 
 func TestBreaking1(t *testing.T) {
-	KnotEncode(strings.NewReader("Hello world!"), nil, nil)
+	regs := p.NewTypesettingRegisters()
+	regs.Push(p.P_MINHYPHENLENGTH, 3)
+	KnotEncode(strings.NewReader("Hello world!"), nil, regs)
 }
 
 /*

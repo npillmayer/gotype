@@ -47,6 +47,7 @@ import (
 	"github.com/npillmayer/gotype/gtcore/uax/segment"
 	"github.com/npillmayer/gotype/gtcore/uax/uax14"
 	"github.com/npillmayer/gotype/gtcore/uax/uax29"
+	"github.com/npillmayer/gotype/gtlocate"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -81,17 +82,9 @@ func KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.Type
 	for seg.Next() {
 		fragment := seg.Text()
 		CT.Infof("next segment = '%s'\twith penalties %v", fragment, seg.Penalties())
-		k := CreatePartialKhipuFromSegment(seg, pipeline, regs)
+		k := createPartialKhipuFromSegment(seg, pipeline, regs)
 		if regs.N(params.P_MINHYPHENLENGTH) < params.Infty {
-			pipeline.words.Init(strings.NewReader(fragment))
-			for pipeline.words.Next() {
-				word := pipeline.words.Text()
-				CT.Infof("   word = '%s'", word)
-				if len(word) > regs.N(params.P_MINHYPHENLENGTH) {
-					CT.Info("   will try to hyphenate word")
-					//splitWord := HyphenateWord(word, dict, regs)
-				}
-			}
+			HypenateTextBoxes(k, pipeline, regs)
 		}
 		khipu.AppendKhipu(k)
 	}
@@ -107,7 +100,7 @@ func KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.Type
 // arguments is invalid.
 //
 // Returns a khipu consisting of text-boxes, glues and penalties.
-func CreatePartialKhipuFromSegment(seg *segment.Segmenter, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) *Khipu {
+func createPartialKhipuFromSegment(seg *segment.Segmenter, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) *Khipu {
 	khipu := NewKhipu()
 	if seg.Penalties()[0] < 1000 { // broken by primary breaker
 		// fragment is terminated by possible line wrap opportunity
@@ -137,6 +130,28 @@ func CreatePartialKhipuFromSegment(seg *segment.Segmenter, pipeline *Typesetting
 		}
 	}
 	return khipu
+}
+
+func HypenateTextBoxes(khipu *Khipu, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) {
+	iterator := khipu.Iterator()
+	for iterator.Next() {
+		if iterator.Knot().Type() == KTTextBox {
+			CT.Infof("knot = %v | %v", iterator.Knot(), iterator.Knot())
+			text := iterator.AsTextBox().text
+			pipeline.words.Init(strings.NewReader(text))
+			for pipeline.words.Next() {
+				word := pipeline.words.Text()
+				CT.Infof("   word = '%s'", word)
+				if len(word) > regs.N(params.P_MINHYPHENLENGTH) {
+					dict := gtlocate.Dictionnary(regs.S(params.P_LANGUAGE))
+					CT.Info("   will try to hyphenate word")
+					//splitWord := HyphenateWord(word, dict, regs)
+					splitWord := dict.HyphenationString(word)
+					CT.Info("   %s", splitWord)
+				}
+			}
+		}
+	}
 }
 
 // Check if a typesetting pipeline is correctly initialized and create
