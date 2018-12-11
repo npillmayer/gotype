@@ -84,9 +84,7 @@ func NewKnot(knottype KnotType) Knot {
 	case KTPenalty:
 		return Penalty(0)
 	case KTDiscretionary:
-		d := &Discretionary{}
-		//d.pre = "-"
-		return d
+		return Discretionary('-') // TODO should be hyphenchar of current font or -1
 	case KTTextBox:
 		box := &TextBox{}
 		return box
@@ -108,10 +106,11 @@ func KnotString(k Knot) string {
 	case KTTextBox:
 		s := k.(*TextBox)
 		return s.String()
+	case KTDiscretionary:
+		return "\\-"
 	default:
 		return "yes, it is a knot"
 	}
-	return "TODO"
 }
 
 // --- Kern ------------------------------------------------------------------
@@ -202,49 +201,32 @@ func NewFill(f int) Glue {
 // --- Discretionary ---------------------------------------------------------
 
 // A discretionary is a hyphenation opportunity
-type Discretionary struct {
-	nobreak TextBox // text if not hyphenated
-	pre     TextBox // pre-hyphen text
-	post    TextBox // post-hyphen text
-}
+type Discretionary rune
 
 // Interface Knot.
-func (d *Discretionary) Type() KnotType {
+func (d Discretionary) Type() KnotType {
 	return KTDiscretionary
 }
 
-/* Prints the dimension (width) of the kern.
- */
-func (d *Discretionary) String() string {
-	return fmt.Sprintf("\\discretionary{%s}{%s}{%s}", d.nobreak.text,
-		d.pre.text, d.post.text)
+// Interface Knot. Returns the width of the un-hyphenated text.
+func (d Discretionary) W() p.Dimen {
+	return 0
 }
 
-/* Interface Knot. Returns the width of the un-hyphenated text.
- */
-func (d *Discretionary) W() p.Dimen {
-	return d.nobreak.W()
+// Interface Knot. Returns the width of the pre-hyphen text.
+func (d Discretionary) MinW() p.Dimen {
+	return 0
 }
 
-/* Interface Knot. Returns the width of the pre-hyphen text.
- */
-func (d *Discretionary) MinW() p.Dimen {
-	return d.pre.W()
+// Interface Knot. Returns the width of the post-hyphen text.
+func (d Discretionary) MaxW() p.Dimen {
+	return 5 * p.PT // TODO
 }
 
-/* Interface Knot. Returns the width of the post-hyphen text.
- */
-func (d *Discretionary) MaxW() p.Dimen {
-	return d.post.W()
-}
-
-/* Interface Knot. Discretionaries are not discardable.
- */
-func (d *Discretionary) IsDiscardable() bool {
+// Interface Knot. Discretionaries are not discardable.
+func (d Discretionary) IsDiscardable() bool {
 	return false
 }
-
-var _ Knot = &Discretionary{}
 
 // --- Boxes -----------------------------------------------------------------
 
@@ -257,7 +239,7 @@ type TextBox struct {
 	//knotlist Khipu // content, if available
 }
 
-func NewWordBox(s string) *TextBox {
+func NewTextBox(s string) *TextBox {
 	box := &TextBox{}
 	box.text = s
 	return box
@@ -268,32 +250,27 @@ func (b *TextBox) Type() KnotType {
 	return KTTextBox
 }
 
-/* Interface Knot.
- */
+// Interface Knot.
 func (b *TextBox) String() string {
 	return fmt.Sprintf("\\box{%s}", b.text)
 }
 
-/* Interface Knot. Width of the glue.
- */
+// Interface Knot. Width of the glue.
 func (b *TextBox) W() p.Dimen {
 	return b.Width
 }
 
-/* Interface Knot. Width of the glue.
- */
+// Interface Knot. Width of the glue.
 func (b *TextBox) MinW() p.Dimen {
 	return b.Width
 }
 
-/* Interface Knot. Width of the glue.
- */
+// Interface Knot. Width of the glue.
 func (b *TextBox) MaxW() p.Dimen {
 	return b.Width
 }
 
-/* Interface Knot. Glue is discardable.
- */
+// Interface Knot. Glue is discardable.
 func (b *TextBox) IsDiscardable() bool {
 	return false
 }
@@ -345,27 +322,25 @@ const (
 	MList
 )
 
-/* Create a new knot list.
- */
+// Create a new knot list.
 func NewKhipu() *Khipu {
 	kh := &Khipu{}
 	kh.knots = make([]Knot, 0, 50)
 	return kh
 }
 
-/* Number of knots in the list.
- */
+// Number of knots in the list.
 func (kh *Khipu) Length() int {
 	return len(kh.knots)
 }
 
-/* Append a knot at the end of the list.
- */
+// Append a knot at the end of the list.
 func (kh *Khipu) AppendKnot(knot Knot) *Khipu {
 	kh.knots = append(kh.knots, knot)
 	return kh
 }
 
+// Concatenate two khipus.
 func (kh *Khipu) AppendKhipu(k *Khipu) *Khipu {
 	for _, knot := range k.knots {
 		kh.knots = append(kh.knots, knot)
@@ -373,10 +348,9 @@ func (kh *Khipu) AppendKhipu(k *Khipu) *Khipu {
 	return kh
 }
 
-/* Return the widths of a subset of this knot list. The subset runs from
- * index [from ... to-1]. The method returns natural, maximum and minimum
- * width.
- */
+// Return the widths of a subset of this knot list. The subset runs from
+// index [from ... to-1]. The method returns natural, maximum and minimum
+// width.
 func (kh *Khipu) Measure(from, to int) (p.Dimen, p.Dimen, p.Dimen) {
 	var w, max, min p.Dimen
 	to = iMax(to, len(kh.knots))
@@ -389,11 +363,10 @@ func (kh *Khipu) Measure(from, to int) (p.Dimen, p.Dimen, p.Dimen) {
 	return w, max, min
 }
 
-/* Starting from a knot (index), return a set of knots which mark possible
- * endpoints for a sequence of knots to cover a certain width distance.
- * The knot set is returned as a pair (from,to) of indices.
- * If the distance cannot be covered, (-1,-1) is returned.
- */
+// Starting from a knot (index), return a set of knots which mark possible
+// endpoints for a sequence of knots to cover a certain width distance.
+// The knot set is returned as a pair (from,to) of indices.
+// If the distance cannot be covered, (-1,-1) is returned.
 func (kh *Khipu) Reach(start int, distance p.Dimen) (int, int) {
 	l := len(kh.knots)
 	var max, min p.Dimen
@@ -412,8 +385,7 @@ func (kh *Khipu) Reach(start int, distance p.Dimen) (int, int) {
 	return from, to
 }
 
-/* Find the maximum width of the knots in the range [from ... to-1].
- */
+// Find the maximum width of the knots in the range [from ... to-1].
 func (kh *Khipu) MaxWidth(from, to int) p.Dimen {
 	to = iMax(to, len(kh.knots))
 	var w p.Dimen

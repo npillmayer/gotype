@@ -9,39 +9,30 @@ import (
 
 func TestDimen(t *testing.T) {
 	if p.BP.String() != "65536sp" {
-		t.Fail()
+		t.Error("a big point BP should be 65536 scaled points SP")
 	}
 }
 
 func TestKhipu(t *testing.T) {
 	khipu := NewKhipu()
 	khipu.AppendKnot(NewKnot(KTKern)).AppendKnot(NewKnot(KTGlue))
-	khipu.AppendKnot(NewWordBox("Hello"))
+	khipu.AppendKnot(NewTextBox("Hello"))
 	t.Logf("khipu = %s\n", khipu.String())
 	if khipu.Length() != 3 {
-		t.Fail()
+		t.Errorf("Length of khipu should be 3")
 	}
 }
 
 func TestBreaking1(t *testing.T) {
 	regs := p.NewTypesettingRegisters()
 	regs.Push(p.P_MINHYPHENLENGTH, 3)
-	KnotEncode(strings.NewReader("Hello world!"), nil, regs)
+	khipu := KnotEncode(strings.NewReader("Hello world!"), nil, regs)
+	if khipu.Length() != 9 {
+		t.Errorf("khipu length is %d, should be 9", khipu.Length())
+	}
 }
 
 /*
-func TestGraphemeIterator1(t *testing.T) {
-	_ = graphemes("Hello")
-}
-
-func TestGraphemeIterator2(t *testing.T) {
-	iterateOverGraphemes("Héllô 世界")
-}
-
-func TestWordIterator1(t *testing.T) {
-	iterateOverWords(strings.NewReader("Héllô 世界"))
-}
-
 func TestUAX14(t *testing.T) {
 	UAX14LineWrap("Title(\"Héllô\") 世界", nil)
 }

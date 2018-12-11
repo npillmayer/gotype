@@ -42,7 +42,6 @@ import (
 	"strings"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	"github.com/npillmayer/gotype/gtcore/hyphenation"
 	params "github.com/npillmayer/gotype/gtcore/parameters"
 	"github.com/npillmayer/gotype/gtcore/uax/segment"
 	"github.com/npillmayer/gotype/gtcore/uax/uax14"
@@ -110,7 +109,7 @@ func createPartialKhipuFromSegment(seg *segment.Segmenter, pipeline *Typesetting
 				p := Penalty(seg.Penalties()[1])
 				khipu.AppendKnot(g).AppendKnot(p)
 			} else {
-				b := NewWordBox(seg.Text())
+				b := NewTextBox(seg.Text())
 				p := Penalty(params.Infty)
 				khipu.AppendKnot(b).AppendKnot(p)
 			}
@@ -119,7 +118,7 @@ func createPartialKhipuFromSegment(seg *segment.Segmenter, pipeline *Typesetting
 		// fragment is start or end of a span of whitespace
 		if seg.Penalties()[1] == segment.PenaltyBeforeWhitespace {
 			// close a text box which is not a possible line wrap position
-			b := NewWordBox(seg.Text())
+			b := NewTextBox(seg.Text())
 			p := Penalty(params.Infty)
 			khipu.AppendKnot(b).AppendKnot(p)
 		} else {
@@ -132,26 +131,44 @@ func createPartialKhipuFromSegment(seg *segment.Segmenter, pipeline *Typesetting
 	return khipu
 }
 
+// Hypenate all the words in a khipu. Words are contained inside TextBox
+// knots.
+//
+// Hyphenation is governed by the typesetting registers provided.
+// If regs is nil, no hyphenation is done.
 func HypenateTextBoxes(khipu *Khipu, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) {
+	if regs == nil || khipu == nil {
+		return
+	}
+	k := make([]Knot, 0, khipu.Length())
 	iterator := khipu.Iterator()
 	for iterator.Next() {
-		if iterator.Knot().Type() == KTTextBox {
-			CT.Infof("knot = %v | %v", iterator.Knot(), iterator.Knot())
-			text := iterator.AsTextBox().text
-			pipeline.words.Init(strings.NewReader(text))
-			for pipeline.words.Next() {
-				word := pipeline.words.Text()
-				CT.Infof("   word = '%s'", word)
-				if len(word) > regs.N(params.P_MINHYPHENLENGTH) {
-					dict := gtlocate.Dictionnary(regs.S(params.P_LANGUAGE))
-					CT.Info("   will try to hyphenate word")
-					//splitWord := HyphenateWord(word, dict, regs)
-					splitWord := dict.HyphenationString(word)
-					CT.Infof("   %s", splitWord)
+		if iterator.Knot().Type() != KTTextBox { // can only hyphenate text knots
+			k = append(k, iterator.Knot())
+			continue
+		}
+		CT.Infof("knot = %v | %v", iterator.Knot(), iterator.Knot())
+		text := iterator.AsTextBox().text
+		pipeline.words.Init(strings.NewReader(text))
+		for pipeline.words.Next() {
+			word := pipeline.words.Text()
+			CT.Infof("   word = '%s'", word)
+			if len(word) < regs.N(params.P_MINHYPHENLENGTH) {
+				k = append(k, iterator.Knot())
+				continue
+			}
+			if syllables, isHyphenated := HyphenateWord(word, regs); isHyphenated {
+				for _, sy := range syllables[:len(syllables)-1] {
+					k = append(k, NewTextBox(sy))
+					k = append(k, Discretionary(regs.N(params.P_HYPHENCHAR)))
 				}
+				k = append(k, NewTextBox(syllables[len(syllables)-1]))
+			} else {
+				k = append(k, iterator.Knot())
 			}
 		}
 	}
+	khipu.knots = k
 }
 
 // Check if a typesetting pipeline is correctly initialized and create
@@ -175,16 +192,19 @@ func PrepareTypesettingPipeline(text io.Reader, pipeline *TypesettingPipeline) *
 	return pipeline
 }
 
-func HyphenateWord(word []byte, dict *hyphenation.Dictionnary, regs *params.TypesettingRegisters) {
-	// TODO if no dictionnary provided:
-	// consult language
-	// match language against list of supported dictionnaries
-	// get the closest match
-	// get the corresponding dictionnary
-	//
+func HyphenateWord(word string, regs *params.TypesettingRegisters) ([]string, bool) {
+	dict := gtlocate.Dictionnary(regs.S(params.P_LANGUAGE))
+	ok := false
 	if dict == nil {
 		panic("TODO not yet implemented: find dictionnary for language")
 	}
+	CT.Info("   will try to hyphenate word")
+	splitWord := dict.Hyphenate(word)
+	if len(splitWord) > 1 {
+		ok = true
+	}
+	CT.Infof("   %v", splitWord)
+	return splitWord, ok
 }
 
 /*
