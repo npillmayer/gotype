@@ -32,3 +32,13 @@ functionality. TeX does this by providing hooks which may be extended or
 overridden by macros. Examples are token registers like `everypar` or
 the page output routine. There is even a generic extension mechanism called
 *specials*, which can be used for all kinds of additional functionality.
+
+
+## Lua
+
+Modern versions of TeX support Lua as an extension language. Embedding Lua in an application is all the rage today, and we will follow this tradition. However, we will employ at least one Domain Specific Language: a derivate of MetaPost, which will be called (working title) "Poor Man's MetaPost" (PMMPos). MetaPost includes a powerful macro-language, which we will not support. Instead, we will make PMMPost extensible via Lua.
+
+## Parser Generators
+
+We use ANTLR V4 as our goto-tool for implementing grammars, e.g., for PMMPost.
+Additionally we will create an experimental GSS parser. It is intended for parsing Markdown, but the idea still needs some working-on.
