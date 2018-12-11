@@ -41,4 +41,4 @@ Modern versions of TeX support Lua as an extension language. Embedding Lua in an
 ## Parser Generators
 
 We use ANTLR V4 as our goto-tool for implementing grammars, e.g., for PMMPost.
-Additionally we will create an experimental GSS parser. It is intended for parsing Markdown, but the idea still needs some working-on.
+Additionally we will create an experimental GLR parser. It is intended for parsing Markdown, but the idea still needs some working-on.
