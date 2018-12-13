@@ -3,8 +3,8 @@ package dom
 import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/benbjohnson/css"
-	"github.com/npillmayer/gotype/gtcore/box"
 	"github.com/npillmayer/gotype/gtcore/dimen"
+	"github.com/npillmayer/gotype/gtengine/box"
 )
 
 // https://github.com/benbjohnson/css
