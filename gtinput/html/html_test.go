@@ -1,4 +1,4 @@
-package htmlbook
+package html
 
 import (
 	"os"

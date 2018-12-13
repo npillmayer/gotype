@@ -4,7 +4,7 @@ package parameters
 ---------------------------------------------------------------------------
 
 BSD License
-Copyright (c) 2017-2018, Norbert Pillmayer
+Copyright (c) 2017–2018, Norbert Pillmayer
 
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
@@ -12,15 +12,15 @@ modification, are permitted provided that the following conditions
 are met:
 
 1. Redistributions of source code must retain the above copyright
-   notice, this list of conditions and the following disclaimer.
+notice, this list of conditions and the following disclaimer.
 
 2. Redistributions in binary form must reproduce the above copyright
-   notice, this list of conditions and the following disclaimer in the
-   documentation and/or other materials provided with the distribution.
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
 
 3. Neither the name of Norbert Pillmayer nor the names of its contributors
-   may be used to endorse or promote products derived from this software
-   without specific prior written permission.
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
@@ -39,6 +39,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import (
 	"golang.org/x/text/unicode/bidi"
+
+	"github.com/npillmayer/gotype/gtcore/dimen"
 )
 
 type TypesettingParameter int
@@ -52,6 +54,7 @@ const (
 	P_BASELINESKIP
 	P_LINESKIP
 	P_LINESKIPLIMIT
+	P_HYPHENCHAR
 	P_HYPHENPENALTY
 	P_MINHYPHENLENGTH
 	P_STOPPER
@@ -78,14 +81,15 @@ func NewTypesettingRegisters() *TypesettingRegisters {
 }
 
 func initParameters(p *[P_STOPPER]interface{}) {
-	p[P_LANGUAGE] = "en_EN"
-	p[P_SCRIPT] = "Latin"
-	p[P_TEXTDIRECTION] = bidi.LeftToRight
-	p[P_BASELINESKIP] = 12 * PT
-	p[P_LINESKIP] = 0
-	p[P_LINESKIPLIMIT] = 0
-	p[P_HYPHENPENALTY] = 0
-	p[P_MINHYPHENLENGTH] = Infty
+	p[P_LANGUAGE] = "en_EN"               // a string
+	p[P_SCRIPT] = "Latin"                 // a string
+	p[P_TEXTDIRECTION] = bidi.LeftToRight //
+	p[P_BASELINESKIP] = 12 * dimen.PT     // dimension
+	p[P_LINESKIP] = 0                     // dimension
+	p[P_LINESKIPLIMIT] = 0                // dimension
+	p[P_HYPHENCHAR] = int('-')            // a rune
+	p[P_HYPHENPENALTY] = 0                // a numeric penalty (int)
+	p[P_MINHYPHENLENGTH] = dimen.Infty    // a numeric quantitiv (int) = # of runes
 }
 
 func (regs *TypesettingRegisters) Begingroup() {
@@ -153,6 +157,6 @@ func (regs *TypesettingRegisters) N(key TypesettingParameter) int {
 	return regs.Get(key).(int)
 }
 
-func (regs *TypesettingRegisters) D(key TypesettingParameter) Dimen {
-	return regs.Get(key).(Dimen)
+func (regs *TypesettingRegisters) D(key TypesettingParameter) dimen.Dimen {
+	return regs.Get(key).(dimen.Dimen)
 }

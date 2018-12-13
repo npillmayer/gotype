@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	p "github.com/npillmayer/gotype/gtcore/parameters"
+	"github.com/npillmayer/gotype/gtcore/dimen"
 )
 
 /*
@@ -58,9 +58,9 @@ type KnotType int8
 // A knot has a width and may be discardable
 type Knot interface {
 	Type() KnotType      // type identifier of this knot
-	W() p.Dimen          // width
-	MinW() p.Dimen       // minimum width
-	MaxW() p.Dimen       // maximum width
+	W() dimen.Dimen      // width
+	MinW() dimen.Dimen   // minimum width
+	MaxW() dimen.Dimen   // maximum width
 	IsDiscardable() bool // is this knot discardable?
 }
 
@@ -116,7 +116,7 @@ func KnotString(k Knot) string {
 // --- Kern ------------------------------------------------------------------
 
 // A kern is an unshrinkable space
-type Kern p.Dimen // fixed width
+type Kern dimen.Dimen // fixed width
 
 // Interface Knot.
 func (k Kern) Type() KnotType {
@@ -124,18 +124,18 @@ func (k Kern) Type() KnotType {
 }
 
 // Interface Knot. Width of the kern.
-func (k Kern) W() p.Dimen {
-	return p.Dimen(k)
+func (k Kern) W() dimen.Dimen {
+	return dimen.Dimen(k)
 }
 
 // Interface Knot. Kerns do not shrink.
-func (k Kern) MinW() p.Dimen {
-	return p.Dimen(k)
+func (k Kern) MinW() dimen.Dimen {
+	return dimen.Dimen(k)
 }
 
 // Interface Knot. Kerns do not stretch.
-func (k Kern) MaxW() p.Dimen {
-	return p.Dimen(k)
+func (k Kern) MaxW() dimen.Dimen {
+	return dimen.Dimen(k)
 }
 
 // Interface Knot. Kerns are discardable.
@@ -146,7 +146,7 @@ func (k Kern) IsDiscardable() bool {
 // --- Glue ------------------------------------------------------------------
 
 // A glue is a space which can shrink and expand
-type Glue [3]p.Dimen
+type Glue [3]dimen.Dimen
 
 // Interface Knot.
 func (g Glue) Type() KnotType {
@@ -159,17 +159,17 @@ func (g Glue) String() string {
 }
 
 // Interface Knot. Natural width of the glue.
-func (g Glue) W() p.Dimen {
+func (g Glue) W() dimen.Dimen {
 	return g[0]
 }
 
 // Interface Knot. Minimum width of the glue.
-func (g Glue) MinW() p.Dimen {
+func (g Glue) MinW() dimen.Dimen {
 	return g[0] + g[1]
 }
 
 // Interface Knot. Maximum width of the glue.
-func (g Glue) MaxW() p.Dimen {
+func (g Glue) MaxW() dimen.Dimen {
 	return g[0] + g[2]
 }
 
@@ -179,21 +179,21 @@ func (g Glue) IsDiscardable() bool {
 }
 
 // Create a new drop of glue with stretch and shrink.
-func NewGlue(w p.Dimen, shrink p.Dimen, stretch p.Dimen) Glue {
+func NewGlue(w dimen.Dimen, shrink dimen.Dimen, stretch dimen.Dimen) Glue {
 	g := Glue{w, shrink, stretch}
 	return g
 }
 
 // Create a drop of infinitely stretchable glue.
 func NewFill(f int) Glue {
-	var stretch p.Dimen
+	var stretch dimen.Dimen
 	switch f {
 	case 2:
-		stretch = p.Fill
+		stretch = dimen.Fill
 	case 3:
-		stretch = p.Filll
+		stretch = dimen.Filll
 	default:
-		stretch = p.Fil
+		stretch = dimen.Fil
 	}
 	return NewGlue(0, 0, stretch)
 }
@@ -209,18 +209,18 @@ func (d Discretionary) Type() KnotType {
 }
 
 // Interface Knot. Returns the width of the un-hyphenated text.
-func (d Discretionary) W() p.Dimen {
+func (d Discretionary) W() dimen.Dimen {
 	return 0
 }
 
 // Interface Knot. Returns the width of the pre-hyphen text.
-func (d Discretionary) MinW() p.Dimen {
+func (d Discretionary) MinW() dimen.Dimen {
 	return 0
 }
 
 // Interface Knot. Returns the width of the post-hyphen text.
-func (d Discretionary) MaxW() p.Dimen {
-	return 5 * p.PT // TODO
+func (d Discretionary) MaxW() dimen.Dimen {
+	return 5 * dimen.PT // TODO
 }
 
 // Interface Knot. Discretionaries are not discardable.
@@ -232,10 +232,10 @@ func (d Discretionary) IsDiscardable() bool {
 
 // A TextBox is a fixed unit of text
 type TextBox struct {
-	Width  p.Dimen // width
-	Height p.Dimen // height
-	Depth  p.Dimen // depth
-	text   string  // text, if available
+	Width  dimen.Dimen // width
+	Height dimen.Dimen // height
+	Depth  dimen.Dimen // depth
+	text   string      // text, if available
 	//knotlist Khipu // content, if available
 }
 
@@ -256,17 +256,17 @@ func (b *TextBox) String() string {
 }
 
 // Interface Knot. Width of the glue.
-func (b *TextBox) W() p.Dimen {
+func (b *TextBox) W() dimen.Dimen {
 	return b.Width
 }
 
 // Interface Knot. Width of the glue.
-func (b *TextBox) MinW() p.Dimen {
+func (b *TextBox) MinW() dimen.Dimen {
 	return b.Width
 }
 
 // Interface Knot. Width of the glue.
-func (b *TextBox) MaxW() p.Dimen {
+func (b *TextBox) MaxW() dimen.Dimen {
 	return b.Width
 }
 
@@ -288,17 +288,17 @@ func (p Penalty) Type() KnotType {
 }
 
 // Interface Knot. Returns 0.
-func (p Penalty) W() p.Dimen {
+func (p Penalty) W() dimen.Dimen {
 	return 0
 }
 
 // Interface Knot. Returns 0.
-func (p Penalty) MinW() p.Dimen {
+func (p Penalty) MinW() dimen.Dimen {
 	return 0
 }
 
 // Interface Knot. Returns 0.
-func (p Penalty) MaxW() p.Dimen {
+func (p Penalty) MaxW() dimen.Dimen {
 	return 0
 }
 
@@ -351,8 +351,8 @@ func (kh *Khipu) AppendKhipu(k *Khipu) *Khipu {
 // Return the widths of a subset of this knot list. The subset runs from
 // index [from ... to-1]. The method returns natural, maximum and minimum
 // width.
-func (kh *Khipu) Measure(from, to int) (p.Dimen, p.Dimen, p.Dimen) {
-	var w, max, min p.Dimen
+func (kh *Khipu) Measure(from, to int) (dimen.Dimen, dimen.Dimen, dimen.Dimen) {
+	var w, max, min dimen.Dimen
 	to = iMax(to, len(kh.knots))
 	for i := from; i < to; i++ {
 		knot := kh.knots[i]
@@ -367,9 +367,9 @@ func (kh *Khipu) Measure(from, to int) (p.Dimen, p.Dimen, p.Dimen) {
 // endpoints for a sequence of knots to cover a certain width distance.
 // The knot set is returned as a pair (from,to) of indices.
 // If the distance cannot be covered, (-1,-1) is returned.
-func (kh *Khipu) Reach(start int, distance p.Dimen) (int, int) {
+func (kh *Khipu) Reach(start int, distance dimen.Dimen) (int, int) {
 	l := len(kh.knots)
-	var max, min p.Dimen
+	var max, min dimen.Dimen
 	var from, to int = -1, -1
 	for i := start; i < l; i++ {
 		knot := kh.knots[i]
@@ -386,9 +386,9 @@ func (kh *Khipu) Reach(start int, distance p.Dimen) (int, int) {
 }
 
 // Find the maximum width of the knots in the range [from ... to-1].
-func (kh *Khipu) MaxWidth(from, to int) p.Dimen {
+func (kh *Khipu) MaxWidth(from, to int) dimen.Dimen {
 	to = iMax(to, len(kh.knots))
-	var w p.Dimen
+	var w dimen.Dimen
 	for i := from; i < to; i++ {
 		knot := kh.knots[i]
 		if knot.W() > w {
@@ -401,9 +401,9 @@ func (kh *Khipu) MaxWidth(from, to int) p.Dimen {
 /* Find the maximum height and depth of the knots in the range [from ... to-1].
  * Only knots of type TextBox are considered.
  */
-func (kh *Khipu) MaxHeightAndDepth(from, to int) (p.Dimen, p.Dimen) {
+func (kh *Khipu) MaxHeightAndDepth(from, to int) (dimen.Dimen, dimen.Dimen) {
 	to = iMax(to, len(kh.knots))
-	var h, d p.Dimen
+	var h, d dimen.Dimen
 	for i := from; i < to; i++ {
 		if knot, ok := kh.knots[i].(*TextBox); ok {
 			if knot.Height > h {

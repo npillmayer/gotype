@@ -42,6 +42,7 @@ import (
 	"strings"
 
 	"github.com/npillmayer/gotype/gtcore/config/tracing"
+	"github.com/npillmayer/gotype/gtcore/dimen"
 	params "github.com/npillmayer/gotype/gtcore/parameters"
 	"github.com/npillmayer/gotype/gtcore/uax/segment"
 	"github.com/npillmayer/gotype/gtcore/uax/uax14"
@@ -82,7 +83,7 @@ func KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.Type
 		fragment := seg.Text()
 		CT.Infof("next segment = '%s'\twith penalties %v", fragment, seg.Penalties())
 		k := createPartialKhipuFromSegment(seg, pipeline, regs)
-		if regs.N(params.P_MINHYPHENLENGTH) < params.Infty {
+		if regs.N(params.P_MINHYPHENLENGTH) < dimen.Infty {
 			HypenateTextBoxes(k, pipeline, regs)
 		}
 		khipu.AppendKhipu(k)
@@ -105,12 +106,12 @@ func createPartialKhipuFromSegment(seg *segment.Segmenter, pipeline *Typesetting
 		// fragment is terminated by possible line wrap opportunity
 		if seg.Penalties()[1] < 1000 { // broken by secondary breaker, too
 			if seg.Penalties()[1] == segment.PenaltyAfterWhitespace {
-				g := NewGlue(5*params.PT, 1*params.PT, 2*params.PT)
+				g := NewGlue(5*dimen.PT, 1*dimen.PT, 2*dimen.PT)
 				p := Penalty(seg.Penalties()[1])
 				khipu.AppendKnot(g).AppendKnot(p)
 			} else {
 				b := NewTextBox(seg.Text())
-				p := Penalty(params.Infty)
+				p := Penalty(dimen.Infty)
 				khipu.AppendKnot(b).AppendKnot(p)
 			}
 		}
@@ -119,11 +120,11 @@ func createPartialKhipuFromSegment(seg *segment.Segmenter, pipeline *Typesetting
 		if seg.Penalties()[1] == segment.PenaltyBeforeWhitespace {
 			// close a text box which is not a possible line wrap position
 			b := NewTextBox(seg.Text())
-			p := Penalty(params.Infty)
+			p := Penalty(dimen.Infty)
 			khipu.AppendKnot(b).AppendKnot(p)
 		} else {
 			// close a span of whitespace
-			g := NewGlue(5*params.PT, 1*params.PT, 2*params.PT)
+			g := NewGlue(5*dimen.PT, 1*dimen.PT, 2*dimen.PT)
 			p := Penalty(seg.Penalties()[1])
 			khipu.AppendKnot(g).AppendKnot(p)
 		}

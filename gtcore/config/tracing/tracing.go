@@ -35,6 +35,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 Tracing: TODO clean this up. This is only a first draft to get
 things going.
 
+https://github.com/davecgh/go-spew  // TODO
+
 */
 package tracing
 

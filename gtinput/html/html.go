@@ -1,4 +1,4 @@
-package htmlbook
+package html
 
 // github.com/andybalholm/cascadia
 // github.com/PuerkitoBio/goquery

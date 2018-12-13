@@ -1,6 +1,10 @@
 package gtlocate
 
 /*
+This is currentyl just a stand-in for a real implementation.
+It grows whenever I add some functionality needed for tests. Everything here
+is quick and dirty right now.
+
 TODO for fonts:
 
 - use "fontconfig" CLIs (via shell):
@@ -42,7 +46,7 @@ func FileResource(item string, typ string) string {
 	case "font":
 		path = filepath.Join(os.Getenv("HOME"), "Library", "Fonts", item)
 	case "pattern":
-		path = "/Users/npi/prg/go/gotype/etc/hyph-en-us.tex"
+		path = "/Users/npi/prg/go/gotype/etc/" + item
 	}
 	return path
 }
@@ -55,7 +59,7 @@ func Dictionnary(loc string) *hyphenation.Dictionnary {
 	}
 	if dicts[loc] == nil {
 		pname := "hyph-en-us.tex"
-		d := hyphenation.LoadPatterns(FileResource("pattern", pname))
+		d := hyphenation.LoadPatterns(FileResource(pname, "pattern"))
 		dicts[loc] = d
 	}
 	if dicts[loc] == nil {
