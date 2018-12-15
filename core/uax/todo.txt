@@ -1,0 +1,13 @@
+X  RI-variable
+X  Setup Classes in Init() au0erhalb if(...)
+X  Package unicode -> uax
+X  RunePublisher et al in uax herausziehen
+X  Code für unicode tests in ucd ziehen
+X  unicode test files in current dir pro uax... ziehen
+X  cont_... -> finish_...  und cont2_... -> cont_...
+X  fix queue: gap-- bzw gap++ immer dann wenn swap erfolgte
+   Bei graphemes penalties umbenennen
+   bei graphemes Example einbauen
+
+   Wie sieht's mit UAX#14 aus?
+   Wie sieht's mit Tailoring aus? Class-Remapping, Rules+, Rules-
