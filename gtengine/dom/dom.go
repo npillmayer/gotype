@@ -4,7 +4,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/benbjohnson/css"
 	"github.com/npillmayer/gotype/gtcore/dimen"
-	"github.com/npillmayer/gotype/gtengine/box"
+	"github.com/npillmayer/gotype/gtengine/dom/box"
 )
 
 // https://github.com/benbjohnson/css
@@ -46,4 +46,8 @@ type Page struct {
 	marginsLeft  dimen.Rect
 	marginsRight dimen.Rect
 	marginBoxes  []*box.StyledBox
+}
+
+type Layout struct {
+    //
 }
