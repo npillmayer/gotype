@@ -53,8 +53,8 @@ package box
 import (
 	"image/color"
 
-	"github.com/npillmayer/gotype/gtcore/dimen"
-	"github.com/npillmayer/gotype/gtcore/font"
+	"github.com/npillmayer/gotype/core/dimen"
+	"github.com/npillmayer/gotype/core/font"
 )
 
 /*

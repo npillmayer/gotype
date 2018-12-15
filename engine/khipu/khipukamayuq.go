@@ -41,12 +41,12 @@ import (
 	"io"
 	"strings"
 
-	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	"github.com/npillmayer/gotype/gtcore/dimen"
-	params "github.com/npillmayer/gotype/gtcore/parameters"
-	"github.com/npillmayer/gotype/gtcore/uax/segment"
-	"github.com/npillmayer/gotype/gtcore/uax/uax14"
-	"github.com/npillmayer/gotype/gtcore/uax/uax29"
+	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/dimen"
+	params "github.com/npillmayer/gotype/core/parameters"
+	"github.com/npillmayer/gotype/core/uax/segment"
+	"github.com/npillmayer/gotype/core/uax/uax14"
+	"github.com/npillmayer/gotype/core/uax/uax29"
 	"github.com/npillmayer/gotype/gtlocate"
 	"golang.org/x/text/unicode/norm"
 )
@@ -58,7 +58,7 @@ We will call these kinds of items "khipus".
 */
 
 // We trace to the core-tracer.
-var CT tracing.Trace = tracing.CoreTracer
+var CT tracing.Trace
 
 type TypesettingPipeline struct {
 	input       io.RuneReader
@@ -199,7 +199,7 @@ func HyphenateWord(word string, regs *params.TypesettingRegisters) ([]string, bo
 	if dict == nil {
 		panic("TODO not yet implemented: find dictionnary for language")
 	}
-	CT.Info("   will try to hyphenate word")
+	CT.Infof("   will try to hyphenate word")
 	splitWord := dict.Hyphenate(word)
 	if len(splitWord) > 1 {
 		ok = true

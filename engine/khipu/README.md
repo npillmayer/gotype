@@ -1,4 +1,4 @@
-Package khipus is about encoding text into typesetting items.
+Package khipu is about encoding text into typesetting items.
 
 # Metaphor
 

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/npillmayer/gotype/gtcore/dimen"
+	"github.com/npillmayer/gotype/core/dimen"
 )
 
 /*

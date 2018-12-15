@@ -1,7 +1,6 @@
-package gtlocate
-
 /*
 This is currentyl just a stand-in for a real implementation.
+
 It grows whenever I add some functionality needed for tests. Everything here
 is quick and dirty right now.
 
@@ -14,13 +13,14 @@ https://www.freedesktop.org/wiki/Software/fontconfig/
 
 - use some webfont library interface
 */
+package gtlocate
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/npillmayer/gotype/gtcore/hyphenation"
+	"github.com/npillmayer/gotype/core/hyphenation"
 )
 
 func gtrootdir() string {

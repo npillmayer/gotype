@@ -3,8 +3,8 @@ package dom
 import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/benbjohnson/css"
-	"github.com/npillmayer/gotype/gtcore/dimen"
-	"github.com/npillmayer/gotype/gtengine/dom/box"
+	"github.com/npillmayer/gotype/core/dimen"
+	"github.com/npillmayer/gotype/engine/dom/box"
 )
 
 // https://github.com/benbjohnson/css
@@ -49,5 +49,5 @@ type Page struct {
 }
 
 type Layout struct {
-    //
+	//
 }

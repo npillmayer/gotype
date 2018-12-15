@@ -1,5 +1,5 @@
 /*
-Package khipus is about encoding text into typesetting items.
+Package khipu is about encoding text into typesetting items.
 
 "Khipu were recording devices fashioned
 from strings historically used by a number of cultures in the region of
