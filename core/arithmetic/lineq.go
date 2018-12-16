@@ -6,7 +6,6 @@ import (
 
 	"github.com/emirpasic/gods/maps"
 	"github.com/emirpasic/gods/maps/treemap"
-	"github.com/npillmayer/gotype/core/config"
 	numeric "github.com/shopspring/decimal"
 )
 
@@ -87,7 +86,7 @@ func CreateLinEqSolver() *LinEqSolver {
 	leq := LinEqSolver{
 		dependents:       treemap.NewWithIntComparator(), // sorted map
 		solved:           treemap.NewWithIntComparator(), // sorted map
-		showdependencies: config.IsSet("showdependencies"),
+		showdependencies: false,
 	}
 	return &leq
 }
