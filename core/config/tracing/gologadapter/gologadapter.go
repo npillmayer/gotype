@@ -6,7 +6,7 @@ for such a low-level task will create too tight a coupling—more abstract
 classes/packages are infected with log classes/packages.
 
 Sub-packages of tracing implement concrete tracers. Package
-logrus uses the default Go logging mechanism.
+gologadapter uses the default Go logging mechanism.
 
 BSD License
 
@@ -84,7 +84,8 @@ func (t *Tracer) P(key string, val interface{}) tracing.Trace {
 }
 
 // Interface Trace
-func (t *Tracer) output(s string, args ...interface{}) {
+func (t *Tracer) output(l tracing.TraceLevel, s string, args ...interface{}) {
+	t.log.SetPrefix(logLevelPrefix[int(l)])
 	if t.p != "" {
 		t.log.Println(fmt.Sprintf(t.p+s, args...))
 		t.p = ""
@@ -98,7 +99,7 @@ func (t *Tracer) Debugf(s string, args ...interface{}) {
 	if t.level < tracing.LevelDebug {
 		return
 	}
-	t.output(s, args...)
+	t.output(tracing.LevelDebug, s, args...)
 }
 
 // Interface Trace
@@ -106,7 +107,7 @@ func (t *Tracer) Infof(s string, args ...interface{}) {
 	if t.level < tracing.LevelInfo {
 		return
 	}
-	t.output(s, args...)
+	t.output(tracing.LevelInfo, s, args...)
 }
 
 // Interface Trace
@@ -114,7 +115,7 @@ func (t *Tracer) Errorf(s string, args ...interface{}) {
 	if t.level < tracing.LevelError {
 		return
 	}
-	t.output(s, args...)
+	t.output(tracing.LevelError, s, args...)
 }
 
 // Interface Trace
