@@ -88,8 +88,8 @@ import (
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	sll "github.com/emirpasic/gods/lists/singlylinkedlist"
-	"github.com/npillmayer/gotype/gtcore/arithmetic"
-	"github.com/npillmayer/gotype/gtcore/config/tracing"
+	"github.com/npillmayer/gotype/core/arithmetic"
+	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables/grammar"
 	dec "github.com/shopspring/decimal"
@@ -245,7 +245,7 @@ func NewPMMPVarDecl(nm string) runtime.Symbol {
 	sym.Name = nm
 	sym.Symtype = Undefined
 	sym.BaseTag = sym // this pointer should never be nil
-	T.P("decl", sym.GetFullName()).Debug("atomic variable type declaration created")
+	T.P("decl", sym.GetFullName()).Debugf("atomic variable type declaration created")
 	return sym
 }
 
@@ -263,7 +263,7 @@ func CreatePMMPVarDecl(nm string, tp int, parent *PMMPVarDecl) *PMMPVarDecl {
 			for ch != nil { // as long as there are children, i.e. partials
 				if (tp == ComplexSuffix && ch.GetName() == nm) ||
 					(ch.GetType() == ComplexArray && tp == ComplexArray) {
-					T.P("decl", ch.GetFullName()).Debug("variable type already declared")
+					T.P("decl", ch.GetFullName()).Debugf("variable type already declared")
 					return ch // we're done
 				}
 				if c := ch.GetSibling(); c != nil { // move ch = ch->sibling
@@ -276,7 +276,7 @@ func CreatePMMPVarDecl(nm string, tp int, parent *PMMPVarDecl) *PMMPVarDecl {
 	}
 	sym := NewPMMPVarDecl(nm).(*PMMPVarDecl) // not found, create a new one
 	sym.Symtype = tp
-	T.P("decl", sym.GetFullName()).Debug("variable type declaration created")
+	T.P("decl", sym.GetFullName()).Debugf("variable type declaration created")
 	if parent != nil {
 		sym.AppendToVarDecl(parent)
 	}
@@ -412,7 +412,7 @@ func CreatePMMPPairTypeVarRef(decl *PMMPVarDecl, value interface{}, indices []de
 // Symbol-creator for symbol table: creates tag symbol.
 // Do not use this for pair variables !!
 func NewPMMPVarRef(tagName string) runtime.Symbol {
-	T.P("tag", tagName).Debug("tag for variable reference created")
+	T.P("tag", tagName).Debugf("tag for variable reference created")
 	v := &PMMPVarRef{}
 	v.Id = newVarSerial()
 	return v
@@ -479,7 +479,7 @@ func (v *PMMPVarRef) IsPair() bool {
 // Get the x-part of a pair variable
 func (v *PMMPVarRef) XPart() *PairPartRef {
 	if !v.IsPair() {
-		T.P("var", v.GetName()).Error("cannot access x-part of non-pair")
+		T.P("var", v.GetName()).Errorf("cannot access x-part of non-pair")
 		return nil
 	}
 	return v.GetSibling().(*PairPartRef)
@@ -488,7 +488,7 @@ func (v *PMMPVarRef) XPart() *PairPartRef {
 // Get the y-part of a pair variable
 func (v *PMMPVarRef) YPart() *PairPartRef {
 	if !v.IsPair() {
-		T.P("var", v.GetName()).Error("cannot access y-part of non-pair")
+		T.P("var", v.GetName()).Errorf("cannot access y-part of non-pair")
 		return nil
 	}
 	return v.GetFirstChild().(*PairPartRef)

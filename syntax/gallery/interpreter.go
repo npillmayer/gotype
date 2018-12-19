@@ -42,8 +42,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import (
 	"github.com/antlr/antlr4/runtime/Go/antlr"
-	arithm "github.com/npillmayer/gotype/gtcore/arithmetic"
-	"github.com/npillmayer/gotype/gtcore/polygon"
+	arithm "github.com/npillmayer/gotype/core/arithmetic"
+	"github.com/npillmayer/gotype/core/polygon"
 	"github.com/npillmayer/gotype/syntax/corelang"
 	"github.com/npillmayer/gotype/syntax/gallery/grammar"
 	"github.com/npillmayer/gotype/syntax/runtime"
@@ -223,7 +223,7 @@ func (pl *GalleryParseListener) getAnnotation(node interface{}) (*runtime.Scope,
 // Print out a summary of all the scopes and symbols collected up to now.
 func (pl *GalleryParseListener) Summary() {
 	pl.rt.ExprStack.Summary()
-	T.Info("Summary of symbols:")
+	T.Infof("Summary of symbols:")
 	for _, annot := range pl.annotations {
 		scope := annot.scope
 		if scope != nil {
@@ -243,7 +243,7 @@ func (pl *GalleryParseListener) VisitErrorNode(node antlr.ErrorNode) {
 
 /* Helper to trace terminal symbols. Just traces to T.
 func (pl *GalleryParseListener) VisitTerminal(node antlr.TerminalNode) {
-	//T.Debug("@@@ terminal: %s  = %v", node.GetText(), node.GetSymbol())
+	//T.Debugf("@@@ terminal: %s  = %v", node.GetText(), node.GetSymbol())
 }
 */
 
@@ -264,7 +264,7 @@ func (pl *GalleryParseListener) ExitTypedecl(ctx *grammar.TypedeclContext) {
 	mftype := variables.TypeFromString(ctx.TYPE().GetText())
 	if mftype == variables.Undefined {
 		T.Errorf("unknown type: %s", ctx.TYPE().GetText())
-		T.Error("assuming type numeric")
+		T.Errorf("assuming type numeric")
 		mftype = variables.NumericType
 	}
 	for _, tag := range ctx.AllTAG() { // iterator over tag list
@@ -354,7 +354,7 @@ func (pl *GalleryParseListener) ExitAssignment(ctx *grammar.AssignmentContext) {
 	e, _ := pl.rt.ExprStack.Pop()       // the expression value
 	lvalue, ok := pl.rt.ExprStack.Pop() // the lvalue
 	if !ok || !lvalue.IsValid() {
-		T.Debug("operands broken for assignment")
+		T.Debugf("operands broken for assignment")
 	} else {
 		if v := corelang.GetVariableFromExpression(pl.rt, lvalue); v != nil {
 			varname := v.GetName()
@@ -442,8 +442,9 @@ func (pl *GalleryParseListener) ExitShowcmd(ctx *grammar.ShowcmdContext) {
 		t := tag.GetText()
 		T.P("tag", t).Infof("## show %s;", t)
 		output := corelang.Showvariable(pl.rt, t)
-		writer := T.Writer()
-		writer.Write([]byte(output))
+		//writer := T.Writer()
+		//writer.Write([]byte(output))
+		T.Infof(output)
 	}
 }
 
@@ -475,7 +476,7 @@ func (pl *GalleryParseListener) ExitExpression(ctx *grammar.ExpressionContext) {
 		case "difference":
 			p = polygon.Union(p1, p2)
 		default:
-			T.P("op", ctx.PATHCLIPOP().GetText()).Error("unknown clipping operation")
+			T.P("op", ctx.PATHCLIPOP().GetText()).Errorf("unknown clipping operation")
 			p = p1
 		}
 		pl.rt.ExprStack.Push(runtime.NewOtherExpression(p))
@@ -598,7 +599,7 @@ func (pl *GalleryParseListener) transformPair(e *runtime.ExprNode, transforms []
 		case "scaled":
 			_, isconst := parameters[i].GetConstNumeric()
 			if !isknown && !isconst {
-				T.Error("not implemented: <unknown pair> scaled <unknown>")
+				T.Errorf("not implemented: <unknown pair> scaled <unknown>")
 			} else {
 				pl.rt.ExprStack.Push(parameters[i])
 				pl.rt.ExprStack.MultiplyTOS2OS()
@@ -607,7 +608,7 @@ func (pl *GalleryParseListener) transformPair(e *runtime.ExprNode, transforms []
 		case "shifted":
 			_, isconst := parameters[i].GetConstPair()
 			if !isknown && !isconst {
-				T.Error("not implemented: <unknown pair> shifted <unknown>")
+				T.Errorf("not implemented: <unknown pair> shifted <unknown>")
 			} else {
 				pl.rt.ExprStack.Push(parameters[i])
 				pl.rt.ExprStack.AddTOS2OS()
@@ -616,7 +617,7 @@ func (pl *GalleryParseListener) transformPair(e *runtime.ExprNode, transforms []
 		case "rotated":
 			_, isconst := parameters[i].GetConstNumeric()
 			if !isconst {
-				T.Error("not implemented: rotated <unknown>")
+				T.Errorf("not implemented: rotated <unknown>")
 			} else {
 				pl.rt.ExprStack.Push(parameters[i])
 				pl.rt.ExprStack.Rotate2OSbyTOS()
@@ -638,14 +639,14 @@ func (pl *GalleryParseListener) transformPath(e *runtime.ExprNode, transforms []
 		case "scaled":
 			_, isconst := parameters[i].GetConstNumeric()
 			if !isconst {
-				T.Error("not implemented: <path> scaled <unknown>")
+				T.Errorf("not implemented: <path> scaled <unknown>")
 			} else {
-				T.Error("not implemented: scaling of <path>")
+				T.Errorf("not implemented: scaling of <path>")
 			}
 		case "shifted":
 			pr, isconst := parameters[i].GetConstPair()
 			if !isconst {
-				T.Error("not implemented: <path> shifted <unknown>")
+				T.Errorf("not implemented: <path> shifted <unknown>")
 			} else {
 				a := arithm.Translation(pr)
 				affinetr = affinetr.Combine(a)
@@ -653,7 +654,7 @@ func (pl *GalleryParseListener) transformPath(e *runtime.ExprNode, transforms []
 		case "rotated":
 			angle, isconst := parameters[i].GetConstNumeric()
 			if !isconst {
-				T.Error("not implemented: <path> rotated <unknown>")
+				T.Errorf("not implemented: <path> rotated <unknown>")
 			} else {
 				a := arithm.Rotation(angle.Mul(arithm.Deg2Rad))
 				affinetr = affinetr.Combine(a)
@@ -677,7 +678,7 @@ sub-system.
 */
 func (pl *GalleryParseListener) ExitFuncatom(ctx *grammar.FuncatomContext) {
 	fname := ctx.MATHFUNC().GetText()
-	T.P("func", fname).Debug("applying function")
+	T.P("func", fname).Debugf("applying function")
 	e, ok := pl.rt.ExprStack.Pop()
 	if ok {
 		var val interface{}
@@ -685,12 +686,12 @@ func (pl *GalleryParseListener) ExitFuncatom(ctx *grammar.FuncatomContext) {
 		switch etype {
 		case variables.NumericType:
 			if val, ok = e.GetConstNumeric(); !ok {
-				T.P("func", fname).Error("not implemented: f(<unknown numeric>)")
+				T.P("func", fname).Errorf("not implemented: f(<unknown numeric>)")
 				val = nil
 			}
 		case variables.PairType:
 			if val, ok = e.GetConstPair(); !ok {
-				T.P("func", fname).Error("not implemented: f(<unknown pair>)")
+				T.P("func", fname).Errorf("not implemented: f(<unknown pair>)")
 				val = nil
 			}
 		case variables.PathType:
@@ -771,7 +772,7 @@ func (pl *GalleryParseListener) ExitDecimal(ctx *grammar.DecimalContext) {
 		//num = num.Mul(corelang.Unit2numeric(u.GetText())) // multiply with unit value
 		num = corelang.ScaleDimension(num, u.GetText())
 	}
-	T.P("token", num.String()).Debug("numeric token")
+	T.P("token", num.String()).Debugf("numeric token")
 	pl.rt.ExprStack.PushConstant(num) // put decimal number on expression stack
 }
 
@@ -789,7 +790,7 @@ TODO check for @#
 */
 func (pl *GalleryParseListener) ExitVariable(ctx *grammar.VariableContext) {
 	t := ctx.GetText()
-	T.P("var", t).Debug("variable, verbose")
+	T.P("var", t).Debugf("variable, verbose")
 	var vref *variables.PMMPVarRef
 	if t == "whatever" {
 		vref = corelang.Whatever(pl.rt)
@@ -895,11 +896,11 @@ Numeric prefix for a variable, e.g., "3x", "1/2y.r", "0.25z".
 func (pl *GalleryParseListener) ExitNumtokenatom(ctx *grammar.NumtokenatomContext) {
 	numbers := ctx.AllDECIMALTOKEN()
 	num1, _ := dec.NewFromString(numbers[0].GetText())
-	T.P("token", num1.String()).Debug("numeric token")
+	T.P("token", num1.String()).Debugf("numeric token")
 	pl.rt.ExprStack.PushConstant(num1) // put decimal number on expression stack
 	if len(numbers) > 1 {
 		num2, _ := dec.NewFromString(numbers[1].GetText())
-		T.P("token", num2.String()).Debug("numeric token")
+		T.P("token", num2.String()).Debugf("numeric token")
 		pl.rt.ExprStack.PushConstant(num2)
 		pl.rt.ExprStack.DivideTOS2OS()
 	}

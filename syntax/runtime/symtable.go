@@ -175,7 +175,7 @@ func (s *StdSymbol) AppendChild(ch TreeNode) TreeNode {
 			// do nothing
 		}
 		next.SetSibling(ch)
-		T.Debug("appending child: %s\n", next.GetSibling())
+		T.Debugf("appending child: %s\n", next.GetSibling())
 	}
 	return s
 }
@@ -380,7 +380,7 @@ func (scst *ScopeTree) PushNewScope(nm string, symcreator func(string) Symbol) *
 		scst.ScopeBase = newsc // make new scope anchor
 	}
 	scst.ScopeTOS = newsc // new scope now TOS
-	T.P("scope", newsc.Name).Debug("pushing new scope")
+	T.P("scope", newsc.Name).Debugf("pushing new scope")
 	return newsc
 }
 

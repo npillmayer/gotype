@@ -2,8 +2,8 @@ package gallery
 
 import (
 	dll "github.com/emirpasic/gods/lists/doublylinkedlist"
-	arithm "github.com/npillmayer/gotype/gtcore/arithmetic"
-	"github.com/npillmayer/gotype/gtcore/polygon"
+	arithm "github.com/npillmayer/gotype/core/arithmetic"
+	"github.com/npillmayer/gotype/core/polygon"
 )
 
 /*
@@ -96,7 +96,7 @@ func (pb *PolygonBuilder) MakePolygon() polygon.Polygon {
 			if issubp && subpolyg != nil {
 				pb.polyg.AppendSubpath(subpolyg)
 			} else {
-				T.Error("strange polygon fragment detected, ignoring")
+				T.Errorf("strange polygon fragment detected, ignoring")
 			}
 		}
 	}

@@ -132,7 +132,7 @@ func (mfst *MemoryFrameStack) PushNewMemoryFrame(nm string, scope *Scope) *Dynam
 		newmf.SymbolTable = symtab
 	}
 	mfst.memoryFrameTOS = newmf // new frame now TOS
-	T.P("mem", newmf.Name).Debug("pushing new memory frame")
+	T.P("mem", newmf.Name).Debugf("pushing new memory frame")
 	return newmf
 }
 

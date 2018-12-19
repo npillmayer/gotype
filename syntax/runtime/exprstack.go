@@ -5,7 +5,7 @@ import (
 	"math"
 
 	"github.com/emirpasic/gods/stacks/linkedliststack"
-	arithm "github.com/npillmayer/gotype/gtcore/arithmetic"
+	arithm "github.com/npillmayer/gotype/core/arithmetic"
 	dec "github.com/shopspring/decimal"
 )
 
@@ -488,7 +488,7 @@ func (es *ExprStack) Size() int {
 // Internal helper: dump expression stack. This is printed to the trace
 // with level=DEBUG.
 func (es *ExprStack) Dump() {
-	T.P("size", es.Size()).Debug("Expression Stack, TOS first:")
+	T.P("size", es.Size()).Debugf("Expression Stack, TOS first:")
 	it := es.stack.Iterator()
 	for it.Next() {
 		e := it.Value().(*ExprNode)
@@ -576,7 +576,7 @@ func (es *ExprStack) AddTOS2OS() {
 	e1, _ = es.Pop()
 	if e1.IsPair {
 		if !e2.IsPair {
-			T.Error("type mismatch: <pair> + <numeric>")
+			T.Errorf("type mismatch: <pair> + <numeric>")
 			panic("not implemented: <pair> + <numeric>")
 		}
 		px := e1.XPolyn.Add(e2.XPolyn, false)
@@ -584,7 +584,7 @@ func (es *ExprStack) AddTOS2OS() {
 		e = NewPairExpression(px, py)
 	} else {
 		if e2.IsPair {
-			T.Error("type mismatch: <numeric> + <pair>")
+			T.Errorf("type mismatch: <numeric> + <pair>")
 			panic("not implemented: <numeric> + <pair>")
 		}
 		px := e1.XPolyn.Add(e2.XPolyn, false)
@@ -603,7 +603,7 @@ func (es *ExprStack) SubtractTOS2OS() {
 	e1, _ = es.Pop()
 	if e1.IsPair {
 		if !e2.IsPair {
-			T.Error("type mismatch: <pair> - <numeric>")
+			T.Errorf("type mismatch: <pair> - <numeric>")
 			panic("not implemented: <pair> - <numeric>")
 		}
 		px := e1.XPolyn.Subtract(e2.XPolyn, false)
@@ -611,7 +611,7 @@ func (es *ExprStack) SubtractTOS2OS() {
 		e = NewPairExpression(px, py)
 	} else {
 		if e2.IsPair {
-			T.Error("type mismatch: <numeric> - <pair>")
+			T.Errorf("type mismatch: <numeric> - <pair>")
 			panic("not implemented: <numeric> - <pair>")
 		}
 		px := e1.XPolyn.Subtract(e2.XPolyn, false)

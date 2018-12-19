@@ -3,7 +3,7 @@ package corelang
 import (
 	"fmt"
 
-	"github.com/npillmayer/gotype/gtcore/arithmetic"
+	"github.com/npillmayer/gotype/core/arithmetic"
 	"github.com/npillmayer/gotype/gtlocate"
 	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables"
@@ -38,10 +38,10 @@ type Scripting struct {
 func NewScripting(rt *runtime.Runtime) *Scripting {
 	luastate := lua.NewState()
 	if luastate == nil {
-		T.Error("failed to create Lua scripting subsystem")
+		T.Errorf("failed to create Lua scripting subsystem")
 		return nil
 	}
-	T.Info("Loading initial Lua scripts")
+	T.Infof("Loading initial Lua scripts")
 	hostlang := gtlocate.FileResource("hostlang", "lua")
 	T.Infof("- %s", hostlang)
 	luastate.DoFile(hostlang)
@@ -52,7 +52,7 @@ func NewScripting(rt *runtime.Runtime) *Scripting {
 	scr.registerPairType()
 	scr.hooks = make(map[string]lua.LGFunction)
 	scr.RegisterHook("trace", trace)
-	T.Info("Scripting initialized")
+	T.Infof("Scripting initialized")
 	return scr
 }
 
@@ -88,7 +88,7 @@ func forLua(values scriptingArgs) []lua.LValue {
 				args[i] = lua.LNumber(f)
 			} else {
 				// TODO implement UserData types
-				T.Error("type not implemented for scripting")
+				T.Errorf("type not implemented for scripting")
 			}
 		}
 	}
@@ -150,7 +150,7 @@ func isLiteralPair(lv lua.LValue) (*runtime.ExprNode, []*variables.PMMPVarRef, b
 			x = xv.XPolyn
 			vars[0] = v
 		} else {
-			T.Error("illegal x-part for pair returned from Lua, assuming 0")
+			T.Errorf("illegal x-part for pair returned from Lua, assuming 0")
 			x = arithmetic.NewConstantPolynomial(arithmetic.ConstZero)
 		}
 		if yc, yisconst := isNumericConstant(lpr.Y); yisconst {
@@ -159,7 +159,7 @@ func isLiteralPair(lv lua.LValue) (*runtime.ExprNode, []*variables.PMMPVarRef, b
 			y = yv.XPolyn
 			vars[1] = v
 		} else {
-			T.Error("illegal y-part for pair returned from Lua, assuming 0")
+			T.Errorf("illegal y-part for pair returned from Lua, assuming 0")
 			y = arithmetic.NewConstantPolynomial(arithmetic.ConstZero)
 		}
 		return runtime.NewPairExpression(x, y), vars, true
@@ -238,11 +238,11 @@ func (it *ScriptingReturnValueIterator) ValueAsExprNode() (*runtime.ExprNode, []
 		lv := it.values.values[it.inx]
 		T.Debugf("iterator: value as expression = %v", lv)
 		if lua.LVIsFalse(lv) {
-			T.Error("'nil' return value from Lua, substituting numeric 0")
+			T.Errorf("'nil' return value from Lua, substituting numeric 0")
 			p := arithmetic.NewConstantPolynomial(arithmetic.ConstZero)
 			return runtime.NewNumericExpression(p), nil
 		} else if _, ok := isString(lv); ok {
-			T.Error("cannot process string return value, substituting numeric 0")
+			T.Errorf("cannot process string return value, substituting numeric 0")
 			p := arithmetic.NewConstantPolynomial(arithmetic.ConstZero)
 			return runtime.NewNumericExpression(p), nil
 		} else if e, v, ok := isVariable(lv); ok {
@@ -257,7 +257,7 @@ func (it *ScriptingReturnValueIterator) ValueAsExprNode() (*runtime.ExprNode, []
 			T.Debugf("return values iterator: literal pair = %v", e)
 			return e, vxy
 		} else {
-			T.Error("unknown return value from Lua, substituting numeric 0")
+			T.Errorf("unknown return value from Lua, substituting numeric 0")
 			p := arithmetic.NewConstantPolynomial(arithmetic.ConstZero)
 			return runtime.NewNumericExpression(p), nil
 		}
@@ -303,9 +303,9 @@ see RegisterHook()
 func (lscript *Scripting) CallHook(hook string, arguments ...interface{}) (
 	*ScriptingReturnValues, error) {
 	//
-	T.P("lua", hook).Debug("call hook")
+	T.P("lua", hook).Debugf("call hook")
 	if lscript.hooks[hook] == nil {
-		T.P("lua", hook).Error("hook not registered")
+		T.P("lua", hook).Errorf("hook not registered")
 	}
 	r, err := lscript.Call("", hook, arguments...)
 	return r, err
@@ -401,9 +401,9 @@ func trace(L *lua.LState) int {
 	s := L.CheckString(-1)
 	level := L.CheckInt(-2)
 	if level == 0 {
-		S.Debug(s)
+		S.Debugf(s)
 	} else {
-		S.Info(s)
+		S.Infof(s)
 	}
 	return 0
 }
@@ -424,7 +424,7 @@ func lua_z(L *lua.LState) int {
 		Protect: true, // return err or panic
 	}, suffixes)
 	if err != nil {
-		T.Errorf("CallByParam error: %v", err.Error())
+		T.Errorf("CallByParam error: %v", err.Errorf())
 	}
 	return 1
 }
@@ -466,7 +466,7 @@ func (lscript *Scripting) registerPairType() {
 
 // Constructor
 func newPair(L *lua.LState) int {
-	T.P("lua", "udata").Debug("creating pair() UserData")
+	T.P("lua", "udata").Debugf("creating pair() UserData")
 	var pair *LuaPair
 	xy := L.CheckTable(1)
 	if xy.MaxN() != 2 {
@@ -731,8 +731,8 @@ func getGlobalDSLRuntimeEnv(L *lua.LState) *DSLRuntimeEnv {
 		lrt := udata.Value.(*DSLRuntimeEnv)
 		return lrt
 	} else {
-		T.P("script", "lua").Error("host language runtime env. not found")
-		T.Error("Did you pre-load UserData-type 'runtime'?")
+		T.P("script", "lua").Errorf("host language runtime env. not found")
+		T.Errorf("Did you pre-load UserData-type 'runtime'?")
 		return nil
 	}
 }
