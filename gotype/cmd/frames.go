@@ -51,8 +51,8 @@ import (
 	"log"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
-	"github.com/npillmayer/gotype/gtcore/config"
-	"github.com/npillmayer/gotype/gtcore/config/tracing"
+	"github.com/npillmayer/gotype/core/config"
+	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/gallery"
 	"github.com/spf13/cobra"
 )
@@ -103,7 +103,7 @@ func runFramesCmd(cmd *cobra.Command, args []string) {
 		T.Infof("input file is %s", args[0])
 		inputfilename = args[0]
 	}
-	tracing.Tracefile = tracing.ConfigTracing(inputfilename)
+	//tracing.Tracefile = tracing.ConfigTracing(inputfilename)
 	defer tracing.Tracefile.Close()
 	startFramesInput(inputfilename)
 }
@@ -121,12 +121,12 @@ func startFramesInput(inputfilename string) {
 	} else {
 		input, err := antlr.NewFileStream(inputfilename) // TODO refactor to get rid of ANTLR
 		if err != nil {
-			T.Error("cannot open input file")
+			T.Errorf("cannot open input file")
 		} else {
 			config.IsInteractive = false
 			defer func() {
 				if r := recover(); r != nil {
-					T.Error("error executing Gallery statement!")
+					T.Errorf("error executing Gallery statement!")
 				}
 			}()
 			interpreter := gallery.NewGalleryInterpreter(true)

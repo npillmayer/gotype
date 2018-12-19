@@ -76,6 +76,7 @@ type BaseREPL struct {
 	readline    *readline.Instance
 	interpreter REPLCommandInterpreter
 	toolname    string
+	helper      func(io.Writer)
 }
 
 // All interpreter sub-commands implement this.
@@ -140,6 +141,9 @@ func (repl *BaseREPL) executeCommand(cmd string, args []string, line string) boo
 	switch {
 	case cmd == "help":
 		displayCommands(repl.readline.Stderr())
+		if repl.helper != nil {
+			repl.helper(repl.readline.Stderr())
+		}
 	case cmd == "bye":
 		println("> goodbye!")
 		return true

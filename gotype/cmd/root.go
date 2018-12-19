@@ -34,13 +34,13 @@ import (
 	"os"
 
 	homedir "github.com/mitchellh/go-homedir"
-	"github.com/npillmayer/gotype/gtcore/config"
-	"github.com/npillmayer/gotype/gtcore/config/tracing"
+	"github.com/npillmayer/gotype/core/config"
+	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-var T tracing.Trace = tracing.CommandTracer
+var T tracing.Trace
 
 var cfgFile string
 
@@ -106,4 +106,6 @@ func initConfig() {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
 	config.Initialize()
+	T = tracing.CommandTracer
+	T.SetTraceLevel(tracing.LevelInfo)
 }
