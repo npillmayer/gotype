@@ -7,10 +7,6 @@ import (
 	"github.com/npillmayer/gotype/engine/dom/box"
 )
 
-// https://github.com/benbjohnson/css
-// This package provides a CSS parser and scanner in pure Go.
-// It is an implementation as specified in the W3C's CSS Syntax Module Level 3.
-
 // github.com/andrewstuart/goq
 // Package goq was built to allow users to declaratively unmarshal HTML into go
 // structs using struct tags composed of css selectors.
