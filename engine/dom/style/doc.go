@@ -15,7 +15,7 @@ For an in-depth description of HTMLbook please refer to
 https://oreillymedia.github.io/HTMLBook/.
 
 We strive to separate content from presentation. In typesetting, this is
-probably an impossible claim, but we'll try nevertheless. Presentation
+probably an impossible claim, but we'll try anyway. Presentation
 is governed with CSS (Cascading Style Sheets). CSS uses a box model more
 complex than TeX's, which is well described here:
 
@@ -31,19 +31,23 @@ A good explanation of styling may be found in
    https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/
 
 CSSOM is the "CSS Object Model", similar to the DOM for HTML.
-There is not very much open source code around for supporting us
-in implementing a styling engine, and we will have to compromise
+There is not very much open source Go code around for supporting us
+in implementing a styling engine, except the great work of
+https://godoc.org/github.com/andybalholm/cascadia.
+Therefore we will have to compromise
 on many feature in order to complete this in a realistic time frame.
 For a reminder of why that is, refer to
 https://www.youtube.com/watch?v=S68fcV09nGQ .
 
 Further to consider:
 
-   https://godoc.org/github.com/andybalholm/cascadia
    https://github.com/aymerick/douceur
    https://golanglibs.com/search?q=css+parser&sort=top
 
    https://www.mediaevent.de/xhtml/style.html
+
+The styling component is difficult to document/describe without
+diagrams. Think about documenting with https://github.com/robertkrimen/godocdown.
 
 BSD License
 

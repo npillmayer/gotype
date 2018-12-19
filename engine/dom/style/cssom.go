@@ -61,7 +61,14 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ----------------------------------------------------------------- */
 
-// RulesTree holds the styling rules of stylesheet.
+// CSSOM is the "CSS Object Model", similar to the DOM for HTML.
+// Our CSSOM consists of a set of stylesheets, each relevant for a sub-tree
+// of the DOM. This sub-tree is called the "scope" of the stylesheet.
+// Sub-trees are identified through the top node. Stylesheets are wrapped
+// into RulesTrees.
+type CSSOM map[*html.Node]RulesTree
+
+// RulesTree holds the styling rules of a stylesheet.
 //
 // Status: Currently this is not really a tree.
 // Optimize some day (see
@@ -69,6 +76,50 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 type RulesTree struct {
 	stylesheet *css.Stylesheet
 	selectors  map[string]cascadia.Selector
+}
+
+// NewCSSOM creates an empty CSSOM.
+func NewCSSOM() CSSOM {
+	return make(CSSOM)
+}
+
+// AddStylesFor includes a stylesheet to a CSSOM and sets the scope for
+// the stylesheet. If a stylesheet for the scope already exists, the
+// styles are merged. css may be nil. If scope is nil then scope is the
+// body (i.e., top-level content element) of a future document.
+func (cssom CSSOM) AddStylesFor(scope *html.Node, css *css.Stylesheet) (CSSOM, error) {
+	rulestree, exists := cssom[scope]
+	if exists && css != nil {
+		for _, r := range css.Rules { // append every rule from css
+			rulestree.stylesheet.Rules = append(rulestree.stylesheet.Rules, r)
+		}
+	} else {
+		if scope == nil {
+			scope = bodyElement
+		} else {
+			if scope.Type != html.ElementNode {
+				return nil, errors.New("Can only style element nodes")
+			}
+		}
+		cssom[scope] = RulesTree{css, nil}
+	}
+	return cssom, nil
+}
+
+// Empty is a predicate wether a stylesheet is empty, i.e. does not contain
+// any rules.
+func (rt RulesTree) Empty() bool {
+	return rt.stylesheet == nil || len(rt.stylesheet.Rules) == 0
+}
+
+// bodyElement is a symbolic node to denote the body element of a future
+// HTML document.
+var bodyElement *html.Node = &html.Node{}
+
+// NewRulesTree wraps a CSS stylesheet. css may be nil to represent an empty
+// stylesheet.
+func NewRulesTree(css *css.Stylesheet) *RulesTree {
+	return &RulesTree{css, nil}
 }
 
 type matchesList struct {
@@ -99,10 +150,6 @@ const (
 	author
 	attribute
 )
-
-func NewRulesTree(css *css.Stylesheet) *RulesTree {
-	return &RulesTree{css, nil}
-}
 
 func (rt *RulesTree) FilterMatchesFor(node *html.Node) *matchesList {
 	list := &matchesList{}
@@ -540,6 +587,11 @@ func InitializeDefaultPropertyValues() map[string]*PropertyGroup {
 
 // --- Styled Node Tree -------------------------------------------------
 
+type StyledNodeTree struct {
+	root          *StyledNode
+	defaultStyles map[string]*PropertyGroup
+}
+
 // StyledNodes are the building blocks of the styled tree.
 type StyledNode struct {
 	node           *html.Node
@@ -566,16 +618,11 @@ func (sn *StyledNode) getProperty(group string, key string) Property {
 	return pp.Cascade(key).Get(key) // must succeed
 }
 
-type StyledNodeTree struct {
-	root          *StyledNode
-	defaultStyles map[string]*PropertyGroup
-}
-
 // For an explanation what's going on here, refer to
 // https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/
 // and
 // https://limpet.net/mbrubeck/2014/08/23/toy-layout-engine-4-style.html
-func ConstructStyledNodeTree(dom *html.Node, rules *RulesTree) (*StyledNodeTree, error) {
+func ConstructStyledNodeTree(dom *html.Node, rules RulesTree) (*StyledNodeTree, error) {
 	tree := &StyledNodeTree{}
 	tree.defaultStyles = InitializeDefaultPropertyValues()
 	querydom := goquery.NewDocumentFromNode(dom)
@@ -595,8 +642,8 @@ func ConstructStyledNodeTree(dom *html.Node, rules *RulesTree) (*StyledNodeTree,
 	return tree, nil
 }
 
-// node is a (possibly indirect) child of the node corresponding to sn.
-func recurseStyling(parent *StyledNode, node *html.Node, rules *RulesTree) {
+// node is a (possibly indirect) child of the node corresponding to parent.
+func recurseStyling(parent *StyledNode, node *html.Node, rules RulesTree) {
 	if parent == nil || node == nil {
 		return // recursion termination
 	}
@@ -617,4 +664,58 @@ func recurseStyling(parent *StyledNode, node *html.Node, rules *RulesTree) {
 		}
 		node = node.NextSibling
 	}
+}
+
+func (cssom CSSOM) Style(dom *html.Node) (*StyledNodeTree, error) {
+	if dom == nil {
+		return nil, errors.New("Nothing to style: empty document")
+	}
+	domDoc := goquery.NewDocumentFromNode(dom)
+	//styledTree := setupStyledNodeTree(domDoc.Selection.Nodes[0]) // root of dom
+	styledTree := setupStyledNodeTree(dom)
+	for scope, rulestree := range cssom {
+		// TODO we have to process all rules in parallel
+		newStyledTree, err := rulestree.doStyle(scope, domDoc, styledTree)
+		if err != nil {
+			return nil, err
+		}
+		styledTree = newStyledTree
+	}
+	return styledTree, nil
+}
+
+func (rulestree RulesTree) doStyle(scope *html.Node, domDoc *goquery.Document, styledTree *StyledNodeTree) (*StyledNodeTree, error) {
+	if scope == nil || len(domDoc.Selection.Nodes) == 0 {
+		return nil, errors.New("Nothing to style: empty scope or document")
+	}
+	if rulestree.Empty() {
+		return styledTree, nil // we're done
+	}
+	var stylingRootElement *goquery.Selection
+	if scope == bodyElement { // scope is body element, i.e. whole document
+		stylingRootElement := domDoc.Find("body")
+		if stylingRootElement.Length() == 0 {
+			tracing.EngineTracer.Infof("Misconstructed DOM: cannot find <body>. Proceeding.")
+			stylingRootElement = domDoc.Selection // root of fragment, try our best
+		}
+	} else {
+		stylingRootElement = domDoc.FindNodes(scope)
+		if stylingRootElement.Length() == 0 {
+			// do not try to proceed: client meant something else...
+			return nil, errors.New(fmt.Sprintf("Scope '%s' not found in DOM", scope.Data))
+		}
+	}
+	//parentNode := stylingRootElement.Nodes[0].Parent
+	//TODO
+	//recurseStyling(parent, stylingRootElement.Nodes[0], rulestree)
+	return styledTree, nil
+}
+
+func setupStyledNodeTree(domRoot *html.Node) *StyledNodeTree {
+	defaultStyles := InitializeDefaultPropertyValues()
+	viewport := &StyledNode{}
+	viewport.node = domRoot
+	viewport.computedStyles = defaultStyles
+	tree := &StyledNodeTree{viewport, defaultStyles}
+	return tree
 }

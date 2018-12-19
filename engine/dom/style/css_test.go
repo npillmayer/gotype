@@ -22,7 +22,7 @@ func getTestDOM() *html.Node {
 	return doc
 }
 
-func getTestCSSOM() *css.Stylesheet {
+func getTestCSS() *css.Stylesheet {
 	testCSS := `table, ul, td {
   padding: 0;
 }
@@ -39,12 +39,21 @@ body, h1, ul, p   {
 
 func Test1(t *testing.T) {
 	config.InitTracing(gologadapter.GetAdapter())
-	//tracing.With(tracing.CoreTracer).Dump("styles", styles)
+	styles := getTestCSS()
+	tracing.With(tracing.CoreTracer).Dump("styles", styles)
 }
 
+func TestCSSOM1(t *testing.T) {
+	dom := getTestDOM()
+	cssom := NewCSSOM()
+	cssom.AddStylesFor(dom, getTestCSS())
+}
+
+/*
 func Test2(t *testing.T) {
 	dom := getTestDOM()
-	cssom := getTestCSSOM()
+	cssom := getTestCSS()
 	rulestree := &RulesTree{cssom, nil}
 	ConstructStyledNodeTree(dom, rulestree)
 }
+*/
