@@ -1,10 +1,13 @@
 package style
 
 import (
+	"fmt"
 	"sync"
 )
 
-// We will employ a small helper for launching worker goroutines.
+// TODO who detects empty workload?
+
+// We will employ a small helper for managing worker goroutines.
 type workerLauncher int
 
 // Prepare for launching n worker goroutines.
@@ -13,7 +16,7 @@ type workerLauncher int
 // Call the launcher like this:
 //
 //     workers := launch(3).workers(task, workload, errors)
-//     waitfor(workers) // async, spawns a goroutine to wait for workers
+//     watch(workers) // async, spawns a goroutine to wait for workers
 //     ... // do something with workload
 //     errlist := collect(errors) // read errors util closed => no more workers active
 //
@@ -31,15 +34,21 @@ func launch(n int) workerLauncher {
 // - workload for read and write (workers may produce work packages themselves)
 // - errorch for write (to be read by the caller)
 // Returns a workergroup (see below).
-func (launcher workerLauncher) workers(task workerTask, workload chan workPackage, errorch chan<- error) workergroup {
-	var workers workergroup
+func (launcher workerLauncher) workers(task workerTask, workload chan workPackage,
+	errorch chan<- error) *workergroup {
+	workers := &workergroup{}
+	workers.waitgroup = sync.WaitGroup{}
 	workers.workload = workload
 	workers.errorch = errorch
 	for i := 0; i < int(launcher); i++ {
 		workers.waitgroup.Add(1)
+		wno := i + 1
 		go func(workload <-chan workPackage) {
-			defer workers.waitgroup.Done() // will call this when no more work to be done
-			for wp := range workload {     // get workpackages until drained
+			defer func() {
+				fmt.Printf("finished worker #%d\n", wno)
+				workers.waitgroup.Done() // will call this when no more work to be done
+			}()
+			for wp := range workload { // get workpackages until drained
 				err := task(wp) // perform task on workpackage
 				if err != nil {
 					errorch <- err // signal error to caller
@@ -61,10 +70,10 @@ type workergroup struct {
 // waitfor spawns a goroutine to wait for completion of a worker group.
 // It will close input- and output-channel supplies for the call to launch.
 // Closing errorch should signal to the caller that no more worker is running.
-func waitfor(workers workergroup) {
+func watch(workers *workergroup) {
 	go func() {
 		workers.waitgroup.Wait()
-		close(workers.workload)
+		fmt.Printf("all workers are done\n")
 		close(workers.errorch)
 	}()
 }
