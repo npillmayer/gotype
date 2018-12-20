@@ -248,12 +248,22 @@ func (intp *styleIntp) InterpretCommand(line string) {
 			T.Errorf("need HTML and CSS loaded for styling")
 			return
 		}
-		tree, err := style.ConstructStyledNodeTree(intp.dom, intp.rulesTree)
+		//tree, err := style.ConstructStyledNodeTree(intp.dom, intp.rulesTree)
+		cssom := style.NewCSSOM()
+		err := cssom.AddStylesFor(nil, intp.css)
 		if err != nil {
 			T.Errorf(err.Error())
 			return
 		}
-		intp.styleTree = tree
+		//intp.styleTree = tree
+		T.Debugf("styling DOM")
+		//_, err = cssom.Style(intp.dom)
+		tree, err := cssom.Style(intp.dom)
+		if err != nil {
+			T.Errorf(err.Error())
+			return
+		}
+		tracing.With(T).Dump("tree", tree)
 	case "tree":
 		if intp.styleTree == nil {
 			T.Errorf("need to first style the DOM")
