@@ -6,10 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/OneOfOne/xxhash"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/andybalholm/cascadia"
-	"github.com/aymerick/douceur/css"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"golang.org/x/net/html"
 )
@@ -17,11 +15,13 @@ import (
 /*
 TODO
 - implement shortcut-properties: "border", "background" etc.
-- extract style from header: link and sytle tags
-- Locally scoped style (inline or <style> in body
++ style from header: link and sytle tags
+- Locally scoped style (inline or <style> in body)
 - Specifity
+- be independent from goquery
++ be independent form douceur.css
 - Fix API
-- Document code
++ Document code
 - Create Diagram -> Wiki
 - API for export to DOT
 */
@@ -64,35 +64,63 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // CSSOM is the "CSS Object Model", similar to the DOM for HTML.
 // Our CSSOM consists of a set of stylesheets, each relevant for a sub-tree
 // of the DOM. This sub-tree is called the "scope" of the stylesheet.
-// Sub-trees are identified through the top node. Stylesheets are wrapped
-// into RulesTrees.
-type CSSOM map[*html.Node]RulesTree
+// Sub-trees are identified through the top node.
+//
+// Stylesheets are wrapped into an internal rules tree.
+type CSSOM struct {
+	rules             map[*html.Node]rulesTree
+	defaultProperties PropertyMap
+}
 
 // RulesTree holds the styling rules of a stylesheet.
 //
 // Status: Currently this is not really a tree.
 // Optimize some day (see
 // https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/).
-type RulesTree struct {
-	stylesheet *css.Stylesheet
-	selectors  map[string]cascadia.Selector
+type rulesTree struct {
+	stylesheet StyleSheet                   // stylesheet holding the rules
+	selectors  map[string]cascadia.Selector // cache of compiled selectors
+	source     PropertySource               // where do these rules come from?
 }
 
 // NewCSSOM creates an empty CSSOM.
-func NewCSSOM() CSSOM {
-	return make(CSSOM)
+// Clients need to supply a map of default property values.
+// If pmap is nil, NewCSSOM will create a standard map.
+func NewCSSOM(pmap PropertyMap) CSSOM {
+	if pmap == nil {
+		pmap = InitializeDefaultPropertyValues()
+	}
+	cssom := CSSOM{}
+	cssom.rules = make(map[*html.Node]rulesTree)
+	cssom.defaultProperties = pmap
+	return cssom
 }
+
+// Properties may be defined at different places in HTML: as a sytlesheet
+// reference link, within a <script> element in the HTML file, or in an
+// attribute value.
+//
+// PropertySource influences the specifity of rules.
+type PropertySource uint8
+
+// Values for property sources, used when adding style sheets.
+const (
+	Global    PropertySource = iota + 1 // "browser" globals
+	Author                              // CSS author (stylesheet link)
+	Script                              // <script> element
+	Attribute                           // in an element's attribute(s)
+)
 
 // AddStylesFor includes a stylesheet to a CSSOM and sets the scope for
 // the stylesheet. If a stylesheet for the scope already exists, the
 // styles are merged. css may be nil. If scope is nil then scope is the
 // body (i.e., top-level content element) of a future document.
-func (cssom CSSOM) AddStylesFor(scope *html.Node, css *css.Stylesheet) error {
-	rulestree, exists := cssom[scope]
+//
+// source hints to where the stylesheet comes from.
+func (cssom CSSOM) AddStylesFor(scope *html.Node, css StyleSheet, source PropertySource) error {
+	rules, exists := cssom.rules[scope]
 	if exists && css != nil {
-		for _, r := range css.Rules { // append every rule from css
-			rulestree.stylesheet.Rules = append(rulestree.stylesheet.Rules, r)
-		}
+		rules.stylesheet.AppendRules(css)
 	} else {
 		if scope == nil {
 			scope = bodyElement
@@ -101,32 +129,32 @@ func (cssom CSSOM) AddStylesFor(scope *html.Node, css *css.Stylesheet) error {
 				return errors.New("Can style element nodes only")
 			}
 		}
-		cssom[scope] = RulesTree{css, nil}
+		cssom.rules[scope] = rulesTree{css, nil, source}
 	}
 	return nil
-}
-
-// Empty is a predicate wether a stylesheet is empty, i.e. does not contain
-// any rules.
-func (rt RulesTree) Empty() bool {
-	return rt.stylesheet == nil || len(rt.stylesheet.Rules) == 0
 }
 
 // bodyElement is a symbolic node to denote the body element of a future
 // HTML document.
 var bodyElement *html.Node = &html.Node{}
 
-// NewRulesTree wraps a CSS stylesheet. css may be nil to represent an empty
-// stylesheet.
-func NewRulesTree(css *css.Stylesheet) *RulesTree {
-	return &RulesTree{css, nil}
+// Empty is a predicate wether a stylesheet is empty, i.e. does not contain
+// any rules.
+func (rt rulesTree) Empty() bool {
+	return rt.stylesheet == nil || rt.stylesheet.Empty()
 }
 
+// Internal helper for applying rules to an HTML node.
+// In a first step it holds all the rules matching for node.
+// In a second step it collects all the properties set in those rules,
+// then orderes them by specifity.
 type matchesList struct {
-	matchingRules   []*css.Rule
+	matchingRules   []Rule
 	propertiesTable []specifity
 }
 
+// Rules matches are collected from more than one stylesheet. Matching
+// rules from these stylesheets will be merged to one list.
 func (mlist *matchesList) mergeMatchesWith(m *matchesList) *matchesList {
 	if mlist == nil {
 		return m
@@ -155,48 +183,41 @@ func (m *matchesList) String() string {
 	return s
 }
 
-type propertySource uint8
-
-const (
-	global propertySource = iota + 1
-	author
-	attribute
-)
-
-func (rt *RulesTree) FilterMatchesFor(node *html.Node) *matchesList {
+func (rt *rulesTree) FilterMatchesFor(node *html.Node) *matchesList {
 	list := &matchesList{}
-	for _, rule := range rt.stylesheet.Rules {
-		pre := rule.Prelude
+	for _, rule := range rt.stylesheet.Rules() {
+		selectorString := rule.Selector()
 		var sel cascadia.Selector
 		found := false
-		if sel, found = rt.selectors[pre]; !found {
+		if sel, found = rt.selectors[selectorString]; !found {
 			var err error
-			sel, err = cascadia.Compile(pre)
+			sel, err = cascadia.Compile(selectorString)
 			if err != nil {
-				tracing.EngineTracer.Errorf("CSS selector seems not to work: %s", sel)
+				tracing.EngineTracer.Errorf("CSS selector seems not to work: %s", selectorString)
 				break
 			}
 			if rt.selectors == nil {
 				rt.selectors = make(map[string]cascadia.Selector)
 			}
-			rt.selectors[pre] = sel
+			rt.selectors[selectorString] = sel
 		}
 		if sel.Match(node) {
 			list.matchingRules = append(list.matchingRules, rule)
 		}
 	}
-	tracing.EngineTracer.Debugf("matching rules for %s", NodePath(node))
+	tracing.EngineTracer.Debugf("matching rules for %s", nodePath(node))
 	return list
 }
 
-func NodePath(node *html.Node) string {
+// small helper to debug-print out a node
+func nodePath(node *html.Node) string {
 	s := ""
 	if node.Type == html.TextNode {
 		s += "(text)"
 	} else if node.Type == html.ElementNode {
-		s += fmt.Sprintf("- %s", node.Data)
+		s += fmt.Sprintf("%s", node.Data)
 	} else {
-		s += "- (unknown)"
+		s += "(unknown)"
 	}
 	return s
 }
@@ -204,10 +225,9 @@ func NodePath(node *html.Node) string {
 func (matches *matchesList) SortProperties() {
 	var proptable []specifity
 	for _, rule := range matches.matchingRules {
-		for _, decl := range rule.Declarations {
-			key := decl.Property
-			value := Property(decl.Value)
-			sp := specifity{author, rule, key, value, decl.Important, 0}
+		for _, propertyKey := range rule.Properties() {
+			value := Property(rule.Value(propertyKey))
+			sp := specifity{Author, rule, propertyKey, value, rule.IsImportant(propertyKey), 0}
 			sp.calcSpecifity()
 			proptable = append(proptable, sp)
 		}
@@ -221,13 +241,11 @@ func (matches *matchesList) SortProperties() {
 	}
 }
 
-func (matches *matchesList) createStyleGroups(parent *StyledNode) map[string]*PropertyGroup {
-	m := make(map[string]*PropertyGroup)
-	done := make(map[string]bool)
-	//fmt.Printf("iterating over %d specifities\n", len(matches.propertiesTable))
+func (matches *matchesList) createStyleGroups(parent *StyledNode) map[string]*propertyGroup {
+	m := make(map[string]*propertyGroup)
+	done := make(map[string]bool, len(matches.propertiesTable))
 	for _, pspec := range matches.propertiesTable { // for every specifity entry
-		//fmt.Printf("pspec = %v\n", pspec)
-		groupname, found := GroupNameFromPropertyKey[pspec.propertyKey]
+		groupname, found := groupNameFromPropertyKey[pspec.propertyKey]
 		if !found {
 			tracing.EngineTracer.Infof("Don't know about CSS property: %s", pspec.propertyKey)
 			continue
@@ -241,11 +259,11 @@ func (matches *matchesList) createStyleGroups(parent *StyledNode) map[string]*Pr
 		if group, exists := m[groupname]; exists {
 			group.Set(pspec.propertyKey, pspec.propertyValue)
 		} else {
-			_, pp := parent.findAncestorWithPropertyGroup(groupname) // must succeed
-			if pp == nil {
+			_, pg := parent.findAncestorWithPropertyGroup(groupname) // must succeed
+			if pg == nil {
 				panic(fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", groupname))
 			}
-			group, isNew := pp.SpawnOn(pspec.propertyKey, pspec.propertyValue, true)
+			group, isNew := pg.SpawnOn(pspec.propertyKey, pspec.propertyValue, true)
 			if isNew { // a new property group has been created
 				m[groupname] = group // put it into the group map
 			}
@@ -268,8 +286,8 @@ func (matches *matchesList) createStyleGroups(parent *StyledNode) map[string]*Pr
 // https://www.smashingmagazine.com/2007/07/css-specificity-things-you-should-know/
 
 type specifity struct {
-	source        propertySource
-	rule          *css.Rule
+	source        PropertySource
+	rule          Rule
 	propertyKey   string
 	propertyValue Property
 	important     bool
@@ -282,10 +300,11 @@ func (sp *specifity) calcSpecifity() {
 		sp.spec = 10000 // max
 		return
 	}
+	//selectorstring := sp.rule.Selector()
 	sp.spec = uint16((sp.source - 1) * 100)
-	selspec := len(sp.rule.Selectors)
+	selspec := uint16(1) // TODO
 	sp.spec += uint16(selspec)
-	idcnt := countIdSelectors(sp.rule.Selectors)
+	idcnt := uint16(1) // TODO
 	if idcnt > 0 {
 		sp.spec += uint16(10) + idcnt // assumes no |selector| > 10 ...
 	}
@@ -300,313 +319,11 @@ func countIdSelectors(sels []string) (cnt uint16) {
 	return
 }
 
-func isImportant(rule *css.Rule) bool {
-	for _, s := range rule.Selectors {
-		if strings.EqualFold(s, "!important") {
-			return true
-		}
-	}
-	return false
-}
-
-// --- CSS Properties ---------------------------------------------------
-//
-// https://www.tutorialrepublic.com/css-reference/css3-properties.php
-// https://www.mediaevent.de/xhtml/kernattribute.html
-
-type Property string
-
-func (p Property) IsInitial() bool {
-	return p == "initial"
-}
-
-func (p Property) IsInherited() bool {
-	return p == "inherited"
-}
-
-func (p Property) IsEmpty() bool {
-	return p == ""
-}
-
-// --- CSS Property Groups ----------------------------------------------
-//
-// Caching is currently not implemented.
-
-type PropertyGroup struct {
-	name          string
-	Parent        *PropertyGroup
-	propertiesMap map[string]Property
-	//signature       uint32 // signature of IDs and classes, used for caching
-}
-
-func NewPropertyGroup(ofType string) *PropertyGroup {
-	pp := &PropertyGroup{}
-	pp.name = ofType
-	return pp
-}
-
-func (pp *PropertyGroup) String() string {
-	s := "[" + pp.name + "] =\n"
-	for k, v := range pp.propertiesMap {
-		s += fmt.Sprintf("  %s = %s\n", k, v)
-	}
-	return s
-}
-
-func (pp *PropertyGroup) IsSet(key string) bool {
-	if pp.propertiesMap == nil {
-		return false
-	}
-	v, ok := pp.propertiesMap[key]
-	return ok && !v.IsEmpty()
-}
-
-func (pp *PropertyGroup) Get(key string) Property {
-	if pp.propertiesMap == nil {
-		return ""
-	}
-	return pp.propertiesMap[key]
-}
-
-func (pp *PropertyGroup) Set(key string, p Property) {
-	if pp.propertiesMap == nil {
-		pp.propertiesMap = make(map[string]Property)
-	}
-	pp.propertiesMap[key] = p
-}
-
-func (pp *PropertyGroup) SpawnOn(key string, p Property, cascade bool) (*PropertyGroup, bool) {
-	if cascade {
-		found := pp.Cascade(key)
-		if found.Get(key) == p {
-			return pp, false
-		}
-	}
-	npp := NewPropertyGroup(pp.name)
-	//npp.signature = pp.signature
-	npp.Set(key, p)
-	return npp, true
-}
-
-func (pp *PropertyGroup) Cascade(key string) *PropertyGroup {
-	it := pp
-	for !it.IsSet(key) { // stopper is default partial
-		it = it.Parent
-	}
-	return it
-}
-
-// Signature for being able to cache a fragment.
-// Caching is currently not implemented.
-//
-// Class values have to be sorted.
-//
-// Returns hash and number of ID+class attributes.
-func HashSignatureAttributes(htmlNode *html.Node) (uint32, uint8) {
-	var hash uint32 = 0
-	var count uint8 = 0
-	signature := ""
-	for _, a := range htmlNode.Attr {
-		if a.Key == "id" {
-			signature += a.Key
-			count += 1
-		}
-	}
-	for _, a := range htmlNode.Attr {
-		if a.Key == "class" {
-			signature += a.Key
-			count += 1
-		}
-	}
-	hash = xxhash.Checksum32([]byte(signature))
-	return hash, count
-}
-
-var GroupNameFromPropertyKey = map[string]string{
-	"margin-top":                 "Margins", // Margins
-	"margin-left":                "Margins",
-	"margin-right":               "Margins",
-	"margin-bottom":              "Margins",
-	"padding-top":                "Padding", // Padding
-	"padding-left":               "Padding",
-	"padding-right":              "Padding",
-	"padding-bottom":             "Padding",
-	"border-top-color":           "Border", // Border
-	"border-left-color":          "Border",
-	"border-right-color":         "Border",
-	"border-bottom-color":        "Border",
-	"border-top-width":           "Border",
-	"border-left-width":          "Border",
-	"border-right-width":         "Border",
-	"border-bottom-width":        "Border",
-	"border-top-style":           "Border",
-	"border-left-style":          "Border",
-	"border-right-style":         "Border",
-	"border-bottom-style":        "Border",
-	"border-top-left-radius":     "Border",
-	"border-top-right-radius":    "Border",
-	"border-bottom-left-radius":  "Border",
-	"border-bottom-right-radius": "Border",
-	"width":                      "Dimension", // Dimension
-	"height":                     "Dimension",
-	"min-width":                  "Dimension",
-	"min-height":                 "Dimension",
-	"max-width":                  "Dimension",
-	"max-height":                 "Dimension",
-}
-
-func InitializeDefaultPropertyValues() map[string]*PropertyGroup {
-	m := make(map[string]*PropertyGroup, 15)
-	root := NewPropertyGroup("Root")
-
-	margins := NewPropertyGroup("Margins")
-	margins.Set("margin-top", "0")
-	margins.Set("margin-left", "0")
-	margins.Set("margin-right", "0")
-	margins.Set("margin-bottom", "0")
-	margins.Parent = root
-	m["Margins"] = margins
-
-	padding := NewPropertyGroup("Padding")
-	padding.Set("padding-top", "0")
-	padding.Set("padding-left", "0")
-	padding.Set("padding-right", "0")
-	padding.Set("padding-bottom", "0")
-	padding.Parent = root
-	m["Padding"] = padding
-
-	border := NewPropertyGroup("Border")
-	border.Set("border-top-color", "black")
-	border.Set("border-left-color", "black")
-	border.Set("border-right-color", "black")
-	border.Set("border-bottom-color", "black")
-	border.Set("border-top-width", "medium")
-	border.Set("border-left-width", "medium")
-	border.Set("border-right-width", "medium")
-	border.Set("border-bottom-width", "medium")
-	border.Set("border-top-style", "solid")
-	border.Set("border-left-style", "solid")
-	border.Set("border-right-style", "solid")
-	border.Set("border-bottom-style", "solid")
-	border.Set("border-top-left-radius", "0")
-	border.Set("border-top-right-radius", "0")
-	border.Set("border-bottom-left-radius", "0")
-	border.Set("border-bottom-right-radius", "0")
-	border.Parent = root
-	m["Border"] = border
-
-	dimension := NewPropertyGroup("Dimension")
-	dimension.Set("width", "10%")
-	dimension.Set("width", "100pt")
-	dimension.Set("min-width", "0")
-	dimension.Set("min-height", "0")
-	dimension.Set("max-width", "10000pt")
-	dimension.Set("max-height", "10000pt")
-	dimension.Parent = root
-	m["Dimension"] = dimension
-
-	/*
-	   type ColorModel string
-
-	   type Color struct {
-	   	Color   color.Color
-	   	Model   ColorModel
-	   	Opacity uint8
-	   }
-
-	   type DisplayStyle struct {
-	   	Display    uint8 // https://www.tutorialrepublic.com/css-reference/css-display-property.php
-	   	Position   uint8
-	   	Top        dimen.Dimen
-	   	Left       dimen.Dimen
-	   	Right      dimen.Dimen
-	   	Bottom     dimen.Dimen
-	   	Float      uint8
-	   	ZIndex     int
-	   	Overflow   uint8
-	   	OverflowX  uint8
-	   	OverflowY  uint8
-	   	Clip       string // geometric shape
-	   	Visibility bool
-	   }
-
-	   type Background struct {
-	   	Color color.Color
-	   	//Position TODO
-	   	Image  image.Image
-	   	Origin dimen.Point
-	   	Size   dimen.Point
-	   	Clip   uint8
-	   }
-
-	   type Font struct {
-	   	Family     string
-	   	Style      string
-	   	Variant    uint16
-	   	Stretch    uint8
-	   	Size       dimen.Dimen
-	   	SizeAdjust dimen.Dimen
-	   }
-
-	   type TextProperties struct {
-	   	Direction          uint8
-	   	WordSpacing        uint8
-	   	LetterSpacing      uint8
-	   	VerticalAlignment  uint8
-	   	TextAlignment      uint8 // + TextJustify
-	   	TextAlignLast      uint8
-	   	TextIndentation    dimen.Dimen // first line
-	   	TabSize            dimen.Dimen
-	   	LineHeight         uint8
-	   	TextDecoration     uint8
-	   	TextTransformation uint8
-	   	WordWrap           uint8
-	   	WordBreak          uint8
-	   	Whitespace         uint8
-	   	TextOverflow       uint8
-	   }
-
-
-	   type GeneratedContent struct {
-	   	Content          string
-	   	Quotes           string
-	   	CounterReset     uint8
-	   	CounterIncrement uint8
-	   }
-
-	   type Print struct {
-	   	PageBreakAfter  uint8
-	   	PageBreakBefore uint8
-	   	PageBreakInside uint8
-	   }
-
-	   type Outline struct {
-	   	Color  color.Color
-	   	Offset dimen.Dimen
-	   	Style  uint8
-	   	Width  dimen.Dimen
-	   }
-
-	   //list-style-type:
-	   //	disc | circle | square | decimal | decimal-leading-zero | lower-roman |
-	   //  upper-roman | lower-greek | lower-latin | upper-latin | armenian |
-	   //  georgian | lower-alpha | upper-alpha | none | initial | inherit
-	   type List struct {
-	   	StyleImage    image.Image
-	   	StylePosition uint8 // inside, outside
-	   	StyleType     uint8
-	   }
-
-	*/
-
-	return m
-}
-
 // --- Styled Node Tree -------------------------------------------------
 
 type StyledNodeTree struct {
 	root          *StyledNode
-	defaultStyles map[string]*PropertyGroup
+	defaultStyles map[string]*propertyGroup
 }
 
 func setupStyledNodeTree(domRoot *html.Node) *StyledNodeTree {
@@ -621,109 +338,34 @@ func setupStyledNodeTree(domRoot *html.Node) *StyledNodeTree {
 // StyledNodes are the building blocks of the styled tree.
 type StyledNode struct {
 	node           *html.Node
-	computedStyles map[string]*PropertyGroup
+	computedStyles map[string]*propertyGroup
 	parent         *StyledNode
 	children       []*StyledNode
 }
 
-func (sn *StyledNode) findAncestorWithPropertyGroup(group string) (*StyledNode, *PropertyGroup) {
-	var pp *PropertyGroup
+func (sn *StyledNode) findAncestorWithPropertyGroup(group string) (*StyledNode, *propertyGroup) {
+	var pg *propertyGroup
 	it := sn
-	for it != nil && pp == nil {
-		pp = it.computedStyles[group]
+	for it != nil && pg == nil {
+		pg = it.computedStyles[group]
 		it = it.parent
 	}
-	return it, pp
+	return it, pg
 }
 
 func (sn *StyledNode) getProperty(group string, key string) Property {
-	_, pp := sn.findAncestorWithPropertyGroup(group) // must succeed
-	if pp == nil {
+	_, pg := sn.findAncestorWithPropertyGroup(group) // must succeed
+	if pg == nil {
 		panic(fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", group))
 	}
-	return pp.Cascade(key).Get(key) // must succeed
+	return pg.Cascade(key).Get(key) // must succeed
 }
 
 // For an explanation what's going on here, refer to
 // https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/
 // and
 // https://limpet.net/mbrubeck/2014/08/23/toy-layout-engine-4-style.html
-func ConstructStyledNodeTree(dom *html.Node, rules RulesTree) (*StyledNodeTree, error) {
-	tree := &StyledNodeTree{}
-	tree.defaultStyles = InitializeDefaultPropertyValues()
-	querydom := goquery.NewDocumentFromNode(dom)
-	body := querydom.Find("body").First()
-	if body == nil {
-		return nil, errors.New("Misconstructed DOM: cannot find <body>")
-	}
-	viewport := &StyledNode{}
-	viewport.node = body.Nodes[0]
-	viewport.computedStyles = tree.defaultStyles
-	// now recurse
-	// first version is without concurrency
-	worklist := body.Children().Nodes
-	for _, n := range worklist {
-		recurseStyling(viewport, n, rules)
-	}
-	return tree, nil
-}
-
-// node is a (possibly indirect) child of the node corresponding to parent.
-func recurseStyling(parent *StyledNode, node *html.Node, rules RulesTree) {
-	if parent == nil || node == nil {
-		return // recursion termination
-	}
-	sn := &StyledNode{}
-	sn.node = node
-	sn.parent = sn
-	parent.children = append(parent.children, sn)
-	matchingRules := rules.FilterMatchesFor(node)
-	if matchingRules != nil {
-		matchingRules.SortProperties()
-		groups := matchingRules.createStyleGroups(parent)
-		sn.computedStyles = groups // may be nil
-	}
-	node = node.FirstChild // now recurse into children
-	for node != nil {
-		if node.Type == html.ElementNode {
-			recurseStyling(sn, node, rules)
-		}
-		node = node.NextSibling
-	}
-}
-
-func (runner *stylingRunner) doStyle(node *html.Node, parent *StyledNode) {
-	runner.activateStylesheetsFor(node)
-	if createsStyledNode(node.Type) {
-		sn := &StyledNode{}
-		sn.node = node
-		sn.parent = parent
-		parent.children = append(parent.children, sn)
-		var matchingRules *matchesList
-		for _, rulesTree := range runner.activeStylers {
-			matches := rulesTree.FilterMatchesFor(node)
-			matchingRules = matchingRules.mergeMatchesWith(matches)
-		}
-		if matchingRules != nil {
-			matchingRules.SortProperties()
-			fmt.Println("sorting done")
-			groups := matchingRules.createStyleGroups(parent)
-			fmt.Println("group creation done")
-			sn.computedStyles = groups // may be nil
-		}
-		parent = sn // continue with newly created styled node
-	}
-	node = node.FirstChild // now recurse into children
-	for node != nil {
-		if node.Type == html.ElementNode {
-			runner.doStyle(node, parent)
-		}
-		node = node.NextSibling
-	}
-}
-
 func (cssom CSSOM) Style(dom *html.Node) (*StyledNodeTree, error) {
-	tracing.EngineTracer.Debugf("called Style(...)")
 	if dom == nil {
 		return nil, errors.New("Nothing to style: empty document")
 	}
@@ -744,7 +386,7 @@ func (cssom CSSOM) attachStylesheets(domDoc *goquery.Document) (*stylingRunner, 
 		return nil, errors.New("Nothing to style: empty document")
 	}
 	runner := newStylingRunner()
-	for scope, rulestree := range cssom {
+	for scope, rulestree := range cssom.rules {
 		var stylingRootElement *goquery.Selection
 		if scope == bodyElement { // scope is body element, i.e. whole document
 			stylingRootElement := domDoc.Find("body")
@@ -773,15 +415,15 @@ func (cssom CSSOM) attachStylesheets(domDoc *goquery.Document) (*stylingRunner, 
 }
 
 type stylingRunner struct {
-	activeStylers   map[*html.Node]RulesTree
-	inactiveStylers map[*html.Node]RulesTree
+	activeStylers   map[*html.Node]rulesTree
+	inactiveStylers map[*html.Node]rulesTree
 	startNode       *html.Node
 }
 
 func newStylingRunner() *stylingRunner {
 	runner := &stylingRunner{}
-	runner.activeStylers = make(map[*html.Node]RulesTree)
-	runner.inactiveStylers = make(map[*html.Node]RulesTree)
+	runner.activeStylers = make(map[*html.Node]rulesTree)
+	runner.inactiveStylers = make(map[*html.Node]rulesTree)
 	return runner
 }
 
@@ -794,8 +436,75 @@ func (runner *stylingRunner) activateStylesheetsFor(node *html.Node) {
 	}
 }
 
+func (runner *stylingRunner) doStyle(node *html.Node, parent *StyledNode) {
+	runner.activateStylesheetsFor(node)
+	if createsStyledNode(node.Type) {
+		sn := &StyledNode{}
+		sn.node = node
+		sn.parent = parent
+		parent.children = append(parent.children, sn)
+		var matchingRules *matchesList
+		for _, rulesTree := range runner.activeStylers {
+			matches := rulesTree.FilterMatchesFor(node)
+			matchingRules = matchingRules.mergeMatchesWith(matches)
+		}
+		if matchingRules != nil {
+			matchingRules.SortProperties()
+			groups := matchingRules.createStyleGroups(parent)
+			sn.computedStyles = groups // may be nil
+		}
+		parent = sn // continue with newly created styled node
+	}
+	node = node.FirstChild // now recurse into children
+	for node != nil {
+		if node.Type == html.ElementNode {
+			runner.doStyle(node, parent)
+		}
+		node = node.NextSibling
+	}
+}
+
+// Which HTML node type needs a corresponding styled node?
+func createsStyledNode(nodeType html.NodeType) bool {
+	if nodeType == html.ElementNode || nodeType == html.TextNode {
+		return true
+	}
+	return false
+}
+
+func shorten(s string) string {
+	if len(s) > 10 {
+		return s[:10] + "..."
+	}
+	return s
+}
+
+// --- old versions -----------------------------------------------------
+
 /*
-func (rulestree RulesTree) doStyle(scope *html.Node, domDoc *goquery.Document, styledTree *StyledNodeTree) (*StyledNodeTree, error) {
+func ConstructStyledNodeTree(dom *html.Node, rules rulesTree) (*StyledNodeTree, error) {
+	tree := &StyledNodeTree{}
+	tree.defaultStyles = InitializeDefaultPropertyValues()
+	querydom := goquery.NewDocumentFromNode(dom)
+	body := querydom.Find("body").First()
+	if body == nil {
+		return nil, errors.New("Misconstructed DOM: cannot find <body>")
+	}
+	viewport := &StyledNode{}
+	viewport.node = body.Nodes[0]
+	viewport.computedStyles = tree.defaultStyles
+	// now recurse
+	// first version is without concurrency
+	worklist := body.Children().Nodes
+	for _, n := range worklist {
+		recurseStyling(viewport, n, rules)
+	}
+	return tree, nil
+}
+*/
+
+/*
+func (rulestree rulesTree) doStyle(scope *html.Node, domDoc *goquery.Document, styledTree *StyledNodeTree) (*StyledNodeTree, error) {
 	if scope == nil || len(domDoc.Selection.Nodes) == 0 {
 		return nil, errors.New("Nothing to style: empty scope or document")
 	}
@@ -823,17 +532,36 @@ func (rulestree RulesTree) doStyle(scope *html.Node, domDoc *goquery.Document, s
 }
 */
 
-// Which HTML node type needs a corresponding styled node?
-func createsStyledNode(nodeType html.NodeType) bool {
-	if nodeType == html.ElementNode || nodeType == html.TextNode {
-		return true
+// node is a (possibly indirect) child of the node corresponding to parent.
+/*
+func recurseStyling(parent *StyledNode, node *html.Node, rules rulesTree) {
+	if parent == nil || node == nil {
+		return // recursion termination
 	}
-	return false
+	sn := &StyledNode{}
+	sn.node = node
+	sn.parent = sn
+	parent.children = append(parent.children, sn)
+	matchingRules := rules.FilterMatchesFor(node)
+	if matchingRules != nil {
+		matchingRules.SortProperties()
+		groups := matchingRules.createStyleGroups(parent)
+		sn.computedStyles = groups // may be nil
+	}
+	node = node.FirstChild // now recurse into children
+	for node != nil {
+		if node.Type == html.ElementNode {
+			recurseStyling(sn, node, rules)
+		}
+		node = node.NextSibling
+	}
 }
+*/
 
-func shorten(s string) string {
-	if len(s) > 10 {
-		return s[:10] + "..."
-	}
-	return s
+// NewRulesTree wraps a CSS stylesheet. css may be nil to represent an empty
+// stylesheet.
+/*
+func newRulesTree(css *css.Stylesheet) *rulesTree {
+	return &rulesTree{css, nil}
 }
+*/

@@ -3,7 +3,8 @@ Package style will some day provide functionality for CSS styling.
 
 Status
 
-Nothing to find here yet – development will start soon.
+This is a very first draft. It is unstable and the API will change without
+notice. Please be patient.
 
 Overview
 

@@ -56,11 +56,11 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/antlr/antlr4/runtime/Go/antlr"
-	"github.com/aymerick/douceur/css"
 	"github.com/aymerick/douceur/parser"
 	"github.com/npillmayer/gotype/core/config"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/engine/dom/style"
+	"github.com/npillmayer/gotype/engine/dom/style/douceuradapter"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/html"
 )
@@ -157,9 +157,9 @@ func NewStyleREPL() *StyleREPL {
 }
 
 type styleIntp struct {
-	dom       *html.Node
-	css       *css.Stylesheet
-	rulesTree *style.RulesTree
+	dom *html.Node
+	css style.StyleSheet
+	//rulesTree *style.rulesTree
 	query     *goquery.Document
 	selector  string
 	selection *goquery.Selection
@@ -204,8 +204,8 @@ func (intp *styleIntp) InterpretCommand(line string) {
 			return
 		}
 		T.Infof("OK loading CSS file")
-		intp.css = css
-		intp.rulesTree = style.NewRulesTree(css)
+		intp.css = douceuradapter.Wrap(css)
+		//intp.rulesTree = style.NewRulesTree(css)
 	case "query":
 		if intp.dom == nil {
 			T.Errorf("need HTML loaded for query (command 'html')")
@@ -236,21 +236,23 @@ func (intp *styleIntp) InterpretCommand(line string) {
 		}
 		T.Infof("Nodes:")
 		intp.selection.Each(elementName)
-	case "match":
-		if intp.dom == nil || intp.css == nil {
-			T.Errorf("need HTML and CSS loaded for style-rule matching")
-			return
-		}
-		m := intp.rulesTree.FilterMatchesFor(intp.selection.Nodes[0])
-		m.SortProperties()
+		/*
+			case "match":
+				if intp.dom == nil || intp.css == nil {
+					T.Errorf("need HTML and CSS loaded for style-rule matching")
+					return
+				}
+				m := intp.rulesTree.FilterMatchesFor(intp.selection.Nodes[0])
+				m.SortProperties()
+		*/
 	case "style":
 		if intp.dom == nil || intp.css == nil {
 			T.Errorf("need HTML and CSS loaded for styling")
 			return
 		}
 		//tree, err := style.ConstructStyledNodeTree(intp.dom, intp.rulesTree)
-		cssom := style.NewCSSOM()
-		err := cssom.AddStylesFor(nil, intp.css)
+		cssom := style.NewCSSOM(nil)
+		err := cssom.AddStylesFor(nil, intp.css, style.Author)
 		if err != nil {
 			T.Errorf(err.Error())
 			return
@@ -278,7 +280,7 @@ func styleCmdHelp(out io.Writer) {
 	io.WriteString(out, "query <selector>:   select a set of nodes\n")
 	io.WriteString(out, "name:               element name(s) of selection\n")
 	io.WriteString(out, "text:               textual content of selection\n")
-	io.WriteString(out, "match:              match style-rules for selection\n")
+	//io.WriteString(out, "match:              match style-rules for selection\n")
 	io.WriteString(out, "style:              style complete DOM\n")
 	io.WriteString(out, "tree:               display styled boxes tree\n")
 }
