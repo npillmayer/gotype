@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/andybalholm/cascadia"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"golang.org/x/net/html"
@@ -14,13 +13,16 @@ import (
 
 /*
 TODO
-- implement shortcut-properties: "border", "background" etc.
++ implement shortcut-properties: "border", "background" etc.
 + style from header: link and sytle tags
-- Locally scoped style (inline or <style> in body)
-- Specifity
-- be independent from goquery
++ Locally scoped style (inline or <style> in body)
++ Specifity
++ be independent from goquery
 + be independent form douceur.css
-- Fix API
+- Fix API:
+  - create StyledTree using factory
+  - define extension points for future properties: group "X"; registerCompound(key, func(...))
+- make concurrent
 + Document code
 - Create Diagram -> Wiki
 - API for export to DOT
@@ -167,6 +169,7 @@ func (mlist *matchesList) mergeMatchesWith(m *matchesList) *matchesList {
 	return mlist
 }
 
+// sorter
 type byHighestSpecifity []specifity
 
 // make specifities sortable by highest sp.spec
@@ -209,27 +212,26 @@ func (rt *rulesTree) FilterMatchesFor(node *html.Node) *matchesList {
 	return list
 }
 
-// small helper to debug-print out a node
-func nodePath(node *html.Node) string {
-	s := ""
-	if node.Type == html.TextNode {
-		s += "(text)"
-	} else if node.Type == html.ElementNode {
-		s += fmt.Sprintf("%s", node.Data)
-	} else {
-		s += "(unknown)"
-	}
-	return s
-}
-
 func (matches *matchesList) SortProperties() {
 	var proptable []specifity
-	for _, rule := range matches.matchingRules {
+	for rno, rule := range matches.matchingRules {
 		for _, propertyKey := range rule.Properties() {
 			value := Property(rule.Value(propertyKey))
-			sp := specifity{Author, rule, propertyKey, value, rule.IsImportant(propertyKey), 0}
-			sp.calcSpecifity()
-			proptable = append(proptable, sp)
+			props, err := splitCompountProperty(propertyKey, value)
+			if err != nil {
+				sp := specifity{Author, rule, propertyKey, value, rule.IsImportant(propertyKey), 0}
+				sp.calcSpecifity(rno)
+				proptable = append(proptable, sp)
+			} else {
+				tracing.EngineTracer.Debugf("%s is a compound style", propertyKey)
+				for _, kv := range props {
+					key := kv.key
+					val := kv.value
+					sp := specifity{Author, rule, key, val, rule.IsImportant(propertyKey), 0}
+					sp.calcSpecifity(rno)
+					proptable = append(proptable, sp)
+				}
+			}
 		}
 	}
 	if len(proptable) > 0 {
@@ -281,9 +283,7 @@ func (matches *matchesList) createStyleGroups(parent *StyledNode) map[string]*pr
 	return m
 }
 
-// --- Everthing in this section is a hack ! ----------------------------
-
-// https://www.smashingmagazine.com/2007/07/css-specificity-things-you-should-know/
+// --- Specifity of rules -----------------------------------------------
 
 type specifity struct {
 	source        PropertySource
@@ -291,36 +291,61 @@ type specifity struct {
 	propertyKey   string
 	propertyValue Property
 	important     bool
-	spec          uint16
+	spec          uint32
 }
 
-// This is a grotesque hack :-(
-func (sp *specifity) calcSpecifity() {
-	if sp.important {
-		sp.spec = 10000 // max
+// CalcSpecifity calculates an appromiation to the true W3C specifity.
+// https://www.smashingmagazine.com/2007/07/css-specificity-things-you-should-know/
+func (sp *specifity) calcSpecifity(no int) {
+	if sp.rule.IsImportant(sp.propertyKey) {
+		sp.spec = 99999 // max
 		return
 	}
-	//selectorstring := sp.rule.Selector()
-	sp.spec = uint16((sp.source - 1) * 100)
-	selspec := uint16(1) // TODO
-	sp.spec += uint16(selspec)
-	idcnt := uint16(1) // TODO
-	if idcnt > 0 {
-		sp.spec += uint16(10) + idcnt // assumes no |selector| > 10 ...
-	}
-}
-
-func countIdSelectors(sels []string) (cnt uint16) {
-	for _, s := range sels {
-		if strings.HasPrefix(s, "#") {
-			cnt++
+	sp.spec = uint32(sp.source-1) * 1000
+	selectorstring := sp.rule.Selector()
+	// simple "parsing" = rough estimate...
+	// alternatively use code from cascadia or from
+	// https://godoc.org/github.com/ericchiang/css
+	sels := strings.Fields(selectorstring)
+	var selcnt uint32
+	var idcnt uint32
+	var classcnt uint32
+	for _, sel := range sels {
+		selcnt++
+		if strings.ContainsRune(sel, ':') {
+			selcnt++ // count double
+		}
+		if strings.ContainsAny(sel, ".[:") {
+			classcnt++
+		}
+		if strings.HasPrefix(sel, "#") {
+			idcnt++
 		}
 	}
-	return
+	sp.spec += selcnt*10 + classcnt*100 + idcnt*1000 + uint32(no)
 }
 
 // --- Styled Node Tree -------------------------------------------------
 
+/*
+Creation of node:
+- link to html node
+
+Link (double?) when in Child
+- add to children
+- set parent for child
+
+Set computed styles
+
+Get computed styles (for a group?)
+
+parent.findAncestorWithPropertyGroup(groupname)
+need not be a member function
+
+Tree als extra type ?
+= viewport ? (normaler styled node)
+
+*/
 type StyledNodeTree struct {
 	root          *StyledNode
 	defaultStyles map[string]*propertyGroup
@@ -353,14 +378,6 @@ func (sn *StyledNode) findAncestorWithPropertyGroup(group string) (*StyledNode, 
 	return it, pg
 }
 
-func (sn *StyledNode) getProperty(group string, key string) Property {
-	_, pg := sn.findAncestorWithPropertyGroup(group) // must succeed
-	if pg == nil {
-		panic(fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", group))
-	}
-	return pg.Cascade(key).Get(key) // must succeed
-}
-
 // For an explanation what's going on here, refer to
 // https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/
 // and
@@ -369,9 +386,8 @@ func (cssom CSSOM) Style(dom *html.Node) (*StyledNodeTree, error) {
 	if dom == nil {
 		return nil, errors.New("Nothing to style: empty document")
 	}
-	domDoc := goquery.NewDocumentFromNode(dom)
 	styledTree := setupStyledNodeTree(dom)
-	runner, err := cssom.attachStylesheets(domDoc)
+	runner, err := cssom.attachStylesheets(dom)
 	if err != nil {
 		return nil, err
 	}
@@ -381,35 +397,35 @@ func (cssom CSSOM) Style(dom *html.Node) (*StyledNodeTree, error) {
 
 // Scopes for all ruletrees have to be HTML element nodes.
 // This is enforced during construction of the rules trees (adding to CSSDOM).
-func (cssom CSSOM) attachStylesheets(domDoc *goquery.Document) (*stylingRunner, error) {
-	if len(domDoc.Selection.Nodes) == 0 {
+func (cssom CSSOM) attachStylesheets(dom *html.Node) (*stylingRunner, error) {
+	if dom == nil {
 		return nil, errors.New("Nothing to style: empty document")
 	}
 	runner := newStylingRunner()
 	for scope, rulestree := range cssom.rules {
-		var stylingRootElement *goquery.Selection
+		var stylingRootElement *html.Node
 		if scope == bodyElement { // scope is body element, i.e. whole document
-			stylingRootElement := domDoc.Find("body")
-			if stylingRootElement.Length() == 0 { // no body element found
+			stylingRootElement := findBodyElement(dom)
+			if stylingRootElement == nil { // no body element found
 				tracing.EngineTracer.Infof("Misconstructed DOM: cannot find <body>. Proceeding.")
-				stylingRootElement = domDoc.Selection // root of fragment, try our best
+				stylingRootElement = dom // root of fragment, try our best
 			}
-			runner.activeStylers[stylingRootElement.Nodes[0]] = rulestree
-			runner.startNode = stylingRootElement.Nodes[0]
+			runner.activeStylers[stylingRootElement] = rulestree
+			runner.startNode = stylingRootElement
 		} else {
-			stylingRootElement = domDoc.FindNodes(scope)
-			if stylingRootElement.Length() == 0 { // scope not not found in DOM
+			stylingRootElement = findThisNode(dom, scope)
+			if stylingRootElement == nil { // scope not not found in DOM
 				// do not try to proceed: client meant something else...
 				return nil, errors.New(fmt.Sprintf("Scope '%s' not found in DOM", scope.Data))
 			}
-			if stylingRootElement.Nodes[0].Type != html.ElementNode {
+			if stylingRootElement.Type != html.ElementNode {
 				return nil, errors.New(fmt.Sprintf("Scope '%s' is not of element type", shorten(scope.Data)))
 			}
-			runner.inactiveStylers[stylingRootElement.Nodes[0]] = rulestree
+			runner.inactiveStylers[stylingRootElement] = rulestree
 		}
 	}
 	if runner.startNode == nil {
-		runner.startNode = domDoc.Selection.Nodes[0]
+		runner.startNode = dom
 	}
 	return runner, nil
 }
@@ -464,6 +480,19 @@ func (runner *stylingRunner) doStyle(node *html.Node, parent *StyledNode) {
 	}
 }
 
+// --- Getting Property Values ------------------------------------------
+
+// TODO
+func (sn *StyledNode) TODO_GetProperty(group string, key string) Property {
+	_, pg := sn.findAncestorWithPropertyGroup(group) // must succeed
+	if pg == nil {
+		panic(fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", group))
+	}
+	return pg.Cascade(key).Get(key) // must succeed
+}
+
+// --- Helpers ----------------------------------------------------------
+
 // Which HTML node type needs a corresponding styled node?
 func createsStyledNode(nodeType html.NodeType) bool {
 	if nodeType == html.ElementNode || nodeType == html.TextNode {
@@ -472,6 +501,36 @@ func createsStyledNode(nodeType html.NodeType) bool {
 	return false
 }
 
+// Helper to find nodes matching a predicate. Currently works recursive.
+// Returns a node or nil.
+func findNode(node *html.Node, matcher func(n *html.Node) bool) *html.Node {
+	if node == nil {
+		return nil
+	}
+	if matcher(node) {
+		return node
+	}
+	for c := node.FirstChild; c != nil; c = c.NextSibling {
+		if f := findNode(c, matcher); f != nil {
+			return f
+		}
+	}
+	return nil
+}
+
+func findThisNode(tree *html.Node, nodeToFind *html.Node) *html.Node {
+	return findNode(tree, func(n *html.Node) bool {
+		return n == nodeToFind
+	})
+}
+
+func findBodyElement(tree *html.Node) *html.Node {
+	return findNode(tree, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && n.Data == "body"
+	})
+}
+
+// shorten a string
 func shorten(s string) string {
 	if len(s) > 10 {
 		return s[:10] + "..."
@@ -479,89 +538,15 @@ func shorten(s string) string {
 	return s
 }
 
-// --- old versions -----------------------------------------------------
-
-/*
-func ConstructStyledNodeTree(dom *html.Node, rules rulesTree) (*StyledNodeTree, error) {
-	tree := &StyledNodeTree{}
-	tree.defaultStyles = InitializeDefaultPropertyValues()
-	querydom := goquery.NewDocumentFromNode(dom)
-	body := querydom.Find("body").First()
-	if body == nil {
-		return nil, errors.New("Misconstructed DOM: cannot find <body>")
-	}
-	viewport := &StyledNode{}
-	viewport.node = body.Nodes[0]
-	viewport.computedStyles = tree.defaultStyles
-	// now recurse
-	// first version is without concurrency
-	worklist := body.Children().Nodes
-	for _, n := range worklist {
-		recurseStyling(viewport, n, rules)
-	}
-	return tree, nil
-}
-*/
-
-/*
-func (rulestree rulesTree) doStyle(scope *html.Node, domDoc *goquery.Document, styledTree *StyledNodeTree) (*StyledNodeTree, error) {
-	if scope == nil || len(domDoc.Selection.Nodes) == 0 {
-		return nil, errors.New("Nothing to style: empty scope or document")
-	}
-	if rulestree.Empty() {
-		return styledTree, nil // we're done
-	}
-	var stylingRootElement *goquery.Selection
-	if scope == bodyElement { // scope is body element, i.e. whole document
-		stylingRootElement := domDoc.Find("body")
-		if stylingRootElement.Length() == 0 {
-			tracing.EngineTracer.Infof("Misconstructed DOM: cannot find <body>. Proceeding.")
-			stylingRootElement = domDoc.Selection // root of fragment, try our best
-		}
+// small helper to debug-print out a node. TODO
+func nodePath(node *html.Node) string {
+	s := ""
+	if node.Type == html.TextNode {
+		s += "(text)"
+	} else if node.Type == html.ElementNode {
+		s += fmt.Sprintf("%s", node.Data)
 	} else {
-		stylingRootElement = domDoc.FindNodes(scope)
-		if stylingRootElement.Length() == 0 {
-			// do not try to proceed: client meant something else...
-			return nil, errors.New(fmt.Sprintf("Scope '%s' not found in DOM", scope.Data))
-		}
+		s += "(unknown)"
 	}
-	//parentNode := stylingRootElement.Nodes[0].Parent
-	//TODO
-	//recurseStyling(parent, stylingRootElement.Nodes[0], rulestree)
-	return styledTree, nil
+	return s
 }
-*/
-
-// node is a (possibly indirect) child of the node corresponding to parent.
-/*
-func recurseStyling(parent *StyledNode, node *html.Node, rules rulesTree) {
-	if parent == nil || node == nil {
-		return // recursion termination
-	}
-	sn := &StyledNode{}
-	sn.node = node
-	sn.parent = sn
-	parent.children = append(parent.children, sn)
-	matchingRules := rules.FilterMatchesFor(node)
-	if matchingRules != nil {
-		matchingRules.SortProperties()
-		groups := matchingRules.createStyleGroups(parent)
-		sn.computedStyles = groups // may be nil
-	}
-	node = node.FirstChild // now recurse into children
-	for node != nil {
-		if node.Type == html.ElementNode {
-			recurseStyling(sn, node, rules)
-		}
-		node = node.NextSibling
-	}
-}
-*/
-
-// NewRulesTree wraps a CSS stylesheet. css may be nil to represent an empty
-// stylesheet.
-/*
-func newRulesTree(css *css.Stylesheet) *rulesTree {
-	return &rulesTree{css, nil}
-}
-*/

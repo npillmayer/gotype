@@ -1,10 +1,9 @@
 package style
 
 import (
+	"errors"
 	"fmt"
-
-	"github.com/OneOfOne/xxhash"
-	"golang.org/x/net/html"
+	"strings"
 )
 
 /* -----------------------------------------------------------------
@@ -50,6 +49,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Property is a raw value for a CSS property.
 type Property string
 
+func (p Property) String() string {
+	return string(p)
+}
+
 // property = "initial"
 func (p Property) IsInitial() bool {
 	return p == "initial"
@@ -62,6 +65,12 @@ func (p Property) IsInherited() bool {
 
 func (p Property) IsEmpty() bool {
 	return p == ""
+}
+
+// temporary container
+type keyValue struct {
+	key   string
+	value Property
 }
 
 // --- CSS Property Groups ----------------------------------------------
@@ -148,6 +157,9 @@ func (pg *propertyGroup) Cascade(key string) *propertyGroup {
 // Class values have to be sorted.
 //
 // Returns hash and number of ID+class attributes.
+//
+// TODO
+/*
 func HashSignatureAttributes(htmlNode *html.Node) (uint32, uint8) {
 	var hash uint32 = 0
 	var count uint8 = 0
@@ -167,6 +179,7 @@ func HashSignatureAttributes(htmlNode *html.Node) (uint32, uint8) {
 	hash = xxhash.Checksum32([]byte(signature))
 	return hash, count
 }
+*/
 
 var groupNameFromPropertyKey = map[string]string{
 	"margin-top":                 "Margins", // Margins
@@ -199,6 +212,70 @@ var groupNameFromPropertyKey = map[string]string{
 	"min-height":                 "Dimension",
 	"max-width":                  "Dimension",
 	"max-height":                 "Dimension",
+}
+
+// SplitCompountProperty splits up a shortcut property into its individual
+// components.
+func splitCompountProperty(key string, value Property) ([]keyValue, error) {
+	fields := strings.Fields(value.String())
+	switch key {
+	case "margins":
+		return feazeCompound4("margin", "", fourDirs, fields)
+	case "padding":
+		return feazeCompound4("padding", "", fourDirs, fields)
+	case "border-color":
+		return feazeCompound4("border", "color", fourDirs, fields)
+	case "border-width":
+		return feazeCompound4("border", "width", fourDirs, fields)
+	case "border-style":
+		return feazeCompound4("border", "style", fourDirs, fields)
+	case "border-radius":
+		return feazeCompound4("border", "style", fourCorners, fields)
+	}
+	return nil, errors.New(fmt.Sprintf("Not recognized as compound property: %s", key))
+}
+
+// CSS logic to distribute individual values from compound shortcuts is as
+// follows: https://www.w3schools.com/css/css_border.asp
+func feazeCompound4(pre string, suf string, dirs [4]string, fields []string) ([]keyValue, error) {
+	l := len(fields)
+	if l == 0 || l > 4 {
+		return nil, errors.New(fmt.Sprintf("Expecting 1-3 values for %s-%s", pre, suf))
+	}
+	r := make([]keyValue, 4, 4)
+	r[0] = keyValue{p(pre, suf, dirs[0]), Property(fields[0])}
+	if l >= 2 {
+		r[1] = keyValue{p(pre, suf, dirs[1]), Property(fields[1])}
+		if l >= 3 {
+			r[2] = keyValue{p(pre, suf, dirs[2]), Property(fields[2])}
+			if l == 4 {
+				r[3] = keyValue{p(pre, suf, dirs[3]), Property(fields[3])}
+			} else {
+				r[3] = keyValue{p(pre, suf, dirs[3]), Property(fields[1])}
+			}
+		} else {
+			r[2] = keyValue{p(pre, suf, dirs[2]), Property(fields[0])}
+			r[3] = keyValue{p(pre, suf, dirs[3]), Property(fields[1])}
+		}
+	} else {
+		r[1] = keyValue{p(pre, suf, dirs[1]), Property(fields[0])}
+		r[2] = keyValue{p(pre, suf, dirs[2]), Property(fields[0])}
+		r[3] = keyValue{p(pre, suf, dirs[3]), Property(fields[0])}
+	}
+	return r, nil
+}
+
+var fourDirs = [4]string{"top", "right", "bottom", "left"}
+var fourCorners = [4]string{"top-right", "bottom-right", "bottom-left", "top-left"}
+
+func p(prefix string, suffix string, tag string) string {
+	if suffix == "" {
+		return prefix + "-" + tag
+	}
+	if prefix == "" {
+		return tag + "-" + suffix
+	}
+	return prefix + "-" + tag + "-" + suffix
 }
 
 // PropertyMap holds CSS properties. As CSS defines a whole lot of properties,

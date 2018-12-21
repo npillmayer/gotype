@@ -40,11 +40,15 @@ on many feature in order to complete this in a realistic time frame.
 For a reminder of why that is, refer to
 https://www.youtube.com/watch?v=S68fcV09nGQ .
 
+This package relies on just one non-standard external library: cascadia.
+CSS handling is de-coupled by introducing appropriate interfaces
+StyleSheet and Rule. Concrete implementations may be found in sub-packages
+of package style.
+
 Further to consider:
 
-   https://github.com/aymerick/douceur
+   https://godoc.org/github.com/ericchiang/css
    https://golanglibs.com/search?q=css+parser&sort=top
-
    https://www.mediaevent.de/xhtml/style.html
 
 The styling component is difficult to document/describe without

@@ -3,6 +3,7 @@ package style
 import (
 	"log"
 	"strings"
+	"testing"
 
 	//	"testing"
 
@@ -37,6 +38,15 @@ body, h1, ul, p   {
 		panic("error parsing test CSS")
 	}
 	return stylesheet
+}
+
+func TestFindBody(t *testing.T) {
+	tree := getTestDOM()
+	n := findBodyElement(tree)
+	t.Logf("found node = %v", n)
+	if n == nil {
+		t.Error("element <body> should have been found in DOM")
+	}
 }
 
 /*
