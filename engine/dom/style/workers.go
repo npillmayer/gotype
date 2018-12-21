@@ -5,8 +5,6 @@ import (
 	"sync"
 )
 
-// TODO who detects empty workload?
-
 // We will employ a small helper for managing worker goroutines.
 type workerLauncher int
 
@@ -15,10 +13,10 @@ type workerLauncher int
 //
 // Call the launcher like this:
 //
-//     workers := launch(3).workers(task, workload, errors)
-//     watch(workers) // async, spawns a goroutine to wait for workers
-//     ... // do something with workload
-//     errlist := collect(errors) // read errors util closed => no more workers active
+//    workers := launch(3).workers(task, workload, errors)
+//    watch(workers, doSomething)  // async, to wait for workers, called only once
+//    order(workers, doSomething)  // create more workload, called many times
+//    errlist := collect(errors)   // read errors util closed => no more workers active
 //
 // This pattern follows the one in "The Go Programming Language", chapter 8.5.
 //
@@ -37,22 +35,21 @@ func launch(n int) workerLauncher {
 func (launcher workerLauncher) workers(task workerTask, workload chan workPackage,
 	errorch chan<- error) *workergroup {
 	workers := &workergroup{}
-	workers.waitgroup = sync.WaitGroup{}
+	workers.queuecount = sync.WaitGroup{}
 	workers.workload = workload
 	workers.errorch = errorch
 	for i := 0; i < int(launcher); i++ {
-		workers.waitgroup.Add(1)
 		wno := i + 1
 		go func(workload <-chan workPackage) {
 			defer func() {
 				fmt.Printf("finished worker #%d\n", wno)
-				workers.waitgroup.Done() // will call this when no more work to be done
 			}()
 			for wp := range workload { // get workpackages until drained
 				err := task(wp) // perform task on workpackage
 				if err != nil {
 					errorch <- err // signal error to caller
 				}
+				workers.queuecount.Done() // worker has finished a workpackage
 			}
 		}(workload)
 	}
@@ -62,20 +59,29 @@ func (launcher workerLauncher) workers(task workerTask, workload chan workPackag
 // workergroup is a helper to asynchronously wait for a group of workers
 // to complete the workload.
 type workergroup struct {
-	waitgroup sync.WaitGroup
-	workload  chan workPackage
-	errorch   chan<- error
+	queuecount sync.WaitGroup   // count of work packages
+	workload   chan workPackage // channel for work packages
+	errorch    chan<- error     // response channel for error messages
 }
 
 // waitfor spawns a goroutine to wait for completion of a worker group.
 // It will close input- and output-channel supplies for the call to launch.
 // Closing errorch should signal to the caller that no more worker is running.
-func watch(workers *workergroup) {
+func watch(workers *workergroup, wp workPackage) {
 	go func() {
-		workers.waitgroup.Wait()
+		order(workers, wp)        // must be before q.Wait()
+		workers.queuecount.Wait() // wait for empty queue
 		fmt.Printf("all workers are done\n")
 		close(workers.errorch)
 	}()
+}
+
+// Order a new workpackage, i.e. put it on the workload queue.
+func order(workers *workergroup, wp workPackage) {
+	workers.queuecount.Add(1) // must be before put
+	go func(wp workPackage) {
+		workers.workload <- wp
+	}(wp)
 }
 
 // Collect error message from workers, waiting synchronously until
@@ -83,12 +89,14 @@ func watch(workers *workergroup) {
 func collect(errorch <-chan error) []error {
 	var e []error
 	for err := range errorch {
-		e = append(e, err)
+		if err != nil {
+			e = append(e, err)
+		}
 	}
 	return e
 }
 
-// workers will be tasked a series of workerTasks.
+// Workers will be tasked a series of workerTasks.
 type workerTask func(wp workPackage) error
 
 // TODO define a styled node work package.
