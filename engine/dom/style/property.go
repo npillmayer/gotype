@@ -282,8 +282,26 @@ func p(prefix string, suffix string, tag string) string {
 // we segment them into logical group.
 //
 // We make this public in order to enable clients to extend the set of
-// supported properties.
+// supported properties. Use AppProperty(...) to add custom properties.
 type PropertyMap map[string]*propertyGroup
+
+// Add a property to this property map, e.g.,
+//
+//    pm.AddProperty("Margins", "funny-margin", "big")
+//
+// If groupname is empty, it will be set to "X".
+func (pm PropertyMap) AddProperty(groupname string, key string, value string) {
+	if pm != nil {
+		if groupname == "" {
+			groupname = "X"
+		}
+		group, found := pm[groupname]
+		if !found {
+			group = newPropertyGroup(groupname)
+		}
+		group.Set(key, Property(value))
+	}
+}
 
 // InitializeDefaultPropertyValues creates an internal data structure to
 // hold all the default values for CSS properties.

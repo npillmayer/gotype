@@ -20,7 +20,7 @@ TODO
 + be independent from goquery
 + be independent form douceur.css
 - Fix API:
-  - create StyledTree using factory
+  + create StyledTree using factory
   - define extension points for future properties: group "X"; registerCompound(key, func(...))
 - make concurrent
 + Document code
@@ -137,7 +137,8 @@ func (cssom CSSOM) AddStylesFor(scope *html.Node, css StyleSheet, source Propert
 }
 
 // bodyElement is a symbolic node to denote the body element of a future
-// HTML document.
+// HTML document. AddStylesFor(...) with nil as a scope will replace it
+// with this marker for scoping the complete document body.
 var bodyElement *html.Node = &html.Node{}
 
 // Empty is a predicate wether a stylesheet is empty, i.e. does not contain
@@ -243,7 +244,7 @@ func (matches *matchesList) SortProperties() {
 	}
 }
 
-func (matches *matchesList) createStyleGroups(parent *StyledNode) map[string]*propertyGroup {
+func (matches *matchesList) createStyleGroups(parent StyledNode) map[string]*propertyGroup {
 	m := make(map[string]*propertyGroup)
 	done := make(map[string]bool, len(matches.propertiesTable))
 	for _, pspec := range matches.propertiesTable { // for every specifity entry
@@ -261,7 +262,7 @@ func (matches *matchesList) createStyleGroups(parent *StyledNode) map[string]*pr
 		if group, exists := m[groupname]; exists {
 			group.Set(pspec.propertyKey, pspec.propertyValue)
 		} else {
-			_, pg := parent.findAncestorWithPropertyGroup(groupname) // must succeed
+			_, pg := findAncestorWithPropertyGroup(parent, groupname) // must succeed
 			if pg == nil {
 				panic(fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", groupname))
 			}
@@ -286,16 +287,19 @@ func (matches *matchesList) createStyleGroups(parent *StyledNode) map[string]*pr
 // --- Specifity of rules -----------------------------------------------
 
 type specifity struct {
-	source        PropertySource
-	rule          Rule
-	propertyKey   string
-	propertyValue Property
-	important     bool
-	spec          uint32
+	source        PropertySource // where the property has been defined
+	rule          Rule           // the rule containing the property definition
+	propertyKey   string         // CSS property name
+	propertyValue Property       // raw string value
+	important     bool           // marked as !IMPORTANT ?
+	spec          uint32         // specifity value to calculate; higher is more
 }
 
 // CalcSpecifity calculates an appromiation to the true W3C specifity.
 // https://www.smashingmagazine.com/2007/07/css-specificity-things-you-should-know/
+//
+// no is a sequence number for rules, ensuring that later rules override
+// previously defined rules / properties.
 func (sp *specifity) calcSpecifity(no int) {
 	if sp.rule.IsImportant(sp.propertyKey) {
 		sp.spec = 99999 // max
@@ -327,6 +331,17 @@ func (sp *specifity) calcSpecifity(no int) {
 
 // --- Styled Node Tree -------------------------------------------------
 
+type StyledNode interface {
+	Parent() StyledNode
+	LinkToParent(StyledNode)
+	ComputedStyles() PropertyMap
+	SetComputedStyles(PropertyMap)
+}
+
+type NodeFactory interface {
+	NodeFor(*html.Node) StyledNode
+}
+
 /*
 Creation of node:
 - link to html node
@@ -345,35 +360,25 @@ need not be a member function
 Tree als extra type ?
 = viewport ? (normaler styled node)
 
-*/
 type StyledNodeTree struct {
 	root          *StyledNode
 	defaultStyles map[string]*propertyGroup
 }
+*/
 
-func setupStyledNodeTree(domRoot *html.Node) *StyledNodeTree {
+func setupStyledNodeTree(domRoot *html.Node, factory NodeFactory) StyledNode {
 	defaultStyles := InitializeDefaultPropertyValues()
-	viewport := &StyledNode{}
-	viewport.node = domRoot
-	viewport.computedStyles = defaultStyles
-	tree := &StyledNodeTree{viewport, defaultStyles}
-	return tree
+	viewport := factory.NodeFor(domRoot)
+	viewport.SetComputedStyles(defaultStyles)
+	return viewport
 }
 
-// StyledNodes are the building blocks of the styled tree.
-type StyledNode struct {
-	node           *html.Node
-	computedStyles map[string]*propertyGroup
-	parent         *StyledNode
-	children       []*StyledNode
-}
-
-func (sn *StyledNode) findAncestorWithPropertyGroup(group string) (*StyledNode, *propertyGroup) {
+func findAncestorWithPropertyGroup(sn StyledNode, group string) (StyledNode, *propertyGroup) {
 	var pg *propertyGroup
 	it := sn
 	for it != nil && pg == nil {
-		pg = it.computedStyles[group]
-		it = it.parent
+		pg = it.ComputedStyles()[group]
+		it = it.Parent()
 	}
 	return it, pg
 }
@@ -382,17 +387,17 @@ func (sn *StyledNode) findAncestorWithPropertyGroup(group string) (*StyledNode, 
 // https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/
 // and
 // https://limpet.net/mbrubeck/2014/08/23/toy-layout-engine-4-style.html
-func (cssom CSSOM) Style(dom *html.Node) (*StyledNodeTree, error) {
+func (cssom CSSOM) Style(dom *html.Node, factory NodeFactory) (StyledNode, error) {
 	if dom == nil {
 		return nil, errors.New("Nothing to style: empty document")
 	}
-	styledTree := setupStyledNodeTree(dom)
+	styledRootNode := setupStyledNodeTree(dom, factory)
 	runner, err := cssom.attachStylesheets(dom)
 	if err != nil {
 		return nil, err
 	}
-	runner.doStyle(runner.startNode, styledTree.root)
-	return styledTree, nil
+	runner.doStyle(runner.startNode, styledRootNode, factory)
+	return styledRootNode, nil
 }
 
 // Scopes for all ruletrees have to be HTML element nodes.
@@ -452,13 +457,11 @@ func (runner *stylingRunner) activateStylesheetsFor(node *html.Node) {
 	}
 }
 
-func (runner *stylingRunner) doStyle(node *html.Node, parent *StyledNode) {
+func (runner *stylingRunner) doStyle(node *html.Node, parent StyledNode, factory NodeFactory) {
 	runner.activateStylesheetsFor(node)
 	if createsStyledNode(node.Type) {
-		sn := &StyledNode{}
-		sn.node = node
-		sn.parent = parent
-		parent.children = append(parent.children, sn)
+		sn := factory.NodeFor(node)
+		sn.LinkToParent(parent)
 		var matchingRules *matchesList
 		for _, rulesTree := range runner.activeStylers {
 			matches := rulesTree.FilterMatchesFor(node)
@@ -467,24 +470,32 @@ func (runner *stylingRunner) doStyle(node *html.Node, parent *StyledNode) {
 		if matchingRules != nil {
 			matchingRules.SortProperties()
 			groups := matchingRules.createStyleGroups(parent)
-			sn.computedStyles = groups // may be nil
+			sn.SetComputedStyles(groups) // may be nil
 		}
 		parent = sn // continue with newly created styled node
 	}
 	node = node.FirstChild // now recurse into children
 	for node != nil {
 		if node.Type == html.ElementNode {
-			runner.doStyle(node, parent)
+			runner.doStyle(node, parent, factory) // TODO make this concurrent
 		}
 		node = node.NextSibling
 	}
 }
 
-// --- Getting Property Values ------------------------------------------
+// ----------------------------------------------------------------------
 
-// TODO
-func (sn *StyledNode) TODO_GetProperty(group string, key string) Property {
-	_, pg := sn.findAncestorWithPropertyGroup(group) // must succeed
+// GetCascaded gets the value of a property. The search cascades to
+// parent property maps, if available.
+//
+// This is normally called on a tree of styled nodes and it will cascade
+// all the way up to the default properties, if necessary.
+func GetCascadedProperty(sn StyledNode, key string) Property {
+	group, found := groupNameFromPropertyKey[key]
+	if !found {
+		group = "X"
+	}
+	_, pg := findAncestorWithPropertyGroup(sn, group) // must succeed
 	if pg == nil {
 		panic(fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", group))
 	}
