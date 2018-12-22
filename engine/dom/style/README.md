@@ -44,4 +44,4 @@ of package style.
 
 # Dependencies
 
-![graph](https://user-images.githubusercontent.com/4531688/50376896-2e745800-0614-11e9-8744-9a041bb253bb.png)
+![graph](https://user-images.githubusercontent.com/4531688/50376896-2e745800-0614-11e9-8744-9a041bb253bb.png | width=300)
