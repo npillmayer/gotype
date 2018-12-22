@@ -21,7 +21,8 @@ TODO
 + be independent form douceur.css
 - Fix API:
   + create StyledTree using factory
-  - define extension points for future properties: group "X"; registerCompound(key, func(...))
+  + define extension points for future properties: group "X"; registerCompound(key, func(...))
+- write lots of tests
 - make concurrent
 + Document code
 - Create Diagram -> Wiki
@@ -71,7 +72,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Stylesheets are wrapped into an internal rules tree.
 type CSSOM struct {
 	rules             map[*html.Node]rulesTree
-	defaultProperties PropertyMap
+	defaultProperties *PropertyMap
+	compoundSplitters []CompoundPropertiesSplitter
 }
 
 // RulesTree holds the styling rules of a stylesheet.
@@ -85,16 +87,28 @@ type rulesTree struct {
 	source     PropertySource               // where do these rules come from?
 }
 
+// Compound properties are properties which abbreviate the
+// setting of more fine grained propertes. An example is
+//    padding: 10px 20px
+// which sets the following detail properties:
+//    padding-top:    10px
+//    padding-right:  20px
+//    padding-bottom: 10px
+//    padding-left:   20px
+// Standard CSS compound properties are known by default, but clients are
+// allowed to extend the set of compound properties.
+type CompoundPropertiesSplitter func(string, Property) ([]KeyValue, error)
+
 // NewCSSOM creates an empty CSSOM.
-// Clients need to supply a map of default property values.
-// If pmap is nil, NewCSSOM will create a standard map.
-func NewCSSOM(pmap PropertyMap) CSSOM {
-	if pmap == nil {
-		pmap = InitializeDefaultPropertyValues()
-	}
+// Clients are allowed to supply a map of additional/custom CSS property values.
+// These may override values of the default ("user-agent") style sheet,
+// or introduce completely new styling properties.
+func NewCSSOM(additionalProperties []KeyValue) CSSOM {
 	cssom := CSSOM{}
 	cssom.rules = make(map[*html.Node]rulesTree)
-	cssom.defaultProperties = pmap
+	cssom.defaultProperties = initializeDefaultPropertyValues(additionalProperties)
+	cssom.compoundSplitters = make([]CompoundPropertiesSplitter, 1)
+	cssom.compoundSplitters[0] = splitCompoundProperty
 	return cssom
 }
 
@@ -102,7 +116,7 @@ func NewCSSOM(pmap PropertyMap) CSSOM {
 // reference link, within a <script> element in the HTML file, or in an
 // attribute value.
 //
-// PropertySource influences the specifity of rules.
+// PropertySource affects the specifity of rules.
 type PropertySource uint8
 
 // Values for property sources, used when adding style sheets.
@@ -119,6 +133,8 @@ const (
 // body (i.e., top-level content element) of a future document.
 //
 // source hints to where the stylesheet comes from.
+// Its value will affect the calculation of specifity for rules of this
+// stylesheet.
 func (cssom CSSOM) AddStylesFor(scope *html.Node, css StyleSheet, source PropertySource) error {
 	rules, exists := cssom.rules[scope]
 	if exists && css != nil {
@@ -140,6 +156,14 @@ func (cssom CSSOM) AddStylesFor(scope *html.Node, css StyleSheet, source Propert
 // HTML document. AddStylesFor(...) with nil as a scope will replace it
 // with this marker for scoping the complete document body.
 var bodyElement *html.Node = &html.Node{}
+
+// RegisterCompoundSplitter allows clients to handle additional compound
+// properties. See type CompoundPropertiesSplitter.
+func (cssom CSSOM) RegisterCompoundSplitter(splitter CompoundPropertiesSplitter) {
+	if splitter != nil {
+		cssom.compoundSplitters = append(cssom.compoundSplitters, splitter)
+	}
+}
 
 // Empty is a predicate wether a stylesheet is empty, i.e. does not contain
 // any rules.
@@ -218,7 +242,7 @@ func (matches *matchesList) SortProperties() {
 	for rno, rule := range matches.matchingRules {
 		for _, propertyKey := range rule.Properties() {
 			value := Property(rule.Value(propertyKey))
-			props, err := splitCompountProperty(propertyKey, value)
+			props, err := splitCompoundProperty(propertyKey, value)
 			if err != nil {
 				sp := specifity{Author, rule, propertyKey, value, rule.IsImportant(propertyKey), 0}
 				sp.calcSpecifity(rno)
@@ -226,8 +250,8 @@ func (matches *matchesList) SortProperties() {
 			} else {
 				tracing.EngineTracer.Debugf("%s is a compound style", propertyKey)
 				for _, kv := range props {
-					key := kv.key
-					val := kv.value
+					key := kv.Key
+					val := kv.Value
 					sp := specifity{Author, rule, key, val, rule.IsImportant(propertyKey), 0}
 					sp.calcSpecifity(rno)
 					proptable = append(proptable, sp)
@@ -250,8 +274,8 @@ func (matches *matchesList) createStyleGroups(parent StyledNode) map[string]*pro
 	for _, pspec := range matches.propertiesTable { // for every specifity entry
 		groupname, found := groupNameFromPropertyKey[pspec.propertyKey]
 		if !found {
-			tracing.EngineTracer.Infof("Don't know about CSS property: %s", pspec.propertyKey)
-			continue
+			tracing.EngineTracer.Debugf("Don't know about CSS property: %s", pspec.propertyKey)
+			groupname = "X" // assume client uses custom properties
 		}
 		if done[pspec.propertyKey] {
 			// already present in current properties map
@@ -331,45 +355,26 @@ func (sp *specifity) calcSpecifity(no int) {
 
 // --- Styled Node Tree -------------------------------------------------
 
+// StyledNode is the node type for the styled tree to build. The CSSOM
+// styler builds a tree of styled nodes, more or less corresponding to the
+// stylable DOM nodes. We de-couple the Styler from the type of the resulting
+// styled nodes by using a factory (see NodeFactory) and an interface type.
 type StyledNode interface {
 	Parent() StyledNode
 	LinkToParent(StyledNode)
-	ComputedStyles() PropertyMap
-	SetComputedStyles(PropertyMap)
+	ComputedStyles() *PropertyMap
+	SetComputedStyles(*PropertyMap)
 }
 
+// NodeFactory is a factory to create conrete implementations of interface
+// StyleNode (see type StyledNode).
 type NodeFactory interface {
 	NodeFor(*html.Node) StyledNode
 }
 
-/*
-Creation of node:
-- link to html node
-
-Link (double?) when in Child
-- add to children
-- set parent for child
-
-Set computed styles
-
-Get computed styles (for a group?)
-
-parent.findAncestorWithPropertyGroup(groupname)
-need not be a member function
-
-Tree als extra type ?
-= viewport ? (normaler styled node)
-
-type StyledNodeTree struct {
-	root          *StyledNode
-	defaultStyles map[string]*propertyGroup
-}
-*/
-
-func setupStyledNodeTree(domRoot *html.Node, factory NodeFactory) StyledNode {
-	defaultStyles := InitializeDefaultPropertyValues()
+func setupStyledNodeTree(domRoot *html.Node, defaults *PropertyMap, factory NodeFactory) StyledNode {
 	viewport := factory.NodeFor(domRoot)
-	viewport.SetComputedStyles(defaultStyles)
+	viewport.SetComputedStyles(defaults)
 	return viewport
 }
 
@@ -377,25 +382,33 @@ func findAncestorWithPropertyGroup(sn StyledNode, group string) (StyledNode, *pr
 	var pg *propertyGroup
 	it := sn
 	for it != nil && pg == nil {
-		pg = it.ComputedStyles()[group]
+		pg = it.ComputedStyles().m[group]
 		it = it.Parent()
 	}
 	return it, pg
 }
 
+// Style() gets things rolling. It styles a DOM, referred to by the root
+// node, and returns a tree of styled nodes.
 // For an explanation what's going on here, refer to
 // https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/
 // and
 // https://limpet.net/mbrubeck/2014/08/23/toy-layout-engine-4-style.html
+//
+// If either dom or factory are nil, no tree is returned (plus an error).
 func (cssom CSSOM) Style(dom *html.Node, factory NodeFactory) (StyledNode, error) {
 	if dom == nil {
 		return nil, errors.New("Nothing to style: empty document")
 	}
-	styledRootNode := setupStyledNodeTree(dom, factory)
+	if factory == nil {
+		return nil, errors.New("Cannot style: no factory to create styles nodes")
+	}
+	styledRootNode := setupStyledNodeTree(dom, cssom.defaultProperties, factory)
 	runner, err := cssom.attachStylesheets(dom)
 	if err != nil {
 		return nil, err
 	}
+	runner.splitters = cssom.compoundSplitters // hack, sorry
 	runner.doStyle(runner.startNode, styledRootNode, factory)
 	return styledRootNode, nil
 }
@@ -439,6 +452,7 @@ type stylingRunner struct {
 	activeStylers   map[*html.Node]rulesTree
 	inactiveStylers map[*html.Node]rulesTree
 	startNode       *html.Node
+	splitters       []CompoundPropertiesSplitter
 }
 
 func newStylingRunner() *stylingRunner {
@@ -470,7 +484,7 @@ func (runner *stylingRunner) doStyle(node *html.Node, parent StyledNode, factory
 		if matchingRules != nil {
 			matchingRules.SortProperties()
 			groups := matchingRules.createStyleGroups(parent)
-			sn.SetComputedStyles(groups) // may be nil
+			sn.SetComputedStyles(&PropertyMap{groups}) // groups may be nil
 		}
 		parent = sn // continue with newly created styled node
 	}
@@ -482,6 +496,18 @@ func (runner *stylingRunner) doStyle(node *html.Node, parent StyledNode, factory
 		node = node.NextSibling
 	}
 }
+
+func (runner *stylingRunner) splitCompoundProperties(key string, value Property) ([]KeyValue, error) {
+	for _, splitter := range runner.splitters {
+		kv, err := splitter(key, value)
+		if err != nil {
+			return kv, err
+		}
+	}
+	return nil, errNoSuchCompoundProperty
+}
+
+var errNoSuchCompoundProperty error = errors.New("No such compound property")
 
 // ----------------------------------------------------------------------
 

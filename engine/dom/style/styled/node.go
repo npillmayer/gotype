@@ -34,7 +34,7 @@ type StyledNodeTree struct {
 // StyledNodes are the building blocks of the styled tree.
 type Node struct {
 	node           *html.Node
-	computedStyles style.PropertyMap
+	computedStyles *style.PropertyMap
 	parent         *Node
 	children       []*Node
 }
@@ -60,12 +60,12 @@ func (sn *Node) LinkToParent(parent style.StyledNode) {
 }
 
 // Interface style.StyledNode.
-func (sn Node) ComputedStyles() style.PropertyMap {
+func (sn Node) ComputedStyles() *style.PropertyMap {
 	return sn.computedStyles
 }
 
 // Interface style.StyledNode.
-func (sn *Node) SetComputedStyles(styles style.PropertyMap) {
+func (sn *Node) SetComputedStyles(styles *style.PropertyMap) {
 	sn.computedStyles = styles
 }
 

@@ -46,7 +46,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // https://www.tutorialrepublic.com/css-reference/css3-properties.php
 // https://www.mediaevent.de/xhtml/kernattribute.html
 
-// Property is a raw value for a CSS property.
+// Property is a raw value for a CSS property. For example, with
+//     color: black
+// a property value of "black" is set.
 type Property string
 
 func (p Property) String() string {
@@ -67,10 +69,10 @@ func (p Property) IsEmpty() bool {
 	return p == ""
 }
 
-// temporary container
-type keyValue struct {
-	key   string
-	value Property
+// KeyValue is a container for a style property.
+type KeyValue struct {
+	Key   string
+	Value Property
 }
 
 // --- CSS Property Groups ----------------------------------------------
@@ -216,7 +218,7 @@ var groupNameFromPropertyKey = map[string]string{
 
 // SplitCompountProperty splits up a shortcut property into its individual
 // components.
-func splitCompountProperty(key string, value Property) ([]keyValue, error) {
+func splitCompoundProperty(key string, value Property) ([]KeyValue, error) {
 	fields := strings.Fields(value.String())
 	switch key {
 	case "margins":
@@ -237,30 +239,30 @@ func splitCompountProperty(key string, value Property) ([]keyValue, error) {
 
 // CSS logic to distribute individual values from compound shortcuts is as
 // follows: https://www.w3schools.com/css/css_border.asp
-func feazeCompound4(pre string, suf string, dirs [4]string, fields []string) ([]keyValue, error) {
+func feazeCompound4(pre string, suf string, dirs [4]string, fields []string) ([]KeyValue, error) {
 	l := len(fields)
 	if l == 0 || l > 4 {
 		return nil, errors.New(fmt.Sprintf("Expecting 1-3 values for %s-%s", pre, suf))
 	}
-	r := make([]keyValue, 4, 4)
-	r[0] = keyValue{p(pre, suf, dirs[0]), Property(fields[0])}
+	r := make([]KeyValue, 4, 4)
+	r[0] = KeyValue{p(pre, suf, dirs[0]), Property(fields[0])}
 	if l >= 2 {
-		r[1] = keyValue{p(pre, suf, dirs[1]), Property(fields[1])}
+		r[1] = KeyValue{p(pre, suf, dirs[1]), Property(fields[1])}
 		if l >= 3 {
-			r[2] = keyValue{p(pre, suf, dirs[2]), Property(fields[2])}
+			r[2] = KeyValue{p(pre, suf, dirs[2]), Property(fields[2])}
 			if l == 4 {
-				r[3] = keyValue{p(pre, suf, dirs[3]), Property(fields[3])}
+				r[3] = KeyValue{p(pre, suf, dirs[3]), Property(fields[3])}
 			} else {
-				r[3] = keyValue{p(pre, suf, dirs[3]), Property(fields[1])}
+				r[3] = KeyValue{p(pre, suf, dirs[3]), Property(fields[1])}
 			}
 		} else {
-			r[2] = keyValue{p(pre, suf, dirs[2]), Property(fields[0])}
-			r[3] = keyValue{p(pre, suf, dirs[3]), Property(fields[1])}
+			r[2] = KeyValue{p(pre, suf, dirs[2]), Property(fields[0])}
+			r[3] = KeyValue{p(pre, suf, dirs[3]), Property(fields[1])}
 		}
 	} else {
-		r[1] = keyValue{p(pre, suf, dirs[1]), Property(fields[0])}
-		r[2] = keyValue{p(pre, suf, dirs[2]), Property(fields[0])}
-		r[3] = keyValue{p(pre, suf, dirs[3]), Property(fields[0])}
+		r[1] = KeyValue{p(pre, suf, dirs[1]), Property(fields[0])}
+		r[2] = KeyValue{p(pre, suf, dirs[2]), Property(fields[0])}
+		r[3] = KeyValue{p(pre, suf, dirs[3]), Property(fields[0])}
 	}
 	return r, nil
 }
@@ -280,24 +282,18 @@ func p(prefix string, suffix string, tag string) string {
 
 // PropertyMap holds CSS properties. As CSS defines a whole lot of properties,
 // we segment them into logical group.
-//
-// We make this public in order to enable clients to extend the set of
-// supported properties. Use AppProperty(...) to add custom properties.
-type PropertyMap map[string]*propertyGroup
+type PropertyMap struct {
+	m map[string]*propertyGroup // into struct to make it opaque for clients
+}
 
-// Add a property to this property map, e.g.,
-//
-//    pm.AddProperty("Margins", "funny-margin", "big")
-//
-// If groupname is empty, it will be set to "X".
-func (pm PropertyMap) AddProperty(groupname string, key string, value string) {
+// Add adds a property to this property map, e.g.,
+//    pm.Add("funny-margin", "big")
+func (pm *PropertyMap) Add(key string, value string) {
 	if pm != nil {
-		if groupname == "" {
-			groupname = "X"
-		}
-		group, found := pm[groupname]
+		group, found := pm.m["X"]
 		if !found {
-			group = newPropertyGroup(groupname)
+			group = newPropertyGroup("X")
+			pm.m["X"] = group
 		}
 		group.Set(key, Property(value))
 	}
@@ -306,11 +302,15 @@ func (pm PropertyMap) AddProperty(groupname string, key string, value string) {
 // InitializeDefaultPropertyValues creates an internal data structure to
 // hold all the default values for CSS properties.
 // In real-world browsers these are the user-agent CSS values.
-//
-// Clients will have to supply this structure at creation time of CSSOM.
-func InitializeDefaultPropertyValues() PropertyMap {
+func initializeDefaultPropertyValues(additionalProps []KeyValue) *PropertyMap {
 	m := make(map[string]*propertyGroup, 15)
 	root := newPropertyGroup("Root")
+
+	x := newPropertyGroup("X") // special group for extension properties
+	for _, kv := range additionalProps {
+		x.Set(kv.Key, kv.Value)
+	}
+	m["X"] = x
 
 	margins := newPropertyGroup("Margins")
 	margins.Set("margin-top", "0")
@@ -452,5 +452,5 @@ func InitializeDefaultPropertyValues() PropertyMap {
 
 	*/
 
-	return m
+	return &PropertyMap{m}
 }
