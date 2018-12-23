@@ -48,7 +48,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Property is a raw value for a CSS property. For example, with
 //     color: black
-// a property value of "black" is set.
+// a property value of "black" is set. The main purpose of wrapping
+// the raw string value into type Property is to provide a set of
+// convenient type conversion functions.
 type Property string
 
 func (p Property) String() string {
@@ -79,7 +81,7 @@ type KeyValue struct {
 //
 // Caching is currently not implemented.
 
-// propertyGroup is a collected of propertes sharing a common topic.
+// propertyGroup is a collection of propertes sharing a common topic.
 // CSS knows a whole lot of properties. We split them up into organisatorial
 // groups.
 //
@@ -133,13 +135,15 @@ func (pg *propertyGroup) Set(key string, p Property) {
 }
 
 func (pg *propertyGroup) SpawnOn(key string, p Property, cascade bool) (*propertyGroup, bool) {
+	var ancestor *propertyGroup
 	if cascade {
-		found := pg.Cascade(key)
-		if found.Get(key) == p {
+		ancestor = pg.Cascade(key)
+		if ancestor != nil && ancestor.Get(key) == p {
 			return pg, false
 		}
 	}
 	npg := newPropertyGroup(pg.name)
+	npg.Parent = ancestor
 	//npg.signature = pg.signature
 	npg.Set(key, p)
 	return npg, true
@@ -147,7 +151,7 @@ func (pg *propertyGroup) SpawnOn(key string, p Property, cascade bool) (*propert
 
 func (pg *propertyGroup) Cascade(key string) *propertyGroup {
 	it := pg
-	for !it.IsSet(key) { // stopper is default partial
+	for it != nil && !it.IsSet(key) { // stopper is default partial
 		it = it.Parent
 	}
 	return it
@@ -280,14 +284,15 @@ func p(prefix string, suffix string, tag string) string {
 	return prefix + "-" + tag + "-" + suffix
 }
 
-// PropertyMap holds CSS properties. As CSS defines a whole lot of properties,
-// we segment them into logical group.
+// PropertyMap holds CSS properties.
 type PropertyMap struct {
+	// As CSS defines a whole lot of properties, we segment them into logical group.
 	m map[string]*propertyGroup // into struct to make it opaque for clients
 }
 
 // Add adds a property to this property map, e.g.,
 //    pm.Add("funny-margin", "big")
+/*
 func (pm *PropertyMap) Add(key string, value string) {
 	if pm != nil {
 		group, found := pm.m["X"]
@@ -298,6 +303,7 @@ func (pm *PropertyMap) Add(key string, value string) {
 		group.Set(key, Property(value))
 	}
 }
+*/
 
 // InitializeDefaultPropertyValues creates an internal data structure to
 // hold all the default values for CSS properties.

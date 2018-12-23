@@ -395,7 +395,7 @@ func findAncestorWithPropertyGroup(sn StyledNode, group string) (StyledNode, *pr
 // and
 // https://limpet.net/mbrubeck/2014/08/23/toy-layout-engine-4-style.html
 //
-// If either dom or factory are nil, no tree is returned (plus an error).
+// If either dom or factory are nil, no tree is returned (but an error).
 func (cssom CSSOM) Style(dom *html.Node, factory NodeFactory) (StyledNode, error) {
 	if dom == nil {
 		return nil, errors.New("Nothing to style: empty document")
