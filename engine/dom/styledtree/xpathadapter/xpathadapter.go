@@ -1,6 +1,18 @@
 /*
 Package xpathadapter implements an xpath.NodeNavigator.
 
+We use this library for XPath queries:
+
+	github.com/antchfx/xpath
+
+Package xpathadapter implements an adapter to enable antchfx/xpath to
+access a styled tree, where nodes are of type styledtree.Node (the latter
+is the default implementation for a styled tree). For a possible usage
+of this package, refer to package dom (type dom.XPath).
+
+For a description of the various methods of interface xpath.NodeNavigator
+please refer to the documentation of antchfx/xpath. It is not replicated here.
+
 BSD License
 
 Copyright (c) 2017–18, Norbert Pillmayer
@@ -160,7 +172,7 @@ func (nav *NodeNavigator) MoveToChild() bool {
 	}
 	nav.chinx = 0
 	ok := false
-	nav.current, ok = nav.current.Child(0)
+	nav.current, ok = nav.current.ChildNode(0)
 	return ok
 }
 
@@ -171,7 +183,7 @@ func (nav *NodeNavigator) MoveToFirst() bool {
 	nav.chinx = 0
 	ok := true
 	parent := nav.current.Parent().(*styledtree.Node)
-	nav.current, ok = parent.Child(0)
+	nav.current, ok = parent.ChildNode(0)
 	return ok
 }
 
@@ -186,7 +198,7 @@ func (nav *NodeNavigator) MoveToNext() bool {
 	parent := nav.current.Parent().(*styledtree.Node)
 	if nav.chinx < parent.ChildCount()-1 {
 		nav.chinx++
-		ch, ok := parent.Child(nav.chinx)
+		ch, ok := parent.ChildNode(nav.chinx)
 		if ok {
 			nav.current = ch
 		}
@@ -202,7 +214,7 @@ func (nav *NodeNavigator) MoveToPrevious() bool {
 	if nav.chinx > 0 {
 		nav.chinx--
 		parent := nav.current.Parent().(*styledtree.Node)
-		ch, ok := parent.Child(nav.chinx)
+		ch, ok := parent.ChildNode(nav.chinx)
 		if ok {
 			nav.current = ch
 		}

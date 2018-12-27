@@ -1,10 +1,11 @@
 /*
 Package builder implements a builder for styled trees.
 
-Type Builder is an implementation of style.TreeBuilder.
-It is suited to be called from style.CSSOM to create a styled tree.
+Type Builder is an implementation of cssom.TreeBuilder.
+It is suited to be called from CSSOM.Style() to create a styled tree.
 
-This builder constructs a styled tree using type styledtree.Node.
+This builder constructs a styled tree using the default node type, i.e.
+styledtree.Node.
 
 BSD License
 
@@ -52,7 +53,7 @@ type Builder struct{}
 
 // MakeNodeFor creates a new styled node corresponding to an HTML DOM node.
 //
-// Interface style.StyledTreeBuilder.
+// Interface cssom.StyledTreeBuilder.
 func (b Builder) MakeNodeFor(n *html.Node) cssom.StyledNode {
 	sn := styledtree.NewNodeForHtmlNode(n)
 	return sn
@@ -71,10 +72,12 @@ func (b Builder) LinkNodeToParent(sn cssom.StyledNode, parent cssom.StyledNode) 
 		panic("LinkNodeToParent: cannot link to unknown type of styled node")
 	}
 	this := sn.(*styledtree.Node)
-	parent.AddChild(this) // concurrency-safe operation
+	p.AddChild(this) // concurrency-safe operation
 }
 
 // WalkUpwards walks to parent of node.
+//
+// Interface cssom.StyledTreeBuilder.
 func (b Builder) WalkUpwards(sn cssom.StyledNode) cssom.StyledNode {
 	this := sn.(*styledtree.Node)
 	return this.Parent().(*styledtree.Node)

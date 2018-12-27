@@ -1,12 +1,6 @@
+package styledtree
+
 /*
-Package styledtree implements a node type for styled trees.
-
-This is an implementation of style.StyledNode.
-It is suited to be called from style.CSSOM to create a styled tree
-(i.e., a builder type will construct a tree based on types in this package).
-
-This builder constructs a styled tree using type styledtree.Node.
-
 BSD License
 
 Copyright (c) 2017–18, Norbert Pillmayer
@@ -40,7 +34,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-package styledtree
 
 // https://github.com/antchfx/xpath       XPath for parser
 // https://github.com/antchfx/htmlquery   HTML DOM XPath
@@ -85,7 +78,8 @@ func (sn Node) HtmlNode() *html.Node {
 	return sn.htmlNode
 }
 
-func (sn Node) Parent() style.TreeNode {
+// ParentNode returns the parent node or nil (for the root of the tree).
+func (sn Node) ParentNode() *Node {
 	return sn.parent
 }
 
@@ -95,7 +89,7 @@ func (sn Node) ChildCount() int {
 }
 
 // Child is a safe way to get a children-node of a styled node.
-func (sn Node) Child(i int) (*Node, bool) {
+func (sn Node) ChildNode(i int) (*Node, bool) {
 	if sn.children.length() <= i {
 		return nil, false
 	}
@@ -111,6 +105,13 @@ func (sn *Node) AddChild(ch *Node) {
 		return
 	}
 	sn.children.addChild(ch)
+}
+
+// Parent returns the parent node of this node, as a style.TreeNode.
+//
+// Interface style.TreeNode.
+func (sn Node) Parent() style.TreeNode {
+	return sn.parent
 }
 
 // ----------------------------------------------------------------------
@@ -135,7 +136,9 @@ type childrenSlice struct {
 	slice []*Node
 }
 
-func (chs childrenSlice) length() int {
+func (chs *childrenSlice) length() int {
+	chs.RLock()
+	defer chs.RUnlock()
 	return len(chs.slice)
 }
 
@@ -149,11 +152,11 @@ func (chs *childrenSlice) addChild(child *Node) {
 }
 
 func (chs *childrenSlice) child(n int) *Node {
-	if len(chs.slice) == 0 || n >= len(chs.slice) {
+	if chs.length() == 0 || n < 0 || n >= chs.length() {
 		return nil
 	}
-	chs.Lock()
-	defer chs.Unlock()
+	chs.RLock()
+	defer chs.RUnlock()
 	return chs.slice[n]
 }
 

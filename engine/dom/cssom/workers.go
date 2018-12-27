@@ -99,5 +99,4 @@ func collect(errorch <-chan error) []error {
 // Workers will be tasked a series of workerTasks.
 type workerTask func(wp workPackage) error
 
-// TODO define a styled node work package.
-type workPackage int
+// workPackage is defined in file cssom.go

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/andybalholm/cascadia"
 	"github.com/npillmayer/gotype/core/config/tracing"
@@ -407,22 +408,21 @@ func (cssom CSSOM) Style(dom *html.Node, builder StyledTreeBuilder) (StyledNode,
 		return nil, errors.New("Cannot style: no builder to create styles nodes")
 	}
 	styledRootNode := setupStyledNodeTree(dom, cssom.defaultProperties, builder)
-	runner, err := cssom.attachStylesheets(dom)
+	runner := newStylingRunner(builder, cssom.compoundSplitters)
+	err := cssom.attachStylesheets(dom, runner)
 	if err != nil {
 		return nil, err
 	}
-	runner.splitters = cssom.compoundSplitters // hack, sorry
-	runner.doStyle(runner.startNode, styledRootNode, builder)
+	runner.doStyle(runner.startNode, styledRootNode)
 	return styledRootNode, nil
 }
 
 // Scopes for all ruletrees have to be HTML element nodes.
 // This is enforced during construction of the rules trees (adding to CSSDOM).
-func (cssom CSSOM) attachStylesheets(dom *html.Node) (*stylingRunner, error) {
+func (cssom CSSOM) attachStylesheets(dom *html.Node, runner *stylingRunner) error {
 	if dom == nil {
-		return nil, errors.New("Nothing to style: empty document")
+		return errors.New("Nothing to style: empty document")
 	}
-	runner := newStylingRunner()
 	for scope, rulestree := range cssom.rules {
 		var stylingRootElement *html.Node
 		if scope == bodyElement { // scope is body element, i.e. whole document
@@ -437,10 +437,10 @@ func (cssom CSSOM) attachStylesheets(dom *html.Node) (*stylingRunner, error) {
 			stylingRootElement = findThisNode(dom, scope)
 			if stylingRootElement == nil { // scope not not found in DOM
 				// do not try to proceed: client meant something else...
-				return nil, errors.New(fmt.Sprintf("Scope '%s' not found in DOM", scope.Data))
+				return errors.New(fmt.Sprintf("Scope '%s' not found in DOM", scope.Data))
 			}
 			if stylingRootElement.Type != html.ElementNode {
-				return nil, errors.New(fmt.Sprintf("Scope '%s' is not of element type", shorten(scope.Data)))
+				return errors.New(fmt.Sprintf("Scope '%s' is not of element type", shorten(scope.Data)))
 			}
 			runner.inactiveStylers[stylingRootElement] = rulestree
 		}
@@ -448,33 +448,67 @@ func (cssom CSSOM) attachStylesheets(dom *html.Node) (*stylingRunner, error) {
 	if runner.startNode == nil {
 		runner.startNode = dom
 	}
-	return runner, nil
+	return nil
 }
 
+// stylingRunner is a helper type for concurrent execution of node styling.
 type stylingRunner struct {
-	activeStylers   map[*html.Node]rulesTree
-	inactiveStylers map[*html.Node]rulesTree
-	startNode       *html.Node
-	splitters       []CompoundPropertiesSplitter
+	sync.RWMutex                                 // used to protect non-threadsafe code
+	activeStylers   map[*html.Node]rulesTree     // rules in scope
+	inactiveStylers map[*html.Node]rulesTree     // rules out of scope
+	startNode       *html.Node                   // usually document body
+	builder         StyledTreeBuilder            // the tree builder to use
+	splitters       []CompoundPropertiesSplitter // splitters for compound style properties
+	workers         *workergroup                 // concurrent workers
 }
 
-func newStylingRunner() *stylingRunner {
+// Create a new stylingRunner.
+func newStylingRunner(builder StyledTreeBuilder, splitters []CompoundPropertiesSplitter) *stylingRunner {
 	runner := &stylingRunner{}
 	runner.activeStylers = make(map[*html.Node]rulesTree)
 	runner.inactiveStylers = make(map[*html.Node]rulesTree)
+	runner.builder = builder
+	runner.splitters = splitters
 	return runner
 }
 
+// Check for a scope (= DOM node) whether new style sheets have to be
+// activated.
+//
+// Concurrency-safe.
 func (runner *stylingRunner) activateStylesheetsFor(node *html.Node) {
+	var sty *rulesTree
+	runner.RLock()
 	for scope, r := range runner.inactiveStylers {
 		if scope == node {
-			runner.activeStylers[scope] = r
-			delete(runner.inactiveStylers, scope)
+			sty = &r
+			break
 		}
+	}
+	runner.RUnlock()
+	if sty != nil {
+		runner.Lock()
+		defer runner.Unlock()
+		runner.activeStylers[node] = *sty
+		delete(runner.inactiveStylers, node)
 	}
 }
 
-func (runner *stylingRunner) doStyle(node *html.Node, parent StyledNode, builder StyledTreeBuilder) {
+// Currently starts 3 workers. TODO: make this configurable.
+func (runner *stylingRunner) doStyle(node *html.Node, parent StyledNode) {
+	workload := make(chan workPackage)
+	errors := make(chan error)
+	workers := launch(3).workers(styleSingleNode, workload, errors)
+	initialWorkPackage := workPackage{
+		runner:       runner,
+		node:         node,
+		styledParent: parent,
+	}
+	watch(workers, initialWorkPackage)
+	e := collect(errors) // wait for workers to complete
+	tracing.EngineTracer.Debugf("Errors from styling workers: %v", e)
+	//
+	/*  // non-concurrent version
 	runner.activateStylesheetsFor(node)
 	if createsStyledNode(node.Type) {
 		sn := builder.MakeNodeFor(node)
@@ -498,23 +532,71 @@ func (runner *stylingRunner) doStyle(node *html.Node, parent StyledNode, builder
 		}
 		node = node.NextSibling
 	}
+	*/
 }
 
-// Helper: try to split up a property (which may or may not be a compound
-// property) using a set of splitter functions.
-// Return a slice of key-value pairs or nil.
-func splitCompoundProperty(splitters []CompoundPropertiesSplitter,
-	key string, value style.Property) ([]style.KeyValue, error) {
-	for _, splitter := range splitters {
-		kv, err := splitter(key, value)
-		if err != nil {
-			return kv, err
+// workPackage is a type to distribute styling work amongst worker goroutines.
+// It contains necessary information to style a single DOM node.
+type workPackage struct {
+	runner       *stylingRunner // styling controller
+	node         *html.Node     // the DOM node to style
+	styledParent StyledNode     // the active styled node above the DOM node
+	udata        interface{}    // all-purpose extension data
+}
+
+// styleSingleNode is of type workerTask.
+// Workers will perform the styling of a single HTML DOM node. This task
+// will create a styled node for the DOM node. The newly created styled node
+// will be attached to the existing styled parent node.
+//
+// The worker can rely on being the only worker tasked with styling this
+// DOM node. However, linking the new styled node to its parent must be
+// a concurrency-safe operation.
+func styleSingleNode(wp workPackage) error {
+	var lasterror error
+	builder := wp.runner.builder
+	wp.runner.activateStylesheetsFor(wp.node) // is concurrency-safe
+	if createsStyledNode(wp.node.Type) {
+		sn := builder.MakeNodeFor(wp.node)
+		builder.LinkNodeToParent(sn, wp.styledParent) // must be concurrency-safe
+		pmap := calcComputedStylesForNode(wp.node, sn, wp.runner)
+		if pmap != nil {
+			sn.SetComputedStyles(pmap)
 		}
+		parent := sn // continue with newly created styled node as parent for next node
+		createWorkPackagesForChildrenNodes(wp.node, parent, wp.runner)
 	}
-	return nil, errNoSuchCompoundProperty
+	return lasterror
 }
 
-var errNoSuchCompoundProperty error = errors.New("No such compound property")
+func calcComputedStylesForNode(node *html.Node, parent StyledNode, runner *stylingRunner) *style.PropertyMap {
+	var matchingRules *matchesList
+	for _, rulesTree := range runner.activeStylers {
+		matches := rulesTree.FilterMatchesFor(node)
+		matchingRules = matchingRules.mergeMatchesWith(matches)
+	}
+	if matchingRules != nil {
+		matchingRules.SortProperties(runner.splitters)
+		pmap := matchingRules.createStyleGroups(parent, runner.builder)
+		return pmap
+	}
+	return nil
+}
+
+// node is exclusive for a worker; no other goroutine can access its children.
+func createWorkPackagesForChildrenNodes(node *html.Node, parent StyledNode, runner *stylingRunner) {
+	node = node.FirstChild // recurse into children
+	for node != nil {
+		if node.Type == html.ElementNode {
+			wp := workPackage{runner: runner}
+			wp.node = node
+			wp.styledParent = parent
+			//runner.doStyle(node, parent, builder) // TODO make this concurrent
+			order(runner.workers, wp)
+		}
+		node = node.NextSibling
+	}
+}
 
 // ----------------------------------------------------------------------
 
@@ -538,6 +620,22 @@ func GetCascadedProperty(sn StyledNode, key string) style.Property {
 */
 
 // --- Helpers ----------------------------------------------------------
+
+var errNoSuchCompoundProperty error = errors.New("No such compound property")
+
+// Try to split up a property (which may or may not be a compound
+// property) using a set of splitter functions.
+// Return a slice of key-value pairs or nil.
+func splitCompoundProperty(splitters []CompoundPropertiesSplitter,
+	key string, value style.Property) ([]style.KeyValue, error) {
+	for _, splitter := range splitters {
+		kv, err := splitter(key, value)
+		if err != nil {
+			return kv, err
+		}
+	}
+	return nil, errNoSuchCompoundProperty
+}
 
 // Which HTML node type needs a corresponding styled node?
 func createsStyledNode(nodeType html.NodeType) bool {
