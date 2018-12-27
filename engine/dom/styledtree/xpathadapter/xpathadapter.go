@@ -42,7 +42,7 @@ import (
 	"fmt"
 
 	"github.com/antchfx/xpath"
-	"github.com/npillmayer/gotype/engine/dom"
+	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/dom/styledtree"
 	"golang.org/x/net/html"
 )
@@ -63,7 +63,7 @@ func NewNavigator(styledtree *styledtree.Node) *NodeNavigator {
 }
 
 // CurrentNode implements dom.NodeExtractorFunc
-func CurrentNode(nav xpath.NodeNavigator) (dom.TreeNode, error) {
+func CurrentNode(nav xpath.NodeNavigator) (style.TreeNode, error) {
 	mynav, ok := nav.(*NodeNavigator)
 	if !ok {
 		return nil, errors.New("Navigator is not of type xpathadapter.NodeNavigator")
@@ -134,7 +134,11 @@ func (nav *NodeNavigator) MoveToParent() bool {
 	if nav.current == nav.root {
 		return false
 	}
-	nav.current = nav.current.Parent
+	ok := true
+	nav.current, ok = nav.current.Parent().(*styledtree.Node)
+	if !ok {
+		return false
+	}
 	nav.chinx = 0
 	return true
 }
@@ -166,7 +170,8 @@ func (nav *NodeNavigator) MoveToFirst() bool {
 	}
 	nav.chinx = 0
 	ok := true
-	nav.current, ok = nav.current.Parent.Child(0)
+	parent := nav.current.Parent().(*styledtree.Node)
+	nav.current, ok = parent.Child(0)
 	return ok
 }
 
@@ -178,10 +183,14 @@ func (nav *NodeNavigator) MoveToNext() bool {
 	if nav.attr != -1 {
 		return false
 	}
-	if nav.chinx < nav.current.Parent.ChildCount()-1 {
+	parent := nav.current.Parent().(*styledtree.Node)
+	if nav.chinx < parent.ChildCount()-1 {
 		nav.chinx++
-		nav.current = nav.current.Parent.Children[nav.chinx]
-		return true
+		ch, ok := parent.Child(nav.chinx)
+		if ok {
+			nav.current = ch
+		}
+		return ok
 	}
 	return false
 }
@@ -192,8 +201,12 @@ func (nav *NodeNavigator) MoveToPrevious() bool {
 	}
 	if nav.chinx > 0 {
 		nav.chinx--
-		nav.current = nav.current.Parent.Children[nav.chinx]
-		return true
+		parent := nav.current.Parent().(*styledtree.Node)
+		ch, ok := parent.Child(nav.chinx)
+		if ok {
+			nav.current = ch
+		}
+		return ok
 	}
 	return false
 }
@@ -210,7 +223,7 @@ func (nav *NodeNavigator) MoveTo(other xpath.NodeNavigator) bool {
 }
 
 var _ xpath.NodeNavigator = &NodeNavigator{}
-var _ dom.TreeNode = &styledtree.Node{}
+var _ style.TreeNode = &styledtree.Node{}
 
 // InnerText returns the text between the start and end tags of the object.
 func innerText(n *html.Node) string {

@@ -4,8 +4,7 @@ import (
 	"errors"
 
 	"github.com/antchfx/xpath"
-	"github.com/npillmayer/gotype/engine/dom/style"
-	"golang.org/x/net/html"
+	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 )
 
 /* -----------------------------------------------------------------
@@ -110,7 +109,7 @@ func (xp *XPath) FindOne(xpathexpr string) (style.TreeNode, error) {
 	return elem, err
 }
 
-// Each searches the html.Node and calls a callback on each node.
+// Each searches the styled tree and calls a callback on each node.
 // If brkOnErr (break on error) is set, Each will stop traversing the nodes
 // and return immediately, as soon as callback returns an error.
 // If brkOnErr is set to false,

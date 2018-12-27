@@ -1,5 +1,5 @@
 /*
-Package douceuradapter is a concrete implementation of interface style.StyleSheet.
+Package douceuradapter is a concrete implementation of interface cssom.StyleSheet.
 
 BSD License
 
@@ -38,12 +38,12 @@ package douceuradapter
 
 import (
 	"github.com/aymerick/douceur/css"
-	"github.com/npillmayer/gotype/engine/dom/style"
+	"github.com/npillmayer/gotype/engine/dom/cssom"
 )
 
-// CssStyle is an adapter for interface style.StyleSheet.
+// CssStyle is an adapter for interface cssom.StyleSheet.
 // For an explanation of the motivation behind this design, please refer
-// to documentation for interface style.StyleSheet.
+// to documentation for interface cssom.StyleSheet.
 type CssStyles struct {
 	css css.Stylesheet
 }
@@ -57,15 +57,15 @@ func Wrap(css *css.Stylesheet) *CssStyles {
 
 // Does this stylesheet contain any rules?
 //
-// Interface style.StyleSheet
+// Interface cssom.StyleSheet
 func (sheet *CssStyles) Empty() bool {
 	return len(sheet.css.Rules) == 0
 }
 
 // Append rules from another stylesheet
 //
-// Interface style.StyleSheet
-func (sheet *CssStyles) AppendRules(other style.StyleSheet) {
+// Interface cssom.StyleSheet
+func (sheet *CssStyles) AppendRules(other cssom.StyleSheet) {
 	othercss := other.(*CssStyles)
 	for _, r := range othercss.css.Rules { // append every rule from other
 		sheet.css.Rules = append(sheet.css.Rules, r)
@@ -75,8 +75,8 @@ func (sheet *CssStyles) AppendRules(other style.StyleSheet) {
 // All the rules of a stylesheet
 //
 // Interface style.StyleSheet
-func (sheet *CssStyles) Rules() []style.Rule {
-	rules := make([]style.Rule, len(sheet.css.Rules))
+func (sheet *CssStyles) Rules() []cssom.Rule {
+	rules := make([]cssom.Rule, len(sheet.css.Rules))
 	for i := range sheet.css.Rules {
 		r := sheet.css.Rules[i]
 		rules[i] = Rule(*r)
@@ -84,9 +84,9 @@ func (sheet *CssStyles) Rules() []style.Rule {
 	return rules
 }
 
-var _ style.StyleSheet = &CssStyles{}
+var _ cssom.StyleSheet = &CssStyles{}
 
-// Rule is an adapter for interface style.Rule.
+// Rule is an adapter for interface cssom.Rule.
 type Rule css.Rule
 
 // The prelude / selectors of the rule
@@ -126,4 +126,4 @@ func (r Rule) IsImportant(key string) bool {
 	return false
 }
 
-var _ style.Rule = &Rule{}
+var _ cssom.Rule = &Rule{}

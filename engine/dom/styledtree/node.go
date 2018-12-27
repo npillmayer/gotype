@@ -58,8 +58,10 @@ package styledtree
 // https://godoc.org/github.com/jiangmitiao/ebook-go
 
 import (
-	"github.com/npillmayer/gotype/engine/dom"
-	"github.com/npillmayer/gotype/engine/dom/style"
+	"sync"
+
+	"github.com/npillmayer/gotype/engine/dom/cssom"
+	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"golang.org/x/net/html"
 )
 
@@ -67,8 +69,8 @@ import (
 type Node struct {
 	htmlNode       *html.Node
 	computedStyles *style.PropertyMap
-	Parent         *Node
-	Children       []*Node
+	parent         *Node
+	children       childrenSlice
 }
 
 // NewNodeForHtmlNode creates a new styled node linked to an HTML DOM node.
@@ -83,35 +85,77 @@ func (sn Node) HtmlNode() *html.Node {
 	return sn.htmlNode
 }
 
+func (sn Node) Parent() style.TreeNode {
+	return sn.parent
+}
+
 // ChildCount returns the number of children-nodes for a styled node.
 func (sn Node) ChildCount() int {
-	return len(sn.Children)
+	return sn.children.length()
 }
 
 // Child is a safe way to get a children-node of a styled node.
 func (sn Node) Child(i int) (*Node, bool) {
-	if len(sn.Children) <= i {
+	if sn.children.length() <= i {
 		return nil, false
 	}
-	return sn.Children[i], true
+	return sn.children.child(i), true
+}
+
+// AddChild inserts a new child node into the tree.
+// The newly inserted node is connected to this node as its parent.
+//
+// This operation is concurrency-safe.
+func (sn *Node) AddChild(ch *Node) {
+	if ch == nil {
+		return
+	}
+	sn.children.addChild(ch)
 }
 
 // ----------------------------------------------------------------------
 
-// Interface style.StyledNode.
+// Interface style.TreeNode.
 func (sn Node) ComputedStyles() *style.PropertyMap {
 	return sn.computedStyles
 }
 
-// Interface style.StyledNode.
+// Interface cssom.StyledNode.
 func (sn *Node) SetComputedStyles(styles *style.PropertyMap) {
 	sn.computedStyles = styles
 }
 
-var _ style.StyledNode = &Node{}
-var _ dom.TreeNode = &Node{}
+var _ cssom.StyledNode = &Node{}
+var _ style.TreeNode = &Node{}
 
 // ----------------------------------------------------------------------
+
+type childrenSlice struct {
+	sync.RWMutex
+	slice []*Node
+}
+
+func (chs childrenSlice) length() int {
+	return len(chs.slice)
+}
+
+func (chs *childrenSlice) addChild(child *Node) {
+	if child == nil {
+		return
+	}
+	chs.Lock()
+	defer chs.Unlock()
+	chs.slice = append(chs.slice, child)
+}
+
+func (chs *childrenSlice) child(n int) *Node {
+	if len(chs.slice) == 0 || n >= len(chs.slice) {
+		return nil
+	}
+	chs.Lock()
+	defer chs.Unlock()
+	return chs.slice[n]
+}
 
 /*
 type StyledNodeQuery struct {

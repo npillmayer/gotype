@@ -42,7 +42,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package builder
 
 import (
-	"github.com/npillmayer/gotype/engine/dom/style"
+	"github.com/npillmayer/gotype/engine/dom/cssom"
 	"github.com/npillmayer/gotype/engine/dom/styledtree"
 	"golang.org/x/net/html"
 )
@@ -51,28 +51,31 @@ import (
 type Builder struct{}
 
 // MakeNodeFor creates a new styled node corresponding to an HTML DOM node.
+//
 // Interface style.StyledTreeBuilder.
-func (b Builder) MakeNodeFor(n *html.Node) style.StyledNode {
+func (b Builder) MakeNodeFor(n *html.Node) cssom.StyledNode {
 	sn := styledtree.NewNodeForHtmlNode(n)
 	return sn
 }
 
 // LinkNodeToParent attaches a styled node to the tree. ATTENTION:
 // Tree construction may be concurrent => this method must be thread-safe!
-// Interface style.StyledTreeBuilder
-func (b Builder) LinkNodeToParent(sn style.StyledNode, parent style.StyledNode) {
+//
+// Will panic if nodes are not of type *styledtree.Node (this builder
+// builds trees of this node type, after all).
+//
+// Interface cssom.StyledTreeBuilder.
+func (b Builder) LinkNodeToParent(sn cssom.StyledNode, parent cssom.StyledNode) {
 	p, ok := parent.(*styledtree.Node)
 	if !ok {
 		panic("LinkNodeToParent: cannot link to unknown type of styled node")
 	}
 	this := sn.(*styledtree.Node)
-	// TODO make this concurrency safe
-	this.Parent = p
-	p.Children = append(p.Children, this)
+	parent.AddChild(this) // concurrency-safe operation
 }
 
 // WalkUpwards walks to parent of node.
-func (b Builder) WalkUpwards(sn style.StyledNode) style.StyledNode {
+func (b Builder) WalkUpwards(sn cssom.StyledNode) cssom.StyledNode {
 	this := sn.(*styledtree.Node)
-	return this.Parent
+	return this.Parent().(*styledtree.Node)
 }

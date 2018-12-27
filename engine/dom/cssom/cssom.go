@@ -8,6 +8,7 @@ import (
 
 	"github.com/andybalholm/cascadia"
 	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"golang.org/x/net/html"
 )
 
@@ -71,7 +72,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Stylesheets are wrapped into an internal rules tree.
 type CSSOM struct {
 	rules             map[*html.Node]rulesTree
-	defaultProperties *PropertyMap
+	defaultProperties *style.PropertyMap
 	compoundSplitters []CompoundPropertiesSplitter
 }
 
@@ -96,18 +97,18 @@ type rulesTree struct {
 //    padding-left:   20px
 // Standard CSS compound properties are known by default, but clients are
 // allowed to extend the set of compound properties.
-type CompoundPropertiesSplitter func(string, Property) ([]KeyValue, error)
+type CompoundPropertiesSplitter func(string, style.Property) ([]style.KeyValue, error)
 
 // NewCSSOM creates an empty CSSOM.
 // Clients are allowed to supply a map of additional/custom CSS property values.
 // These may override values of the default ("user-agent") style sheet,
 // or introduce completely new styling properties.
-func NewCSSOM(additionalProperties []KeyValue) CSSOM {
+func NewCSSOM(additionalProperties []style.KeyValue) CSSOM {
 	cssom := CSSOM{}
 	cssom.rules = make(map[*html.Node]rulesTree)
-	cssom.defaultProperties = initializeDefaultPropertyValues(additionalProperties)
+	cssom.defaultProperties = style.InitializeDefaultPropertyValues(additionalProperties)
 	cssom.compoundSplitters = make([]CompoundPropertiesSplitter, 1)
-	cssom.compoundSplitters[0] = splitCompoundProperty
+	cssom.compoundSplitters[0] = style.SplitCompoundProperty
 	return cssom
 }
 
@@ -236,12 +237,12 @@ func (rt *rulesTree) FilterMatchesFor(node *html.Node) *matchesList {
 	return list
 }
 
-func (matches *matchesList) SortProperties() {
+func (matches *matchesList) SortProperties(splitters []CompoundPropertiesSplitter) {
 	var proptable []specifity
 	for rno, rule := range matches.matchingRules {
 		for _, propertyKey := range rule.Properties() {
-			value := Property(rule.Value(propertyKey))
-			props, err := splitCompoundProperty(propertyKey, value)
+			value := style.Property(rule.Value(propertyKey))
+			props, err := splitCompoundProperty(splitters, propertyKey, value)
 			if err != nil {
 				sp := specifity{Author, rule, propertyKey, value, rule.IsImportant(propertyKey), 0}
 				sp.calcSpecifity(rno)
@@ -267,44 +268,44 @@ func (matches *matchesList) SortProperties() {
 	}
 }
 
-func (matches *matchesList) createStyleGroups(parent StyledNode, builder StyledTreeBuilder) map[string]*propertyGroup {
-	m := make(map[string]*propertyGroup)
+func (matches *matchesList) createStyleGroups(parent StyledNode, builder StyledTreeBuilder) *style.PropertyMap {
+	//m := make(map[string]*propertyGroup)
+	pmap := style.NewPropertyMap()
 	done := make(map[string]bool, len(matches.propertiesTable))
 	for _, pspec := range matches.propertiesTable { // for every specifity entry
-		groupname, found := groupNameFromPropertyKey[pspec.propertyKey]
-		if !found {
-			tracing.EngineTracer.Debugf("Don't know about CSS property: %s", pspec.propertyKey)
-			groupname = "X" // assume client uses custom properties
-		}
 		if done[pspec.propertyKey] {
 			// already present in current properties map
 			// this must be from previous set with higher specifity
 			// => do nothing
 			break
 		}
-		if group, exists := m[groupname]; exists {
+		groupname := style.GroupNameFromPropertyKey(pspec.propertyKey)
+		group := pmap.Group(groupname)
+		if group != nil {
 			group.Set(pspec.propertyKey, pspec.propertyValue)
 		} else {
 			_, pg := findAncestorWithPropertyGroup(parent, groupname, builder) // must succeed
 			if pg == nil {
 				panic(fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", groupname))
 			}
-			group, isNew := pg.SpawnOn(pspec.propertyKey, pspec.propertyValue, true)
+			group, isNew := pg.ForkOnProperty(pspec.propertyKey, pspec.propertyValue, true)
 			if isNew { // a new property group has been created
-				m[groupname] = group // put it into the group map
+				pmap.AddAllFromGroup(group, true) // put it into the group map
 			}
 		}
 		done[pspec.propertyKey] = true // remember we're done with this property
 	}
-	if len(m) == 0 { // no property groups created, not properties set
+	if pmap.Size() == 0 { // no property groups created, no properties set
 		return nil
 	}
-	if tracing.EngineTracer.GetTraceLevel() >= tracing.LevelDebug {
-		for _, v := range m {
-			tracing.EngineTracer.Debugf(v.String())
+	/*
+		if tracing.EngineTracer.GetTraceLevel() >= tracing.LevelDebug {
+			for _, v := range m {
+				tracing.EngineTracer.Debugf(v.String())
+			}
 		}
-	}
-	return m
+	*/
+	return pmap
 }
 
 // --- Specifity of rules -----------------------------------------------
@@ -313,7 +314,7 @@ type specifity struct {
 	source        PropertySource // where the property has been defined
 	rule          Rule           // the rule containing the property definition
 	propertyKey   string         // CSS property name
-	propertyValue Property       // raw string value
+	propertyValue style.Property // raw string value
 	important     bool           // marked as !IMPORTANT ?
 	spec          uint32         // specifity value to calculate; higher is more
 }
@@ -359,8 +360,8 @@ func (sp *specifity) calcSpecifity(no int) {
 // stylable DOM nodes. We de-couple the Styler from the type of the resulting
 // styled nodes by using a builder (see StyledTreeBuilder) and an interface type.
 type StyledNode interface {
-	ComputedStyles() *PropertyMap   // get the computed styles of this styled node
-	SetComputedStyles(*PropertyMap) // set the computed styles of this styled node
+	ComputedStyles() *style.PropertyMap   // get the computed styles of this styled node
+	SetComputedStyles(*style.PropertyMap) // set the computed styles of this styled node
 }
 
 // StyledTreeBuilder is a builder to create tree of conrete implementations
@@ -374,17 +375,17 @@ type StyledTreeBuilder interface {
 	WalkUpwards(StyledNode) StyledNode                 // walk to parent of node
 }
 
-func setupStyledNodeTree(domRoot *html.Node, defaults *PropertyMap, builder StyledTreeBuilder) StyledNode {
+func setupStyledNodeTree(domRoot *html.Node, defaults *style.PropertyMap, builder StyledTreeBuilder) StyledNode {
 	viewport := builder.MakeNodeFor(domRoot)
 	viewport.SetComputedStyles(defaults)
 	return viewport
 }
 
-func findAncestorWithPropertyGroup(sn StyledNode, group string, builder StyledTreeBuilder) (StyledNode, *propertyGroup) {
-	var pg *propertyGroup
+func findAncestorWithPropertyGroup(sn StyledNode, group string, builder StyledTreeBuilder) (StyledNode, *style.PropertyGroup) {
+	var pg *style.PropertyGroup
 	it := sn
 	for it != nil && pg == nil {
-		pg = it.ComputedStyles().m[group]
+		pg = it.ComputedStyles().Group(group)
 		it = builder.WalkUpwards(it)
 	}
 	return it, pg
@@ -403,7 +404,7 @@ func (cssom CSSOM) Style(dom *html.Node, builder StyledTreeBuilder) (StyledNode,
 		return nil, errors.New("Nothing to style: empty document")
 	}
 	if builder == nil {
-		return nil, errors.New("Cannot style: no factory to create styles nodes")
+		return nil, errors.New("Cannot style: no builder to create styles nodes")
 	}
 	styledRootNode := setupStyledNodeTree(dom, cssom.defaultProperties, builder)
 	runner, err := cssom.attachStylesheets(dom)
@@ -484,9 +485,9 @@ func (runner *stylingRunner) doStyle(node *html.Node, parent StyledNode, builder
 			matchingRules = matchingRules.mergeMatchesWith(matches)
 		}
 		if matchingRules != nil {
-			matchingRules.SortProperties()
-			groups := matchingRules.createStyleGroups(parent, builder)
-			sn.SetComputedStyles(&PropertyMap{groups}) // groups may be nil
+			matchingRules.SortProperties(runner.splitters)
+			pmap := matchingRules.createStyleGroups(parent, builder)
+			sn.SetComputedStyles(pmap)
 		}
 		parent = sn // continue with newly created styled node
 	}
@@ -499,8 +500,12 @@ func (runner *stylingRunner) doStyle(node *html.Node, parent StyledNode, builder
 	}
 }
 
-func (runner *stylingRunner) splitCompoundProperties(key string, value Property) ([]KeyValue, error) {
-	for _, splitter := range runner.splitters {
+// Helper: try to split up a property (which may or may not be a compound
+// property) using a set of splitter functions.
+// Return a slice of key-value pairs or nil.
+func splitCompoundProperty(splitters []CompoundPropertiesSplitter,
+	key string, value style.Property) ([]style.KeyValue, error) {
+	for _, splitter := range splitters {
 		kv, err := splitter(key, value)
 		if err != nil {
 			return kv, err
@@ -519,8 +524,8 @@ var errNoSuchCompoundProperty error = errors.New("No such compound property")
 // This is normally called on a tree of styled nodes and it will cascade
 // all the way up to the default properties, if necessary.
 /*
-func GetCascadedProperty(sn StyledNode, key string) Property {
-	group, found := groupNameFromPropertyKey[key]
+func GetCascadedProperty(sn StyledNode, key string) style.Property {
+	group, found := style.GroupNameFromPropertyKey(key)
 	if !found {
 		group = "X"
 	}
