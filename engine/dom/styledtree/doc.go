@@ -1,21 +1,27 @@
 /*
-Package dom will some day provide utilities for HTMLbook DOMs.
+Package styledtree is a straightforward default implementation of a styled document tree.
 
 Status
 
-Early draft—API may change frequently. Please stay patient.
+This is a very first draft. Please be patient.
 
 Overview
 
-HTMLbook is the core DOM of our documents.
-Background for this decision can be found under
-https://www.balisage.net/Proceedings/vol10/print/Kleinfeld01/BalisageVol10-Kleinfeld01.html
-and http://radar.oreilly.com/2013/09/html5-is-the-future-of-book-authorship.html
+We strive to separate content from presentation. In typesetting, this is
+probably an impossible claim, but we'll try anyway. Presentation
+is governed with CSS (Cascading Style Sheets). CSS uses a box model more
+complex than TeX's, which is well described here:
 
-Excerpt: "In this paper, I argue that HTML5 offers unique advantages to authors and publishers in comparison to both traditional word processing and desktop publishing tools like Microsoft Word and Adobe InDesign, as well as other markup vocabularies like DocBook and AsciiDoc. I also consider the drawbacks currently inherent in the HTML5 standard with respect to representing long-form, structured text content, and the challenges O’Reilly has faced in adopting the standard as the new source format for its toolchain. Finally, I discuss how O’Reilly has surmounted these challenges by developing HTMLBook, a new open, HTML5-based XML standard expressly designed for the authoring and production of both print and digital book content."
+   https://developer.mozilla.org/en-US/docs/Learn/CSS/Introduction_to_CSS/Box_model
 
-For an in-depth description of HTMLbook please refer to
-https://oreillymedia.github.io/HTMLBook/.
+If you think about it: a typesetter using the HTML/CSS box model is
+effectively a browser with output type PDF.
+Browsers are large and complex pieces of code, a fact that implies that
+we should seek out where to reduce complexity.
+
+A good explanation of styling may be found in
+
+   https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/
 
 BSD License
 
@@ -49,5 +55,6 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 */
-package dom
+package styledtree

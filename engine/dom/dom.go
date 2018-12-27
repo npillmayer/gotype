@@ -1,12 +1,5 @@
 package dom
 
-import (
-	"github.com/PuerkitoBio/goquery"
-	"github.com/benbjohnson/css"
-	"github.com/npillmayer/gotype/core/dimen"
-	"github.com/npillmayer/gotype/engine/dom/box"
-)
-
 // github.com/andrewstuart/goq
 // Package goq was built to allow users to declaratively unmarshal HTML into go
 // structs using struct tags composed of css selectors.
@@ -30,20 +23,3 @@ import (
 // JSON, SVG and XML minifiers.
 
 // https://www.smashingmagazine.com/2015/01/designing-for-print-with-css/
-
-type DOM struct {
-	doc    *goquery.Document
-	design *css.StyleSheet
-	//page []media-pages
-}
-
-type Page struct {
-	size         dimen.Point
-	marginsLeft  dimen.Rect
-	marginsRight dimen.Rect
-	marginBoxes  []*box.StyledBox
-}
-
-type Layout struct {
-	//
-}

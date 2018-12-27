@@ -1,27 +1,10 @@
 /*
-Package styled is a straightforward default implementation of style.StyledNode.
+Package builder implements a builder for styled trees.
 
-Status
+Type Builder is an implementation of style.TreeBuilder.
+It is suited to be called from style.CSSOM to create a styled tree.
 
-This is a very first draft. Please be patient.
-
-Overview
-
-We strive to separate content from presentation. In typesetting, this is
-probably an impossible claim, but we'll try anyway. Presentation
-is governed with CSS (Cascading Style Sheets). CSS uses a box model more
-complex than TeX's, which is well described here:
-
-   https://developer.mozilla.org/en-US/docs/Learn/CSS/Introduction_to_CSS/Box_model
-
-If you think about it: a typesetter using the HTML/CSS box model is
-effectively a browser with output type PDF.
-Browsers are large and complex pieces of code, a fact that implies that
-we should seek out where to reduce complexity.
-
-A good explanation of styling may be found in
-
-   https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/
+This builder constructs a styled tree using type styledtree.Node.
 
 BSD License
 
@@ -55,6 +38,41 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 */
-package styled
+package builder
+
+import (
+	"github.com/npillmayer/gotype/engine/dom/style"
+	"github.com/npillmayer/gotype/engine/dom/styledtree"
+	"golang.org/x/net/html"
+)
+
+// Builder is an implementation of style.TreeBuilder.
+type Builder struct{}
+
+// MakeNodeFor creates a new styled node corresponding to an HTML DOM node.
+// Interface style.StyledTreeBuilder.
+func (b Builder) MakeNodeFor(n *html.Node) style.StyledNode {
+	sn := styledtree.NewNodeForHtmlNode(n)
+	return sn
+}
+
+// LinkNodeToParent attaches a styled node to the tree. ATTENTION:
+// Tree construction may be concurrent => this method must be thread-safe!
+// Interface style.StyledTreeBuilder
+func (b Builder) LinkNodeToParent(sn style.StyledNode, parent style.StyledNode) {
+	p, ok := parent.(*styledtree.Node)
+	if !ok {
+		panic("LinkNodeToParent: cannot link to unknown type of styled node")
+	}
+	this := sn.(*styledtree.Node)
+	// TODO make this concurrency safe
+	this.Parent = p
+	p.Children = append(p.Children, this)
+}
+
+// WalkUpwards walks to parent of node.
+func (b Builder) WalkUpwards(sn style.StyledNode) style.StyledNode {
+	this := sn.(*styledtree.Node)
+	return this.Parent
+}

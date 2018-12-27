@@ -1,5 +1,5 @@
 /*
-Package douceuradapter is a concrete implementation of interface StyleSheet.
+Package douceuradapter is a concrete implementation of interface style.StyleSheet.
 
 BSD License
 

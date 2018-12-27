@@ -1,4 +1,4 @@
-package style
+package cssom
 
 import (
 	"errors"
@@ -26,7 +26,6 @@ TODO
 - make concurrent
 + Document code
 - Create Diagram -> Wiki
-- API for export to DOT
 */
 
 /* -----------------------------------------------------------------
@@ -127,7 +126,7 @@ const (
 	Attribute                           // in an element's attribute(s)
 )
 
-// AddStylesFor includes a stylesheet to a CSSOM and sets the scope for
+// AddStylesForScope includes a stylesheet to a CSSOM and sets the scope for
 // the stylesheet. If a stylesheet for the scope already exists, the
 // styles are merged. css may be nil. If scope is nil then scope is the
 // body (i.e., top-level content element) of a future document.
@@ -135,7 +134,7 @@ const (
 // source hints to where the stylesheet comes from.
 // Its value will affect the calculation of specifity for rules of this
 // stylesheet.
-func (cssom CSSOM) AddStylesFor(scope *html.Node, css StyleSheet, source PropertySource) error {
+func (cssom CSSOM) AddStylesForScope(scope *html.Node, css StyleSheet, source PropertySource) error {
 	rules, exists := cssom.rules[scope]
 	if exists && css != nil {
 		rules.stylesheet.AppendRules(css)
@@ -268,7 +267,7 @@ func (matches *matchesList) SortProperties() {
 	}
 }
 
-func (matches *matchesList) createStyleGroups(parent StyledNode) map[string]*propertyGroup {
+func (matches *matchesList) createStyleGroups(parent StyledNode, builder StyledTreeBuilder) map[string]*propertyGroup {
 	m := make(map[string]*propertyGroup)
 	done := make(map[string]bool, len(matches.propertiesTable))
 	for _, pspec := range matches.propertiesTable { // for every specifity entry
@@ -286,7 +285,7 @@ func (matches *matchesList) createStyleGroups(parent StyledNode) map[string]*pro
 		if group, exists := m[groupname]; exists {
 			group.Set(pspec.propertyKey, pspec.propertyValue)
 		} else {
-			_, pg := findAncestorWithPropertyGroup(parent, groupname) // must succeed
+			_, pg := findAncestorWithPropertyGroup(parent, groupname, builder) // must succeed
 			if pg == nil {
 				panic(fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", groupname))
 			}
@@ -358,32 +357,35 @@ func (sp *specifity) calcSpecifity(no int) {
 // StyledNode is the node type for the styled tree to build. The CSSOM
 // styler builds a tree of styled nodes, more or less corresponding to the
 // stylable DOM nodes. We de-couple the Styler from the type of the resulting
-// styled nodes by using a factory (see NodeFactory) and an interface type.
+// styled nodes by using a builder (see StyledTreeBuilder) and an interface type.
 type StyledNode interface {
-	Parent() StyledNode
-	LinkToParent(StyledNode)
-	ComputedStyles() *PropertyMap
-	SetComputedStyles(*PropertyMap)
+	ComputedStyles() *PropertyMap   // get the computed styles of this styled node
+	SetComputedStyles(*PropertyMap) // set the computed styles of this styled node
 }
 
-// NodeFactory is a factory to create conrete implementations of interface
-// StyleNode (see type StyledNode).
-type NodeFactory interface {
-	NodeFor(*html.Node) StyledNode
+// StyledTreeBuilder is a builder to create tree of conrete implementations
+// of interface StyleNode (see type StyledNode).
+//
+// ATTENTION: Tree construction may be performed concurrently, so all methods
+// (especially LinkNodeToParent) must be thread-safe!
+type StyledTreeBuilder interface {
+	MakeNodeFor(*html.Node) StyledNode                 // create a new styled node
+	LinkNodeToParent(sn StyledNode, parent StyledNode) // attach a node to the tree
+	WalkUpwards(StyledNode) StyledNode                 // walk to parent of node
 }
 
-func setupStyledNodeTree(domRoot *html.Node, defaults *PropertyMap, factory NodeFactory) StyledNode {
-	viewport := factory.NodeFor(domRoot)
+func setupStyledNodeTree(domRoot *html.Node, defaults *PropertyMap, builder StyledTreeBuilder) StyledNode {
+	viewport := builder.MakeNodeFor(domRoot)
 	viewport.SetComputedStyles(defaults)
 	return viewport
 }
 
-func findAncestorWithPropertyGroup(sn StyledNode, group string) (StyledNode, *propertyGroup) {
+func findAncestorWithPropertyGroup(sn StyledNode, group string, builder StyledTreeBuilder) (StyledNode, *propertyGroup) {
 	var pg *propertyGroup
 	it := sn
 	for it != nil && pg == nil {
 		pg = it.ComputedStyles().m[group]
-		it = it.Parent()
+		it = builder.WalkUpwards(it)
 	}
 	return it, pg
 }
@@ -396,20 +398,20 @@ func findAncestorWithPropertyGroup(sn StyledNode, group string) (StyledNode, *pr
 // https://limpet.net/mbrubeck/2014/08/23/toy-layout-engine-4-style.html
 //
 // If either dom or factory are nil, no tree is returned (but an error).
-func (cssom CSSOM) Style(dom *html.Node, factory NodeFactory) (StyledNode, error) {
+func (cssom CSSOM) Style(dom *html.Node, builder StyledTreeBuilder) (StyledNode, error) {
 	if dom == nil {
 		return nil, errors.New("Nothing to style: empty document")
 	}
-	if factory == nil {
+	if builder == nil {
 		return nil, errors.New("Cannot style: no factory to create styles nodes")
 	}
-	styledRootNode := setupStyledNodeTree(dom, cssom.defaultProperties, factory)
+	styledRootNode := setupStyledNodeTree(dom, cssom.defaultProperties, builder)
 	runner, err := cssom.attachStylesheets(dom)
 	if err != nil {
 		return nil, err
 	}
 	runner.splitters = cssom.compoundSplitters // hack, sorry
-	runner.doStyle(runner.startNode, styledRootNode, factory)
+	runner.doStyle(runner.startNode, styledRootNode, builder)
 	return styledRootNode, nil
 }
 
@@ -471,11 +473,11 @@ func (runner *stylingRunner) activateStylesheetsFor(node *html.Node) {
 	}
 }
 
-func (runner *stylingRunner) doStyle(node *html.Node, parent StyledNode, factory NodeFactory) {
+func (runner *stylingRunner) doStyle(node *html.Node, parent StyledNode, builder StyledTreeBuilder) {
 	runner.activateStylesheetsFor(node)
 	if createsStyledNode(node.Type) {
-		sn := factory.NodeFor(node)
-		sn.LinkToParent(parent)
+		sn := builder.MakeNodeFor(node)
+		builder.LinkNodeToParent(sn, parent)
 		var matchingRules *matchesList
 		for _, rulesTree := range runner.activeStylers {
 			matches := rulesTree.FilterMatchesFor(node)
@@ -483,7 +485,7 @@ func (runner *stylingRunner) doStyle(node *html.Node, parent StyledNode, factory
 		}
 		if matchingRules != nil {
 			matchingRules.SortProperties()
-			groups := matchingRules.createStyleGroups(parent)
+			groups := matchingRules.createStyleGroups(parent, builder)
 			sn.SetComputedStyles(&PropertyMap{groups}) // groups may be nil
 		}
 		parent = sn // continue with newly created styled node
@@ -491,7 +493,7 @@ func (runner *stylingRunner) doStyle(node *html.Node, parent StyledNode, factory
 	node = node.FirstChild // now recurse into children
 	for node != nil {
 		if node.Type == html.ElementNode {
-			runner.doStyle(node, parent, factory) // TODO make this concurrent
+			runner.doStyle(node, parent, builder) // TODO make this concurrent
 		}
 		node = node.NextSibling
 	}
@@ -516,17 +518,19 @@ var errNoSuchCompoundProperty error = errors.New("No such compound property")
 //
 // This is normally called on a tree of styled nodes and it will cascade
 // all the way up to the default properties, if necessary.
+/*
 func GetCascadedProperty(sn StyledNode, key string) Property {
 	group, found := groupNameFromPropertyKey[key]
 	if !found {
 		group = "X"
 	}
-	_, pg := findAncestorWithPropertyGroup(sn, group) // must succeed
+	_, pg := findAncestorWithPropertyGroup(sn, group, builder) // must succeed
 	if pg == nil {
 		panic(fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", group))
 	}
 	return pg.Cascade(key).Get(key) // must succeed
 }
+*/
 
 // --- Helpers ----------------------------------------------------------
 

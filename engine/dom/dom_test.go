@@ -1,4 +1,4 @@
-package style_test
+package dom_test
 
 import (
 	"strings"
@@ -8,9 +8,12 @@ import (
 	"github.com/aymerick/douceur/parser"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/logrusadapter"
+	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/dom/style"
 	"github.com/npillmayer/gotype/engine/dom/style/douceuradapter"
-	"github.com/npillmayer/gotype/engine/dom/style/styled"
+	"github.com/npillmayer/gotype/engine/dom/styledtree"
+	"github.com/npillmayer/gotype/engine/dom/styledtree/builder"
+	"github.com/npillmayer/gotype/engine/dom/styledtree/xpathadapter"
 	"golang.org/x/net/html"
 )
 
@@ -64,26 +67,26 @@ func getTestCSS(s string) style.StyleSheet {
 	return douceuradapter.Wrap(css)
 }
 
-func setupTest(htmlStr string, cssStr string) (*goquery.Document, *styled.Node) {
+func setupTest(htmlStr string, cssStr string) (*goquery.Document, *styledtree.Node) {
 	dom := getTestDOM(htmlStr)
 	css := getTestCSS(cssStr)
 	cssom := style.NewCSSOM(nil)
-	cssom.AddStylesFor(nil, css, style.Author)
-	styledTree, err := cssom.Style(dom, styled.Factory{})
+	cssom.AddStylesForScope(nil, css, style.Author)
+	styledTree, err := cssom.Style(dom, builder.Builder{})
 	if err != nil {
 		T.Errorf("error: %s", err)
 		return nil, nil
 	}
-	tree := styledTree.(*styled.Node)
+	tree := styledTree.(*styledtree.Node)
 	doc := goquery.NewDocumentFromNode(dom)
 	return doc, tree
 }
 
-func findNodesFor(sel string, doc *goquery.Document, tree *styled.Node) []*styled.Node {
-	q, _ := styled.QueryFor(tree)
-	s := doc.Find(sel)
-	var nodes []*styled.Node
-	for _, n := range s.Nodes {
+func findNodesFor(xpath string, doc *goquery.Document, tree *styledtree.Node) []*styledtree.Node {
+	nav := xpathadapter.NewNavigator(tree)
+	xp, _ := dom.NewXPath(nav, xpathadapter.CurrentNode)
+	nodes, _ := xp.Find(xpath)
+	for _, n := range nodes {
 		sn := q.FindStyledNodeFor(n)
 		if sn == nil {
 			return nil
@@ -96,7 +99,7 @@ func findNodesFor(sel string, doc *goquery.Document, tree *styled.Node) []*style
 
 type props []style.Property
 
-func assertProperty(nodes []*styled.Node, key string) props {
+func assertProperty(nodes []*styledtree.Node, key string) props {
 	if nodes == nil {
 		return nil
 	}

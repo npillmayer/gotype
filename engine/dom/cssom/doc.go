@@ -1,5 +1,5 @@
 /*
-Package style will some day provide functionality for CSS styling.
+Package style provides functionality for CSS styling.
 
 Status
 
@@ -88,4 +88,4 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
-package style
+package cssom
