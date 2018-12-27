@@ -104,7 +104,7 @@ func (sn *Node) AddChild(ch *Node) {
 	if ch == nil {
 		return
 	}
-	sn.children.addChild(ch)
+	sn.children.addChild(ch, sn)
 }
 
 // Parent returns the parent node of this node, as a style.TreeNode.
@@ -142,13 +142,14 @@ func (chs *childrenSlice) length() int {
 	return len(chs.slice)
 }
 
-func (chs *childrenSlice) addChild(child *Node) {
+func (chs *childrenSlice) addChild(child *Node, parent *Node) {
 	if child == nil {
 		return
 	}
 	chs.Lock()
 	defer chs.Unlock()
 	chs.slice = append(chs.slice, child)
+	child.parent = parent
 }
 
 func (chs *childrenSlice) child(n int) *Node {

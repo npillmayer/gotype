@@ -3,6 +3,8 @@ package cssom
 import (
 	"fmt"
 	"sync"
+
+	"github.com/npillmayer/gotype/core/config/tracing"
 )
 
 // We will employ a small helper for managing worker goroutines.
@@ -42,7 +44,7 @@ func (launcher workerLauncher) workers(task workerTask, workload chan workPackag
 		wno := i + 1
 		go func(workload <-chan workPackage) {
 			defer func() {
-				fmt.Printf("finished worker #%d\n", wno)
+				tracing.EngineTracer.Debugf("finished worker #%d\n", wno)
 			}()
 			for wp := range workload { // get workpackages until drained
 				err := task(wp) // perform task on workpackage

@@ -366,7 +366,7 @@ func p(prefix string, suffix string, tag string) string {
 
 // PropertyMap holds CSS properties.
 type PropertyMap struct {
-	// As CSS defines a whole lot of properties, we segment them into logical group.
+	// As CSS defines a whole lot of properties, we segment them into logical groups.
 	m map[string]*PropertyGroup // into struct to make it opaque for clients
 }
 
@@ -382,6 +382,9 @@ func (pmap *PropertyMap) Size() int {
 
 // Group returns the property group for a group name or nil.
 func (pmap *PropertyMap) Group(groupname string) *PropertyGroup {
+	if pmap == nil {
+		return nil
+	}
 	group, _ := pmap.m[groupname]
 	return group
 }
@@ -393,6 +396,12 @@ func (pmap *PropertyMap) Group(groupname string) *PropertyGroup {
 // If the property map does not yet contain a group of this kind, it will
 // simply set this group (instead of copying values).
 func (pmap *PropertyMap) AddAllFromGroup(group *PropertyGroup, overwrite bool) {
+	if pmap == nil {
+		return
+	}
+	if pmap.m == nil {
+		pmap.m = make(map[string]*PropertyGroup)
+	}
 	g := pmap.Group(group.name)
 	if g == nil {
 		pmap.m[group.name] = group
@@ -576,4 +585,27 @@ func InitializeDefaultPropertyValues(additionalProps []KeyValue) *PropertyMap {
 	*/
 
 	return &PropertyMap{m}
+}
+
+// GetCascaded gets the value of a property. The search cascades to
+// parent property maps, if available.
+//
+// This is normally called on a tree of styled nodes and it will cascade
+// all the way up to the default properties, if necessary.
+//
+// Will flag an error if the style property isn't found (which should not
+// happen, as every property should be included in the 'user-agent' default
+// style properties.
+func GetCascadedProperty(sn TreeNode, key string) (Property, error) {
+	groupname := GroupNameFromPropertyKey(key)
+	var group *PropertyGroup
+	for sn != nil && group == nil {
+		group = sn.ComputedStyles().Group(groupname)
+		sn = sn.Parent()
+	}
+	if group == nil {
+		errmsg := fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", groupname)
+		return Property(""), errors.New(errmsg)
+	}
+	return group.Cascade(key).Get(key), nil // must succeed
 }

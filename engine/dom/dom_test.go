@@ -9,6 +9,7 @@ import (
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/logrusadapter"
 	"github.com/npillmayer/gotype/engine/dom"
+	"github.com/npillmayer/gotype/engine/dom/cssom"
 	"github.com/npillmayer/gotype/engine/dom/cssom/douceuradapter"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/dom/styledtree"
@@ -62,7 +63,7 @@ func getTestDOM(s string) *html.Node {
 	return doc
 }
 
-func getTestCSS(s string) style.StyleSheet {
+func getTestCSS(s string) cssom.StyleSheet {
 	css, _ := parser.Parse(s)
 	return douceuradapter.Wrap(css)
 }
@@ -70,42 +71,34 @@ func getTestCSS(s string) style.StyleSheet {
 func setupTest(htmlStr string, cssStr string) (*goquery.Document, *styledtree.Node) {
 	dom := getTestDOM(htmlStr)
 	css := getTestCSS(cssStr)
-	cssom := style.NewCSSOM(nil)
-	cssom.AddStylesForScope(nil, css, style.Author)
-	styledTree, err := cssom.Style(dom, builder.Builder{})
+	styler := cssom.NewCSSOM(nil)
+	styler.AddStylesForScope(nil, css, cssom.Author)
+	styledTree, err := styler.Style(dom, builder.Builder{})
 	if err != nil {
 		T.Errorf("error: %s", err)
 		return nil, nil
 	}
-	tree := styledTree.(*styledtree.Node)
 	doc := goquery.NewDocumentFromNode(dom)
-	return doc, tree
+	return doc, styledTree.(*styledtree.Node)
 }
 
-func findNodesFor(xpath string, doc *goquery.Document, tree *styledtree.Node) []*styledtree.Node {
-	nav := xpathadapter.NewNavigator(tree)
+func findNodesFor(xpath string, doc *goquery.Document, tree style.TreeNode) []style.TreeNode {
+	nav := xpathadapter.NewNavigator(tree.(*styledtree.Node))
 	xp, _ := dom.NewXPath(nav, xpathadapter.CurrentNode)
 	nodes, _ := xp.Find(xpath)
-	for _, n := range nodes {
-		sn := q.FindStyledNodeFor(n)
-		if sn == nil {
-			return nil
-		}
-		nodes = append(nodes, sn)
-	}
 	T.Debugf("found styled nodes: %v", nodes)
 	return nodes
 }
 
 type props []style.Property
 
-func assertProperty(nodes []*styledtree.Node, key string) props {
+func assertProperty(nodes []style.TreeNode, key string) props {
 	if nodes == nil {
 		return nil
 	}
 	var pp props
 	for _, sn := range nodes {
-		p := style.GetCascadedProperty(sn, key)
+		p, _ := style.GetCascadedProperty(sn, key)
 		T.Debugf("property %s of %s = %s", key, sn, p)
 		pp = append(pp, p)
 	}

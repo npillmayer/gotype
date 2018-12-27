@@ -65,6 +65,10 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ----------------------------------------------------------------- */
 
+// We trace to EngineTracer. Will be set with creation of first
+// CSSOM instance.
+var T tracing.Trace
+
 // CSSOM is the "CSS Object Model", similar to the DOM for HTML.
 // Our CSSOM consists of a set of stylesheets, each relevant for a sub-tree
 // of the DOM. This sub-tree is called the "scope" of the stylesheet.
@@ -105,6 +109,7 @@ type CompoundPropertiesSplitter func(string, style.Property) ([]style.KeyValue, 
 // These may override values of the default ("user-agent") style sheet,
 // or introduce completely new styling properties.
 func NewCSSOM(additionalProperties []style.KeyValue) CSSOM {
+	T = tracing.EngineTracer
 	cssom := CSSOM{}
 	cssom.rules = make(map[*html.Node]rulesTree)
 	cssom.defaultProperties = style.InitializeDefaultPropertyValues(additionalProperties)
@@ -222,7 +227,7 @@ func (rt *rulesTree) FilterMatchesFor(node *html.Node) *matchesList {
 			var err error
 			sel, err = cascadia.Compile(selectorString)
 			if err != nil {
-				tracing.EngineTracer.Errorf("CSS selector seems not to work: %s", selectorString)
+				T.Errorf("CSS selector seems not to work: %s", selectorString)
 				break
 			}
 			if rt.selectors == nil {
@@ -234,7 +239,7 @@ func (rt *rulesTree) FilterMatchesFor(node *html.Node) *matchesList {
 			list.matchingRules = append(list.matchingRules, rule)
 		}
 	}
-	tracing.EngineTracer.Debugf("matching rules for %s", nodePath(node))
+	T.Debugf("matching rules for %s", nodePath(node))
 	return list
 }
 
@@ -249,7 +254,7 @@ func (matches *matchesList) SortProperties(splitters []CompoundPropertiesSplitte
 				sp.calcSpecifity(rno)
 				proptable = append(proptable, sp)
 			} else {
-				tracing.EngineTracer.Debugf("%s is a compound style", propertyKey)
+				T.Debugf("%s is a compound style", propertyKey)
 				for _, kv := range props {
 					key := kv.Key
 					val := kv.Value
@@ -264,8 +269,8 @@ func (matches *matchesList) SortProperties(splitters []CompoundPropertiesSplitte
 		sort.Sort(byHighestSpecifity(proptable))
 		matches.propertiesTable = proptable
 	}
-	if tracing.EngineTracer.GetTraceLevel() >= tracing.LevelDebug {
-		tracing.EngineTracer.Debugf(matches.String())
+	if T.GetTraceLevel() >= tracing.LevelDebug {
+		T.Debugf(matches.String())
 	}
 }
 
@@ -285,6 +290,7 @@ func (matches *matchesList) createStyleGroups(parent StyledNode, builder StyledT
 		if group != nil {
 			group.Set(pspec.propertyKey, pspec.propertyValue)
 		} else {
+			//T.Infof("parent is %s", parent)
 			_, pg := findAncestorWithPropertyGroup(parent, groupname, builder) // must succeed
 			if pg == nil {
 				panic(fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", groupname))
@@ -386,6 +392,9 @@ func findAncestorWithPropertyGroup(sn StyledNode, group string, builder StyledTr
 	var pg *style.PropertyGroup
 	it := sn
 	for it != nil && pg == nil {
+		if it == nil {
+			panic("this cannot happen")
+		}
 		pg = it.ComputedStyles().Group(group)
 		it = builder.WalkUpwards(it)
 	}
@@ -428,7 +437,7 @@ func (cssom CSSOM) attachStylesheets(dom *html.Node, runner *stylingRunner) erro
 		if scope == bodyElement { // scope is body element, i.e. whole document
 			stylingRootElement := findBodyElement(dom)
 			if stylingRootElement == nil { // no body element found
-				tracing.EngineTracer.Infof("Misconstructed DOM: cannot find <body>. Proceeding.")
+				T.Infof("Misconstructed DOM: cannot find <body>. Proceeding.")
 				stylingRootElement = dom // root of fragment, try our best
 			}
 			runner.activeStylers[stylingRootElement] = rulestree
@@ -499,6 +508,7 @@ func (runner *stylingRunner) doStyle(node *html.Node, parent StyledNode) {
 	workload := make(chan workPackage)
 	errors := make(chan error)
 	workers := launch(3).workers(styleSingleNode, workload, errors)
+	runner.workers = workers
 	initialWorkPackage := workPackage{
 		runner:       runner,
 		node:         node,
@@ -506,7 +516,7 @@ func (runner *stylingRunner) doStyle(node *html.Node, parent StyledNode) {
 	}
 	watch(workers, initialWorkPackage)
 	e := collect(errors) // wait for workers to complete
-	tracing.EngineTracer.Debugf("Errors from styling workers: %v", e)
+	T.Infof("Errors from styling workers: %v", e)
 	//
 	/*  // non-concurrent version
 	runner.activateStylesheetsFor(node)
@@ -553,6 +563,7 @@ type workPackage struct {
 // DOM node. However, linking the new styled node to its parent must be
 // a concurrency-safe operation.
 func styleSingleNode(wp workPackage) error {
+	T.Debugf("worker is grabbing node %s", wp.node.Data)
 	var lasterror error
 	builder := wp.runner.builder
 	wp.runner.activateStylesheetsFor(wp.node) // is concurrency-safe
@@ -566,6 +577,7 @@ func styleSingleNode(wp workPackage) error {
 		parent := sn // continue with newly created styled node as parent for next node
 		createWorkPackagesForChildrenNodes(wp.node, parent, wp.runner)
 	}
+	T.Debugf("worpackage for node %s done", wp.node.Data)
 	return lasterror
 }
 
@@ -585,39 +597,18 @@ func calcComputedStylesForNode(node *html.Node, parent StyledNode, runner *styli
 
 // node is exclusive for a worker; no other goroutine can access its children.
 func createWorkPackagesForChildrenNodes(node *html.Node, parent StyledNode, runner *stylingRunner) {
+	T.Debugf("creating worpackage for child-nodes of  %s", node.Data)
 	node = node.FirstChild // recurse into children
 	for node != nil {
 		if node.Type == html.ElementNode {
 			wp := workPackage{runner: runner}
 			wp.node = node
 			wp.styledParent = parent
-			//runner.doStyle(node, parent, builder) // TODO make this concurrent
 			order(runner.workers, wp)
 		}
 		node = node.NextSibling
 	}
 }
-
-// ----------------------------------------------------------------------
-
-// GetCascaded gets the value of a property. The search cascades to
-// parent property maps, if available.
-//
-// This is normally called on a tree of styled nodes and it will cascade
-// all the way up to the default properties, if necessary.
-/*
-func GetCascadedProperty(sn StyledNode, key string) style.Property {
-	group, found := style.GroupNameFromPropertyKey(key)
-	if !found {
-		group = "X"
-	}
-	_, pg := findAncestorWithPropertyGroup(sn, group, builder) // must succeed
-	if pg == nil {
-		panic(fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", group))
-	}
-	return pg.Cascade(key).Get(key) // must succeed
-}
-*/
 
 // --- Helpers ----------------------------------------------------------
 
