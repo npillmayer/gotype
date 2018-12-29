@@ -297,7 +297,7 @@ func (matches *matchesList) createStyleGroups(parent StyledNode, builder StyledT
 			}
 			group, isNew := pg.ForkOnProperty(pspec.propertyKey, pspec.propertyValue, true)
 			if isNew { // a new property group has been created
-				pmap.AddAllFromGroup(group, true) // put it into the group map
+				pmap = pmap.AddAllFromGroup(group, true) // put it into the group map
 			}
 		}
 		done[pspec.propertyKey] = true // remember we're done with this property

@@ -164,6 +164,8 @@ func (pg *PropertyGroup) IsSet(key string) bool {
 }
 
 // Get a property's value.
+//
+// Style property values are always converted to lower case.
 func (pg *PropertyGroup) Get(key string) Property {
 	if pg.propertiesMap == nil {
 		return ""
@@ -172,7 +174,10 @@ func (pg *PropertyGroup) Get(key string) Property {
 }
 
 // Set a property's value. Overwrites an existing value, if present.
+//
+// Style property values are always converted to lower case.
 func (pg *PropertyGroup) Set(key string, p Property) {
+	p = Property(strings.ToLower(string(p)))
 	if pg.propertiesMap == nil {
 		pg.propertiesMap = make(map[string]Property)
 	}
@@ -288,6 +293,7 @@ var groupNameFromPropertyKey = map[string]string{
 	"min-height":                 "Dimension",
 	"max-width":                  "Dimension",
 	"max-height":                 "Dimension",
+	"display":                    "Display", // Display
 }
 
 // SplitCompountProperty splits up a shortcut property into its individual
@@ -364,7 +370,7 @@ func p(prefix string, suffix string, tag string) string {
 	return prefix + "-" + tag + "-" + suffix
 }
 
-// PropertyMap holds CSS properties.
+// PropertyMap holds CSS properties. nil is a legal (empty) property map.
 type PropertyMap struct {
 	// As CSS defines a whole lot of properties, we segment them into logical groups.
 	m map[string]*PropertyGroup // into struct to make it opaque for clients
@@ -377,6 +383,9 @@ func NewPropertyMap() *PropertyMap {
 
 // Size returns the number of style property entries.
 func (pmap *PropertyMap) Size() int {
+	if pmap == nil {
+		return 0
+	}
 	return len(pmap.m)
 }
 
@@ -395,9 +404,9 @@ func (pmap *PropertyMap) Group(groupname string) *PropertyGroup {
 //
 // If the property map does not yet contain a group of this kind, it will
 // simply set this group (instead of copying values).
-func (pmap *PropertyMap) AddAllFromGroup(group *PropertyGroup, overwrite bool) {
+func (pmap *PropertyMap) AddAllFromGroup(group *PropertyGroup, overwrite bool) *PropertyMap {
 	if pmap == nil {
-		return
+		pmap = NewPropertyMap()
 	}
 	if pmap.m == nil {
 		pmap.m = make(map[string]*PropertyGroup)
@@ -414,6 +423,7 @@ func (pmap *PropertyMap) AddAllFromGroup(group *PropertyGroup, overwrite bool) {
 			}
 		}
 	}
+	return pmap
 }
 
 // Add adds a property to this property map, e.g.,
@@ -489,6 +499,10 @@ func InitializeDefaultPropertyValues(additionalProps []KeyValue) *PropertyMap {
 	dimension.Set("max-height", "10000pt")
 	dimension.Parent = root
 	m["Dimension"] = dimension
+
+	display := NewPropertyGroup("Display")
+	display.Set("display", "block")
+	m["Display"] = display
 
 	/*
 	   type ColorModel string
@@ -587,7 +601,7 @@ func InitializeDefaultPropertyValues(additionalProps []KeyValue) *PropertyMap {
 	return &PropertyMap{m}
 }
 
-// GetCascaded gets the value of a property. The search cascades to
+// GetCascadedProperty gets the value of a property. The search cascades to
 // parent property maps, if available.
 //
 // This is normally called on a tree of styled nodes and it will cascade
@@ -608,4 +622,16 @@ func GetCascadedProperty(sn TreeNode, key string) (Property, error) {
 		return Property(""), errors.New(errmsg)
 	}
 	return group.Cascade(key).Get(key), nil // must succeed
+}
+
+// GetLocalProperty returns a style property value, if it is set locally
+// for the styled node. No cascading is performed.
+func GetLocalProperty(sn TreeNode, key string) (Property, bool) {
+	groupname := GroupNameFromPropertyKey(key)
+	var group *PropertyGroup
+	group = sn.ComputedStyles().Group(groupname)
+	if group == nil {
+		return "", false
+	}
+	return group.Get(key), true
 }

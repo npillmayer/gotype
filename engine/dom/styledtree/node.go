@@ -89,11 +89,11 @@ func (sn Node) ChildCount() int {
 }
 
 // Child is a safe way to get a children-node of a styled node.
-func (sn Node) ChildNode(i int) (*Node, bool) {
-	if sn.children.length() <= i {
+func (sn Node) ChildNode(n int) (*Node, bool) {
+	if sn.children.length() <= n {
 		return nil, false
 	}
-	return sn.children.child(i), true
+	return sn.children.child(n), true
 }
 
 // AddChild inserts a new child node into the tree.
@@ -112,6 +112,14 @@ func (sn *Node) AddChild(ch *Node) {
 // Interface style.TreeNode.
 func (sn Node) Parent() style.TreeNode {
 	return sn.parent
+}
+
+// Child returns the child at position n, as a style.TreeNode
+//
+// Interface style.TreeNode.
+func (sn Node) Child(n int) style.TreeNode {
+	ch, _ := sn.ChildNode(n)
+	return ch
 }
 
 // ----------------------------------------------------------------------
