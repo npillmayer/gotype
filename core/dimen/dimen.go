@@ -66,14 +66,21 @@ func (d Dimen) String() string {
 	return fmt.Sprintf("%dsp", int32(d))
 }
 
-// A point on a page
+// A point on a page.
 //
 // TODO see methods in https://golang.org/pkg/image/#Point
 type Point struct {
 	X, Y Dimen
 }
 
-// A rectangle on a page
+// Shift a point along a vector.
+func (p *Point) Shift(vector Point) *Point {
+	p.X += vector.X
+	p.Y += vector.Y
+	return p
+}
+
+// A rectangle (on a page).
 type Rect struct {
 	TopL, BotR Point
 }
