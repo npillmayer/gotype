@@ -3,7 +3,7 @@
 /*
 Typesetting may be understood as the process of placing boxes within
 larger boxes. The smallest type of box is a glyph, i.e. a printable
-letter. The largest type of box is a page -- or even a book, where
+letter. The largest type of box is a page—or even a book, where
 page-boxes are placed into.
 
 The box model is very versatile. Nevertheless we will generalize the
@@ -12,8 +12,8 @@ irregular shapes is a feature available in most modern systems, e.g.
 when letting text flow around a non-rectangular illustration.
 
 This module deals with rectangular boxes, starting at the glyph level.
-The notation oftentimes follows the one introduced by the TeX typesetting
-system.
+Boxes follow the CSS box model. Nevertheless, the notation oftentimes follows
+the one introduced by the TeX typesetting system.
 
 BSD License
 
@@ -57,12 +57,22 @@ import (
 	"github.com/npillmayer/gotype/core/font"
 )
 
-/*
----------------------------------------------------------------------------
+// Box type, following the CSS box model.
+type Box struct {
+	dimen.Rect
+	Min     dimen.Point
+	Max     dimen.Point
+	Padding [4]dimen.Dimen // inside of border
+	Margins [4]dimen.Dimen // outside of border
+}
 
-
-----------------------------------------------------------------------
-
+// For padding, margins
+const (
+	Top    int = 0
+	Right      = 1
+	Bottom     = 2
+	Left       = 3
+)
 
 /* Box styling: We follow the CSS paradigm for boxes. Boxes are stylable
  * objects which have dimensions, spacing, borders and colors.
@@ -70,49 +80,85 @@ import (
  * Some boxes may just implement a subset of the styling parameters. Most
  * notably this holds for glyphs: Glyphs may have styled their content only.
  * No border or additional spacing is possible with glyphs.
-*/
+ */
 
-// Type for styled content (color only)
-type ContentStyling struct {
-	Foreground        color.Color
-	Background        color.Color
-	StylingIdentifier string // e.g., a CSS ID
-	StylingClass      string // e.g., a CSS class
+// Type for styling with color.
+type ColorStyle struct {
+	Foreground color.Color
+	Background color.Color // may be (semi-)transparent
 }
 
-// Type for a fully stylable box
-type StyledBox struct {
-	//Box
-	Style   *ContentStyling
-	Border  *BorderStyle
-	Padding dimen.Dimen // inside of border
-	Spacing dimen.Dimen // outside of border
+// A type for styling text.
+type TextStyle struct {
+	Typecase *font.TypeCase
 }
 
-// A type for simple borders. Currently no line style variants are supported.
+// A type for simple borders.
 type BorderStyle struct {
 	LineColor     color.Color
 	LineThickness dimen.Dimen
+	LineStyle     int8
+	CornerRadius  dimen.Dimen
 }
 
-/* Wikipedia: In typography, a glyph [...] is an elemental symbol within
- * an agreed set of symbols, intended to represent a readable character
- * for the purposes of writing. [ Copyright (c) Wikipedia.com, 2017 ]
- */
+// A type for border line styles.
+type LineStyle int8
 
-// A box for glyphs. Glyphs are content-stylable only (no borders).
+// We support these line styles only
+const (
+	LS_Solid  LineStyle = 0
+	LS_Dashed LineStyle = 1
+	LS_Dotted LineStyle = 2
+)
+
+// BoxStyling rolls all styling options into one type.
+type BoxStyling struct {
+	TextStyle TextStyle
+	Colors    ColorStyle
+	Border    BorderStyle
+}
+
+// Type for a fully stylable box.
+type StyledBox struct {
+	Box
+	Styling *BoxStyling
+}
+
+// A box for glyphs. Glyphs currently are content-stylable only (no borders).
+//
+// Wikipedia: In typography, a glyph [...] is an elemental symbol within
+// an agreed set of symbols, intended to represent a readable character
+// for the purposes of writing. [ Copyright (c) Wikipedia.com, 2017 ]
 type Glyph struct {
-	//Box
-	Style    *ContentStyling
-	Typecase *font.TypeCase
-	CharPos  rune
+	TextStyle *TextStyle
+	Colors    *ColorStyle
+	CharPos   rune
 }
 
-// Boxed for typesetting, similar to TeX's \hbox and \vbox.
-type TypesetBox struct {
-	//Box
-	Style *ContentStyling
-	//Cord  *Khipu
+// Normalize sorts the corner coordinates into correct order.
+func (box *Box) Normalize() *Box {
+	if box.TopL.X > box.BotR.X {
+		box.TopL.X, box.BotR.X = box.BotR.X, box.TopL.X
+	}
+	if box.TopL.Y > box.BotR.Y {
+		box.TopL.Y, box.BotR.Y = box.BotR.Y, box.BotR.Y
+	}
+	return box
+}
+
+// Shift a box along a vector. The size of the box is unchanged.
+func (box *Box) Shift(vector dimen.Point) *Box {
+	box.TopL.Shift(vector)
+	box.BotR.Shift(vector)
+	return box
+}
+
+// Enlarge a box in x- and y-direction. For shrinking, use negative
+// argument(s).
+func (box *Box) Enlarge(scales dimen.Point) *Box {
+	box.BotR.X = box.BotR.X + scales.X
+	box.BotR.Y = box.BotR.Y + scales.Y
+	return box
 }
 
 // Method for boxing content into a horizontal box. Content is given as a
