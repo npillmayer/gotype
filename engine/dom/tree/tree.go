@@ -61,7 +61,7 @@ var errInvalidFilter error = errors.New("Filter stage is invalid")
 //    nodes, err := futureResult()
 //
 // Walker support a set of search & filter functions. Clients will chain
-// some of these to perform tasks on tree nodes.
+// some of these to perform tasks on tree nodes (see examples).
 type Walker struct {
 	sync.Mutex
 	initial *Node     // initial node of (sub-)tree
@@ -69,98 +69,15 @@ type Walker struct {
 }
 
 // NewWalker creates a Walker for the initial node of a (sub-)tree.
+// The first subsequent call to a node filter function will have this
+// initial node as input.
 func NewWalker(initial *Node) *Walker {
 	return &Walker{initial: initial, pipe: newPipeline()}
 }
 
-// LastError returns the last error encountered during previous operations.
-//
-// If the previous operation generated a promise, a call to LastError()
-// will block and collect the result of all spawned goroutines.
-//
-// If w is nil, LastError() will return nil.
-/*
-func (w *Walker) LastError() error {
-	if w == nil {
-		return nil
-	}
-	w.waitForCompletion()
-	return w.lasterror
-}
-*/
-
-// Selection returns the current selection of tree nodes (which may be nil).
-//
-// If the previous operation generated a promise, a call to Selection()
-// will block and collect the result of all spawned goroutines.
-//
-// If w is nil, Selection() will return nil.
-/*
-func (w *Walker) Selection() []*Node {
-	if w == nil {
-		return nil
-	}
-	w.waitForCompletion()
-	return w.selection
-}
-*/
-
-// ResetSelection sets the current selection to an empty set.
-// Does nothing if w is nil.
-//
-// If the previous operation generated a promise, a call to ResetSelection()
-// will block and wait for the completion of all spawned goroutines.
-// It will then collect the last error, clear the selection and return.
-/*
-func (w *Walker) ResetSelection() {
-	if w != nil {
-		w.waitForCompletion()
-		w.resetSelection()
-	}
-}
-*/
-
-// Initialize and/or clear the current selection.
-/*
-func (w *Walker) resetSelection() {
-	if w.selection == nil {
-		w.selection = make([]*Node, 0, 10)
-	} else {
-		w.selection = w.selection[:0]
-	}
-}
-*/
-
-// waitForCompletion waits for all spawned goroutines to finish.
-// It will then set the client-level fields to be fetched by
-// Selection() and LastError().
-//
-// Does nothing if w is nil.
-/*
-func waitForCompletion(results <-chan *Node, errch <-chan error) ([]*Node, error) {
-	if w == nil {
-		return
-	}
-	go func() {
-		w.workers.queuecount.Wait()          // wait for workload queue to become empty
-		log.Printf("all workers are done\n") // TODO
-		w.closeErrorChannel()
-	}()
-	w.lasterror = nil
-	for err := range w.errorch {
-		if err != nil {
-			w.lasterror = err // throw away all errors but the last one
-		}
-	}
-	// Now collect all results from the pipeline of promises
-	finalPromise := w.promises[len(w.promises)-1]
-	for node := range finalPromise.results {
-		w.selection = append(w.selection, node)
-	}
-	w.cleanupPromises()
-}
-*/
-
+// appendFilterForTask will create a new filter for a task and append
+// that filter at the end of the pipeline. If processing has not
+// been started yet, it will be started.
 func (w *Walker) appendFilterForTask(task workerTask, udata interface{}) {
 	newFilter := newFilter(task, udata)
 	if w.pipe.empty() { // quick check, may be false positive when in if-block
@@ -170,6 +87,9 @@ func (w *Walker) appendFilterForTask(task workerTask, udata interface{}) {
 	w.pipe.appendFilter(newFilter) // insert filter in running pipeline
 }
 
+// startProcessing should be called as soon as the first filter is inserted
+// into the pipeline. It will put the initial tree node onto the front input
+// channel.
 func (w *Walker) startProcessing() {
 	doStart := false
 	w.pipe.RLock()
@@ -183,71 +103,14 @@ func (w *Walker) startProcessing() {
 	}
 }
 
-// We need this protected by a mutex because it is outside of our control
-// how often this will be called. Every client-level call to Selection(),
-// ResetSelection() and LastError() will trigger this.
-/*
-func (w *Walker) closeErrorChannel() {
-	w.Lock()
-	defer w.Unlock()
-	if !w.errorsClosed {
-		w.errorsClosed = true
-		close(w.errorch)
-	}
-}
-*/
-
-// start will
-// - reset the selection
-// - create channels
-// - initialize the waitgroup for the workload
-// - start the worker goroutines waiting for workload
-/*
-func (w *Walker) start() {
-	w.Lock()
-	defer w.Unlock()
-	if w.errorsClosed {
-		w.resetSelection()
-		w.errorch = make(chan error, 10)
-		w.workers.queuecount = sync.WaitGroup{}
-		w.workers.workload = make(chan workPackage)
-		w.workers.errorch = w.errorch // write-only copy for workers
-		w.errorsClosed = false
-		for i := 0; i < 2; i++ { // TODO where to define # of workers ?
-			wno := i + 1 // going to start worker #wno
-			go func(workload <-chan workPackage, errch chan<- error) {
-				defer func() {
-					log.Printf("finished worker #%d\n", wno)
-				}()
-				for wp := range workload { // get workpackages until drained
-					node, err := wp.todo(wp.data) // perform task on workpackage
-					if err != nil {
-						errch <- err // signal error to Walker
-					}
-					if node != nil {
-						wp.promise.results <- node
-					}
-					w.workers.queuecount.Done() // worker has finished a workpackage
-				}
-			}(w.workers.workload, w.errorch)
-		}
-	}
-}
-*/
-
-// Walkers may decide to perform certain tasks asynchronously. This
-// will result in a promise being created.
-/*
-type Promise struct {
-	selection []*Node      // protected against premature client access
-	lasterror error        // protected against premature client access
-	results   <-chan *Node // results to collect
-	errch     <-chan error // channel for errors from pipeline
-}
-*/
-
-// Walkers may decide to perform certain tasks asynchronously. This
-// will result in a promise being created.
+// Walkers may decide to perform certain tasks asynchronously.
+// Clients will not receive the resulting node list immediately, but
+// rather get handed a Promise.
+// Clients will then—any time after they received the Promise—call the
+// Promise (which is a function type) to receive a slice of nodes and
+// a possible error value. Calling the Promise will block until all
+// concurrent operations on the tree nodes have finished, i.e. it
+// is a synchronization point.
 func (w *Walker) Promise() func() ([]*Node, error) {
 	errch := w.pipe.errors
 	results := w.pipe.results
@@ -265,18 +128,22 @@ func (w *Walker) Promise() func() ([]*Node, error) {
 	}
 }
 
+// ----------------------------------------------------------------------
+
 // Predicate is a function type to match against nodes of a tree.
 // Is is used as an argument for various Walker functions to
 // collect a selection of nodes.
 type Predicate func(*Node) (matches bool, err error)
 
-// Whatever is a predicate to match anything. See type Predicate.
+// Whatever is a predicate to match anything (see type Predicate).
+// It is useful to match the first node in a given direction.
 var Whatever Predicate = func(*Node) (bool, error) {
 	return true, nil
 }
 
-// Impossible is a predicate to match nothing. See type Predicate.
-var Impossible Predicate = func(*Node) (bool, error) {
+// TraverseAll is a predicate to match nothing (see type Predicate).
+// It is useful to traverse a whole tree.
+var TraverseAll Predicate = func(*Node) (bool, error) {
 	return false, nil
 }
 

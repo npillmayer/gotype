@@ -52,6 +52,7 @@ func NewNode(payload interface{}) *Node {
 	return &Node{Payload: payload}
 }
 
+// String is a simple Stringer which the node's Payload packaged in a string.
 func (node *Node) String() string {
 	return fmt.Sprintf("(Node %v)", node.Payload)
 }
@@ -72,13 +73,13 @@ func (node Node) Parent() *Node {
 	return node.parent
 }
 
-// ChildCount returns the number of children-nodes for a styled node
+// ChildCount returns the number of children-nodes for a node
 // (concurrency-safe).
 func (node Node) ChildCount() int {
 	return node.children.length()
 }
 
-// Child is a concurrency-safe way to get a children-node of a styled node.
+// Child is a concurrency-safe way to get a children-node of a node.
 func (node Node) Child(n int) (*Node, bool) {
 	if node.children.length() <= n {
 		return nil, false

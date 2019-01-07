@@ -1,6 +1,21 @@
 /*
 Package tree implements an all-purpose tree type.
 
+There are many tree implementations around. This one supports trees
+of a fairly simple structure. However, this package makes heavy use
+of concurrency for all kinds of tree operations. Tree traversal and
+modification are often performed asynchronously by creating pipelines
+of concurrent filters. This is done transparently for the client,
+only reflected by getting a
+promise (https://en.wikipedia.org/wiki/Futures_and_promises)
+as a return type.
+
+For small trees the overhead of concurrency may hurt, from a performance
+point of view. This package is meant for fairly large DOMs with potentially
+complex styling information. However, it is generalized enough to be useful
+in other scenarios as well. And to be honest: I wrote it because
+concurrency in Go is kind of fun!
+
 BSD License
 
 Copyright (c) 2017–18, Norbert Pillmayer
