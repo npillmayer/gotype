@@ -1,6 +1,6 @@
-/*
-Package tree implements an all-purpose tree type.
+package tree
 
+/*
 BSD License
 
 Copyright (c) 2017–18, Norbert Pillmayer
@@ -34,77 +34,43 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-package tree
 
 import (
-	"log"
+	"errors"
 	"sync"
 )
 
-// Node is the base type our tree is built of.
-type Node struct {
-	parent   *Node
-	children childrenSlice
-	Payload  interface{}
-}
-
-// NewNode creates a new tree node with a payload.
-func NewNode(payload interface{}) *Node {
-	return &Node{Payload: payload}
-}
-
-// AddChild inserts a new child node into the tree.
-// The newly inserted node is connected to this node as its parent.
-//
-// This operation is concurrency-safe.
-func (sn *Node) AddChild(ch *Node) {
-	if ch == nil {
-		return
-	}
-	sn.children.addChild(ch, sn)
-}
-
-// ParentNode returns the parent node or nil (for the root of the tree).
-func (sn Node) Parent() *Node {
-	return sn.parent
-}
-
-// ChildCount returns the number of children-nodes for a styled node
-// (concurrency-safe).
-func (sn Node) ChildCount() int {
-	return sn.children.length()
-}
-
-// Child is a concurrency-safe way to get a children-node of a styled node.
-func (sn Node) Child(n int) (*Node, bool) {
-	if sn.children.length() <= n {
-		return nil, false
-	}
-	return sn.children.child(n), true
-}
-
-// ----------------------------------------------------------------------
+// Error to be emitted if a pipeline filter step is defunct.
+var errInvalidFilter error = errors.New("Filter stage is invalid")
 
 // Walker holds information for operating on trees: finding nodes and
 // doing work on them. Clients usually create a Walker for a (sub-)tree
 // to search for a selection of nodes matching certain criteria, and
 // then perform some operation on this selection.
 //
-// A Walker has two client-level fields, accessed by getter methods:
-// Selection and LastError.
+// A Walker will eventually return two client-level values:
+// A slice of tree nodes and the last error occured.
+// Often these fields are accessed through a
+// Promise-object, which represents future values for the two fields.
+//
+// A typical usage of a Walker looks like this ("FindNodesAndDoSomething()" is
+// a placeholder for a sequence of function calls, see below):
+//
+//    w := NewWalker(node)
+//    futureResult := w.FindNodesAndDoSomething(...).Promise()
+//    nodes, err := futureResult()
+//
+// Walker support a set of search & filter functions. Clients will chain
+// some of these to perform tasks on tree nodes.
 type Walker struct {
 	sync.Mutex
-	root         *Node      // root node of (sub-)tree
-	selection    []*Node    // protected against premature client access
-	lasterror    error      // protected against premature client access
-	promises     *promise   // pipeline of chained promises
-	errorch      chan error // channel for errors from workers
-	errorsClosed bool       // is the error channel closed, i.e., all workers done?
+	initial *Node     // initial node of (sub-)tree
+	pipe    *pipeline // pipeline of filters to perform work on tree nodes.
 }
 
-// NewWalker creates a Walker for the root node of a (sub-)tree.
-func NewWalker(root *Node) *Walker {
-	return &Walker{root: root}
+// NewWalker creates a Walker for the initial node of a (sub-)tree.
+func NewWalker(initial *Node) *Walker {
+	return &Walker{initial: initial, pipe: newPipeline()}
 }
 
 // LastError returns the last error encountered during previous operations.
@@ -113,6 +79,7 @@ func NewWalker(root *Node) *Walker {
 // will block and collect the result of all spawned goroutines.
 //
 // If w is nil, LastError() will return nil.
+/*
 func (w *Walker) LastError() error {
 	if w == nil {
 		return nil
@@ -120,6 +87,7 @@ func (w *Walker) LastError() error {
 	w.waitForCompletion()
 	return w.lasterror
 }
+*/
 
 // Selection returns the current selection of tree nodes (which may be nil).
 //
@@ -127,6 +95,7 @@ func (w *Walker) LastError() error {
 // will block and collect the result of all spawned goroutines.
 //
 // If w is nil, Selection() will return nil.
+/*
 func (w *Walker) Selection() []*Node {
 	if w == nil {
 		return nil
@@ -134,6 +103,7 @@ func (w *Walker) Selection() []*Node {
 	w.waitForCompletion()
 	return w.selection
 }
+*/
 
 // ResetSelection sets the current selection to an empty set.
 // Does nothing if w is nil.
@@ -141,14 +111,17 @@ func (w *Walker) Selection() []*Node {
 // If the previous operation generated a promise, a call to ResetSelection()
 // will block and wait for the completion of all spawned goroutines.
 // It will then collect the last error, clear the selection and return.
+/*
 func (w *Walker) ResetSelection() {
 	if w != nil {
 		w.waitForCompletion()
 		w.resetSelection()
 	}
 }
+*/
 
 // Initialize and/or clear the current selection.
+/*
 func (w *Walker) resetSelection() {
 	if w.selection == nil {
 		w.selection = make([]*Node, 0, 10)
@@ -156,13 +129,15 @@ func (w *Walker) resetSelection() {
 		w.selection = w.selection[:0]
 	}
 }
+*/
 
 // waitForCompletion waits for all spawned goroutines to finish.
 // It will then set the client-level fields to be fetched by
 // Selection() and LastError().
 //
 // Does nothing if w is nil.
-func (w *Walker) waitForCompletion() {
+/*
+func waitForCompletion(results <-chan *Node, errch <-chan error) ([]*Node, error) {
 	if w == nil {
 		return
 	}
@@ -184,10 +159,34 @@ func (w *Walker) waitForCompletion() {
 	}
 	w.cleanupPromises()
 }
+*/
+
+func (w *Walker) appendFilterForTask(task workerTask, udata interface{}) {
+	newFilter := newFilter(task, udata)
+	if w.pipe.empty() { // quick check, may be false positive when in if-block
+		// now we know the new filter might be the first one
+		w.startProcessing() // this will check again, and startup if pipe empty
+	}
+	w.pipe.appendFilter(newFilter) // insert filter in running pipeline
+}
+
+func (w *Walker) startProcessing() {
+	doStart := false
+	w.pipe.RLock()
+	if w.pipe.filters == nil { // no processing up to now => start with initial node
+		w.pipe.pushSync(w.initial) // input is buffered, so this will return immediately
+		doStart = true             // yes, we will have to start the pipeline
+	}
+	w.pipe.RUnlock()
+	if doStart { // ok to be outside mutex as other goroutines will check pipe.empty()
+		w.pipe.startProcessing() // must be outside of mutex lock
+	}
+}
 
 // We need this protected by a mutex because it is outside of our control
 // how often this will be called. Every client-level call to Selection(),
 // ResetSelection() and LastError() will trigger this.
+/*
 func (w *Walker) closeErrorChannel() {
 	w.Lock()
 	defer w.Unlock()
@@ -196,12 +195,14 @@ func (w *Walker) closeErrorChannel() {
 		close(w.errorch)
 	}
 }
+*/
 
 // start will
 // - reset the selection
 // - create channels
 // - initialize the waitgroup for the workload
 // - start the worker goroutines waiting for workload
+/*
 func (w *Walker) start() {
 	w.Lock()
 	defer w.Unlock()
@@ -232,66 +233,36 @@ func (w *Walker) start() {
 		}
 	}
 }
-
-type pipe struct {
-	workload   chan *Node     // data pipe
-	queuecount sync.WaitGroup // count of work packages
-}
-
-func (p *pipe) push(node *Node) {
-	p.queuecount.Add(1)
-	go func(wp workPackage) {
-		p.workload <- wp
-	}(wp)
-}
+*/
 
 // Walkers may decide to perform certain tasks asynchronously. This
-// will result in a promise being created and handed to the succeeding
-// task in a pipeline.
-type promise struct {
-	workers workergroup // a pool of worker goroutines
-	next    *promise    // the next promise in a pipeline
+// will result in a promise being created.
+/*
+type Promise struct {
+	selection []*Node      // protected against premature client access
+	lasterror error        // protected against premature client access
+	results   <-chan *Node // results to collect
+	errch     <-chan error // channel for errors from pipeline
 }
+*/
 
-func makePromise(workercnt int, workload <-chan *Node, errch chan<- error) *promise {
-	p := &promise{}
-	p.workers.queuecount = sync.WaitGroup{} // should be unnecessary
-	p.workers.workload = workload           // promise gets input from here...
-	p.workers.results = make(chan *Node)    // ... and puts results here
-	p.workers.errorch = errch               // this is were error messages go to
-	return p
-}
-
-func (w *Walker) cleanupPromises() {
-	for _, p := range w.promises {
-		close(p.results)
+// Walkers may decide to perform certain tasks asynchronously. This
+// will result in a promise being created.
+func (w *Walker) Promise() func() ([]*Node, error) {
+	errch := w.pipe.errors
+	results := w.pipe.results
+	signal := make(chan struct{}, 1)
+	counter := &w.pipe.queuecount
+	var selection []*Node
+	var lasterror error
+	go func() {
+		defer close(signal)
+		selection, lasterror = waitForCompletion(results, errch, counter)
+	}()
+	return func() ([]*Node, error) {
+		<-signal
+		return selection, lasterror
 	}
-}
-
-func (p *promise) order(workers *workergroup, task workerTask, data interface{}) {
-	wp := workPackage{
-		todo:    task,
-		data:    data,
-		promise: p,
-	}
-	workers.queuecount.Add(1) // must be before put
-	go func(wp workPackage) {
-		workers.workload <- wp
-	}(wp)
-}
-
-type nodePredicateTask struct {
-	predicate Predicate
-}
-
-func matchNode(wpData interface{}) (*Node, error) {
-	data := wpData.(*nodePredicateTask)
-	var matches bool
-	var err error
-	if matches, err = data.predicate(data.node); matches {
-		return data.node, err
-	}
-	return nil, err
 }
 
 // Predicate is a function type to match against nodes of a tree.
@@ -300,14 +271,16 @@ func matchNode(wpData interface{}) (*Node, error) {
 type Predicate func(*Node) (matches bool, err error)
 
 // Whatever is a predicate to match anything. See type Predicate.
-func Whatever(*Node) (bool, error) {
+var Whatever Predicate = func(*Node) (bool, error) {
 	return true, nil
 }
 
 // Impossible is a predicate to match nothing. See type Predicate.
-func Impossible(*Node) (bool, error) {
+var Impossible Predicate = func(*Node) (bool, error) {
 	return false, nil
 }
+
+// ----------------------------------------------------------------------
 
 // AncesterWith finds an ancestor matching the given predicate.
 // The search does not include the start node.
@@ -317,35 +290,31 @@ func (w *Walker) AncestorWith(predicate Predicate) *Walker {
 	if w == nil {
 		return nil
 	}
-	if w.root != nil && predicate != nil {
-		promise := makePromise()
-		w.promises = append(w.promises, promise) // TODO make conc-safe
-		go func(pre Predicate, output chan<- *Node, errch chan<- error) {
-			node, err := ancestorWith(w.root, pre)
-			if err != nil {
-				errch <- err // may block
-			}
-			if node != nil {
-				output <- node // may block
-			}
-		}(predicate, promise.results, w.workers.errorch)
+	if w.initial == nil || predicate == nil {
+		w.pipe.errors <- errInvalidFilter
+	} else {
+		w.appendFilterForTask(ancestorWith, predicate) // hook in this filter
 	}
 	return w
 }
 
-// ancestorWith searches recursively for a node matching a predicate.
+// ancestorWith searches iteratively for a node matching a predicate.
 // node is at least the parent of the start node.
-func ancestorWith(node *Node, predicate Predicate) (anc *Node, err error) {
-	matched := false
-	matched, err = predicate(node)
-	if err == nil {
-		if matched {
-			anc = node
-		} else if parent := node.Parent(); parent != nil {
-			anc, err = ancestorWith(node, predicate)
+func ancestorWith(node *Node, udata interface{}, push func(*Node)) error {
+	//
+	predicate := udata.(Predicate)
+	anc := node.Parent()
+	for anc != nil {
+		matches, err := predicate(anc)
+		if err != nil {
+			return err
+		}
+		if matches {
+			push(anc) // put ancestor on output channel for next pipeline stage
+			return nil
 		}
 	}
-	return
+	return nil // no matching ancestor found
 }
 
 // DescendentWith searches for a single descendent matching a predicate.
@@ -354,15 +323,16 @@ func ancestorWith(node *Node, predicate Predicate) (anc *Node, err error) {
 // The search does not include the start node.
 //
 // If w is nil, DescendentWith will return nil.
+/*
 func (w *Walker) DescendentWith(predicate Predicate) *Walker {
 	if w == nil {
 		return nil
 	}
 	w.ResetSelection()
-	if w.root != nil && predicate != nil {
-		chcnt := w.root.ChildCount()
+	if w.initial != nil && predicate != nil {
+		chcnt := w.initial.ChildCount()
 		for i := 0; i < chcnt; i++ {
-			ch, _ := w.root.Child(i)
+			ch, _ := w.initial.Child(i)
 			node, err := descendentWith(ch, predicate)
 			if err != nil {
 				w.lasterror = err
@@ -376,9 +346,11 @@ func (w *Walker) DescendentWith(predicate Predicate) *Walker {
 	}
 	return w
 }
+*/
 
 // descendentWith searches recursively for children matching a predicate.
 // It will stop searching as soon as a descendent matches.
+/*
 func descendentWith(node *Node, predicate Predicate) (desc *Node, err error) {
 	matched := false
 	matched, err = predicate(node)
@@ -398,68 +370,4 @@ func descendentWith(node *Node, predicate Predicate) (desc *Node, err error) {
 	}
 	return
 }
-
-// DescendentsWith searches a sub-tree for nodes matching a predicate and
-// collects these nodes.
-//
-// The function may decide to spawn goroutines for traversing the tree.
-// In this case, the returned Walker will contain a (transparentyl wrapped)
-// promise.
-//
-// If w is nil, DescendentWith will return nil.
-func (w *Walker) DescendentsWith(predicate Predicate) *Walker {
-	if w == nil {
-		return nil
-	}
-	w.ResetSelection()
-	if w.root != nil && predicate != nil {
-		chcnt := w.root.ChildCount()
-		if chcnt > 0 {
-			for i := 0; i < chcnt; i++ {
-				ch, _ := w.root.Child(i)
-				node, err := descendentWith(ch, predicate)
-				if err != nil {
-					w.lasterror = err
-					break
-				}
-				if node != nil {
-					w.selection = append(w.selection, node)
-					break
-				}
-			}
-		}
-	}
-	return w
-}
-
-// --- Slices of concurrency-safe sets of children ----------------------
-
-type childrenSlice struct {
-	sync.RWMutex
-	slice []*Node
-}
-
-func (chs *childrenSlice) length() int {
-	chs.RLock()
-	defer chs.RUnlock()
-	return len(chs.slice)
-}
-
-func (chs *childrenSlice) addChild(child *Node, parent *Node) {
-	if child == nil {
-		return
-	}
-	chs.Lock()
-	defer chs.Unlock()
-	chs.slice = append(chs.slice, child)
-	child.parent = parent
-}
-
-func (chs *childrenSlice) child(n int) *Node {
-	if chs.length() == 0 || n < 0 || n >= chs.length() {
-		return nil
-	}
-	chs.RLock()
-	defer chs.RUnlock()
-	return chs.slice[n]
-}
+*/
