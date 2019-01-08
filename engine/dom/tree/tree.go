@@ -41,7 +41,10 @@ import (
 )
 
 // Error to be emitted if a pipeline filter step is defunct.
-var errInvalidFilter error = errors.New("Filter stage is invalid")
+var ErrInvalidFilter error = errors.New("Filter stage is invalid")
+
+// Error to be emitted if a Walker is called with an empty tree
+var ErrEmptyTree error = errors.New("Cannot walk empty tree")
 
 // Walker holds information for operating on trees: finding nodes and
 // doing work on them. Clients usually create a Walker for a (sub-)tree
@@ -62,24 +65,40 @@ var errInvalidFilter error = errors.New("Filter stage is invalid")
 //
 // Walker support a set of search & filter functions. Clients will chain
 // some of these to perform tasks on tree nodes (see examples).
+// You may think of the set of operations to form a small
+// Domain Specific Language (DSL), similar in concept to JQuery.
+//
+// ATTENTION: Clients must call Promise() as the final link of the
+// DSL expression chain, even if they do not expect the expression to
+// return a non-empty set of nodes. Firstly, they need to check for errors,
+// and secondly without fetching the (possibly empty) result set by calling
+// the promise, the Walker may leak goroutines.
 type Walker struct {
 	sync.Mutex
-	initial *Node     // initial node of (sub-)tree
-	pipe    *pipeline // pipeline of filters to perform work on tree nodes.
+	initial         *Node     // initial node of (sub-)tree
+	pipe            *pipeline // pipeline of filters to perform work on tree nodes.
+	attributeGetter AttributeGetter
 }
 
 // NewWalker creates a Walker for the initial node of a (sub-)tree.
 // The first subsequent call to a node filter function will have this
 // initial node as input.
+//
+// If initial is nil, NewWalker will return a nil-Walker, resulting
+// in a NOP-pipeline of operations, resulting in an empty set of nodes
+// and an error (ErrEmptyTree).
 func NewWalker(initial *Node) *Walker {
+	if initial == nil {
+		return nil
+	}
 	return &Walker{initial: initial, pipe: newPipeline()}
 }
 
 // appendFilterForTask will create a new filter for a task and append
 // that filter at the end of the pipeline. If processing has not
 // been started yet, it will be started.
-func (w *Walker) appendFilterForTask(task workerTask, udata interface{}) {
-	newFilter := newFilter(task, udata)
+func (w *Walker) appendFilterForTask(task workerTask, udata interface{}, buflen int) {
+	newFilter := newFilter(task, udata, buflen)
 	if w.pipe.empty() { // quick check, may be false positive when in if-block
 		// now we know the new filter might be the first one
 		w.startProcessing() // this will check again, and startup if pipe empty
@@ -94,7 +113,7 @@ func (w *Walker) startProcessing() {
 	doStart := false
 	w.pipe.RLock()
 	if w.pipe.filters == nil { // no processing up to now => start with initial node
-		w.pipe.pushSync(w.initial) // input is buffered, so this will return immediately
+		w.pipe.pushSync(w.initial) // input is buffered, will return immediately
 		doStart = true             // yes, we will have to start the pipeline
 	}
 	w.pipe.RUnlock()
@@ -112,19 +131,27 @@ func (w *Walker) startProcessing() {
 // concurrent operations on the tree nodes have finished, i.e. it
 // is a synchronization point.
 func (w *Walker) Promise() func() ([]*Node, error) {
-	errch := w.pipe.errors
-	results := w.pipe.results
-	signal := make(chan struct{}, 1)
-	counter := &w.pipe.queuecount
-	var selection []*Node
-	var lasterror error
-	go func() {
-		defer close(signal)
-		selection, lasterror = waitForCompletion(results, errch, counter)
-	}()
-	return func() ([]*Node, error) {
-		<-signal
-		return selection, lasterror
+	if w == nil {
+		// empty Walker => return nil set and an error
+		return func() ([]*Node, error) {
+			return nil, ErrEmptyTree
+		}
+	} else {
+		// drain the result channel and the error channel
+		errch := w.pipe.errors
+		results := w.pipe.results
+		counter := &w.pipe.queuecount
+		signal := make(chan struct{}, 1)
+		var selection []*Node
+		var lasterror error
+		go func() {
+			defer close(signal)
+			selection, lasterror = waitForCompletion(results, errch, counter)
+		}()
+		return func() ([]*Node, error) {
+			<-signal
+			return selection, lasterror
+		}
 	}
 }
 
@@ -147,7 +174,47 @@ var TraverseAll Predicate = func(*Node) (bool, error) {
 	return false, nil
 }
 
+// AttributeGetter supports the querying of attributes for a node.
+// As we do not know the internal structure of a node's payload, we need
+// help from the client.
+//
+// GetAttribute() should return the attribute value for a given key.
+// AttributesEqual() should return true iff two values are considered equal.
+type AttributeGetter interface {
+	GetAttribute(payload interface{}, key interface{}) interface{}
+	AttributesEqual(value1 interface{}, value2 interface{}) bool
+}
+
+// SetAttributeGetter sets an attribute getter to support querying of
+// nodes' attributes.
+func (w *Walker) SetAttributeGetter(getter AttributeGetter) {
+	w.attributeGetter = getter
+}
+
 // ----------------------------------------------------------------------
+
+// Parent returns the parent node.
+//
+// If w is nil, Parent will return nil.
+func (w *Walker) Parent() *Walker {
+	if w == nil {
+		return nil
+	}
+	w.appendFilterForTask(parent, nil, 0)
+	return w
+}
+
+// parent is a very simple filter task to retrieve the parent of a tree node.
+// if the node is the tree root node, parent() will not produce a result.
+func parent(node *Node, isBuffered bool, udata interface{}, push func(*Node),
+	pushBuf func(*Node)) error {
+	//
+	p := node.Parent()
+	if p != nil {
+		push(p) // forward parent node to next pipeline stage
+	}
+	return nil
+}
 
 // AncesterWith finds an ancestor matching the given predicate.
 // The search does not include the start node.
@@ -157,17 +224,18 @@ func (w *Walker) AncestorWith(predicate Predicate) *Walker {
 	if w == nil {
 		return nil
 	}
-	if w.initial == nil || predicate == nil {
-		w.pipe.errors <- errInvalidFilter
+	if predicate == nil {
+		w.pipe.errors <- ErrInvalidFilter
 	} else {
-		w.appendFilterForTask(ancestorWith, predicate) // hook in this filter
+		w.appendFilterForTask(ancestorWith, predicate, 0) // hook in this filter
 	}
 	return w
 }
 
 // ancestorWith searches iteratively for a node matching a predicate.
 // node is at least the parent of the start node.
-func ancestorWith(node *Node, udata interface{}, push func(*Node)) error {
+func ancestorWith(node *Node, isBuffered bool, udata interface{}, push func(*Node),
+	pushBuf func(*Node)) error {
 	//
 	predicate := udata.(Predicate)
 	anc := node.Parent()
@@ -181,60 +249,91 @@ func ancestorWith(node *Node, udata interface{}, push func(*Node)) error {
 			return nil
 		}
 	}
-	return nil // no matching ancestor found
+	return nil // no matching ancestor found, not an error
 }
 
-// DescendentWith searches for a single descendent matching a predicate.
-// The search will be performed sequentially and recursively. Search will
-// abort as soon as a matching descendent has been found.
+// DescendentsWith finds descendents matching a predicate.
 // The search does not include the start node.
 //
-// If w is nil, DescendentWith will return nil.
-/*
-func (w *Walker) DescendentWith(predicate Predicate) *Walker {
+// If w is nil, DescendentsWith will return nil.
+func (w *Walker) DescendentsWith(predicate Predicate) *Walker {
 	if w == nil {
 		return nil
 	}
-	w.ResetSelection()
-	if w.initial != nil && predicate != nil {
-		chcnt := w.initial.ChildCount()
-		for i := 0; i < chcnt; i++ {
-			ch, _ := w.initial.Child(i)
-			node, err := descendentWith(ch, predicate)
-			if err != nil {
-				w.lasterror = err
-				break
-			}
-			if node != nil {
-				w.selection = append(w.selection, node)
-				break
-			}
-		}
+	if predicate == nil {
+		w.pipe.errors <- ErrInvalidFilter
+	} else {
+		w.appendFilterForTask(descendentsWith, predicate, 5) // need a helper queue
 	}
 	return w
 }
-*/
 
-// descendentWith searches recursively for children matching a predicate.
-// It will stop searching as soon as a descendent matches.
-/*
-func descendentWith(node *Node, predicate Predicate) (desc *Node, err error) {
-	matched := false
-	matched, err = predicate(node)
-	if err == nil {
-		if matched {
-			desc = node
+func descendentsWith(node *Node, isBuffered bool, udata interface{}, push func(*Node),
+	pushBuf func(*Node)) error {
+	//
+	if isBuffered {
+		predicate := udata.(Predicate)
+		matches, err := predicate(node)
+		if err != nil {
+			return err // do not descend further
+		}
+		if matches {
+			push(node) // found one, put on output channel for next pipeline stage
 		} else {
-			chcnt := node.ChildCount()
-			for i := 0; i < chcnt; i++ {
-				ch, _ := node.Child(i)
-				desc, err = descendentWith(ch, predicate)
-				if err != nil || node != nil {
-					break
-				}
-			}
+			revisitChildrenOf(node, pushBuf)
+		}
+	} else {
+		revisitChildrenOf(node, pushBuf)
+	}
+	return nil
+}
+
+func revisitChildrenOf(node *Node, pushBuf func(*Node)) {
+	chcnt := node.ChildCount()
+	for i := 0; i < chcnt; i++ {
+		ch, _ := node.Child(i)
+		pushBuf(ch)
+	}
+}
+
+// AttributeIs checks a node's attributes and filters all nodes with
+// their attributes not matching the requested value.
+//
+// If w is nil, AncestorWith will return nil.
+func (w *Walker) AttributeIs(key interface{}, value interface{}) *Walker {
+	if w == nil {
+		return nil
+	}
+	if key == nil {
+		w.pipe.errors <- ErrInvalidFilter
+	} else {
+		attr := attrMatcher{w.attributeGetter, key, value}
+		w.appendFilterForTask(attributeIs, attr, 0) // hook in this filter
+	}
+	return w
+}
+
+type attrMatcher struct {
+	getter AttributeGetter
+	key    interface{}
+	value  interface{}
+}
+
+// attributeIs checks an attribute of a tree node. It relies on an
+// attribute getter function to perform this task. The attribute getter
+// has to be provided by the caller.
+// nil is a valid attribute value to compare.
+//
+// If no attribute getter is provided, no tree node will match.
+func attributeIs(node *Node, isBuffered bool, udata interface{}, push func(*Node),
+	pushBuf func(*Node)) error {
+	//
+	attr := udata.(attrMatcher)
+	if attr.getter != nil {
+		val := attr.getter.GetAttribute(node.Payload, attr.key)
+		if attr.getter.AttributesEqual(val, attr.value) {
+			push(node) // forward node to next pipeline stage
 		}
 	}
-	return
+	return nil
 }
-*/

@@ -16,6 +16,25 @@ complex styling information. However, it is generalized enough to be useful
 in other scenarios as well. And to be honest: I wrote it because
 concurrency in Go is kind of fun!
 
+We support a set of search & filter functions on tree nodes. Clients will chain
+these to perform tasks on nodes (see examples).
+You may think of the set of operations to form a small
+Domain Specific Language (DSL). This is similar in concept to JQuery, but
+of course with a much smaller set of functions.
+
+Navigation functions:
+
+   Parent()                     // find parent for all selected nodes
+   AncestorWith(predicate)      // find ancestor with a given predicate
+   DescendentsWith(predicate)   // find descendets with a given predicate
+
+Filter functions:
+
+   AttributeIs(key, value)      // filter for nodes with a given attribute value
+
+More operations will follow as I get experience from using the tree in
+more real life contexts.
+
 BSD License
 
 Copyright (c) 2017–18, Norbert Pillmayer

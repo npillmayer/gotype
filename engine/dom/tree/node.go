@@ -59,13 +59,14 @@ func (node *Node) String() string {
 
 // AddChild inserts a new child node into the tree.
 // The newly inserted node is connected to this node as its parent.
+// It returns the parent node to allow for chaining.
 //
 // This operation is concurrency-safe.
-func (node *Node) AddChild(ch *Node) {
-	if ch == nil {
-		return
+func (node *Node) AddChild(ch *Node) *Node {
+	if ch != nil {
+		node.children.addChild(ch, node)
 	}
-	node.children.addChild(ch, node)
+	return node
 }
 
 // ParentNode returns the parent node or nil (for the root of the tree).
