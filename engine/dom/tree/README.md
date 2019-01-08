@@ -7,7 +7,7 @@ of concurrency for all kinds of tree operations. Tree traversal and
 modification are often performed asynchronously by creating pipelines
 of concurrent filters. This is done transparently for the client,
 only reflected by getting a
-promise (https://en.wikipedia.org/wiki/Futures_and_promises)
+[promise](https://en.wikipedia.org/wiki/Futures_and_promises)
 as a return type.
 
 For small trees the overhead of concurrency may hurt, from a performance
