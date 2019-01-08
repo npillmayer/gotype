@@ -168,18 +168,22 @@ func DefaultTracing() {
 	tracing.EngineTracer.SetTraceLevel(tracing.TraceLevelFromString(GetString("tracingengine")))
 }
 
+// IsSet is a predicate wether a global configuration property is set.
 func IsSet(key string) bool {
 	return globalConf.IsSet(key)
 }
 
+// GetString returns a global configuration property as a string.
 func GetString(key string) string {
 	return globalConf.GetString(key)
 }
 
+// GetString returns a global configuration property as an integer.
 func GetInt(key string) int {
 	return globalConf.GetInt(key)
 }
 
+// GetString returns a global configuration property as a boolean value.
 func GetBool(key string) bool {
 	return globalConf.GetBool(key)
 }
