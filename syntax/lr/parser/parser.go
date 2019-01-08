@@ -56,7 +56,7 @@ import (
 	"io"
 	"text/scanner"
 
-	"github.com/npillmayer/gotype/gtcore/config/tracing"
+	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/lr"
 	"github.com/npillmayer/gotype/syntax/lr/dss"
 	"github.com/npillmayer/gotype/syntax/lr/sparse"

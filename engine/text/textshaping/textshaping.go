@@ -5,7 +5,6 @@ Unicode characters.
 To understand what a text shaper does, please have a look at
 http://www.manpagez.com/html/harfbuzz/harfbuzz-/what-is-harfbuzz.php
 
-----------------------------------------------------------------------
 
 BSD License
 
@@ -40,13 +39,12 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-----------------------------------------------------------------------
 */
 package textshaping
 
 import (
-	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	"github.com/npillmayer/gotype/gtcore/font"
+	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/font"
 )
 
 // We trace to the commands-tracer. // TODO: create a font tracer?

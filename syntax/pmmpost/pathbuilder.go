@@ -1,10 +1,10 @@
-package runtime
+package pmmpost
 
 import (
 	dll "github.com/emirpasic/gods/lists/doublylinkedlist"
 	"github.com/emirpasic/gods/stacks/linkedliststack"
-	arithm "github.com/npillmayer/gotype/gtcore/arithmetic"
-	"github.com/npillmayer/gotype/gtcore/path"
+	arithm "github.com/npillmayer/gotype/core/arithmetic"
+	"github.com/npillmayer/gotype/core/path"
 )
 
 /*

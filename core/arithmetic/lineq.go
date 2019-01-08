@@ -6,6 +6,7 @@ import (
 
 	"github.com/emirpasic/gods/maps"
 	"github.com/emirpasic/gods/maps/treemap"
+	"github.com/npillmayer/gotype/core/config/tracing"
 	numeric "github.com/shopspring/decimal"
 )
 
@@ -83,6 +84,7 @@ type LinEqSolver struct {
 
 // Create a new sytem of linear equations.
 func CreateLinEqSolver() *LinEqSolver {
+	T = tracing.EquationsTracer
 	leq := LinEqSolver{
 		dependents:       treemap.NewWithIntComparator(), // sorted map
 		solved:           treemap.NewWithIntComparator(), // sorted map

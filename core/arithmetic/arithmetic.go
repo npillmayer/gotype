@@ -132,7 +132,7 @@ func (p SimplePair) AsCmplx() complex128 {
 // Create a Pair from a complex number.
 func C2Pr(c complex128) Pair {
 	if cmplx.IsNaN(c) || cmplx.IsInf(c) {
-		T.Errorf("created pair for complex.NaN")
+		tracing.EquationsTracer.Errorf("created pair for complex.NaN")
 		return MakePair(ConstZero, ConstZero)
 	} else {
 		return Pr(real(c), imag(c))

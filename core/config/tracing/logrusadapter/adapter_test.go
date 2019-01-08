@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/npillmayer/gotype/core/config"
+	"github.com/npillmayer/gotype/core/config/testadapter"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/logrusadapter"
 )
@@ -19,7 +20,7 @@ func Test1(t *testing.T) {
 }
 
 func Test2(t *testing.T) {
-	config.InitDefaults()
+	config.Initialize(testadapter.New())
 	config.InitTracing(logrusadapter.GetAdapter())
 	tracing.EngineTracer.P("key", "value").Errorf("This is a test")
 }

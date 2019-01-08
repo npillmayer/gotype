@@ -48,6 +48,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 package pmmpost
 
-import "github.com/npillmayer/gotype/gtcore/config/tracing"
+import "github.com/npillmayer/gotype/core/config/tracing"
 
 var T tracing.Trace = tracing.InterpreterTracer

@@ -113,7 +113,7 @@ import (
 	"strconv"
 
 	ssl "github.com/emirpasic/gods/lists/singlylinkedlist"
-	"github.com/npillmayer/gotype/gtcore/config/tracing"
+	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/lr"
 )
 

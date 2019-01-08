@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/npillmayer/gotype/gtcore/font"
+	"github.com/npillmayer/gotype/core/font"
 	"github.com/npillmayer/gotype/gtlocate"
 )
 

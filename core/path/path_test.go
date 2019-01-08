@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/npillmayer/gotype/core/arithmetic"
+	"github.com/npillmayer/gotype/core/config"
+	"github.com/npillmayer/gotype/core/config/testadapter"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 	"github.com/shopspring/decimal"
@@ -16,6 +18,7 @@ var one = arithmetic.ConstOne
 var two = decimal.New(2, 0)
 
 func Test0(t *testing.T) {
+	config.Initialize(testadapter.New())
 	t.Log("setting equations tracer")
 	T = gologadapter.New()
 	T.SetTraceLevel(tracing.LevelDebug)

@@ -9,7 +9,6 @@ the drawing or filling of a path.
 Clients often won't use Canvas directly, but rather an enclosing struct type
 Picture, which holds a Canvas plus some administrative information.
 
-----------------------------------------------------------------------
 
 BSD License
 
@@ -44,7 +43,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-----------------------------------------------------------------------
 */
 package gfx
 
@@ -55,10 +53,10 @@ import (
 	"math/cmplx"
 	"os"
 
-	arithm "github.com/npillmayer/gotype/gtcore/arithmetic"
-	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	"github.com/npillmayer/gotype/gtcore/path"
-	"github.com/npillmayer/gotype/gtcore/polygon"
+	arithm "github.com/npillmayer/gotype/core/arithmetic"
+	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/path"
+	"github.com/npillmayer/gotype/core/polygon"
 	dec "github.com/shopspring/decimal"
 )
 
@@ -268,7 +266,7 @@ func (pdrw *pathdrawer) Start() arithm.Pair {
 func (pdrw *pathdrawer) ToNextKnot() (arithm.Pair, arithm.Pair, arithm.Pair) {
 	pdrw.current++
 	if pdrw.current >= pdrw.n {
-		G.Debug("path has no more knots")
+		G.Debugf("path has no more knots")
 		return nil, nil, nil
 	}
 	c1, c2 := pdrw.c.PostControl(pdrw.current-1), pdrw.c.PreControl(pdrw.current%(pdrw.p.N()))

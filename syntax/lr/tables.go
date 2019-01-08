@@ -191,7 +191,7 @@ type cfsmEdge struct {
 func (s *CFSMState) Dump() {
 	T.Debugf("--- state %03d -----------", s.ID)
 	s.items.Dump()
-	T.Debug("-------------------------")
+	T.Debugf("-------------------------")
 }
 
 func (s *CFSMState) isErrorState() bool {
@@ -350,7 +350,7 @@ BuildGotoTable(...).)
 */
 func (lrgen *LRTableGenerator) GotoTable() *sparse.IntMatrix {
 	if lrgen.gototable == nil {
-		T.P("lr", "gen").Error("tables not yet initialized")
+		T.P("lr", "gen").Errorf("tables not yet initialized")
 	}
 	return lrgen.gototable
 }
@@ -362,7 +362,7 @@ BuildSLR1ActionTable(...).)
 */
 func (lrgen *LRTableGenerator) ActionTable() *sparse.IntMatrix {
 	if lrgen.actiontable == nil {
-		T.P("lr", "gen").Error("tables not yet initialized")
+		T.P("lr", "gen").Errorf("tables not yet initialized")
 	}
 	return lrgen.actiontable
 }
@@ -380,7 +380,7 @@ func (lrgen *LRTableGenerator) CreateTables() {
 // Clients have to call CreateTables() first.
 func (lrgen *LRTableGenerator) AcceptingStates() []int {
 	if lrgen.dfa == nil {
-		T.Error("tables not yet generated; call CreateTables() first")
+		T.Errorf("tables not yet generated; call CreateTables() first")
 		return nil
 	}
 	acc := make([]int, 0, 3)
@@ -395,7 +395,7 @@ func (lrgen *LRTableGenerator) AcceptingStates() []int {
 
 // Construct the characteristic finite state machine CFSM for a grammar.
 func (lrgen *LRTableGenerator) buildCFSM() *CFSM {
-	T.Debug("=== build CFSM ==================================================")
+	T.Debugf("=== build CFSM ==================================================")
 	G := lrgen.g
 	cfsm := emptyCFSM(G)
 	closure0 := lrgen.ga.closure(G.rules[0].startItem())
@@ -425,7 +425,7 @@ func (lrgen *LRTableGenerator) buildCFSM() *CFSM {
 			snew.Dump()
 			return nil
 		})
-		T.Debug("-----------------------------------------------------------------")
+		T.Debugf("-----------------------------------------------------------------")
 	}
 	return cfsm
 }
@@ -620,7 +620,7 @@ func (lrgen *LRTableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 
 						actions.Add(state.ID, A.Token(), -1)
 					}
 				} else {
-					T.Debug("    creating shift action entry")
+					T.Debugf("    creating shift action entry")
 					actions.Add(state.ID, 1, -1) // general shift (no lookahead)
 				}
 			}

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/npillmayer/gotype/gtcore/config/tracing"
+	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables"
 	lua "github.com/yuin/gopher-lua"

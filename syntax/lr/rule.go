@@ -202,7 +202,7 @@ func (g *Grammar) findNonTermRules(sym Symbol, includeEpsRules bool) *itemSet {
 			if !r.isEps() || includeEpsRules {
 				i, _ := r.startItem()
 				if i == nil {
-					T.Error("inconsistency? start-item == NIL")
+					T.Errorf("inconsistency? start-item == NIL")
 				}
 				iset.Add(i)
 			}

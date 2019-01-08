@@ -5,13 +5,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 )
 
 //var CT tracing.Trace = tracing.CoreTracer
 
 func TestInit(t *testing.T) {
-	CT = gologadapter.New()
+	tracing.CoreTracer = gologadapter.New()
+	CT = tracing.CoreTracer
 }
 
 func TestWhitespace1(t *testing.T) {

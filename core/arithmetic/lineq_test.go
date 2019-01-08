@@ -3,10 +3,16 @@ package arithmetic
 import (
 	"testing"
 
+	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 	"github.com/shopspring/decimal"
-	//"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestInit0(t *testing.T) {
+	tracing.EquationsTracer = gologadapter.New()
+	T = tracing.EquationsTracer
+}
 
 type X struct { // helper for quick construction of polynomials
 	i int

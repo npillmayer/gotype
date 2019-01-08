@@ -19,7 +19,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/npillmayer/gotype/gtcore/font"
+	"github.com/npillmayer/gotype/core/font"
 )
 
 /*

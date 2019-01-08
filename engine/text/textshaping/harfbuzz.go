@@ -43,7 +43,7 @@ package textshaping
 import (
 	"fmt"
 
-	"github.com/npillmayer/gotype/gtcore/font"
+	"github.com/npillmayer/gotype/core/font"
 )
 
 // Harfbuzz is the de-facto standard for text shaping.

@@ -4,7 +4,7 @@ import (
 	"log"
 	"testing"
 
-	"github.com/npillmayer/gotype/gtcore/arithmetic"
+	"github.com/npillmayer/gotype/core/arithmetic"
 	"github.com/shopspring/decimal"
 )
 
