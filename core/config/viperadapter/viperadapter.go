@@ -27,7 +27,7 @@ func InitDefaults() {
 		viper.Set("Verbose", true)
 	*/
 
-	viper.SetDefault("tracing", "logrus")
+	viper.SetDefault("tracing", "go")
 	viper.SetDefault("tracingonline", true)
 	viper.SetDefault("tracingequations", "Error")
 	viper.SetDefault("tracingsyntax", "Error")

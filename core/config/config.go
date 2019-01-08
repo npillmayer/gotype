@@ -58,7 +58,6 @@ import (
 
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
-	"github.com/npillmayer/gotype/core/config/tracing/logrusadapter"
 )
 
 // Are we running in interactive mode?
@@ -94,8 +93,8 @@ func InitTracing(adapter tracing.Adapter) {
 }
 
 var knownTraceAdapters = map[string]tracing.Adapter{
-	"go":     gologadapter.GetAdapter(),
-	"logrus": logrusadapter.GetAdapter(),
+	"go": gologadapter.GetAdapter(),
+	//"logrus": logrusadapter.GetAdapter(), // now to be set by AddTraceAdapter()
 }
 
 // AddTraceAdapter is an extension point for clients who want to use
