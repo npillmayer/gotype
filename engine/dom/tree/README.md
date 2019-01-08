@@ -27,15 +27,15 @@ of course with a much smaller set of functions.
 
 Navigation functions:
 
-   Parent()                     // find parent for all selected nodes
-   AncestorWith(predicate)      // find ancestor with a given predicate
-   DescendentsWith(predicate)   // find descendets with a given predicate
+    Parent()                     // find parent for all selected nodes
+    AncestorWith(predicate)      // find ancestor with a given predicate
+    DescendentsWith(predicate)   // find descendets with a given predicate
 
 Filter functions:
 
-   AttributeIs(key, value)      // filter for nodes with a given attribute value
-   SetAttribute(key, value)     // set an attribute value for nodes
-   Filter(userfunc)             // apply a user-provided filter function
+    AttributeIs(key, value)      // filter for nodes with a given attribute value
+    SetAttribute(key, value)     // set an attribute value for nodes
+    Filter(userfunc)             // apply a user-provided filter function
 
 More operations will follow as I get experience from using the tree in
 more real life contexts.
