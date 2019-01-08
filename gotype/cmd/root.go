@@ -26,7 +26,7 @@
 // CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
-
+//
 package cmd
 
 import (
@@ -36,6 +36,7 @@ import (
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/npillmayer/gotype/core/config"
 	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/config/viperadapter"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -105,7 +106,7 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
-	config.Initialize()
+	config.Initialize(viperadapter.New())
 	T = tracing.CommandTracer
 	T.SetTraceLevel(tracing.LevelInfo)
 }

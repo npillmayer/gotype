@@ -48,7 +48,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-// Builder is an implementation of style.TreeBuilder.
+// Builder builds styled trees.
 type Builder struct{}
 
 // MakeNodeFor creates a new styled node corresponding to an HTML DOM node.

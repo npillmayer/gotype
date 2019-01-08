@@ -34,6 +34,13 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+Configuration
+
+All configuration is started explicitely with a call to Initialize().
+There is no init() call to set up configuration a priori. The reason
+is to avoid coupling to a specific configuration framework, but rather
+relay this decision to the client.
+
 Tracing
 
 During configuration all global tracers are set up. Currently tracing
@@ -47,43 +54,34 @@ of adapters for Go log and for logrus).
 package config
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 	"github.com/npillmayer/gotype/core/config/tracing/logrusadapter"
-	"github.com/spf13/viper"
 )
 
 // Are we running in interactive mode?
 var IsInteractive bool = true
 
+var globalConf Configuration
+
+type Configuration interface {
+	Init()
+	IsSet(key string) bool
+	GetString(key string) string
+	GetInt(key string) int
+	GetBool(key string) bool
+}
+
 // Initialize is the top level function for setting up the
 // application configuration.
 //
-// It will call InitDefaults(), InitConfigPath() and InitTracing().
-func Initialize() {
-	InitDefaults()
-	InitConfigPath()
+// It will call Init()
+func Initialize(conf Configuration) {
+	globalConf = conf
+	globalConf.Init()
 	InitTracing(getAdapterFromConfiguration())
-}
-
-// InitConfigPath is usually called by Initialize().
-func InitConfigPath() {
-	viper.SetConfigName("gotype")        // name of config file (without extension)
-	viper.AddConfigPath(".")             // optionally look for config in the working directory
-	viper.AddConfigPath("$GOPATH/etc/")  // path to look for the config file in
-	viper.AddConfigPath("$HOME/.gotype") // call multiple times to add many search paths
-	err := viper.ReadInConfig()          // Find and read the config file
-	if err != nil {                      // Handle errors reading the config file
-		panic(fmt.Errorf("Fatal error config file: %s \n", err))
-	}
-}
-
-// IsSet is a predicate wether a configuration flag is set to true.
-func IsSet(key string) bool {
-	return viper.IsSet(key)
 }
 
 // InitTracing sets up all the global module tracers, reading trace levels
@@ -115,7 +113,7 @@ func AddTraceAdapter(key string, adapter tracing.Adapter) {
 // configuration.
 // Default is an adapter for the Go standard log package.
 func getAdapterFromConfiguration() tracing.Adapter {
-	adapterPackage := viper.GetString("tracing")
+	adapterPackage := GetString("tracing")
 	adapter := knownTraceAdapters[adapterPackage]
 	if adapter == nil {
 		adapter = gologadapter.GetAdapter()
@@ -128,10 +126,8 @@ func getAdapterFromConfiguration() tracing.Adapter {
 // It is exported as it may be useful in testing scenarios.
 func ConfigureTracing(inputfilename string) {
 	DefaultTracing() // set default trace levels from configuration
-	if !viper.GetBool("tracingonline") {
+	if GetBool("tracingonline") {
 		if inputfilename != "" {
-			//tracefiledir := viper.GetString("outputdir")
-			//file, err := os.OpenFile("_gotype.log", os.O_CREATE|os.O_WRONLY, 0666)
 			file, err := os.Create("__gotype.log")
 			if err != nil {
 				tracing.CommandTracer.Errorf("cannot open tracefile, tracing to stderr")
@@ -163,12 +159,28 @@ func ConfigureTracing(inputfilename string) {
 // DefaultTracing sets all global tracers to their default trace levels,
 // read from the application configuration.
 func DefaultTracing() {
-	tracing.InterpreterTracer.SetTraceLevel(tracing.TraceLevelFromString(viper.GetString("tracinginterpreter")))
-	tracing.CommandTracer.SetTraceLevel(tracing.TraceLevelFromString(viper.GetString("tracingcommands")))
-	tracing.EquationsTracer.SetTraceLevel(tracing.TraceLevelFromString(viper.GetString("tracingequations")))
-	tracing.SyntaxTracer.SetTraceLevel(tracing.TraceLevelFromString(viper.GetString("tracingsyntax")))
-	tracing.GraphicsTracer.SetTraceLevel(tracing.TraceLevelFromString(viper.GetString("tracinggraphics")))
-	tracing.ScriptingTracer.SetTraceLevel(tracing.TraceLevelFromString(viper.GetString("tracingscripting")))
-	tracing.CoreTracer.SetTraceLevel(tracing.TraceLevelFromString(viper.GetString("tracingcore")))
-	tracing.EngineTracer.SetTraceLevel(tracing.TraceLevelFromString(viper.GetString("tracingengine")))
+	tracing.InterpreterTracer.SetTraceLevel(tracing.TraceLevelFromString(GetString("tracinginterpreter")))
+	tracing.CommandTracer.SetTraceLevel(tracing.TraceLevelFromString(GetString("tracingcommands")))
+	tracing.EquationsTracer.SetTraceLevel(tracing.TraceLevelFromString(GetString("tracingequations")))
+	tracing.SyntaxTracer.SetTraceLevel(tracing.TraceLevelFromString(GetString("tracingsyntax")))
+	tracing.GraphicsTracer.SetTraceLevel(tracing.TraceLevelFromString(GetString("tracinggraphics")))
+	tracing.ScriptingTracer.SetTraceLevel(tracing.TraceLevelFromString(GetString("tracingscripting")))
+	tracing.CoreTracer.SetTraceLevel(tracing.TraceLevelFromString(GetString("tracingcore")))
+	tracing.EngineTracer.SetTraceLevel(tracing.TraceLevelFromString(GetString("tracingengine")))
+}
+
+func IsSet(key string) bool {
+	return globalConf.IsSet(key)
+}
+
+func GetString(key string) string {
+	return globalConf.GetString(key)
+}
+
+func GetInt(key string) int {
+	return globalConf.GetInt(key)
+}
+
+func GetBool(key string) bool {
+	return globalConf.GetBool(key)
 }

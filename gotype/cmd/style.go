@@ -59,8 +59,9 @@ import (
 	"github.com/aymerick/douceur/parser"
 	"github.com/npillmayer/gotype/core/config"
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/engine/dom/style"
-	"github.com/npillmayer/gotype/engine/dom/style/douceuradapter"
+	"github.com/npillmayer/gotype/engine/dom/cssom"
+	"github.com/npillmayer/gotype/engine/dom/cssom/douceuradapter"
+	"github.com/npillmayer/gotype/engine/dom/styledtree/builder"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/html"
 )
@@ -158,12 +159,12 @@ func NewStyleREPL() *StyleREPL {
 
 type styleIntp struct {
 	dom *html.Node
-	css style.StyleSheet
+	css cssom.StyleSheet
 	//rulesTree *style.rulesTree
 	query     *goquery.Document
 	selector  string
 	selection *goquery.Selection
-	styleTree *style.StyledNodeTree
+	styleTree cssom.StyledNode
 }
 
 func (intp *styleIntp) InterpretCommand(line string) {
@@ -251,8 +252,8 @@ func (intp *styleIntp) InterpretCommand(line string) {
 			return
 		}
 		//tree, err := style.ConstructStyledNodeTree(intp.dom, intp.rulesTree)
-		cssom := style.NewCSSOM(nil)
-		err := cssom.AddStylesFor(nil, intp.css, style.Author)
+		c := cssom.NewCSSOM(nil)
+		err := c.AddStylesForScope(nil, intp.css, cssom.Author)
 		if err != nil {
 			T.Errorf(err.Error())
 			return
@@ -260,12 +261,13 @@ func (intp *styleIntp) InterpretCommand(line string) {
 		//intp.styleTree = tree
 		T.Debugf("styling DOM")
 		//_, err = cssom.Style(intp.dom)
-		tree, err := cssom.Style(intp.dom)
+		tree, err := c.Style(intp.dom, builder.Builder{})
 		if err != nil {
 			T.Errorf(err.Error())
 			return
 		}
 		tracing.With(T).Dump("tree", tree)
+		intp.styleTree = tree
 	case "tree":
 		if intp.styleTree == nil {
 			T.Errorf("need to first style the DOM")
