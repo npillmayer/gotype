@@ -1,5 +1,5 @@
 /*
-Package style provides functionality for CSS styling.
+Package cssom provides functionality for CSS styling.
 
 Status
 
