@@ -107,17 +107,15 @@ func TestDescendents(t *testing.T) {
 func ExampleWalker_Promise() {
 	// Build a tree:
 	//
-	// (1)
-	//  +---(2)
-	//  |    +---(10)
-	//  |
-	//  +---(10)
+	//                 (root:1)
+	//          (n2:2)----+----(n4:10)
+	//  (n3:10)----+
 	//
 	// Then query for nodes with value > 5
 	//
-	root, node2, node3, node4 := NewNode(1), NewNode(2), NewNode(10), NewNode(10)
-	root.AddChild(node2).AddChild(node4)
-	node2.AddChild(node3)
+	root, n2, n3, n4 := NewNode(1), NewNode(2), NewNode(10), NewNode(10)
+	root.AddChild(n2).AddChild(n4)
+	n2.AddChild(n3)
 	// Define our ad-hoc predicate
 	greater5 := func(node *Node) (bool, error) {
 		val := node.Payload.(int)
@@ -142,7 +140,7 @@ func TestAttribute1(t *testing.T) {
 	n := checkRuntime(t, -1)
 	node1 := NewNode(1)
 	w := NewWalker(node1)
-	w.SetAttributeGetter(attr{})
+	w.SetAttributeHandler(attr{})
 	future := w.AttributeIs("num", 1).Promise()
 	nodes, err := future()
 	if err != nil {
@@ -165,6 +163,10 @@ func (a attr) AttributesEqual(val1 interface{}, val2 interface{}) bool {
 	v1 := val1.(int)
 	v2 := val2.(int)
 	return v1 == v2
+}
+
+func (a attr) SetAttribute(payload interface{}, key interface{}, value interface{}) bool {
+	return false
 }
 
 // ----------------------------------------------------------------------

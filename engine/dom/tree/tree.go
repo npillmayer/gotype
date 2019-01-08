@@ -43,7 +43,8 @@ import (
 // Error to be emitted if a pipeline filter step is defunct.
 var ErrInvalidFilter error = errors.New("Filter stage is invalid")
 
-// Error to be emitted if a Walker is called with an empty tree
+// Error to be emitted if a Walker is called with an empty tree. Refer to
+// the documentation of NewWalker() for details about this scenario.
 var ErrEmptyTree error = errors.New("Cannot walk empty tree")
 
 // Walker holds information for operating on trees: finding nodes and
@@ -75,9 +76,9 @@ var ErrEmptyTree error = errors.New("Cannot walk empty tree")
 // the promise, the Walker may leak goroutines.
 type Walker struct {
 	sync.Mutex
-	initial         *Node     // initial node of (sub-)tree
-	pipe            *pipeline // pipeline of filters to perform work on tree nodes.
-	attributeGetter AttributeGetter
+	initial          *Node     // initial node of (sub-)tree
+	pipe             *pipeline // pipeline of filters to perform work on tree nodes.
+	attributeHandler AttributeHandler
 }
 
 // NewWalker creates a Walker for the initial node of a (sub-)tree.
@@ -126,7 +127,7 @@ func (w *Walker) startProcessing() {
 // Clients will not receive the resulting node list immediately, but
 // rather get handed a Promise.
 // Clients will then—any time after they received the Promise—call the
-// Promise (which is a function type) to receive a slice of nodes and
+// Promise (which is of function type) to receive a slice of nodes and
 // a possible error value. Calling the Promise will block until all
 // concurrent operations on the tree nodes have finished, i.e. it
 // is a synchronization point.
@@ -170,25 +171,31 @@ var Whatever Predicate = func(*Node) (bool, error) {
 
 // TraverseAll is a predicate to match nothing (see type Predicate).
 // It is useful to traverse a whole tree.
+/*
 var TraverseAll Predicate = func(*Node) (bool, error) {
 	return false, nil
 }
+*/
 
-// AttributeGetter supports the querying of attributes for a node.
+// AttributeHandler supports the querying of attributes for a node.
 // As we do not know the internal structure of a node's payload, we need
 // help from the client.
 //
-// GetAttribute() should return the attribute value for a given key.
-// AttributesEqual() should return true iff two values are considered equal.
-type AttributeGetter interface {
+// ■ GetAttribute() should return the attribute value for a given key.
+//
+// ■ AttributesEqual() should return true iff two values are considered equal.
+//
+// ■ SetAttribute() should set a new attribute value
+type AttributeHandler interface {
 	GetAttribute(payload interface{}, key interface{}) interface{}
 	AttributesEqual(value1 interface{}, value2 interface{}) bool
+	SetAttribute(payload interface{}, key interface{}, value interface{}) bool
 }
 
-// SetAttributeGetter sets an attribute getter to support querying of
-// nodes' attributes.
-func (w *Walker) SetAttributeGetter(getter AttributeGetter) {
-	w.attributeGetter = getter
+// SetAttributeHandler sets an attribute getter and setter to support
+// nodes' attributes. See type AttributeHandler.
+func (w *Walker) SetAttributeHandler(handler AttributeHandler) {
+	w.attributeHandler = handler
 }
 
 // ----------------------------------------------------------------------
@@ -307,33 +314,95 @@ func (w *Walker) AttributeIs(key interface{}, value interface{}) *Walker {
 	if key == nil {
 		w.pipe.errors <- ErrInvalidFilter
 	} else {
-		attr := attrMatcher{w.attributeGetter, key, value}
+		attr := attrInfo{w.attributeHandler, key, value}
 		w.appendFilterForTask(attributeIs, attr, 0) // hook in this filter
 	}
 	return w
 }
 
-type attrMatcher struct {
-	getter AttributeGetter
-	key    interface{}
-	value  interface{}
+type attrInfo struct {
+	handler AttributeHandler
+	key     interface{}
+	value   interface{}
 }
 
 // attributeIs checks an attribute of a tree node. It relies on an
-// attribute getter function to perform this task. The attribute getter
+// attribute handler to perform this task. The attribute handler
 // has to be provided by the caller.
 // nil is a valid attribute value to compare.
 //
-// If no attribute getter is provided, no tree node will match.
+// If no attribute handler is provided, no tree node will match.
 func attributeIs(node *Node, isBuffered bool, udata interface{}, push func(*Node),
 	pushBuf func(*Node)) error {
 	//
-	attr := udata.(attrMatcher)
-	if attr.getter != nil {
-		val := attr.getter.GetAttribute(node.Payload, attr.key)
-		if attr.getter.AttributesEqual(val, attr.value) {
+	attr := udata.(attrInfo)
+	if attr.handler != nil {
+		val := attr.handler.GetAttribute(node.Payload, attr.key)
+		if attr.handler.AttributesEqual(val, attr.value) {
 			push(node) // forward node to next pipeline stage
 		}
 	}
 	return nil
+}
+
+// SetAttribute sets a node's attributes and filters all nodes
+// where setting the attribute failed.
+//
+// If w is nil, SetAttribute will return nil.
+func (w *Walker) SetAttribute(key interface{}, value interface{}) *Walker {
+	if w == nil {
+		return nil
+	}
+	if key == nil {
+		w.pipe.errors <- ErrInvalidFilter
+	} else {
+		attr := attrInfo{w.attributeHandler, key, value}
+		w.appendFilterForTask(attributeIs, attr, 0) // hook in this filter
+	}
+	return w
+}
+
+// setAttribute uses an attribute handler to set a node's attribute.
+// The attribute handler has to be provided by the caller.
+//
+// If no attribute handler is provided, no tree node will match.
+func setAttribute(node *Node, isBuffered bool, udata interface{}, push func(*Node),
+	pushBuf func(*Node)) error {
+	//
+	attr := udata.(attrInfo)
+	if attr.handler != nil {
+		ok := attr.handler.SetAttribute(node.Payload, attr.key, attr.value)
+		if ok {
+			push(node)
+		}
+	}
+	return nil
+}
+
+// Filter calls a client provided function on each node of the selection.
+// The user function should return the input node if it is accepted and
+// nil otherwise.
+//
+// If w is nil, Filter will return nil.
+func (w *Walker) Filter(f func(*Node) (*Node, error)) *Walker {
+	if w == nil {
+		return nil
+	}
+	if f == nil {
+		w.pipe.errors <- ErrInvalidFilter
+	} else {
+		w.appendFilterForTask(clientFilter, f, 0) // hook in this filter
+	}
+	return w
+}
+
+func clientFilter(node *Node, isBuffered bool, udata interface{}, push func(*Node),
+	pushBuf func(*Node)) error {
+	//
+	userfunc := udata.(func(*Node) (*Node, error))
+	n, err := userfunc(node)
+	if n != nil {
+		push(n) // forward filtered node to next pipeline stage
+	}
+	return err
 }
