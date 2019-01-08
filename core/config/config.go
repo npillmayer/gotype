@@ -1,6 +1,23 @@
 /*
 Package config is the central package for application configuration.
 
+Configuration
+
+All configuration is started explicitely with a call to Initialize().
+There is no init() call to set up configuration a priori. The reason
+is to avoid coupling to a specific configuration framework, but rather
+relay this decision to the client.
+
+Tracing
+
+During configuration all global tracers are set up. Currently tracing
+with the Go standard logger is supported, as well as logrus. It is
+possible for clients to use a different tracer, e.g. one relying on
+https://github.com/golang/glog. To use a different logging implementation,
+clients will have to implement an adapter to tracing.Trace (please
+refer to the documentation for package tracing as well as to implementations
+of adapters for Go log and for logrus).
+
 BSD License
 
 Copyright (c) 2017–18, Norbert Pillmayer
@@ -34,22 +51,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Configuration
-
-All configuration is started explicitely with a call to Initialize().
-There is no init() call to set up configuration a priori. The reason
-is to avoid coupling to a specific configuration framework, but rather
-relay this decision to the client.
-
-Tracing
-
-During configuration all global tracers are set up. Currently tracing
-with the Go standard logger is supported, as well as logrus. It is
-possible for clients to use a different tracer, e.g. one relying on
-https://github.com/golang/glog. To use a different logging implementation,
-clients will have to implement an adapter to tracing.Trace (please
-refer to the documentation for package tracing as well as to implementations
-of adapters for Go log and for logrus).
 */
 package config
 
@@ -65,6 +66,8 @@ var IsInteractive bool = true
 
 var globalConf Configuration
 
+// Configuration is an interface to be implemented by every configuration
+// adapter.
 type Configuration interface {
 	Init()
 	IsSet(key string) bool
@@ -75,8 +78,9 @@ type Configuration interface {
 
 // Initialize is the top level function for setting up the
 // application configuration.
-//
-// It will call Init()
+// It will call Init() on the Configuration passed as an argument, and
+// make the Configuration available globally.
+// Functions in this package will serve as a facade to the Configuration.
 func Initialize(conf Configuration) {
 	globalConf = conf
 	globalConf.Init()
