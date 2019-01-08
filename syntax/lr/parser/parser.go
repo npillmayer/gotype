@@ -128,7 +128,7 @@ func NewStdScanner(r io.Reader) *StdScanner {
 // This is not functional for default scanners.
 // Default scanners allow sequential processing only.
 func (s *StdScanner) MoveTo(position uint64) {
-	T.Error("MoveTo() not yet supported by parser.StdScanner")
+	T.Errorf("MoveTo() not yet supported by parser.StdScanner")
 }
 
 /*
@@ -178,7 +178,7 @@ The parser must have been initialized.
 */
 func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) {
 	if p.G == nil {
-		T.Error("parser not initialized")
+		T.Errorf("parser not initialized")
 		return
 	}
 	p.dss = dss.NewRoot("G", -1)    // forget existing one, if present
@@ -197,7 +197,7 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) {
 			p.reducesAndShiftsForToken(stack, tval)
 		}
 		if p.checkAccepted() {
-			T.Errorln("ACCEPT")
+			T.Errorf("ACCEPT")
 		}
 		if tval == scanner.EOF {
 			break
@@ -231,14 +231,14 @@ func (p *Parser) reducesAndShiftsForToken(stack *dss.Stack, tokval int) {
 		T.P("dss", "TOS").Debugf("state = %d, symbol = %v", stateID, sym)
 		actions[0], actions[1] = p.actionT.Values(stateID, tokval)
 		if actions[0] == p.actionT.NullValue() {
-			T.Info("no entry in ACTION table found, parser dies")
+			T.Infof("no entry in ACTION table found, parser dies")
 			heads[0].Die()
 		} else {
 			headcnt := 1
 			T.Debugf("action 1 = %d, action 2 = %d", actions[0], actions[1])
 			conflict := actions[1] != p.actionT.NullValue()
 			if conflict { // shift/reduce or reduce/reduce conflict
-				T.Info("conflict, forking stack")
+				T.Infof("conflict, forking stack")
 				heads[1] = stack.Fork() // must happen before action 1 !
 				headcnt = 2
 			}

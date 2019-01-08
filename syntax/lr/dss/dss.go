@@ -730,7 +730,7 @@ func (stack *Stack) pop(toNode *DSSNode, deleteNode bool, collectStacks bool) ([
 			}
 		}
 	} else {
-		T.Error("unable to pop TOS: stack empty")
+		T.Errorf("unable to pop TOS: stack empty")
 		err = errors.New("unable to pop TOS: stack empty")
 	}
 	return r, err
