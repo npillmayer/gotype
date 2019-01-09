@@ -123,8 +123,11 @@ func (intp *PMMPostInterpreter) SetOutputRoutine(o gfx.OutputRoutine) {
 }
 
 // Parse and interpret a statement list.
-func (intp *PMMPostInterpreter) ParseStatements(input antlr.CharStream) {
-	intp.ASTListener.ParseStatements(input)
+//
+func (intp *PMMPostInterpreter) ParseStatements(input []byte) {
+	// func (intp *PMMPostInterpreter) ParseStatements(input antlr.CharStream) {
+	inputStream := antlr.NewInputStream(string(input))
+	intp.ASTListener.ParseStatements(inputStream)
 }
 
 // Load additionl builtins for this language (added to the core symbols)
@@ -132,6 +135,17 @@ func (intp *PMMPostInterpreter) loadAdditionalBuiltinSymbols(rt *runtime.Runtime
 	scripting *corelang.Scripting) {
 	//
 	//scripting.RegisterHook("TODO: z", ping)
+}
+
+// Value returns the current value of a variable.
+// Return values are: canonical name of the variable & value of the
+// variable as string.
+func (intp *PMMPostInterpreter) Value(variable string) (string, string) {
+	v := corelang.MakeCanonicalAndResolve(intp.runtime, variable, false)
+	if v == nil {
+		return variable, "<undef>"
+	}
+	return v.GetFullName(), v.ValueString()
 }
 
 // === AST driven parsing ====================================================

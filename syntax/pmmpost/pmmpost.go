@@ -49,6 +49,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package pmmpost
 
 //go:generate antlr -Dlanguage=Go -o grammar -lib ../corelang -package grammar -Werror PMMPost.g4
+//go:generate sh tagdoc.sh
 
 import "github.com/npillmayer/gotype/core/config/tracing"
 
