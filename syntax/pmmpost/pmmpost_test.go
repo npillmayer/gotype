@@ -33,6 +33,18 @@ func TestStatement1(t *testing.T) {
 	if !eq(value, 1) {
 		t.Errorf("x0 expected to be 1")
 	}
+	pmmp.ParseStatements([]byte("pair p1"))
+	v, value = pmmp.Value("p1")
+	t.Logf("%s = %v", v, value)
+	if !eq(value, "<unset pair>") {
+		t.Errorf("p1 expected to be <unset pair>")
+	}
+	pmmp.ParseStatements([]byte("p1=origin"))
+	v, value = pmmp.Value("p1")
+	t.Logf("%s = %v", v, value)
+	if !eq(value, "(0,0)") {
+		t.Errorf("p1 expected to be (0,0)")
+	}
 }
 
 // ----------------------------------------------------------------------

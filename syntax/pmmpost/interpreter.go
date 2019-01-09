@@ -35,8 +35,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 import (
+	"fmt"
 	"image/color"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	colorful "github.com/lucasb-eyer/go-colorful"
@@ -141,9 +144,23 @@ func (intp *PMMPostInterpreter) loadAdditionalBuiltinSymbols(rt *runtime.Runtime
 // Return values are: canonical name of the variable & value of the
 // variable as string.
 func (intp *PMMPostInterpreter) Value(variable string) (string, string) {
+	variable = strings.TrimSpace(variable)
+	r, _ := utf8.DecodeRuneInString(variable)
+	if !unicode.IsLetter(r) {
+		return variable, "<illegal variable name>"
+	}
+	vtree := variables.ParseVariableFromString(variable, nil)
+	if vtree == nil {
+		return variable, "<illegal variable name>"
+	}
+	vref := variables.GetVarRefFromVarSyntax(vtree, intp.runtime.ScopeTree)
+	if vref == nil {
+		return variable, "<undefined>"
+	}
 	v := corelang.MakeCanonicalAndResolve(intp.runtime, variable, false)
 	if v == nil {
-		return variable, "<undef>"
+		t := variables.TypeString(vref.GetType())
+		return vref.GetFullName(), fmt.Sprintf("<unset %s>", t)
 	}
 	return v.GetFullName(), v.ValueString()
 }

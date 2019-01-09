@@ -72,10 +72,19 @@ func InitDefaults(m map[string]string) {
 	m["tracingcommands"] = "Error"
 	m["tracinginterpreter"] = "Error"
 	m["tracinggraphics"] = "Error"
+	m["tracingscripting"] = "Error"
+	m["tracingcore"] = "Error"
+	m["tracingengine"] = "Error"
 
 	m["tracingcapsules"] = "Error"
 	m["tracingrestores"] = "Error"
 	m["tracingchoices"] = "true"
+}
+
+func (c *Conf) Set(key string, value string) (oldval string) {
+	oldval = c.conf[key]
+	c.conf[key] = value
+	return
 }
 
 // IsSet is a predicate wether a configuration flag is set to true.

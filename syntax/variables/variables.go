@@ -41,7 +41,6 @@ which I find less confusing.
 The implementation is tightly coupled to the ANTLR V4 parser generator.
 ANTLR is a great tool and I see no use in being independent from it.
 
-----------------------------------------------------------------------
 
 BSD License
 
@@ -76,8 +75,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-----------------------------------------------------------------------
-
 */
 package variables
 
@@ -94,6 +91,9 @@ import (
 	"github.com/npillmayer/gotype/syntax/variables/grammar"
 	dec "github.com/shopspring/decimal"
 )
+
+//go:generate antlr -Dlanguage=Go -o grammar -package grammar -Werror PMMPVar.g4
+//go:generate sh tagdoc.sh
 
 // We're tracing to the InterpreterTracer
 func T() tracing.Trace {
