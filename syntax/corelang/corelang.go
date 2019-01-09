@@ -1,5 +1,5 @@
 /*
-Package corelang implements core commands for DSLs dealing with artihmetic
+Package corelang implements core commands for DSLs dealing with arithmetic
 expressions, pairs and paths. It borrows from MetaFont/MetaPost,
 as described in the accompanying ANTLR grammar file.
 
