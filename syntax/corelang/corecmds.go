@@ -65,7 +65,7 @@ func (c *TracingErrorListener) SyntaxErrorf(r antlr.Recognizer, sym interface{},
 	line, column int, msg string, e antlr.RecognitionException) {
 	//
 	at := fmt.Sprintf("%s:%s", strconv.Itoa(line), strconv.Itoa(column))
-	T.P("line", at).Errorf("%.44s", msg)
+	T().P("line", at).Errorf("%.44s", msg)
 }
 
 // === Handling Variables and Constants ======================================
@@ -88,21 +88,21 @@ It is split by the parser into:
 func CollectVarRefParts(rt *runtime.Runtime, t string, children []antlr.Tree) string {
 	var vname bytes.Buffer
 	for _, ch := range children {
-		T.Debugf("collecting var ref part: %s", GetCtxText(ch))
+		T().Debugf("collecting var ref part: %s", GetCtxText(ch))
 		if IsTerminal(ch) { // just copy string parts to output
-			T.Debugf("adding suffix verbatim: %s", GetCtxText(ch))
+			T().Debugf("adding suffix verbatim: %s", GetCtxText(ch))
 			vname.WriteString(ch.(antlr.ParseTree).GetText())
 		} else { // non-terminal is a subscript-expression
 			subscript, ok := rt.ExprStack.Pop() // take subscript from stack
 			if !ok {
-				T.P("var", t).Errorf("expected subscript on expression stack")
-				T.P("var", t).Errorf("substituting 0 instead")
+				T().P("var", t).Errorf("expected subscript on expression stack")
+				T().P("var", t).Errorf("substituting 0 instead")
 				vname.WriteString("[0]")
 			} else {
 				c, isconst := subscript.XPolyn.IsConstant()
 				if !isconst { // we cannot handle unknown subscripts
-					T.P("var", t).Errorf("subscript must be known numeric")
-					T.P("var", t).Errorf("substituting 0 for %s",
+					T().P("var", t).Errorf("subscript must be known numeric")
+					T().P("var", t).Errorf("substituting 0 for %s",
 						rt.ExprStack.TraceString(subscript))
 					vname.WriteString("[0]")
 				} else {
@@ -114,7 +114,7 @@ func CollectVarRefParts(rt *runtime.Runtime, t string, children []antlr.Tree) st
 		}
 	}
 	varname := vname.String()
-	T.P("var", varname).Debugf("collected parts")
+	T().P("var", varname).Debugf("collected parts")
 	return varname
 }
 
@@ -149,7 +149,7 @@ func AllocateVariableInMemory(vref *variables.PMMPVarRef,
 	mf *runtime.DynamicMemoryFrame) *variables.PMMPVarRef {
 	//
 	mf.Symbols().InsertSymbol(vref)
-	T.P("var", vref.GetFullName()).Debugf("allocating variable in %s", mf.GetName())
+	T().P("var", vref.GetFullName()).Debugf("allocating variable in %s", mf.GetName())
 	return vref
 }
 
@@ -176,7 +176,7 @@ func FindVariableReferenceInMemory(rt *runtime.Runtime, vref *variables.PMMPVarR
 	*variables.PMMPVarRef, *runtime.DynamicMemoryFrame) {
 	//
 	if vref.Decl == nil {
-		T.P("var", vref.GetFullName()).Errorf("attempt to store variable without decl. in memory")
+		T().P("var", vref.GetFullName()).Errorf("attempt to store variable without decl. in memory")
 		return vref, nil
 	}
 	var sym *variables.PMMPVarRef
@@ -186,15 +186,15 @@ func FindVariableReferenceInMemory(rt *runtime.Runtime, vref *variables.PMMPVarR
 	if tag != nil { // found tag declaration in scope
 		memframe = rt.MemFrameStack.FindMemoryFrameWithScope(scope)
 		varname := vref.GetName()
-		T.P("var", varname).Debugf("var in ? %s", memframe)
+		T().P("var", varname).Debugf("var in ? %s", memframe)
 		s := memframe.Symbols().ResolveSymbol(varname)
 		if s == nil { // no variable ref incarnation => create one
-			T.P("var", varname).Debugf("not found in memory")
+			T().P("var", varname).Debugf("not found in memory")
 			if doAlloc {
 				sym = AllocateVariableInMemory(vref, memframe)
 			}
 		} else { // already present, return this one
-			T.P("var", varname).Debugf("variable already present in memory")
+			T().P("var", varname).Debugf("variable already present in memory")
 			sym = s.(*variables.PMMPVarRef)
 		}
 	} else {
@@ -258,7 +258,7 @@ func GetVariableFromExpression(rt *runtime.Runtime, e *runtime.ExprNode) *variab
 			sym = part.Pairvar
 		}
 		v = sym.(*variables.PMMPVarRef)
-		T.P("var", v.GetName()).Debugf("variable of type %s", variables.TypeString(v.GetType()))
+		T().P("var", v.GetName()).Debugf("variable of type %s", variables.TypeString(v.GetType()))
 	}
 	return v
 }
@@ -286,7 +286,7 @@ when to abondon the "zombie" variable.
 func EncapsulateVarsInMemory(rt *runtime.Runtime, mf *runtime.DynamicMemoryFrame) {
 	mf.Symbols().Each(func(name string, sym runtime.Symbol) {
 		vref := sym.(*variables.PMMPVarRef)
-		T.P("var", vref.GetFullName()).Debugf("encapsule")
+		T().P("var", vref.GetFullName()).Debugf("encapsule")
 		rt.ExprStack.EncapsuleVariable(vref.GetID()) // vref is now capsule
 	})
 }
@@ -336,13 +336,13 @@ Variable assignment.
 func Assign(rt *runtime.Runtime, lvalue *variables.PMMPVarRef, e *runtime.ExprNode) {
 	varname := lvalue.GetName()
 	oldserial := lvalue.GetID()
-	T.P("var", varname).Debugf("assignment of lvalue #%d", oldserial)
+	T().P("var", varname).Debugf("assignment of lvalue #%d", oldserial)
 	EncapsulateVariable(rt, lvalue)
 	vref, mf := FindVariableReferenceInMemory(rt, lvalue, false)
 	vref.SetValue(nil) // now lvalue is unset / unsolved
-	T.P("var", varname).Debugf("unset in %v", mf)
+	T().P("var", varname).Debugf("unset in %v", mf)
 	vref.Reincarnate()
-	T.P("var", vref.GetName()).Debugf("new lvalue incarnation #%d", vref.GetID())
+	T().P("var", vref.GetName()).Debugf("new lvalue incarnation #%d", vref.GetID())
 	PushVariable(rt, vref, false) // push LHS on stack
 	rt.ExprStack.Push(e)          // push RHS on stack
 	rt.ExprStack.EquateTOS2OS()   // construct equation
@@ -356,10 +356,10 @@ This method simply creates a var decl for the tag in the current scope.
 func Save(rt *runtime.Runtime, tag string) {
 	sym, scope := rt.ScopeTree.Current().ResolveSymbol(tag)
 	if sym != nil { // already found in scope stack
-		T.P("tag", tag).Debugf("save: found tag in scope %s",
+		T().P("tag", tag).Debugf("save: found tag in scope %s",
 			scope.GetName())
 	}
-	T.Debugf("declaring %s in current scope", tag)
+	T().Debugf("declaring %s in current scope", tag)
 	rt.ScopeTree.Current().DefineSymbol(tag)
 }
 
@@ -374,8 +374,8 @@ scope, make this tag a new undefined symbol.
 func Declare(rt *runtime.Runtime, tag string, tp int) *variables.PMMPVarDecl {
 	sym, scope := rt.ScopeTree.Current().ResolveSymbol(tag)
 	if sym != nil { // already found in scope stack
-		T.P("tag", tag).Debugf("declare: found tag in scope %s", scope.GetName())
-		T.P("decl", tag).Debugf("variable already declared - re-declaring")
+		T().P("tag", tag).Debugf("declare: found tag in scope %s", scope.GetName())
+		T().P("decl", tag).Debugf("variable already declared - re-declaring")
 		// Erase all existing variables and re-define symbol
 		sym, _ = scope.DefineSymbol(tag)
 		sym.(*variables.PMMPVarDecl).SetType(tp)
@@ -384,7 +384,7 @@ func Declare(rt *runtime.Runtime, tag string, tp int) *variables.PMMPVarDecl {
 		sym, _ = scope.DefineSymbol(tag)
 		sym.(*variables.PMMPVarDecl).SetType(tp)
 	}
-	T.P("decl", sym.GetName()).Debugf("declared symbol in %s", scope.GetName())
+	T().P("decl", sym.GetName()).Debugf("declared symbol in %s", scope.GetName())
 	return sym.(*variables.PMMPVarDecl)
 }
 
@@ -419,7 +419,7 @@ func Whatever(rt *runtime.Runtime) *variables.PMMPVarRef {
 	var vref *variables.PMMPVarRef
 	sym, _ := rt.ScopeTree.Globals().ResolveSymbol("_whtvr")
 	if sym == nil {
-		T.Errorf("'whatever'-variable not correctly initialized")
+		T().Errorf("'whatever'-variable not correctly initialized")
 	} else {
 		//func CreatePMMPVarRef(*PMMPVarDecl, value, indices []dec.Decimal) *PMMPVarRef {
 		inx := make([]dec.Decimal, 1)
@@ -444,7 +444,7 @@ func CallFunc(val interface{}, fun string, scripting *Scripting) (*runtime.ExprN
 	n := arithmetic.ConstZero
 	if strings.HasPrefix(fun, "@") {
 		fun = strings.TrimLeft(fun, "@")
-		T.P("func", fun).Debugf("calling Lua scripting subsytem")
+		T().P("func", fun).Debugf("calling Lua scripting subsytem")
 		r, err := scripting.CallHook(fun, val)
 		if err == nil {
 			it := r.Iterator() // iterator over return values
@@ -453,7 +453,7 @@ func CallFunc(val interface{}, fun string, scripting *Scripting) (*runtime.ExprN
 				return e, vars
 			}
 		} else {
-			T.P("func", fun).Errorf("scripting error: %v", err.Error())
+			T().P("func", fun).Errorf("scripting error: %v", err.Error())
 		}
 	} else {
 		switch fun {
@@ -464,9 +464,9 @@ func CallFunc(val interface{}, fun string, scripting *Scripting) (*runtime.ExprN
 			n = val.(dec.Decimal)
 			n = n.Ceil()
 		case "sqrt":
-			T.P("func", fun).Errorf("function not yet implemented")
+			T().P("func", fun).Errorf("function not yet implemented")
 		default:
-			T.P("func", fun).Errorf("function not implemented")
+			T().P("func", fun).Errorf("function not implemented")
 		}
 	}
 	p := arithmetic.NewConstantPolynomial(n)
@@ -486,7 +486,7 @@ references.
 func CallVardef(vref *variables.PMMPVarRef, scripting *Scripting) (*runtime.ExprNode, []*variables.PMMPVarRef) {
 	basetag := vref.Decl.BaseTag
 	suffixes := vref.GetSuffixesString()
-	T.Debugf("vardef call %s(%s)", basetag.GetName(), suffixes)
+	T().Debugf("vardef call %s(%s)", basetag.GetName(), suffixes)
 	r, err := scripting.Call("vardef", basetag.GetName(), suffixes)
 	if err == nil {
 		it := r.Iterator() // iterator over return values
@@ -495,7 +495,7 @@ func CallVardef(vref *variables.PMMPVarRef, scripting *Scripting) (*runtime.Expr
 			return e, vars
 		}
 	} else {
-		T.P("vardef", basetag.GetName()).Errorf("scripting error: %v", err.Error())
+		T().P("vardef", basetag.GetName()).Errorf("scripting error: %v", err.Error())
 	}
 	return nil, nil
 }
@@ -534,7 +534,7 @@ func PopScopeAndMemory(rt *runtime.Runtime) *runtime.DynamicMemoryFrame {
 	hidden.Name = "(hidden)"
 	mf := rt.MemFrameStack.PopMemoryFrame()
 	if mf.GetScope() != hidden {
-		T.P("mem", mf.GetName()).Errorf("groups out of sync?")
+		T().P("mem", mf.GetName()).Errorf("groups out of sync?")
 	}
 	return mf
 }

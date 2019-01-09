@@ -95,7 +95,10 @@ import (
 	dec "github.com/shopspring/decimal"
 )
 
-var T tracing.Trace = tracing.InterpreterTracer
+// We're tracing to the InterpreterTracer
+func T() tracing.Trace {
+	return tracing.InterpreterTracer
+}
 
 // === Variable Type Declarations ============================================
 
@@ -245,7 +248,7 @@ func NewPMMPVarDecl(nm string) runtime.Symbol {
 	sym.Name = nm
 	sym.Symtype = Undefined
 	sym.BaseTag = sym // this pointer should never be nil
-	T.P("decl", sym.GetFullName()).Debugf("atomic variable type declaration created")
+	T().P("decl", sym.GetFullName()).Debugf("atomic variable type declaration created")
 	return sym
 }
 
@@ -263,7 +266,7 @@ func CreatePMMPVarDecl(nm string, tp int, parent *PMMPVarDecl) *PMMPVarDecl {
 			for ch != nil { // as long as there are children, i.e. partials
 				if (tp == ComplexSuffix && ch.GetName() == nm) ||
 					(ch.GetType() == ComplexArray && tp == ComplexArray) {
-					T.P("decl", ch.GetFullName()).Debugf("variable type already declared")
+					T().P("decl", ch.GetFullName()).Debugf("variable type already declared")
 					return ch // we're done
 				}
 				if c := ch.GetSibling(); c != nil { // move ch = ch->sibling
@@ -276,7 +279,7 @@ func CreatePMMPVarDecl(nm string, tp int, parent *PMMPVarDecl) *PMMPVarDecl {
 	}
 	sym := NewPMMPVarDecl(nm).(*PMMPVarDecl) // not found, create a new one
 	sym.Symtype = tp
-	T.P("decl", sym.GetFullName()).Debugf("variable type declaration created")
+	T().P("decl", sym.GetFullName()).Debugf("variable type declaration created")
 	if parent != nil {
 		sym.AppendToVarDecl(parent)
 	}
@@ -299,7 +302,7 @@ func (d *PMMPVarDecl) AppendToVarDecl(v *PMMPVarDecl) *PMMPVarDecl {
 	d.BaseTag = v.BaseTag
 	d.Parent = v
 	v.AppendChild(d)
-	T.P("decl", d.GetFullName()).Debugf("new variable type declaration")
+	T().P("decl", d.GetFullName()).Debugf("new variable type declaration")
 	return d
 }
 
@@ -367,7 +370,7 @@ func CreatePMMPVarRef(decl *PMMPVarDecl, value interface{}, indices []dec.Decima
 	if decl.GetBaseType() == PairType {
 		return CreatePMMPPairTypeVarRef(decl, value, indices)
 	} else {
-		T.Debugf("creating %s var for %v", TypeString(decl.GetType()), decl)
+		T().Debugf("creating %s var for %v", TypeString(decl.GetType()), decl)
 		v := &PMMPVarRef{
 			Decl:       decl,
 			subscripts: indices,
@@ -375,14 +378,14 @@ func CreatePMMPVarRef(decl *PMMPVarDecl, value interface{}, indices []dec.Decima
 		}
 		v.SetType(decl.GetBaseType())
 		v.Id = newVarSerial() // TODO: check, when this is needed (now: id leak)
-		//T.Debugf("created var ref: subscripts = %v", indices)
+		//T().Debugf("created var ref: subscripts = %v", indices)
 		return v
 	}
 }
 
 // Create a pair variable reference. Low level method.
 func CreatePMMPPairTypeVarRef(decl *PMMPVarDecl, value interface{}, indices []dec.Decimal) *PMMPVarRef {
-	T.Debugf("creating pair var for %v", decl)
+	T().Debugf("creating pair var for %v", decl)
 	v := &PMMPVarRef{
 		Decl:       decl,
 		subscripts: indices,
@@ -412,7 +415,7 @@ func CreatePMMPPairTypeVarRef(decl *PMMPVarDecl, value interface{}, indices []de
 // Symbol-creator for symbol table: creates tag symbol.
 // Do not use this for pair variables !!
 func NewPMMPVarRef(tagName string) runtime.Symbol {
-	T.P("tag", tagName).Debugf("tag for variable reference created")
+	T().P("tag", tagName).Debugf("tag for variable reference created")
 	v := &PMMPVarRef{}
 	v.Id = newVarSerial()
 	return v
@@ -479,7 +482,7 @@ func (v *PMMPVarRef) IsPair() bool {
 // Get the x-part of a pair variable
 func (v *PMMPVarRef) XPart() *PairPartRef {
 	if !v.IsPair() {
-		T.P("var", v.GetName()).Errorf("cannot access x-part of non-pair")
+		T().P("var", v.GetName()).Errorf("cannot access x-part of non-pair")
 		return nil
 	}
 	return v.GetSibling().(*PairPartRef)
@@ -488,7 +491,7 @@ func (v *PMMPVarRef) XPart() *PairPartRef {
 // Get the y-part of a pair variable
 func (v *PMMPVarRef) YPart() *PairPartRef {
 	if !v.IsPair() {
-		T.P("var", v.GetName()).Errorf("cannot access y-part of non-pair")
+		T().P("var", v.GetName()).Errorf("cannot access y-part of non-pair")
 		return nil
 	}
 	return v.GetFirstChild().(*PairPartRef)
@@ -505,7 +508,7 @@ func (ppart *PairPartRef) GetValue() interface{} {
 
 // Interface runtime.Assignable
 func (ppart *PairPartRef) SetValue(val interface{}) {
-	T.P("var", ppart.GetName()).Debugf("new value: %v", val)
+	T().P("var", ppart.GetName()).Debugf("new value: %v", val)
 	ppart.Value = val
 	ppart.Pairvar.PullValue()
 }
@@ -544,7 +547,7 @@ func (v *PMMPVarRef) GetFullName() string {
 	}
 	subscriptcount := len(v.subscripts) - 1
 	for sfx := v.Decl; sfx != nil; sfx = sfx.Parent { // iterate backwards
-		//T.Printf("sfx = %v", sfx)
+		//T().Printf("sfx = %v", sfx)
 		if sfx.GetType() == ComplexArray {
 			s := "[" + v.subscripts[subscriptcount].String() + "]"
 			suffixes = append(suffixes, s)
@@ -568,7 +571,7 @@ func (v *PMMPVarRef) GetValue() interface{} {
 
 // Interface runtime.Assignable
 func (v *PMMPVarRef) SetValue(val interface{}) {
-	T.P("var", v.GetName()).Debugf("new value: %v", val)
+	T().P("var", v.GetName()).Debugf("new value: %v", val)
 	v.Value = val
 	if v.IsPair() {
 		var xpart *PairPartRef = v.GetSibling().(*PairPartRef)
@@ -600,7 +603,7 @@ func (v *PMMPVarRef) PullValue() {
 					X: ppart1.GetValue().(dec.Decimal),
 					Y: ppart2.GetValue().(dec.Decimal),
 				}
-				T.P("var", v.GetName()).Debugf("pair value = %s",
+				T().P("var", v.GetName()).Debugf("pair value = %s",
 					v.Value.(arithmetic.Pair).String())
 			}
 		}
@@ -672,7 +675,7 @@ var varSerial = 1 // serial number counter for variables, always > 0 !
 func newVarSerial() int {
 	serial := varSerial
 	varSerial++
-	T.Debugf("creating new serial ID %d", serial)
+	T().Debugf("creating new serial ID %d", serial)
 	return serial
 }
 
@@ -728,7 +731,7 @@ func ParseVariableFromString(vstr string, err antlr.ErrorListener) antlr.RuleCon
 	// We let ANTLR to the heavy lifting. This may change in the future,
 	// as it would be fairly straightforward to implement this by hand.
 	input := antlr.NewInputStream(vstr + "@")
-	T.Debugf("parsing variable ref = %s", vstr)
+	T().Debugf("parsing variable ref = %s", vstr)
 	varlexer := grammar.NewPMMPVarLexer(input)
 	stream := antlr.NewCommonTokenStream(varlexer, 0)
 	// TODO: make the parser re-usable....!
@@ -737,7 +740,7 @@ func ParseVariableFromString(vstr string, err antlr.ErrorListener) antlr.RuleCon
 	if err == nil {
 		err = antlr.NewDiagnosticErrorListener(true)
 	} else {
-		T.Debugf("setting error listener")
+		T().Debugf("setting error listener")
 	}
 	varParser.RemoveErrorListeners()
 	varParser.AddErrorListener(err)
@@ -746,7 +749,7 @@ func ParseVariableFromString(vstr string, err antlr.ErrorListener) antlr.RuleCon
 	varParser.BuildParseTrees = true
 	tree := varParser.Variable()
 	sexpr := antlr.TreesStringTree(tree, nil, varParser)
-	T.Debugf("### VAR = %s", sexpr)
+	T().Debugf("### VAR = %s", sexpr)
 	return tree
 }
 
@@ -755,7 +758,7 @@ func (pl *ParseListener) ParseVarFromString(vstr string) antlr.RuleContext {
 	// We let ANTLR to the heavy lifting. This may change in the future,
 	// as it would be fairly straightforward to implement this by hand.
 	input := antlr.NewInputStream(vstr + "@")
-	T.Debugf("parsing variable ref = %s", vstr)
+	T().Debugf("parsing variable ref = %s", vstr)
 	varlexer := grammar.NewPMMPVarLexer(input)
 	stream := antlr.NewCommonTokenStream(varlexer, 0)
 	// TODO: make the parser re-usable....!
@@ -765,7 +768,7 @@ func (pl *ParseListener) ParseVarFromString(vstr string) antlr.RuleContext {
 	pl.varParser.BuildParseTrees = true
 	tree := pl.varParser.Variable()
 	sexpr := antlr.TreesStringTree(tree, nil, pl.varParser)
-	T.Debugf("### VAR = %s", sexpr)
+	T().Debugf("### VAR = %s", sexpr)
 	return tree
 }
 */
@@ -832,23 +835,23 @@ The MARKER will be ignored.
 */
 func (vl *VarParseListener) ExitVariable(ctx *grammar.VariableContext) {
 	tag := ctx.Tag().GetText()
-	T.P("tag", tag).Debugf("looking for declaration for tag")
+	T().P("tag", tag).Debugf("looking for declaration for tag")
 	sym, scope := vl.scopeTree.Current().ResolveSymbol(tag)
 	if sym != nil {
 		vl.def = sym.(*PMMPVarDecl) // scopes are assumed to create these
-		T.P("decl", vl.def.GetFullName()).Debugf("found %v in scope %s", vl.def, scope.GetName())
+		T().P("decl", vl.def.GetFullName()).Debugf("found %v in scope %s", vl.def, scope.GetName())
 	} else { // variable declaration for tag not found => create it
 		sym, _ = vl.scopeTree.Globals().DefineSymbol(tag)
 		vl.def = sym.(*PMMPVarDecl) // scopes are assumed to create these
 		vl.def.SetType(NumericType) // un-declared variables default to type numeric
-		T.P("decl", vl.def.GetName()).Debugf("created %v in global scope", vl.def)
+		T().P("decl", vl.def.GetName()).Debugf("created %v in global scope", vl.def)
 	} // now def declaration of <tag> is in vl.def
 	// produce declarations for suffixes, if necessary
 	it := vl.suffixes.Iterator()
 	subscrCount := 0
 	for it.Next() {
 		i, vs := it.Index(), it.Value().(varsuffix)
-		T.P("decl", vl.def.GetFullName()).Debugf("appending suffix #%d: %s", i, vs)
+		T().P("decl", vl.def.GetFullName()).Debugf("appending suffix #%d: %s", i, vs)
 		if vs.number { // subscript
 			vl.def = CreatePMMPVarDecl("<array>", ComplexArray, vl.def)
 			subscrCount += 1
@@ -856,7 +859,7 @@ func (vl *VarParseListener) ExitVariable(ctx *grammar.VariableContext) {
 			vl.def = CreatePMMPVarDecl(vs.text, ComplexSuffix, vl.def)
 		}
 	}
-	T.P("decl", vl.def.GetFullName()).Debugf("full declared type: %v", vl.def)
+	T().P("decl", vl.def.GetFullName()).Debugf("full declared type: %v", vl.def)
 	// now create variable ref and push onto expression stack
 	var subscripts []dec.Decimal = make([]dec.Decimal, subscrCount, subscrCount+1)
 	it = vl.suffixes.Iterator()
@@ -868,19 +871,19 @@ func (vl *VarParseListener) ExitVariable(ctx *grammar.VariableContext) {
 		}
 	}
 	vl.ref = CreatePMMPVarRef(vl.def, nil, subscripts)
-	T.P("var", vl.ref.GetName()).Debugf("var ref %v", vl.ref)
+	T().P("var", vl.ref.GetName()).Debugf("var ref %v", vl.ref)
 }
 
 // Variable parsing: Collect a suffix.
 func (vl *VarParseListener) ExitSuffix(ctx *grammar.SuffixContext) {
 	tag := ctx.TAG().GetText()
-	T.Debugf("suffix tag: %s", tag)
+	T().Debugf("suffix tag: %s", tag)
 	vl.suffixes.Add(varsuffix{tag, false})
 }
 
 // Variable parsing: Collect a numeric subscript.
 func (vl *VarParseListener) ExitSubscript(ctx *grammar.SubscriptContext) {
 	d := ctx.DECIMAL().GetText()
-	T.Debugf("subscript: %s", d)
+	T().Debugf("subscript: %s", d)
 	vl.suffixes.Add(varsuffix{d, true})
 }

@@ -37,14 +37,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ---------------------------------------------------------------------------
 
- * Internal drawing commands for the Poor Man's MetaPost graphics language.
+Internal drawing commands for the Poor Man's MetaPost graphics language.
 
 */
 
 import (
 	"image/color"
 
-	"github.com/npillmayer/gotype/gtbackend/gfx"
+	"github.com/npillmayer/gotype/backend/gfx"
 	dec "github.com/shopspring/decimal"
 )
 
@@ -54,8 +54,7 @@ type backend struct {
 	outputRoutine gfx.OutputRoutine // for shipping out images
 }
 
-/* Pickup a drawing pen. The pen is set as current pen for the current picture.
- */
+// Pickup a drawing pen. The pen is set as current pen for the current picture.
 func (b *backend) pickupPen(pentype string, diam dec.Decimal, color color.Color) *gfx.Pen {
 	var pen *gfx.Pen
 	if pentype == "pencircle" {

@@ -54,7 +54,9 @@ import (
 )
 
 // We are tracing to the graphics trace
-var T tracing.Trace = tracing.GraphicsTracer
+func T() tracing.Trace {
+	return tracing.GraphicsTracer
+}
 
 // A canvas type as a bridge to the Go Graphics drawing package.
 type GGCanvas struct {
@@ -94,7 +96,7 @@ If tracing mode is DebugLevel red dots are drawn for the contour's knots.
 func (ggc *GGCanvas) AddContour(contour gfx.DrawableContour, linethickness float64,
 	linecol color.Color, fillcol color.Color) {
 	//
-	T.P("fmt", "PNG").Debugf("add contour")
+	T().P("fmt", "PNG").Debugf("add contour")
 	pt := contour.Start()
 	px, py := arithm.Pr2Pt(pt)
 	ggc.context.MoveTo(px, ggc.yflip(py))
@@ -128,8 +130,8 @@ func (ggc *GGCanvas) AddContour(contour gfx.DrawableContour, linethickness float
 }
 
 func (ggc *GGCanvas) drawKnotsDebug(contour gfx.DrawableContour) {
-	if T.GetTraceLevel() == tracing.LevelDebug {
-		T.P("fmt", "PNG").Debugf("draw knots (debug)")
+	if T().GetTraceLevel() == tracing.LevelDebug {
+		T().P("fmt", "PNG").Debugf("draw knots (debug)")
 		pt := contour.Start()
 		px, py := arithm.Pr2Pt(pt)
 		ggc.context.MoveTo(px, ggc.yflip(py))
@@ -155,16 +157,16 @@ func (ggc *GGCanvas) yflip(y float64) float64 {
 
 // Return the drawing as a stdlib image.
 func (ggc *GGCanvas) AsImage() image.Image {
-	T.P("fmt", "PNG").Debugf("converting image")
+	T().P("fmt", "PNG").Debugf("converting image")
 	return ggc.context.Image()
 }
 
 // Shipout the picture to an output device.
 func (ggc *GGCanvas) Shipout(w io.Writer) bool {
-	T.Debugf("shipping out PNG image")
+	T().Debugf("shipping out PNG image")
 	img := ggc.AsImage()
 	if err := ospng.Encode(w, img); err != nil {
-		T.Errorf("file error: %v", err.Error())
+		T().Errorf("file error: %v", err.Error())
 		return false
 	}
 	return true

@@ -62,5 +62,12 @@ package corelang
 
 import "github.com/npillmayer/gotype/core/config/tracing"
 
-var T tracing.Trace = tracing.InterpreterTracer
-var S tracing.Trace = tracing.ScriptingTracer
+// Trace to the InterpreterTracer
+func T() tracing.Trace {
+	return tracing.InterpreterTracer
+}
+
+// Trace to the ScriptingTracer
+func S() tracing.Trace {
+	return tracing.ScriptingTracer
+}

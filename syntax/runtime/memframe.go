@@ -132,7 +132,7 @@ func (mfst *MemoryFrameStack) PushNewMemoryFrame(nm string, scope *Scope) *Dynam
 		newmf.SymbolTable = symtab
 	}
 	mfst.memoryFrameTOS = newmf // new frame now TOS
-	T.P("mem", newmf.Name).Debugf("pushing new memory frame")
+	T().P("mem", newmf.Name).Debugf("pushing new memory frame")
 	return newmf
 }
 
@@ -143,7 +143,7 @@ func (mfst *MemoryFrameStack) PopMemoryFrame() *DynamicMemoryFrame {
 		panic("attempt to pop memory frame from empty call stack")
 	}
 	mf := mfst.memoryFrameTOS
-	T.Debugf("popping memory frame [%s]", mf.Name)
+	T().Debugf("popping memory frame [%s]", mf.Name)
 	mfst.memoryFrameTOS = mfst.memoryFrameTOS.Parent
 	return mf
 }

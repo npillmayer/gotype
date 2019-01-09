@@ -171,8 +171,12 @@ func (pb *PathBuilder) MakePath() *path.Path {
 			}
 		}
 	}
-	if pb.path.N() > 1 && pb.iscycle {
-		pb.path.Cycle()
+	if pb.path.N() > 1 {
+		if pb.iscycle {
+			pb.path.Cycle()
+		} else {
+			pb.path.End()
+		}
 	}
 	T.Infof("new path = %s", path.PathAsString(pb.path, nil))
 	return pb.path

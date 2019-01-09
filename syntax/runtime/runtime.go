@@ -84,8 +84,10 @@ import (
 	"github.com/npillmayer/gotype/core/config/tracing"
 )
 
-// Configurable trace
-var T tracing.Trace = tracing.SyntaxTracer
+// Configurable trace; tracing to the SyntaxTracer
+func T() tracing.Trace {
+	return tracing.SyntaxTracer
+}
 
 // A type implementing a runtime environment for an interpreter
 type Runtime struct {

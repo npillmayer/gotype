@@ -164,9 +164,9 @@ func (s *StdSymbol) SetSibling(sibling TreeNode) {
 /* Complex symbols: add a sub-symbol.
  */
 func (s *StdSymbol) AppendChild(ch TreeNode) TreeNode {
-	//T.Debug("---> append child %v to %v\n", ch, s)
+	//T().Debug("---> append child %v to %v\n", ch, s)
 	if s.Children == nil {
-		T.Debugf("appending first child: %s", ch)
+		T().Debugf("appending first child: %s", ch)
 		s.Children = ch
 		s.GetFirstChild()
 	} else {
@@ -175,7 +175,7 @@ func (s *StdSymbol) AppendChild(ch TreeNode) TreeNode {
 			// do nothing
 		}
 		next.SetSibling(ch)
-		T.Debugf("appending child: %s\n", next.GetSibling())
+		T().Debugf("appending child: %s\n", next.GetSibling())
 	}
 	return s
 }
@@ -380,7 +380,7 @@ func (scst *ScopeTree) PushNewScope(nm string, symcreator func(string) Symbol) *
 		scst.ScopeBase = newsc // make new scope anchor
 	}
 	scst.ScopeTOS = newsc // new scope now TOS
-	T.P("scope", newsc.Name).Debugf("pushing new scope")
+	T().P("scope", newsc.Name).Debugf("pushing new scope")
 	return newsc
 }
 
@@ -391,7 +391,7 @@ func (scst *ScopeTree) PopScope() *Scope {
 		panic("attempt to pop scope from empty stack")
 	}
 	sc := scst.ScopeTOS
-	T.Debugf("popping scope [%s]", sc.Name)
+	T().Debugf("popping scope [%s]", sc.Name)
 	scst.ScopeTOS = scst.ScopeTOS.Parent
 	return sc
 }

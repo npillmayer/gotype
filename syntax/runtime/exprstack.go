@@ -232,7 +232,7 @@ func (e *ExprNode) GetConstPair() (arithm.Pair, bool) {
 		if isxconst && isyconst {
 			return arithm.MakePair(XPart, YPart), true
 		} else {
-			T.Debugf("expression is not constant: %s", e)
+			T().Debugf("expression is not constant: %s", e)
 		}
 	}
 	return arithm.Origin, false
@@ -284,7 +284,7 @@ a "capsule", which is MetaFont's notation for a variable, which has
 fallen out of scope.
 */
 func (es *ExprStack) AnnounceVariable(v Symbol) {
-	T.P("var", v.GetName()).Debugf("announcing id=%d", v.GetID())
+	T().P("var", v.GetName()).Debugf("announcing id=%d", v.GetID())
 	es.resolver[v.GetID()] = v
 }
 
@@ -399,7 +399,7 @@ func (es *ExprStack) announce(e *ExprNode) {
 // polynomial p = c. For pair constants use PushPairConstant(c).
 func (es *ExprStack) PushConstant(c dec.Decimal) *ExprStack {
 	constant := arithm.NewConstantPolynomial(c)
-	T.Debugf("pushing constant = %s", c.String())
+	T().Debugf("pushing constant = %s", c.String())
 	//return es.Push(&ExprNode{constant})
 	return es.Push(NewNumericExpression(constant))
 }
@@ -410,7 +410,7 @@ func (es *ExprStack) PushPairConstant(pc arithm.Pair) *ExprStack {
 	XPart := arithm.NewConstantPolynomial(pc.XPart())
 	YPart := arithm.NewConstantPolynomial(pc.YPart())
 	e := NewPairExpression(XPart, YPart)
-	T.Debugf("pushing pair constant = %s", e.String())
+	T().Debugf("pushing pair constant = %s", e.String())
 	return es.Push(e)
 }
 
@@ -429,10 +429,10 @@ func (es *ExprStack) PushVariable(v Symbol, w Symbol) *ExprStack {
 		py = py.SetTerm(w.GetID(), arithm.ConstOne) // py = 0 + 1*w
 		e := NewPairExpression(p, py)
 		symname := fmt.Sprintf("(%s,%s)", v.GetName(), w.GetName())
-		T.P("var", symname).Debugf("pushing %s", e.String())
+		T().P("var", symname).Debugf("pushing %s", e.String())
 		return es.Push(e)
 	} else {
-		T.P("var", v.GetName()).Debugf("pushing p = %s", p.String())
+		T().P("var", v.GetName()).Debugf("pushing p = %s", p.String())
 		return es.Push(NewNumericExpression(p))
 	}
 }
@@ -456,7 +456,7 @@ func (es *ExprStack) PushPairVariable(XPart Symbol, xconst dec.Decimal, YPart Sy
 	}
 	e := NewPairExpression(px, py)
 	symname := fmt.Sprintf("(%s,%s)", XPart.GetName(), YPart.GetName())
-	T.P("var", symname).Debugf("pushing %s", e.String())
+	T().P("var", symname).Debugf("pushing %s", e.String())
 	return es.Push(e)
 }
 
@@ -488,11 +488,11 @@ func (es *ExprStack) Size() int {
 // Internal helper: dump expression stack. This is printed to the trace
 // with level=DEBUG.
 func (es *ExprStack) Dump() {
-	T.P("size", es.Size()).Debugf("Expression Stack, TOS first:")
+	T().P("size", es.Size()).Debugf("Expression Stack, TOS first:")
 	it := es.stack.Iterator()
 	for it.Next() {
 		e := it.Value().(*ExprNode)
-		T.P("#", it.Index()).Debugf("    %s", e.XPolyn.TraceString(es))
+		T().P("#", it.Index()).Debugf("    %s", e.XPolyn.TraceString(es))
 	}
 }
 
@@ -557,10 +557,10 @@ func (es *ExprStack) LengthTOS() {
 	cx, isconstx := e.XPolyn.IsConstant()
 	cy, isconsty := e.YPolyn.IsConstant()
 	if !e.IsPair || !isconstx || !isconsty {
-		T.P("op", "length").Errorf("argument must be known pair")
+		T().P("op", "length").Errorf("argument must be known pair")
 		panic("not implemented: length(<unknown>)")
 	} else {
-		T.P("op", "length").Debugf("length of (%s,%s)", cx, cy)
+		T().P("op", "length").Debugf("length of (%s,%s)", cx, cy)
 		x, _ := cx.Float64()
 		y, _ := cy.Float64()
 		l := math.Sqrt(math.Pow(x, 2.0) + math.Pow(y, 2.0))
@@ -576,7 +576,7 @@ func (es *ExprStack) AddTOS2OS() {
 	e1, _ = es.Pop()
 	if e1.IsPair {
 		if !e2.IsPair {
-			T.Errorf("type mismatch: <pair> + <numeric>")
+			T().Errorf("type mismatch: <pair> + <numeric>")
 			panic("not implemented: <pair> + <numeric>")
 		}
 		px := e1.XPolyn.Add(e2.XPolyn, false)
@@ -584,7 +584,7 @@ func (es *ExprStack) AddTOS2OS() {
 		e = NewPairExpression(px, py)
 	} else {
 		if e2.IsPair {
-			T.Errorf("type mismatch: <numeric> + <pair>")
+			T().Errorf("type mismatch: <numeric> + <pair>")
 			panic("not implemented: <numeric> + <pair>")
 		}
 		px := e1.XPolyn.Add(e2.XPolyn, false)
@@ -592,7 +592,7 @@ func (es *ExprStack) AddTOS2OS() {
 	}
 	//es.Push(&ExprNode{p})
 	es.Push(e)
-	T.P("op", "ADD").Debugf("result %s", e.String())
+	T().P("op", "ADD").Debugf("result %s", e.String())
 }
 
 // Subtract TOS from 2ndOS. Allowed for known and unknown terms.
@@ -603,7 +603,7 @@ func (es *ExprStack) SubtractTOS2OS() {
 	e1, _ = es.Pop()
 	if e1.IsPair {
 		if !e2.IsPair {
-			T.Errorf("type mismatch: <pair> - <numeric>")
+			T().Errorf("type mismatch: <pair> - <numeric>")
 			panic("not implemented: <pair> - <numeric>")
 		}
 		px := e1.XPolyn.Subtract(e2.XPolyn, false)
@@ -611,7 +611,7 @@ func (es *ExprStack) SubtractTOS2OS() {
 		e = NewPairExpression(px, py)
 	} else {
 		if e2.IsPair {
-			T.Errorf("type mismatch: <numeric> - <pair>")
+			T().Errorf("type mismatch: <numeric> - <pair>")
 			panic("not implemented: <numeric> - <pair>")
 		}
 		px := e1.XPolyn.Subtract(e2.XPolyn, false)
@@ -619,7 +619,7 @@ func (es *ExprStack) SubtractTOS2OS() {
 	}
 	//es.Push(&ExprNode{p})
 	es.Push(e)
-	T.P("op", "SUB").Debugf("result %s", e.String())
+	T().P("op", "SUB").Debugf("result %s", e.String())
 }
 
 // Multiply TOS and 2ndOS. One multiplicant must be a known numeric constant.
@@ -633,7 +633,7 @@ func (es *ExprStack) MultiplyTOS2OS() {
 	}
 	if e1.IsPair {
 		if e2.IsPair {
-			T.Errorf("one multiplicant must be a known numeric")
+			T().Errorf("one multiplicant must be a known numeric")
 			panic("not implemented: <pair> * <pair>")
 		} else {
 			n := e2.XPolyn
@@ -647,7 +647,7 @@ func (es *ExprStack) MultiplyTOS2OS() {
 		e = NewNumericExpression(px)
 	}
 	es.Push(e)
-	T.P("op", "MUL").Debugf("result = %s", e.String())
+	T().P("op", "MUL").Debugf("result = %s", e.String())
 }
 
 // Divide 2ndOS by TOS. Divisor must be numeric non-0 constant.
@@ -657,7 +657,7 @@ func (es *ExprStack) DivideTOS2OS() {
 	e2, _ = es.Pop()
 	e1, _ = es.Pop()
 	if e2.IsPair {
-		T.Errorf("divisor must be a known non-zero numeric")
+		T().Errorf("divisor must be a known non-zero numeric")
 		panic("not implemented: division by <pair>")
 	}
 	if e1.IsPair {
@@ -671,7 +671,7 @@ func (es *ExprStack) DivideTOS2OS() {
 		e = NewNumericExpression(px)
 	}
 	es.Push(e)
-	T.P("op", "DIV").Debugf("result = %s", e.String())
+	T().P("op", "DIV").Debugf("result = %s", e.String())
 }
 
 /*
@@ -695,7 +695,7 @@ func (es *ExprStack) Interpolate() {
 		p = p.Add(p2, false)
 		e := NewNumericExpression(p)
 		es.Push(e)
-		T.P("op", "INTERP").Debugf("result = %s", p.String())
+		T().P("op", "INTERP").Debugf("result = %s", p.String())
 	}
 }
 
@@ -716,7 +716,7 @@ func (es *ExprStack) InterpolatePair(n *ExprNode, z1 *ExprNode, z2 *ExprNode) {
 	py = py.Add(py2, false)
 	e := NewPairExpression(px, py)
 	es.Push(e)
-	T.P("op", "INTERP").Debugf("result = %s", e.String())
+	T().P("op", "INTERP").Debugf("result = %s", e.String())
 }
 
 /*
@@ -730,10 +730,10 @@ func (es *ExprStack) Rotate2OSbyTOS() {
 	angle, _ := c.Mul(arithm.Deg2Rad).Float64()
 	sin := arithm.NewConstantPolynomial(dec.NewFromFloat(math.Sin(angle)))
 	cos := arithm.NewConstantPolynomial(dec.NewFromFloat(math.Cos(angle)))
-	T.Debugf("sin %s° = %s, cos %s° = %s", c, sin, c, cos)
+	T().Debugf("sin %s° = %s, cos %s° = %s", c, sin, c, cos)
 	e, _ = es.Pop()
-	T.Debugf("rotating %v by %s° = %f rad", e, c, angle)
-	T.Errorf("TODO: rotation calculation is buggy")
+	T().Debugf("rotating %v by %s° = %f rad", e, c, angle)
+	T().Errorf("TODO: rotation calculation is buggy")
 	if e.IsPair {
 		var ysin, ycos, XPart, YPart, tmp arithm.Polynomial
 		tmp = sin.CopyPolynomial()
@@ -745,7 +745,7 @@ func (es *ExprStack) Rotate2OSbyTOS() {
 		e = NewPairExpression(XPart, YPart)
 		es.Push(e)
 	} else {
-		T.P("op", "rotate").Errorf("not implemented: rotate <non-pair>")
+		T().P("op", "rotate").Errorf("not implemented: rotate <non-pair>")
 	}
 }
 

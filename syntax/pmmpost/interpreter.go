@@ -35,7 +35,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 import (
+	"image/color"
+	"strings"
+
 	"github.com/antlr/antlr4/runtime/Go/antlr"
+	colorful "github.com/lucasb-eyer/go-colorful"
+	"github.com/npillmayer/gotype/backend/gfx"
 	arithm "github.com/npillmayer/gotype/core/arithmetic"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/path"
@@ -110,6 +115,13 @@ func NewPMMPostInterpreter(loadBuiltins bool) *PMMPostInterpreter {
 	return intp
 }
 
+// Set an output routine for drawing. Default is nil.
+func (intp *PMMPostInterpreter) SetOutputRoutine(o gfx.OutputRoutine) {
+	if intp.ASTListener != nil {
+		intp.ASTListener.backend.outputRoutine = o
+	}
+}
+
 // Parse and interpret a statement list.
 func (intp *PMMPostInterpreter) ParseStatements(input antlr.CharStream) {
 	intp.ASTListener.ParseStatements(input)
@@ -134,7 +146,8 @@ type PMMPostParseListener struct {
 	annotations                  map[interface{}]Annotation // node annotations
 	expectingLvalue              bool                       // do not evaluate variable
 	rt                           *runtime.Runtime           // runtime environment
-	scripting                    *corelang.Scripting        // (Lua) sciptirg environment
+	scripting                    *corelang.Scripting        // (Lua) scripting environment
+	backend                      *backend                   // where to draw to
 }
 
 // We will annotate the AST. Functions and groups will get a scope, filled with
@@ -169,7 +182,8 @@ func NewParseListener(rt *runtime.Runtime, scr *corelang.Scripting) *PMMPostPars
 // We use ANTLR V4 for parsing the statement grammar.
 func (pl *PMMPostParseListener) ParseStatements(input antlr.CharStream) {
 	pl.LazyCreateParser(input)
-	tree := pl.statemParser.Figures()
+	tree := pl.statemParser.Statement() // TODO: Figures()
+	//tree := pl.statemParser.Figures()
 	sexpr := antlr.TreesStringTree(tree, nil, pl.statemParser)
 	T.Debugf("### figures = %s", sexpr)
 	antlr.ParseTreeWalkerDefault.Walk(pl, tree)
@@ -238,6 +252,101 @@ func (pl *PMMPostParseListener) VisitTerminal(node antlr.TerminalNode) {
 */
 
 // --- Statements ------------------------------------------------------------
+
+// A picture has been completed.
+func (pl *PMMPostParseListener) ExitFigure(ctx *grammar.FigureContext) {
+	if pl.backend.picture != nil {
+		T.Debugf("figure complete")
+		pl.backend.picture.Shipout()
+		/*
+			//image := pl.backend.picture.AsImage()
+			if pl.backend.outputRoutine != nil {
+				//pl.backend.outputRoutine.Shipout(pl.backend.picture, "png")
+			} else {
+				T.Errorf("no output routine set")
+			}
+		*/
+		pl.backend.picture = nil
+	}
+}
+
+// Start a figure. Name, width and height are given.
+//
+//    'beginfig' '(' LABEL ',' DECIMALTOKEN UNIT ',' DECIMALTOKEN UNIT ')' SEMIC
+//
+func (pl *PMMPostParseListener) ExitBeginfig(ctx *grammar.BeginfigContext) {
+	d := ctx.DECIMALTOKEN(0)
+	if d != nil {
+		w, _ := dec.NewFromString(d.GetText())
+		w = corelang.ScaleDimension(w, ctx.UNIT(0).GetText())
+		fw, _ := w.Float64()
+		h, _ := dec.NewFromString(ctx.DECIMALTOKEN(1).GetText())
+		h = corelang.ScaleDimension(h, ctx.UNIT(1).GetText())
+		fh, _ := h.Float64()
+		name := strings.Trim(ctx.LABEL().GetText(), "\"")
+		T.P("figure", name).Debugf("dimension %s x %s", w, h)
+		pl.backend.picture = gfx.NewPicture(name, fw, fh, "png") // TODO: format?
+		corelang.Begingroup(pl.rt, "figure")
+		wdecl := corelang.Declare(pl.rt, "w", variables.NumericType)
+		_ = corelang.Variable(pl.rt, wdecl, w, nil, true)
+		hdecl := corelang.Declare(pl.rt, "h", variables.NumericType)
+		_ = corelang.Variable(pl.rt, hdecl, h, nil, true)
+	} else {
+		T.Errorf("parse error, no figure completed")
+	}
+}
+
+// End a figure.
+func (pl *PMMPostParseListener) ExitEndfig(ctx *grammar.EndfigContext) {
+	if pl.backend.picture != nil {
+		corelang.Endgroup(pl.rt)
+	}
+}
+
+// Pickup a pen. Example: "pickup pencircle scaled 3 withcolor #f080cc".
+//
+//    'pickup' PEN ( 'scaled' DECIMALTOKEN )? ( 'withcolor' COLOR )?
+//
+// The pen is used for subsequent drawing and filling commands.
+//
+func (pl *PMMPostParseListener) ExitPickupCmd(ctx *grammar.PickupCmdContext) {
+	diam := arithm.ConstOne
+	if ctx.DECIMALTOKEN() != nil {
+		diam, _ = dec.NewFromString(ctx.DECIMALTOKEN().GetText())
+	}
+	var color color.Color = color.Black
+	if ctx.COLOR() != nil {
+		color = colorFromHex(ctx.COLOR().GetText())
+	}
+	pentype := ctx.PEN().GetText()
+	pl.backend.pickupPen(pentype, diam, color)
+}
+
+// Draw command: draw a path. Draws a path using current pen and current color.
+//
+//    drawCmd : 'draw' pathexpression
+//
+// pathexpression is TOS of path builder stack.
+//
+func (pl *PMMPostParseListener) ExitDrawCmd(ctx *grammar.DrawCmdContext) {
+	e, _ := pl.rt.ExprStack.Pop()
+	path := e.Other.(*path.Path)
+	pl.backend.picture.Draw(gfx.NewDrawablePath(path, path.Controls))
+}
+
+// Fill command: fill a cloxed path. Fills a path using current color.
+//
+//    fillCmd : 'fill' pathexpression
+//
+// pathexpression is TOS of path builder stack.
+//
+func (pl *PMMPostParseListener) ExitFillCmd(ctx *grammar.FillCmdContext) {
+	e, _ := pl.rt.ExprStack.Pop()
+	path := e.Other.(*path.Path)
+	if pl.backend.picture != nil {
+		pl.backend.picture.Fill(gfx.NewDrawablePath(path, path.Controls))
+	}
+}
 
 // Finish a declaration statement. Example: "numeric a, b, c;"
 // If var decl is new, insert a new symbol in global scope. If var decl
@@ -376,7 +485,7 @@ func (pl *PMMPostParseListener) ExitEquation(ctx *grammar.EquationContext) {
 func (pl *PMMPostParseListener) equate() {
 	rhs, _ := pl.rt.ExprStack.Pop()
 	lhs := pl.rt.ExprStack.Top()
-	etype := pl.getExprType(lhs)
+	etype := getExprType(lhs)
 	T.Debugf("%s equation: %v = %v", variables.TypeString(etype), lhs, rhs)
 	switch etype {
 	case variables.NumericType:
@@ -438,21 +547,26 @@ func (pl *PMMPostParseListener) ExitShowcmd(ctx *grammar.ShowcmdContext) {
 func (pl *PMMPostParseListener) ExitExpression(ctx *grammar.ExpressionContext) {
 	if ctx.PATHCLIPOP() != nil {
 		e, _ := pl.rt.ExprStack.Pop()
-		p1 := e.Other.(polygon.Polygon)
-		e, _ = pl.rt.ExprStack.Pop()
-		p2 := e.Other.(polygon.Polygon)
-		var p polygon.Polygon
-		switch ctx.PATHCLIPOP().GetText() {
-		case "union":
-			p = polygon.Union(p1, p2)
-		case "intersection":
-			p = polygon.Union(p1, p2)
-		case "difference":
-			p = polygon.Union(p1, p2)
-		default:
-			T.P("op", ctx.PATHCLIPOP().GetText()).Errorf("unknown clipping operation")
-			p = p1
-		}
+		p := e.Other.(path.Path)
+		/*
+			e, _ := pl.rt.ExprStack.Pop()
+			p1 := e.Other.(path.Path)
+			e, _ = pl.rt.ExprStack.Pop()
+			p2 := e.Other.(path.Path)
+			var p path.Path
+				switch ctx.PATHCLIPOP().GetText() {
+				case "union":
+					p = polygon.Union(p1, p2)
+				case "intersection":
+					p = polygon.Union(p1, p2)
+				case "difference":
+					p = polygon.Union(p1, p2)
+				default:
+					T.P("op", ctx.PATHCLIPOP().GetText()).Errorf("unknown clipping operation")
+					p = p1
+				}
+		*/
+		T.P("op", ctx.PATHCLIPOP().GetText()).Errorf("unknown clipping operation")
 		pl.rt.ExprStack.Push(runtime.NewOtherExpression(p))
 	}
 }
@@ -544,7 +658,7 @@ func (pl *PMMPostParseListener) ExitTransform(ctx *grammar.TransformContext) {
 	}
 	// now check secondary (on top of stack): pair, path or transform variable
 	e := pl.rt.ExprStack.Top() // leave it on the stack
-	etype := pl.getExprType(e)
+	etype := getExprType(e)
 	switch etype {
 	case variables.PairType:
 		T.Debugf("transform of pair")
@@ -647,7 +761,7 @@ func (pl *PMMPostParseListener) ExitFuncatom(ctx *grammar.FuncatomContext) {
 	e, ok := pl.rt.ExprStack.Pop()
 	if ok {
 		var val interface{}
-		etype := pl.getExprType(e)
+		etype := getExprType(e)
 		switch etype {
 		case variables.NumericType:
 			if val, ok = e.GetConstNumeric(); !ok {
@@ -887,7 +1001,8 @@ func (pl *PMMPostParseListener) ExitExprgroup(ctx *grammar.ExprgroupContext) {
 // ---------------------------------------------------------------------------
 
 // Helper: get the (variable) type of an item of the expression stack
-func (pl *PMMPostParseListener) getExprType(e *runtime.ExprNode) int {
+//func (pl *PMMPostParseListener) getExprType(e *runtime.ExprNode) int {
+func getExprType(e *runtime.ExprNode) int {
 	if e != nil {
 		if e.IsValid() {
 			if e.IsPair {
@@ -910,10 +1025,21 @@ func (pl *PMMPostParseListener) getExprType(e *runtime.ExprNode) int {
 		}
 		if e.Other != nil { // neither numeric nor pair, now test other types
 			var ok bool
-			if _, ok = e.Other.(polygon.Polygon); ok {
+			if _, ok = e.Other.(path.Path); ok {
 				return variables.PathType
 			}
 		}
 	}
 	return variables.Undefined
+}
+
+// Create a color from a hex string. Returns black if the string cannot
+// be interpreted as a color hex code.
+func colorFromHex(hex string) color.Color {
+	c, err := colorful.Hex(hex)
+	if err == nil {
+		return c
+	} else {
+		return color.Black
+	}
 }

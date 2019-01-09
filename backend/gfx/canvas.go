@@ -61,7 +61,9 @@ import (
 )
 
 // We are tracing to the graphics tracer.
-var G tracing.Trace = tracing.GraphicsTracer
+func G() tracing.Trace {
+	return tracing.GraphicsTracer
+}
 
 // Table of canvas creation methods
 var supportedGfxFormats map[string](func(float64, float64) Canvas)
@@ -203,14 +205,14 @@ func GfxStandardOutputRoutine(pic *Picture, gfxFormat string) bool {
 	// TODO: connect to correct io.Writer (Afero FS, possibly memory-FS)
 	picname := pic.Name + "." + pic.gfxFormat
 	f, err := os.Create(picname)
+	defer f.Close()
 	if err != nil { // TODO which directory?
-		G.Errorf("file error while shipping picture '%s': %s", picname, err.Error())
+		G().Errorf("file error while shipping picture '%s': %s", picname, err.Error())
 	}
 	ok := pic.canvas.Shipout(f)
 	if !ok {
-		G.Errorf("error while shipping picture '%s'", picname)
+		G().Errorf("error while shipping picture '%s'", picname)
 	}
-	f.Close()
 	return ok
 }
 
@@ -257,7 +259,7 @@ func (pdrw *pathdrawer) IsCycle() bool {
 
 // implement interface DrawableContour
 func (pdrw *pathdrawer) Start() arithm.Pair {
-	G.Debugf("path start at %s", arithm.C2Pr(pdrw.p.Z(0)))
+	G().Debugf("path start at %s", arithm.C2Pr(pdrw.p.Z(0)))
 	pdrw.current = 0
 	return arithm.C2Pr(pdrw.p.Z(0))
 }
@@ -266,15 +268,15 @@ func (pdrw *pathdrawer) Start() arithm.Pair {
 func (pdrw *pathdrawer) ToNextKnot() (arithm.Pair, arithm.Pair, arithm.Pair) {
 	pdrw.current++
 	if pdrw.current >= pdrw.n {
-		G.Debugf("path has no more knots")
+		G().Debugf("path has no more knots")
 		return nil, nil, nil
 	}
 	c1, c2 := pdrw.c.PostControl(pdrw.current-1), pdrw.c.PreControl(pdrw.current%(pdrw.p.N()))
 	if pdrw.current < pdrw.n && !cmplx.IsNaN(c1) {
-		G.Debugf("path next  at %s", arithm.C2Pr(pdrw.p.Z(pdrw.current)))
-		G.Debugf("     controls %s and %s", arithm.C2Pr(c1), arithm.C2Pr(c2))
+		G().Debugf("path next  at %s", arithm.C2Pr(pdrw.p.Z(pdrw.current)))
+		G().Debugf("     controls %s and %s", arithm.C2Pr(c1), arithm.C2Pr(c2))
 	} else {
-		G.Debugf("path next  at %s", arithm.C2Pr(pdrw.p.Z(pdrw.current)))
+		G().Debugf("path next  at %s", arithm.C2Pr(pdrw.p.Z(pdrw.current)))
 	}
 	return arithm.C2Pr(pdrw.p.Z(pdrw.current)), arithm.C2Pr(c1), arithm.C2Pr(c2)
 }

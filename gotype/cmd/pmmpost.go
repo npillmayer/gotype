@@ -53,9 +53,10 @@ import (
 	"log"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
+	"github.com/npillmayer/gotype/backend/gfx"
+	"github.com/npillmayer/gotype/backend/gfx/png"
 	"github.com/npillmayer/gotype/core/config"
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/gtbackend/gfx/png"
 	"github.com/npillmayer/gotype/syntax/pmmpost"
 	"github.com/spf13/cobra"
 )
@@ -87,8 +88,7 @@ func init() {
 // A type to instantiate a REPL interpreter.
 type PMMPostREPL struct {
 	BaseREPL
-	pmmpintp interface{}
-	//pmmpintp *pmmpost.PMMPostInterpreter
+	pmmpintp *pmmpost.PMMPostInterpreter
 }
 
 /* Bridge to the PMMPost interpreter.
@@ -107,9 +107,9 @@ func runPMMPostCmd(cmd *cobra.Command, args []string) {
 		T.Infof("input file is %s", args[0])
 		inputfilename = args[0]
 	}
-	//tracing.Tracefile = tracing.ConfigTracing(inputfilename)
 	defer tracing.Tracefile.Close()
 	//gfx.GlobalCanvasFactory = png.NewContextFactory() // use GG drawing package
+	gfx.RegisterCanvasCreator("png", png.NewCanvas)
 	startPMMPostInput(inputfilename)
 }
 
@@ -152,8 +152,8 @@ func NewPMMPostREPL() *PMMPostREPL {
 	repl := &PMMPostREPL{}
 	repl.readline = rl
 	repl.interpreter = repl // we are our own bridge to the interpreter
-	repl.pmmpintp = pmmpost.NewPMMPostInterpreter()
-	repl.pmmpintp.SetOutputRoutine(png.NewPNGOutputRoutine()) // will produce PNG format
+	repl.pmmpintp = pmmpost.NewPMMPostInterpreter(true)
+	//repl.pmmpintp.SetOutputRoutine(png.NewPNGOutputRoutine()) // will produce PNG format
 	repl.toolname = "pmmpost"
 	return repl
 }
