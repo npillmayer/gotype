@@ -113,8 +113,8 @@ func newFilter(task workerTask, udata interface{}, buflen int) *filter {
 // Sets an environment for a filter an gets the results-channel in return.
 func (f *filter) start(env *filterenv) chan *Node {
 	f.env = env
-	res := make(chan *Node) // output channel has to be in place before workers start
-	f.results = res         // be careful to set write-only for the filter
+	res := make(chan *Node, 3) // output channel has to be in place before workers start
+	f.results = res            // be careful to set write-only for the filter
 	n := runtime.NumCPU()
 	if n > maxWorkerCount {
 		n = maxWorkerCount
@@ -206,7 +206,7 @@ func (pipe *pipeline) empty() bool {
 	return pipe.filters == nil
 }
 
-// pushResult puts a node on the results channel of a filter stage.
+// pushResult puts a node on the results channel of a filter stage (non-blocking).
 // It is used by filter workers to communicate a result to the next stage
 // of a pipeline.
 func (f *filter) pushResult(node *Node) {
@@ -224,12 +224,21 @@ func (f *filter) pushResult(node *Node) {
 	}
 }
 
-// pushBuffer asynchronously puts a node on the buffer queue of a filter.
+// pushBuffer puts a node on the buffer queue of a filter
+// (non-blocking).
 func (f *filter) pushBuffer(node *Node) {
 	f.env.queuecounter.Add(1)
-	go func(node *Node) {
-		f.queue <- node
-	}(node)
+	written := true
+	select { // try to send it synchronously without blocking
+	case f.queue <- node:
+	default:
+		written = false
+	}
+	if !written { // nope, we'll have to go async
+		go func(node *Node) {
+			f.queue <- node
+		}(node)
+	}
 }
 
 // appendFilter appends a filter to a pipeline, i.e. as the last stage of
