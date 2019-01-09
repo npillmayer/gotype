@@ -1,4 +1,4 @@
-// Generated from PMMPost.g4 by ANTLR 4.7.
+// Code generated from PMMPost.g4 by ANTLR 4.7.2. DO NOT EDIT.
 
 package grammar // PMMPost
 import "github.com/antlr/antlr4/runtime/Go/antlr"
@@ -76,6 +76,9 @@ type PMMPostListener interface {
 	// EnterStatementlist is called when entering the statementlist production.
 	EnterStatementlist(c *StatementlistContext)
 
+	// EnterVardef is called when entering the vardef production.
+	EnterVardef(c *VardefContext)
+
 	// EnterCompound is called when entering the compound production.
 	EnterCompound(c *CompoundContext)
 
@@ -117,9 +120,6 @@ type PMMPostListener interface {
 
 	// EnterFactor is called when entering the factor production.
 	EnterFactor(c *FactorContext)
-
-	// EnterTransformer is called when entering the transformer production.
-	EnterTransformer(c *TransformerContext)
 
 	// EnterFuncatom is called when entering the funcatom production.
 	EnterFuncatom(c *FuncatomContext)
@@ -253,6 +253,9 @@ type PMMPostListener interface {
 	// ExitStatementlist is called when exiting the statementlist production.
 	ExitStatementlist(c *StatementlistContext)
 
+	// ExitVardef is called when exiting the vardef production.
+	ExitVardef(c *VardefContext)
+
 	// ExitCompound is called when exiting the compound production.
 	ExitCompound(c *CompoundContext)
 
@@ -294,9 +297,6 @@ type PMMPostListener interface {
 
 	// ExitFactor is called when exiting the factor production.
 	ExitFactor(c *FactorContext)
-
-	// ExitTransformer is called when exiting the transformer production.
-	ExitTransformer(c *TransformerContext)
 
 	// ExitFuncatom is called when exiting the funcatom production.
 	ExitFuncatom(c *FuncatomContext)

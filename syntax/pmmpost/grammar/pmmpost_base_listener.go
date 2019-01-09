@@ -1,4 +1,4 @@
-// Generated from PMMPost.g4 by ANTLR 4.7.
+// Code generated from PMMPost.g4 by ANTLR 4.7.2. DO NOT EDIT.
 
 package grammar // PMMPost
 import "github.com/antlr/antlr4/runtime/Go/antlr"
@@ -158,6 +158,12 @@ func (s *BasePMMPostListener) EnterStatementlist(ctx *StatementlistContext) {}
 // ExitStatementlist is called when production statementlist is exited.
 func (s *BasePMMPostListener) ExitStatementlist(ctx *StatementlistContext) {}
 
+// EnterVardef is called when production vardef is entered.
+func (s *BasePMMPostListener) EnterVardef(ctx *VardefContext) {}
+
+// ExitVardef is called when production vardef is exited.
+func (s *BasePMMPostListener) ExitVardef(ctx *VardefContext) {}
+
 // EnterCompound is called when production compound is entered.
 func (s *BasePMMPostListener) EnterCompound(ctx *CompoundContext) {}
 
@@ -241,12 +247,6 @@ func (s *BasePMMPostListener) EnterFactor(ctx *FactorContext) {}
 
 // ExitFactor is called when production factor is exited.
 func (s *BasePMMPostListener) ExitFactor(ctx *FactorContext) {}
-
-// EnterTransformer is called when production transformer is entered.
-func (s *BasePMMPostListener) EnterTransformer(ctx *TransformerContext) {}
-
-// ExitTransformer is called when production transformer is exited.
-func (s *BasePMMPostListener) ExitTransformer(ctx *TransformerContext) {}
 
 // EnterFuncatom is called when production funcatom is entered.
 func (s *BasePMMPostListener) EnterFuncatom(ctx *FuncatomContext) {}

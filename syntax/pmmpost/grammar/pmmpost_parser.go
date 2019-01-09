@@ -1,4 +1,4 @@
-// Generated from PMMPost.g4 by ANTLR 4.7.
+// Code generated from PMMPost.g4 by ANTLR 4.7.2. DO NOT EDIT.
 
 package grammar // PMMPost
 import (
@@ -15,7 +15,7 @@ var _ = reflect.Copy
 var _ = strconv.Itoa
 
 var parserATN = []uint16{
-	3, 24715, 42794, 33075, 47597, 16764, 15335, 30598, 22884, 3, 65, 411,
+	3, 24715, 42794, 33075, 47597, 16764, 15335, 30598, 22884, 3, 66, 419,
 	4, 2, 9, 2, 4, 3, 9, 3, 4, 4, 9, 4, 4, 5, 9, 5, 4, 6, 9, 6, 4, 7, 9, 7,
 	4, 8, 9, 8, 4, 9, 9, 9, 4, 10, 9, 10, 4, 11, 9, 11, 4, 12, 9, 12, 4, 13,
 	9, 13, 4, 14, 9, 14, 4, 15, 9, 15, 4, 16, 9, 16, 4, 17, 9, 17, 4, 18, 9,
@@ -37,188 +37,192 @@ var parserATN = []uint16{
 	13, 3, 13, 3, 13, 3, 13, 3, 13, 5, 13, 193, 10, 13, 3, 14, 3, 14, 3, 14,
 	3, 14, 3, 14, 5, 14, 200, 10, 14, 3, 15, 3, 15, 3, 15, 3, 15, 5, 15, 206,
 	10, 15, 3, 16, 3, 16, 3, 16, 7, 16, 211, 10, 16, 12, 16, 14, 16, 214, 11,
-	16, 3, 17, 3, 17, 3, 17, 3, 17, 3, 18, 3, 18, 3, 19, 3, 19, 3, 19, 3, 19,
-	3, 20, 3, 20, 5, 20, 228, 10, 20, 3, 21, 3, 21, 3, 21, 6, 21, 233, 10,
-	21, 13, 21, 14, 21, 234, 3, 22, 3, 22, 3, 22, 6, 22, 240, 10, 22, 13, 22,
-	14, 22, 241, 3, 23, 3, 23, 3, 24, 3, 24, 3, 24, 3, 24, 3, 24, 3, 24, 7,
-	24, 252, 10, 24, 12, 24, 14, 24, 255, 11, 24, 3, 25, 3, 25, 3, 25, 5, 25,
-	260, 10, 25, 3, 25, 3, 25, 3, 25, 7, 25, 265, 10, 25, 12, 25, 14, 25, 268,
-	11, 25, 3, 26, 3, 26, 3, 26, 3, 26, 6, 26, 274, 10, 26, 13, 26, 14, 26,
-	275, 3, 26, 5, 26, 279, 10, 26, 3, 27, 3, 27, 3, 27, 3, 28, 3, 28, 3, 28,
-	3, 28, 3, 28, 3, 28, 3, 28, 3, 28, 7, 28, 292, 10, 28, 12, 28, 14, 28,
-	295, 11, 28, 3, 29, 3, 29, 6, 29, 299, 10, 29, 13, 29, 14, 29, 300, 3,
-	30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30,
+	16, 3, 17, 3, 17, 3, 17, 3, 17, 7, 17, 220, 10, 17, 12, 17, 14, 17, 223,
+	11, 17, 3, 18, 3, 18, 3, 18, 3, 18, 3, 19, 3, 19, 3, 20, 3, 20, 3, 20,
+	3, 20, 3, 21, 3, 21, 5, 21, 237, 10, 21, 3, 22, 3, 22, 3, 22, 6, 22, 242,
+	10, 22, 13, 22, 14, 22, 243, 3, 23, 3, 23, 3, 23, 6, 23, 249, 10, 23, 13,
+	23, 14, 23, 250, 3, 24, 3, 24, 3, 25, 3, 25, 3, 25, 3, 25, 3, 25, 3, 25,
+	7, 25, 261, 10, 25, 12, 25, 14, 25, 264, 11, 25, 3, 26, 3, 26, 3, 26, 5,
+	26, 269, 10, 26, 3, 26, 3, 26, 3, 26, 7, 26, 274, 10, 26, 12, 26, 14, 26,
+	277, 11, 26, 3, 27, 3, 27, 3, 27, 3, 27, 6, 27, 283, 10, 27, 13, 27, 14,
+	27, 284, 3, 27, 5, 27, 288, 10, 27, 3, 28, 3, 28, 3, 28, 3, 29, 3, 29,
+	3, 29, 3, 29, 3, 29, 3, 29, 3, 29, 3, 29, 3, 29, 6, 29, 302, 10, 29, 13,
+	29, 14, 29, 303, 7, 29, 306, 10, 29, 12, 29, 14, 29, 309, 11, 29, 3, 30,
 	3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3,
 	30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30,
-	3, 30, 3, 30, 3, 30, 6, 30, 338, 10, 30, 13, 30, 14, 30, 339, 3, 30, 3,
-	30, 3, 30, 3, 30, 3, 30, 3, 30, 5, 30, 348, 10, 30, 3, 31, 5, 31, 351,
-	10, 31, 3, 31, 3, 31, 3, 32, 3, 32, 3, 32, 3, 32, 5, 32, 359, 10, 32, 3,
-	33, 3, 33, 5, 33, 363, 10, 33, 3, 33, 3, 33, 3, 33, 3, 33, 3, 33, 3, 33,
-	3, 33, 3, 33, 3, 33, 3, 33, 3, 33, 3, 33, 3, 33, 3, 33, 3, 33, 3, 33, 5,
-	33, 381, 10, 33, 3, 34, 3, 34, 3, 34, 7, 34, 386, 10, 34, 12, 34, 14, 34,
-	389, 11, 34, 3, 34, 3, 34, 3, 34, 7, 34, 394, 10, 34, 12, 34, 14, 34, 397,
-	11, 34, 3, 34, 5, 34, 400, 10, 34, 3, 35, 3, 35, 3, 35, 3, 35, 3, 35, 5,
-	35, 407, 10, 35, 3, 36, 3, 36, 3, 36, 2, 5, 46, 48, 54, 37, 2, 4, 6, 8,
-	10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44,
-	46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 2, 8, 3, 2, 33, 35,
-	11, 2, 6, 6, 20, 20, 29, 35, 38, 39, 42, 45, 47, 48, 53, 53, 55, 58, 60,
-	60, 3, 2, 29, 30, 3, 2, 31, 32, 3, 2, 44, 45, 3, 2, 60, 61, 2, 438, 2,
-	75, 3, 2, 2, 2, 4, 80, 3, 2, 2, 2, 6, 84, 3, 2, 2, 2, 8, 96, 3, 2, 2, 2,
-	10, 105, 3, 2, 2, 2, 12, 128, 3, 2, 2, 2, 14, 158, 3, 2, 2, 2, 16, 160,
-	3, 2, 2, 2, 18, 163, 3, 2, 2, 2, 20, 166, 3, 2, 2, 2, 22, 177, 3, 2, 2,
-	2, 24, 192, 3, 2, 2, 2, 26, 199, 3, 2, 2, 2, 28, 201, 3, 2, 2, 2, 30, 212,
-	3, 2, 2, 2, 32, 215, 3, 2, 2, 2, 34, 219, 3, 2, 2, 2, 36, 221, 3, 2, 2,
-	2, 38, 227, 3, 2, 2, 2, 40, 229, 3, 2, 2, 2, 42, 236, 3, 2, 2, 2, 44, 243,
-	3, 2, 2, 2, 46, 245, 3, 2, 2, 2, 48, 259, 3, 2, 2, 2, 50, 269, 3, 2, 2,
-	2, 52, 280, 3, 2, 2, 2, 54, 283, 3, 2, 2, 2, 56, 298, 3, 2, 2, 2, 58, 347,
-	3, 2, 2, 2, 60, 350, 3, 2, 2, 2, 62, 358, 3, 2, 2, 2, 64, 380, 3, 2, 2,
-	2, 66, 399, 3, 2, 2, 2, 68, 406, 3, 2, 2, 2, 70, 408, 3, 2, 2, 2, 72, 74,
+	3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3, 30, 3,
+	30, 3, 30, 3, 30, 6, 30, 346, 10, 30, 13, 30, 14, 30, 347, 3, 30, 3, 30,
+	3, 30, 3, 30, 3, 30, 3, 30, 5, 30, 356, 10, 30, 3, 31, 5, 31, 359, 10,
+	31, 3, 31, 3, 31, 3, 32, 3, 32, 3, 32, 3, 32, 5, 32, 367, 10, 32, 3, 33,
+	3, 33, 5, 33, 371, 10, 33, 3, 33, 3, 33, 3, 33, 3, 33, 3, 33, 3, 33, 3,
+	33, 3, 33, 3, 33, 3, 33, 3, 33, 3, 33, 3, 33, 3, 33, 3, 33, 3, 33, 5, 33,
+	389, 10, 33, 3, 34, 3, 34, 3, 34, 7, 34, 394, 10, 34, 12, 34, 14, 34, 397,
+	11, 34, 3, 34, 3, 34, 3, 34, 7, 34, 402, 10, 34, 12, 34, 14, 34, 405, 11,
+	34, 3, 34, 5, 34, 408, 10, 34, 3, 35, 3, 35, 3, 35, 3, 35, 3, 35, 5, 35,
+	415, 10, 35, 3, 36, 3, 36, 3, 36, 2, 5, 48, 50, 56, 37, 2, 4, 6, 8, 10,
+	12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46,
+	48, 50, 52, 54, 56, 58, 60, 62, 64, 66, 68, 70, 2, 8, 3, 2, 33, 35, 11,
+	2, 7, 7, 20, 20, 29, 35, 38, 39, 43, 46, 48, 49, 54, 54, 56, 59, 61, 61,
+	3, 2, 29, 30, 3, 2, 31, 32, 3, 2, 45, 46, 3, 2, 61, 62, 2, 447, 2, 75,
+	3, 2, 2, 2, 4, 80, 3, 2, 2, 2, 6, 84, 3, 2, 2, 2, 8, 96, 3, 2, 2, 2, 10,
+	105, 3, 2, 2, 2, 12, 128, 3, 2, 2, 2, 14, 158, 3, 2, 2, 2, 16, 160, 3,
+	2, 2, 2, 18, 163, 3, 2, 2, 2, 20, 166, 3, 2, 2, 2, 22, 177, 3, 2, 2, 2,
+	24, 192, 3, 2, 2, 2, 26, 199, 3, 2, 2, 2, 28, 201, 3, 2, 2, 2, 30, 212,
+	3, 2, 2, 2, 32, 215, 3, 2, 2, 2, 34, 224, 3, 2, 2, 2, 36, 228, 3, 2, 2,
+	2, 38, 230, 3, 2, 2, 2, 40, 236, 3, 2, 2, 2, 42, 238, 3, 2, 2, 2, 44, 245,
+	3, 2, 2, 2, 46, 252, 3, 2, 2, 2, 48, 254, 3, 2, 2, 2, 50, 268, 3, 2, 2,
+	2, 52, 278, 3, 2, 2, 2, 54, 289, 3, 2, 2, 2, 56, 292, 3, 2, 2, 2, 58, 355,
+	3, 2, 2, 2, 60, 358, 3, 2, 2, 2, 62, 366, 3, 2, 2, 2, 64, 388, 3, 2, 2,
+	2, 66, 407, 3, 2, 2, 2, 68, 414, 3, 2, 2, 2, 70, 416, 3, 2, 2, 2, 72, 74,
 	5, 4, 3, 2, 73, 72, 3, 2, 2, 2, 74, 77, 3, 2, 2, 2, 75, 73, 3, 2, 2, 2,
 	75, 76, 3, 2, 2, 2, 76, 78, 3, 2, 2, 2, 77, 75, 3, 2, 2, 2, 78, 79, 7,
 	2, 2, 3, 79, 3, 3, 2, 2, 2, 80, 81, 5, 6, 4, 2, 81, 82, 5, 30, 16, 2, 82,
-	83, 5, 8, 5, 2, 83, 5, 3, 2, 2, 2, 84, 85, 7, 11, 2, 2, 85, 86, 7, 25,
-	2, 2, 86, 87, 7, 64, 2, 2, 87, 88, 7, 24, 2, 2, 88, 89, 7, 62, 2, 2, 89,
-	90, 7, 36, 2, 2, 90, 91, 7, 24, 2, 2, 91, 92, 7, 62, 2, 2, 92, 93, 7, 36,
+	83, 5, 8, 5, 2, 83, 5, 3, 2, 2, 2, 84, 85, 7, 12, 2, 2, 85, 86, 7, 25,
+	2, 2, 86, 87, 7, 65, 2, 2, 87, 88, 7, 24, 2, 2, 88, 89, 7, 63, 2, 2, 89,
+	90, 7, 36, 2, 2, 90, 91, 7, 24, 2, 2, 91, 92, 7, 63, 2, 2, 92, 93, 7, 36,
 	2, 2, 93, 94, 7, 26, 2, 2, 94, 95, 7, 23, 2, 2, 95, 7, 3, 2, 2, 2, 96,
-	97, 7, 12, 2, 2, 97, 98, 7, 23, 2, 2, 98, 9, 3, 2, 2, 2, 99, 106, 5, 32,
-	17, 2, 100, 106, 5, 12, 7, 2, 101, 106, 5, 36, 19, 2, 102, 106, 5, 38,
-	20, 2, 103, 106, 5, 14, 8, 2, 104, 106, 5, 34, 18, 2, 105, 99, 3, 2, 2,
+	97, 7, 13, 2, 2, 97, 98, 7, 23, 2, 2, 98, 9, 3, 2, 2, 2, 99, 106, 5, 34,
+	18, 2, 100, 106, 5, 12, 7, 2, 101, 106, 5, 38, 20, 2, 102, 106, 5, 40,
+	21, 2, 103, 106, 5, 14, 8, 2, 104, 106, 5, 36, 19, 2, 105, 99, 3, 2, 2,
 	2, 105, 100, 3, 2, 2, 2, 105, 101, 3, 2, 2, 2, 105, 102, 3, 2, 2, 2, 105,
 	103, 3, 2, 2, 2, 105, 104, 3, 2, 2, 2, 106, 11, 3, 2, 2, 2, 107, 108, 7,
-	10, 2, 2, 108, 113, 7, 60, 2, 2, 109, 110, 7, 24, 2, 2, 110, 112, 7, 60,
+	11, 2, 2, 108, 113, 7, 61, 2, 2, 109, 110, 7, 24, 2, 2, 110, 112, 7, 61,
 	2, 2, 111, 109, 3, 2, 2, 2, 112, 115, 3, 2, 2, 2, 113, 111, 3, 2, 2, 2,
 	113, 114, 3, 2, 2, 2, 114, 129, 3, 2, 2, 2, 115, 113, 3, 2, 2, 2, 116,
-	118, 7, 40, 2, 2, 117, 119, 7, 10, 2, 2, 118, 117, 3, 2, 2, 2, 118, 119,
-	3, 2, 2, 2, 119, 120, 3, 2, 2, 2, 120, 125, 7, 60, 2, 2, 121, 122, 7, 24,
-	2, 2, 122, 124, 7, 60, 2, 2, 123, 121, 3, 2, 2, 2, 124, 127, 3, 2, 2, 2,
+	118, 7, 40, 2, 2, 117, 119, 7, 11, 2, 2, 118, 117, 3, 2, 2, 2, 118, 119,
+	3, 2, 2, 2, 119, 120, 3, 2, 2, 2, 120, 125, 7, 61, 2, 2, 121, 122, 7, 24,
+	2, 2, 122, 124, 7, 61, 2, 2, 123, 121, 3, 2, 2, 2, 124, 127, 3, 2, 2, 2,
 	125, 123, 3, 2, 2, 2, 125, 126, 3, 2, 2, 2, 126, 129, 3, 2, 2, 2, 127,
 	125, 3, 2, 2, 2, 128, 107, 3, 2, 2, 2, 128, 116, 3, 2, 2, 2, 129, 13, 3,
-	2, 2, 2, 130, 131, 7, 57, 2, 2, 131, 136, 7, 60, 2, 2, 132, 133, 7, 24,
-	2, 2, 133, 135, 7, 60, 2, 2, 134, 132, 3, 2, 2, 2, 135, 138, 3, 2, 2, 2,
+	2, 2, 2, 130, 131, 7, 58, 2, 2, 131, 136, 7, 61, 2, 2, 132, 133, 7, 24,
+	2, 2, 133, 135, 7, 61, 2, 2, 134, 132, 3, 2, 2, 2, 135, 138, 3, 2, 2, 2,
 	136, 134, 3, 2, 2, 2, 136, 137, 3, 2, 2, 2, 137, 159, 3, 2, 2, 2, 138,
-	136, 3, 2, 2, 2, 139, 140, 7, 58, 2, 2, 140, 145, 7, 60, 2, 2, 141, 142,
-	7, 24, 2, 2, 142, 144, 7, 60, 2, 2, 143, 141, 3, 2, 2, 2, 144, 147, 3,
+	136, 3, 2, 2, 2, 139, 140, 7, 59, 2, 2, 140, 145, 7, 61, 2, 2, 141, 142,
+	7, 24, 2, 2, 142, 144, 7, 61, 2, 2, 143, 141, 3, 2, 2, 2, 144, 147, 3,
 	2, 2, 2, 145, 143, 3, 2, 2, 2, 145, 146, 3, 2, 2, 2, 146, 159, 3, 2, 2,
-	2, 147, 145, 3, 2, 2, 2, 148, 149, 7, 56, 2, 2, 149, 159, 7, 64, 2, 2,
-	150, 151, 7, 59, 2, 2, 151, 152, 5, 44, 23, 2, 152, 153, 7, 21, 2, 2, 153,
-	154, 7, 46, 2, 2, 154, 159, 3, 2, 2, 2, 155, 159, 5, 20, 11, 2, 156, 159,
+	2, 147, 145, 3, 2, 2, 2, 148, 149, 7, 57, 2, 2, 149, 159, 7, 65, 2, 2,
+	150, 151, 7, 60, 2, 2, 151, 152, 5, 46, 24, 2, 152, 153, 7, 21, 2, 2, 153,
+	154, 7, 47, 2, 2, 154, 159, 3, 2, 2, 2, 155, 159, 5, 20, 11, 2, 156, 159,
 	5, 16, 9, 2, 157, 159, 5, 18, 10, 2, 158, 130, 3, 2, 2, 2, 158, 139, 3,
 	2, 2, 2, 158, 148, 3, 2, 2, 2, 158, 150, 3, 2, 2, 2, 158, 155, 3, 2, 2,
 	2, 158, 156, 3, 2, 2, 2, 158, 157, 3, 2, 2, 2, 159, 15, 3, 2, 2, 2, 160,
-	161, 7, 17, 2, 2, 161, 162, 5, 46, 24, 2, 162, 17, 3, 2, 2, 2, 163, 164,
-	7, 16, 2, 2, 164, 165, 5, 46, 24, 2, 165, 19, 3, 2, 2, 2, 166, 167, 7,
-	13, 2, 2, 167, 170, 7, 14, 2, 2, 168, 169, 7, 15, 2, 2, 169, 171, 7, 62,
+	161, 7, 17, 2, 2, 161, 162, 5, 48, 25, 2, 162, 17, 3, 2, 2, 2, 163, 164,
+	7, 16, 2, 2, 164, 165, 5, 48, 25, 2, 165, 19, 3, 2, 2, 2, 166, 167, 7,
+	14, 2, 2, 167, 170, 7, 15, 2, 2, 168, 169, 7, 3, 2, 2, 169, 171, 7, 63,
 	2, 2, 170, 168, 3, 2, 2, 2, 170, 171, 3, 2, 2, 2, 171, 174, 3, 2, 2, 2,
 	172, 173, 7, 18, 2, 2, 173, 175, 7, 19, 2, 2, 174, 172, 3, 2, 2, 2, 174,
 	175, 3, 2, 2, 2, 175, 21, 3, 2, 2, 2, 176, 178, 5, 24, 13, 2, 177, 176,
 	3, 2, 2, 2, 177, 178, 3, 2, 2, 2, 178, 179, 3, 2, 2, 2, 179, 181, 5, 26,
 	14, 2, 180, 182, 5, 24, 13, 2, 181, 180, 3, 2, 2, 2, 181, 182, 3, 2, 2,
-	2, 182, 23, 3, 2, 2, 2, 183, 184, 7, 3, 2, 2, 184, 185, 7, 9, 2, 2, 185,
-	186, 5, 46, 24, 2, 186, 187, 7, 4, 2, 2, 187, 193, 3, 2, 2, 2, 188, 189,
-	7, 3, 2, 2, 189, 190, 5, 46, 24, 2, 190, 191, 7, 4, 2, 2, 191, 193, 3,
+	2, 182, 23, 3, 2, 2, 2, 183, 184, 7, 4, 2, 2, 184, 185, 7, 10, 2, 2, 185,
+	186, 5, 48, 25, 2, 186, 187, 7, 5, 2, 2, 187, 193, 3, 2, 2, 2, 188, 189,
+	7, 4, 2, 2, 189, 190, 5, 48, 25, 2, 190, 191, 7, 5, 2, 2, 191, 193, 3,
 	2, 2, 2, 192, 183, 3, 2, 2, 2, 192, 188, 3, 2, 2, 2, 193, 25, 3, 2, 2,
-	2, 194, 200, 7, 6, 2, 2, 195, 196, 7, 5, 2, 2, 196, 197, 5, 28, 15, 2,
-	197, 198, 7, 5, 2, 2, 198, 200, 3, 2, 2, 2, 199, 194, 3, 2, 2, 2, 199,
-	195, 3, 2, 2, 2, 200, 27, 3, 2, 2, 2, 201, 202, 7, 7, 2, 2, 202, 205, 5,
-	46, 24, 2, 203, 204, 7, 8, 2, 2, 204, 206, 5, 46, 24, 2, 205, 203, 3, 2,
+	2, 194, 200, 7, 7, 2, 2, 195, 196, 7, 6, 2, 2, 196, 197, 5, 28, 15, 2,
+	197, 198, 7, 6, 2, 2, 198, 200, 3, 2, 2, 2, 199, 194, 3, 2, 2, 2, 199,
+	195, 3, 2, 2, 2, 200, 27, 3, 2, 2, 2, 201, 202, 7, 8, 2, 2, 202, 205, 5,
+	48, 25, 2, 203, 204, 7, 9, 2, 2, 204, 206, 5, 48, 25, 2, 205, 203, 3, 2,
 	2, 2, 205, 206, 3, 2, 2, 2, 206, 29, 3, 2, 2, 2, 207, 208, 5, 10, 6, 2,
 	208, 209, 7, 23, 2, 2, 209, 211, 3, 2, 2, 2, 210, 207, 3, 2, 2, 2, 211,
 	214, 3, 2, 2, 2, 212, 210, 3, 2, 2, 2, 212, 213, 3, 2, 2, 2, 213, 31, 3,
-	2, 2, 2, 214, 212, 3, 2, 2, 2, 215, 216, 7, 38, 2, 2, 216, 217, 5, 30,
-	16, 2, 217, 218, 7, 39, 2, 2, 218, 33, 3, 2, 2, 2, 219, 220, 3, 2, 2, 2,
-	220, 35, 3, 2, 2, 2, 221, 222, 5, 66, 34, 2, 222, 223, 7, 20, 2, 2, 223,
-	224, 5, 46, 24, 2, 224, 37, 3, 2, 2, 2, 225, 228, 5, 40, 21, 2, 226, 228,
-	5, 42, 22, 2, 227, 225, 3, 2, 2, 2, 227, 226, 3, 2, 2, 2, 228, 39, 3, 2,
-	2, 2, 229, 232, 5, 46, 24, 2, 230, 231, 7, 21, 2, 2, 231, 233, 5, 46, 24,
-	2, 232, 230, 3, 2, 2, 2, 233, 234, 3, 2, 2, 2, 234, 232, 3, 2, 2, 2, 234,
-	235, 3, 2, 2, 2, 235, 41, 3, 2, 2, 2, 236, 239, 5, 48, 25, 2, 237, 238,
-	9, 2, 2, 2, 238, 240, 5, 48, 25, 2, 239, 237, 3, 2, 2, 2, 240, 241, 3,
-	2, 2, 2, 241, 239, 3, 2, 2, 2, 241, 242, 3, 2, 2, 2, 242, 43, 3, 2, 2,
-	2, 243, 244, 9, 3, 2, 2, 244, 45, 3, 2, 2, 2, 245, 246, 8, 24, 1, 2, 246,
-	247, 5, 48, 25, 2, 247, 253, 3, 2, 2, 2, 248, 249, 12, 3, 2, 2, 249, 250,
-	7, 55, 2, 2, 250, 252, 5, 48, 25, 2, 251, 248, 3, 2, 2, 2, 252, 255, 3,
-	2, 2, 2, 253, 251, 3, 2, 2, 2, 253, 254, 3, 2, 2, 2, 254, 47, 3, 2, 2,
-	2, 255, 253, 3, 2, 2, 2, 256, 257, 8, 25, 1, 2, 257, 260, 5, 54, 28, 2,
-	258, 260, 5, 50, 26, 2, 259, 256, 3, 2, 2, 2, 259, 258, 3, 2, 2, 2, 260,
-	266, 3, 2, 2, 2, 261, 262, 12, 4, 2, 2, 262, 263, 9, 4, 2, 2, 263, 265,
-	5, 54, 28, 2, 264, 261, 3, 2, 2, 2, 265, 268, 3, 2, 2, 2, 266, 264, 3,
-	2, 2, 2, 266, 267, 3, 2, 2, 2, 267, 49, 3, 2, 2, 2, 268, 266, 3, 2, 2,
-	2, 269, 273, 5, 54, 28, 2, 270, 271, 5, 22, 12, 2, 271, 272, 5, 54, 28,
-	2, 272, 274, 3, 2, 2, 2, 273, 270, 3, 2, 2, 2, 274, 275, 3, 2, 2, 2, 275,
-	273, 3, 2, 2, 2, 275, 276, 3, 2, 2, 2, 276, 278, 3, 2, 2, 2, 277, 279,
-	5, 52, 27, 2, 278, 277, 3, 2, 2, 2, 278, 279, 3, 2, 2, 2, 279, 51, 3, 2,
-	2, 2, 280, 281, 5, 22, 12, 2, 281, 282, 7, 54, 2, 2, 282, 53, 3, 2, 2,
-	2, 283, 284, 8, 28, 1, 2, 284, 285, 5, 58, 30, 2, 285, 293, 3, 2, 2, 2,
-	286, 287, 12, 4, 2, 2, 287, 288, 9, 5, 2, 2, 288, 292, 5, 58, 30, 2, 289,
-	290, 12, 3, 2, 2, 290, 292, 5, 56, 29, 2, 291, 286, 3, 2, 2, 2, 291, 289,
-	3, 2, 2, 2, 292, 295, 3, 2, 2, 2, 293, 291, 3, 2, 2, 2, 293, 294, 3, 2,
-	2, 2, 294, 55, 3, 2, 2, 2, 295, 293, 3, 2, 2, 2, 296, 297, 7, 53, 2, 2,
-	297, 299, 5, 58, 30, 2, 298, 296, 3, 2, 2, 2, 299, 300, 3, 2, 2, 2, 300,
-	298, 3, 2, 2, 2, 300, 301, 3, 2, 2, 2, 301, 57, 3, 2, 2, 2, 302, 303, 7,
-	46, 2, 2, 303, 348, 5, 64, 33, 2, 304, 305, 5, 60, 31, 2, 305, 306, 5,
-	64, 33, 2, 306, 348, 3, 2, 2, 2, 307, 308, 5, 62, 32, 2, 308, 309, 7, 27,
-	2, 2, 309, 310, 5, 48, 25, 2, 310, 311, 7, 24, 2, 2, 311, 312, 5, 48, 25,
-	2, 312, 313, 7, 28, 2, 2, 313, 348, 3, 2, 2, 2, 314, 315, 5, 64, 33, 2,
-	315, 316, 7, 27, 2, 2, 316, 317, 5, 48, 25, 2, 317, 318, 7, 24, 2, 2, 318,
-	319, 5, 48, 25, 2, 319, 320, 7, 28, 2, 2, 320, 348, 3, 2, 2, 2, 321, 348,
-	5, 64, 33, 2, 322, 323, 7, 41, 2, 2, 323, 348, 5, 58, 30, 2, 324, 325,
-	7, 50, 2, 2, 325, 326, 5, 48, 25, 2, 326, 327, 7, 51, 2, 2, 327, 328, 5,
-	58, 30, 2, 328, 348, 3, 2, 2, 2, 329, 330, 7, 48, 2, 2, 330, 348, 5, 58,
-	30, 2, 331, 332, 7, 47, 2, 2, 332, 333, 5, 48, 25, 2, 333, 334, 7, 51,
-	2, 2, 334, 335, 5, 58, 30, 2, 335, 348, 3, 2, 2, 2, 336, 338, 7, 42, 2,
-	2, 337, 336, 3, 2, 2, 2, 338, 339, 3, 2, 2, 2, 339, 337, 3, 2, 2, 2, 339,
-	340, 3, 2, 2, 2, 340, 341, 3, 2, 2, 2, 341, 348, 5, 58, 30, 2, 342, 343,
-	9, 6, 2, 2, 343, 348, 5, 66, 34, 2, 344, 345, 7, 42, 2, 2, 345, 346, 7,
-	43, 2, 2, 346, 348, 5, 54, 28, 2, 347, 302, 3, 2, 2, 2, 347, 304, 3, 2,
-	2, 2, 347, 307, 3, 2, 2, 2, 347, 314, 3, 2, 2, 2, 347, 321, 3, 2, 2, 2,
-	347, 322, 3, 2, 2, 2, 347, 324, 3, 2, 2, 2, 347, 329, 3, 2, 2, 2, 347,
-	331, 3, 2, 2, 2, 347, 337, 3, 2, 2, 2, 347, 342, 3, 2, 2, 2, 347, 344,
-	3, 2, 2, 2, 348, 59, 3, 2, 2, 2, 349, 351, 9, 4, 2, 2, 350, 349, 3, 2,
-	2, 2, 350, 351, 3, 2, 2, 2, 351, 352, 3, 2, 2, 2, 352, 353, 5, 62, 32,
-	2, 353, 61, 3, 2, 2, 2, 354, 355, 7, 62, 2, 2, 355, 356, 7, 32, 2, 2, 356,
-	359, 7, 62, 2, 2, 357, 359, 7, 62, 2, 2, 358, 354, 3, 2, 2, 2, 358, 357,
-	3, 2, 2, 2, 359, 63, 3, 2, 2, 2, 360, 362, 7, 62, 2, 2, 361, 363, 7, 36,
-	2, 2, 362, 361, 3, 2, 2, 2, 362, 363, 3, 2, 2, 2, 363, 381, 3, 2, 2, 2,
-	364, 381, 5, 66, 34, 2, 365, 366, 7, 25, 2, 2, 366, 367, 5, 48, 25, 2,
-	367, 368, 7, 24, 2, 2, 368, 369, 5, 48, 25, 2, 369, 370, 7, 26, 2, 2, 370,
-	381, 3, 2, 2, 2, 371, 372, 7, 25, 2, 2, 372, 373, 5, 48, 25, 2, 373, 374,
-	7, 26, 2, 2, 374, 381, 3, 2, 2, 2, 375, 376, 7, 38, 2, 2, 376, 377, 5,
-	30, 16, 2, 377, 378, 5, 48, 25, 2, 378, 379, 7, 39, 2, 2, 379, 381, 3,
-	2, 2, 2, 380, 360, 3, 2, 2, 2, 380, 364, 3, 2, 2, 2, 380, 365, 3, 2, 2,
-	2, 380, 371, 3, 2, 2, 2, 380, 375, 3, 2, 2, 2, 381, 65, 3, 2, 2, 2, 382,
-	387, 7, 61, 2, 2, 383, 386, 5, 68, 35, 2, 384, 386, 5, 70, 36, 2, 385,
-	383, 3, 2, 2, 2, 385, 384, 3, 2, 2, 2, 386, 389, 3, 2, 2, 2, 387, 385,
-	3, 2, 2, 2, 387, 388, 3, 2, 2, 2, 388, 400, 3, 2, 2, 2, 389, 387, 3, 2,
-	2, 2, 390, 395, 7, 60, 2, 2, 391, 394, 5, 68, 35, 2, 392, 394, 5, 70, 36,
-	2, 393, 391, 3, 2, 2, 2, 393, 392, 3, 2, 2, 2, 394, 397, 3, 2, 2, 2, 395,
-	393, 3, 2, 2, 2, 395, 396, 3, 2, 2, 2, 396, 400, 3, 2, 2, 2, 397, 395,
-	3, 2, 2, 2, 398, 400, 7, 37, 2, 2, 399, 382, 3, 2, 2, 2, 399, 390, 3, 2,
-	2, 2, 399, 398, 3, 2, 2, 2, 400, 67, 3, 2, 2, 2, 401, 407, 7, 62, 2, 2,
-	402, 403, 7, 27, 2, 2, 403, 404, 5, 48, 25, 2, 404, 405, 7, 28, 2, 2, 405,
-	407, 3, 2, 2, 2, 406, 401, 3, 2, 2, 2, 406, 402, 3, 2, 2, 2, 407, 69, 3,
-	2, 2, 2, 408, 409, 9, 7, 2, 2, 409, 71, 3, 2, 2, 2, 42, 75, 105, 113, 118,
-	125, 128, 136, 145, 158, 170, 174, 177, 181, 192, 199, 205, 212, 227, 234,
-	241, 253, 259, 266, 275, 278, 291, 293, 300, 339, 347, 350, 358, 362, 380,
-	385, 387, 393, 395, 399, 406,
+	2, 2, 2, 214, 212, 3, 2, 2, 2, 215, 216, 7, 41, 2, 2, 216, 221, 7, 61,
+	2, 2, 217, 218, 7, 24, 2, 2, 218, 220, 7, 61, 2, 2, 219, 217, 3, 2, 2,
+	2, 220, 223, 3, 2, 2, 2, 221, 219, 3, 2, 2, 2, 221, 222, 3, 2, 2, 2, 222,
+	33, 3, 2, 2, 2, 223, 221, 3, 2, 2, 2, 224, 225, 7, 38, 2, 2, 225, 226,
+	5, 30, 16, 2, 226, 227, 7, 39, 2, 2, 227, 35, 3, 2, 2, 2, 228, 229, 3,
+	2, 2, 2, 229, 37, 3, 2, 2, 2, 230, 231, 5, 66, 34, 2, 231, 232, 7, 20,
+	2, 2, 232, 233, 5, 48, 25, 2, 233, 39, 3, 2, 2, 2, 234, 237, 5, 42, 22,
+	2, 235, 237, 5, 44, 23, 2, 236, 234, 3, 2, 2, 2, 236, 235, 3, 2, 2, 2,
+	237, 41, 3, 2, 2, 2, 238, 241, 5, 48, 25, 2, 239, 240, 7, 21, 2, 2, 240,
+	242, 5, 48, 25, 2, 241, 239, 3, 2, 2, 2, 242, 243, 3, 2, 2, 2, 243, 241,
+	3, 2, 2, 2, 243, 244, 3, 2, 2, 2, 244, 43, 3, 2, 2, 2, 245, 248, 5, 50,
+	26, 2, 246, 247, 9, 2, 2, 2, 247, 249, 5, 50, 26, 2, 248, 246, 3, 2, 2,
+	2, 249, 250, 3, 2, 2, 2, 250, 248, 3, 2, 2, 2, 250, 251, 3, 2, 2, 2, 251,
+	45, 3, 2, 2, 2, 252, 253, 9, 3, 2, 2, 253, 47, 3, 2, 2, 2, 254, 255, 8,
+	25, 1, 2, 255, 256, 5, 50, 26, 2, 256, 262, 3, 2, 2, 2, 257, 258, 12, 3,
+	2, 2, 258, 259, 7, 56, 2, 2, 259, 261, 5, 50, 26, 2, 260, 257, 3, 2, 2,
+	2, 261, 264, 3, 2, 2, 2, 262, 260, 3, 2, 2, 2, 262, 263, 3, 2, 2, 2, 263,
+	49, 3, 2, 2, 2, 264, 262, 3, 2, 2, 2, 265, 266, 8, 26, 1, 2, 266, 269,
+	5, 56, 29, 2, 267, 269, 5, 52, 27, 2, 268, 265, 3, 2, 2, 2, 268, 267, 3,
+	2, 2, 2, 269, 275, 3, 2, 2, 2, 270, 271, 12, 4, 2, 2, 271, 272, 9, 4, 2,
+	2, 272, 274, 5, 56, 29, 2, 273, 270, 3, 2, 2, 2, 274, 277, 3, 2, 2, 2,
+	275, 273, 3, 2, 2, 2, 275, 276, 3, 2, 2, 2, 276, 51, 3, 2, 2, 2, 277, 275,
+	3, 2, 2, 2, 278, 282, 5, 56, 29, 2, 279, 280, 5, 22, 12, 2, 280, 281, 5,
+	56, 29, 2, 281, 283, 3, 2, 2, 2, 282, 279, 3, 2, 2, 2, 283, 284, 3, 2,
+	2, 2, 284, 282, 3, 2, 2, 2, 284, 285, 3, 2, 2, 2, 285, 287, 3, 2, 2, 2,
+	286, 288, 5, 54, 28, 2, 287, 286, 3, 2, 2, 2, 287, 288, 3, 2, 2, 2, 288,
+	53, 3, 2, 2, 2, 289, 290, 5, 22, 12, 2, 290, 291, 7, 55, 2, 2, 291, 55,
+	3, 2, 2, 2, 292, 293, 8, 29, 1, 2, 293, 294, 5, 58, 30, 2, 294, 307, 3,
+	2, 2, 2, 295, 296, 12, 4, 2, 2, 296, 297, 9, 5, 2, 2, 297, 306, 5, 58,
+	30, 2, 298, 301, 12, 3, 2, 2, 299, 300, 7, 54, 2, 2, 300, 302, 5, 58, 30,
+	2, 301, 299, 3, 2, 2, 2, 302, 303, 3, 2, 2, 2, 303, 301, 3, 2, 2, 2, 303,
+	304, 3, 2, 2, 2, 304, 306, 3, 2, 2, 2, 305, 295, 3, 2, 2, 2, 305, 298,
+	3, 2, 2, 2, 306, 309, 3, 2, 2, 2, 307, 305, 3, 2, 2, 2, 307, 308, 3, 2,
+	2, 2, 308, 57, 3, 2, 2, 2, 309, 307, 3, 2, 2, 2, 310, 311, 7, 47, 2, 2,
+	311, 356, 5, 64, 33, 2, 312, 313, 5, 60, 31, 2, 313, 314, 5, 64, 33, 2,
+	314, 356, 3, 2, 2, 2, 315, 316, 5, 62, 32, 2, 316, 317, 7, 27, 2, 2, 317,
+	318, 5, 50, 26, 2, 318, 319, 7, 24, 2, 2, 319, 320, 5, 50, 26, 2, 320,
+	321, 7, 28, 2, 2, 321, 356, 3, 2, 2, 2, 322, 323, 5, 64, 33, 2, 323, 324,
+	7, 27, 2, 2, 324, 325, 5, 50, 26, 2, 325, 326, 7, 24, 2, 2, 326, 327, 5,
+	50, 26, 2, 327, 328, 7, 28, 2, 2, 328, 356, 3, 2, 2, 2, 329, 356, 5, 64,
+	33, 2, 330, 331, 7, 42, 2, 2, 331, 356, 5, 58, 30, 2, 332, 333, 7, 51,
+	2, 2, 333, 334, 5, 50, 26, 2, 334, 335, 7, 52, 2, 2, 335, 336, 5, 58, 30,
+	2, 336, 356, 3, 2, 2, 2, 337, 338, 7, 49, 2, 2, 338, 356, 5, 58, 30, 2,
+	339, 340, 7, 48, 2, 2, 340, 341, 5, 50, 26, 2, 341, 342, 7, 52, 2, 2, 342,
+	343, 5, 58, 30, 2, 343, 356, 3, 2, 2, 2, 344, 346, 7, 43, 2, 2, 345, 344,
+	3, 2, 2, 2, 346, 347, 3, 2, 2, 2, 347, 345, 3, 2, 2, 2, 347, 348, 3, 2,
+	2, 2, 348, 349, 3, 2, 2, 2, 349, 356, 5, 58, 30, 2, 350, 351, 9, 6, 2,
+	2, 351, 356, 5, 66, 34, 2, 352, 353, 7, 43, 2, 2, 353, 354, 7, 44, 2, 2,
+	354, 356, 5, 56, 29, 2, 355, 310, 3, 2, 2, 2, 355, 312, 3, 2, 2, 2, 355,
+	315, 3, 2, 2, 2, 355, 322, 3, 2, 2, 2, 355, 329, 3, 2, 2, 2, 355, 330,
+	3, 2, 2, 2, 355, 332, 3, 2, 2, 2, 355, 337, 3, 2, 2, 2, 355, 339, 3, 2,
+	2, 2, 355, 345, 3, 2, 2, 2, 355, 350, 3, 2, 2, 2, 355, 352, 3, 2, 2, 2,
+	356, 59, 3, 2, 2, 2, 357, 359, 9, 4, 2, 2, 358, 357, 3, 2, 2, 2, 358, 359,
+	3, 2, 2, 2, 359, 360, 3, 2, 2, 2, 360, 361, 5, 62, 32, 2, 361, 61, 3, 2,
+	2, 2, 362, 363, 7, 63, 2, 2, 363, 364, 7, 32, 2, 2, 364, 367, 7, 63, 2,
+	2, 365, 367, 7, 63, 2, 2, 366, 362, 3, 2, 2, 2, 366, 365, 3, 2, 2, 2, 367,
+	63, 3, 2, 2, 2, 368, 370, 7, 63, 2, 2, 369, 371, 7, 36, 2, 2, 370, 369,
+	3, 2, 2, 2, 370, 371, 3, 2, 2, 2, 371, 389, 3, 2, 2, 2, 372, 389, 5, 66,
+	34, 2, 373, 374, 7, 25, 2, 2, 374, 375, 5, 50, 26, 2, 375, 376, 7, 24,
+	2, 2, 376, 377, 5, 50, 26, 2, 377, 378, 7, 26, 2, 2, 378, 389, 3, 2, 2,
+	2, 379, 380, 7, 25, 2, 2, 380, 381, 5, 50, 26, 2, 381, 382, 7, 26, 2, 2,
+	382, 389, 3, 2, 2, 2, 383, 384, 7, 38, 2, 2, 384, 385, 5, 30, 16, 2, 385,
+	386, 5, 50, 26, 2, 386, 387, 7, 39, 2, 2, 387, 389, 3, 2, 2, 2, 388, 368,
+	3, 2, 2, 2, 388, 372, 3, 2, 2, 2, 388, 373, 3, 2, 2, 2, 388, 379, 3, 2,
+	2, 2, 388, 383, 3, 2, 2, 2, 389, 65, 3, 2, 2, 2, 390, 395, 7, 62, 2, 2,
+	391, 394, 5, 68, 35, 2, 392, 394, 5, 70, 36, 2, 393, 391, 3, 2, 2, 2, 393,
+	392, 3, 2, 2, 2, 394, 397, 3, 2, 2, 2, 395, 393, 3, 2, 2, 2, 395, 396,
+	3, 2, 2, 2, 396, 408, 3, 2, 2, 2, 397, 395, 3, 2, 2, 2, 398, 403, 7, 61,
+	2, 2, 399, 402, 5, 68, 35, 2, 400, 402, 5, 70, 36, 2, 401, 399, 3, 2, 2,
+	2, 401, 400, 3, 2, 2, 2, 402, 405, 3, 2, 2, 2, 403, 401, 3, 2, 2, 2, 403,
+	404, 3, 2, 2, 2, 404, 408, 3, 2, 2, 2, 405, 403, 3, 2, 2, 2, 406, 408,
+	7, 37, 2, 2, 407, 390, 3, 2, 2, 2, 407, 398, 3, 2, 2, 2, 407, 406, 3, 2,
+	2, 2, 408, 67, 3, 2, 2, 2, 409, 415, 7, 63, 2, 2, 410, 411, 7, 27, 2, 2,
+	411, 412, 5, 50, 26, 2, 412, 413, 7, 28, 2, 2, 413, 415, 3, 2, 2, 2, 414,
+	409, 3, 2, 2, 2, 414, 410, 3, 2, 2, 2, 415, 69, 3, 2, 2, 2, 416, 417, 9,
+	7, 2, 2, 417, 71, 3, 2, 2, 2, 43, 75, 105, 113, 118, 125, 128, 136, 145,
+	158, 170, 174, 177, 181, 192, 199, 205, 212, 221, 236, 243, 250, 262, 268,
+	275, 284, 287, 303, 305, 307, 347, 355, 358, 366, 370, 388, 393, 395, 401,
+	403, 407, 414,
 }
 var deserializer = antlr.NewATNDeserializer(nil)
 var deserializedATN = deserializer.DeserializeFromUInt16(parserATN)
 
 var literalNames = []string{
-	"", "'{'", "'}'", "'..'", "", "'controls'", "'and'", "'curl'", "", "'figure'",
-	"'endfig'", "'pickup'", "", "'scaled'", "'fill'", "'draw'", "'withcolor'",
+	"", "'scaled'", "'{'", "'}'", "'..'", "", "'controls'", "'and'", "'curl'",
+	"", "'figure'", "'endfig'", "'pickup'", "", "'fill'", "'draw'", "'withcolor'",
 	"", "':='", "'='", "':'", "';'", "','", "'('", "')'", "'['", "']'", "'+'",
 	"'-'", "'*'", "'/'", "'||'", "'|-'", "'~'", "", "'@'", "'begingroup'",
-	"'endgroup'", "'local'", "", "", "'edge'", "'frame'", "'box'", "", "'subpath'",
-	"'reverse'", "'with'", "'point'", "'of'", "'to'", "", "'cycle'", "", "'proof'",
-	"'save'", "'show'", "'let'", "", "", "", "'.'",
+	"'endgroup'", "'local'", "'vardef'", "", "", "'edge'", "'frame'", "'box'",
+	"", "'subpath'", "'reverse'", "'with'", "'point'", "'of'", "'to'", "",
+	"'cycle'", "", "'proof'", "'save'", "'show'", "'let'", "", "", "", "'.'",
 }
 var symbolicNames = []string{
-	"", "", "", "", "PATHJOIN", "CONTROLS", "AND", "CURL", "TYPE", "FIGURE",
-	"ENDFIG", "PICKUP", "PEN", "SCALED", "FILL", "DRAW", "WITHCOLOR", "COLOR",
-	"ASSIGN", "EQUALS", "COLON", "SEMIC", "COMMA", "LPAREN", "RPAREN", "LBRACKET",
-	"RBRACKET", "PLUS", "MINUS", "TIMES", "OVER", "PARALLEL", "PERPENDIC",
-	"CONGRUENT", "UNIT", "LAMBDAARG", "BEGINGROUP", "ENDGROUP", "LOCAL", "PAIRPART",
+	"", "", "", "", "", "PATHJOIN", "CONTROLS", "AND", "CURL", "TYPE", "FIGURE",
+	"ENDFIG", "PICKUP", "PEN", "FILL", "DRAW", "WITHCOLOR", "COLOR", "ASSIGN",
+	"EQUALS", "COLON", "SEMIC", "COMMA", "LPAREN", "RPAREN", "LBRACKET", "RBRACKET",
+	"PLUS", "MINUS", "TIMES", "OVER", "PARALLEL", "PERPENDIC", "CONGRUENT",
+	"UNIT", "LAMBDAARG", "BEGINGROUP", "ENDGROUP", "LOCAL", "VARDEF", "PAIRPART",
 	"EDGECONSTR", "EDGE", "FRAME", "BOX", "MATHFUNC", "SUBPATH", "REVERSE",
 	"WITH", "POINT", "OF", "TO", "TRANSFORM", "CYCLE", "PATHCLIPOP", "PROOF",
 	"SAVE", "SHOW", "LET", "TAG", "MIXEDTAG", "DECIMALTOKEN", "DOT", "LABEL",
@@ -228,10 +232,10 @@ var symbolicNames = []string{
 var ruleNames = []string{
 	"figures", "figure", "beginfig", "endfig", "statement", "declaration",
 	"command", "drawCmd", "fillCmd", "pickupCmd", "pathjoin", "directionspec",
-	"basicpathjoin", "controls", "statementlist", "compound", "empty", "assignment",
-	"constraint", "equation", "orientation", "token", "expression", "tertiary",
-	"path", "cycle", "secondary", "transformer", "primary", "scalarmulop",
-	"numtokenatom", "atom", "variable", "subscript", "anytag",
+	"basicpathjoin", "controls", "statementlist", "vardef", "compound", "empty",
+	"assignment", "constraint", "equation", "orientation", "token", "expression",
+	"tertiary", "path", "cycle", "secondary", "primary", "scalarmulop", "numtokenatom",
+	"atom", "variable", "subscript", "anytag",
 }
 var decisionToDFA = make([]*antlr.DFA, len(deserializedATN.DecisionToState))
 
@@ -265,16 +269,16 @@ const (
 	PMMPostParserT__0         = 1
 	PMMPostParserT__1         = 2
 	PMMPostParserT__2         = 3
-	PMMPostParserPATHJOIN     = 4
-	PMMPostParserCONTROLS     = 5
-	PMMPostParserAND          = 6
-	PMMPostParserCURL         = 7
-	PMMPostParserTYPE         = 8
-	PMMPostParserFIGURE       = 9
-	PMMPostParserENDFIG       = 10
-	PMMPostParserPICKUP       = 11
-	PMMPostParserPEN          = 12
-	PMMPostParserSCALED       = 13
+	PMMPostParserT__3         = 4
+	PMMPostParserPATHJOIN     = 5
+	PMMPostParserCONTROLS     = 6
+	PMMPostParserAND          = 7
+	PMMPostParserCURL         = 8
+	PMMPostParserTYPE         = 9
+	PMMPostParserFIGURE       = 10
+	PMMPostParserENDFIG       = 11
+	PMMPostParserPICKUP       = 12
+	PMMPostParserPEN          = 13
 	PMMPostParserFILL         = 14
 	PMMPostParserDRAW         = 15
 	PMMPostParserWITHCOLOR    = 16
@@ -300,31 +304,32 @@ const (
 	PMMPostParserBEGINGROUP   = 36
 	PMMPostParserENDGROUP     = 37
 	PMMPostParserLOCAL        = 38
-	PMMPostParserPAIRPART     = 39
-	PMMPostParserEDGECONSTR   = 40
-	PMMPostParserEDGE         = 41
-	PMMPostParserFRAME        = 42
-	PMMPostParserBOX          = 43
-	PMMPostParserMATHFUNC     = 44
-	PMMPostParserSUBPATH      = 45
-	PMMPostParserREVERSE      = 46
-	PMMPostParserWITH         = 47
-	PMMPostParserPOINT        = 48
-	PMMPostParserOF           = 49
-	PMMPostParserTO           = 50
-	PMMPostParserTRANSFORM    = 51
-	PMMPostParserCYCLE        = 52
-	PMMPostParserPATHCLIPOP   = 53
-	PMMPostParserPROOF        = 54
-	PMMPostParserSAVE         = 55
-	PMMPostParserSHOW         = 56
-	PMMPostParserLET          = 57
-	PMMPostParserTAG          = 58
-	PMMPostParserMIXEDTAG     = 59
-	PMMPostParserDECIMALTOKEN = 60
-	PMMPostParserDOT          = 61
-	PMMPostParserLABEL        = 62
-	PMMPostParserWS           = 63
+	PMMPostParserVARDEF       = 39
+	PMMPostParserPAIRPART     = 40
+	PMMPostParserEDGECONSTR   = 41
+	PMMPostParserEDGE         = 42
+	PMMPostParserFRAME        = 43
+	PMMPostParserBOX          = 44
+	PMMPostParserMATHFUNC     = 45
+	PMMPostParserSUBPATH      = 46
+	PMMPostParserREVERSE      = 47
+	PMMPostParserWITH         = 48
+	PMMPostParserPOINT        = 49
+	PMMPostParserOF           = 50
+	PMMPostParserTO           = 51
+	PMMPostParserTRANSFORM    = 52
+	PMMPostParserCYCLE        = 53
+	PMMPostParserPATHCLIPOP   = 54
+	PMMPostParserPROOF        = 55
+	PMMPostParserSAVE         = 56
+	PMMPostParserSHOW         = 57
+	PMMPostParserLET          = 58
+	PMMPostParserTAG          = 59
+	PMMPostParserMIXEDTAG     = 60
+	PMMPostParserDECIMALTOKEN = 61
+	PMMPostParserDOT          = 62
+	PMMPostParserLABEL        = 63
+	PMMPostParserWS           = 64
 )
 
 // PMMPostParser rules.
@@ -344,19 +349,19 @@ const (
 	PMMPostParserRULE_basicpathjoin = 12
 	PMMPostParserRULE_controls      = 13
 	PMMPostParserRULE_statementlist = 14
-	PMMPostParserRULE_compound      = 15
-	PMMPostParserRULE_empty         = 16
-	PMMPostParserRULE_assignment    = 17
-	PMMPostParserRULE_constraint    = 18
-	PMMPostParserRULE_equation      = 19
-	PMMPostParserRULE_orientation   = 20
-	PMMPostParserRULE_token         = 21
-	PMMPostParserRULE_expression    = 22
-	PMMPostParserRULE_tertiary      = 23
-	PMMPostParserRULE_path          = 24
-	PMMPostParserRULE_cycle         = 25
-	PMMPostParserRULE_secondary     = 26
-	PMMPostParserRULE_transformer   = 27
+	PMMPostParserRULE_vardef        = 15
+	PMMPostParserRULE_compound      = 16
+	PMMPostParserRULE_empty         = 17
+	PMMPostParserRULE_assignment    = 18
+	PMMPostParserRULE_constraint    = 19
+	PMMPostParserRULE_equation      = 20
+	PMMPostParserRULE_orientation   = 21
+	PMMPostParserRULE_token         = 22
+	PMMPostParserRULE_expression    = 23
+	PMMPostParserRULE_tertiary      = 24
+	PMMPostParserRULE_path          = 25
+	PMMPostParserRULE_cycle         = 26
+	PMMPostParserRULE_secondary     = 27
 	PMMPostParserRULE_primary       = 28
 	PMMPostParserRULE_scalarmulop   = 29
 	PMMPostParserRULE_numtokenatom  = 30
@@ -662,8 +667,20 @@ func (s *BeginfigContext) FIGURE() antlr.TerminalNode {
 	return s.GetToken(PMMPostParserFIGURE, 0)
 }
 
+func (s *BeginfigContext) LPAREN() antlr.TerminalNode {
+	return s.GetToken(PMMPostParserLPAREN, 0)
+}
+
 func (s *BeginfigContext) LABEL() antlr.TerminalNode {
 	return s.GetToken(PMMPostParserLABEL, 0)
+}
+
+func (s *BeginfigContext) AllCOMMA() []antlr.TerminalNode {
+	return s.GetTokens(PMMPostParserCOMMA)
+}
+
+func (s *BeginfigContext) COMMA(i int) antlr.TerminalNode {
+	return s.GetToken(PMMPostParserCOMMA, i)
 }
 
 func (s *BeginfigContext) AllDECIMALTOKEN() []antlr.TerminalNode {
@@ -680,6 +697,10 @@ func (s *BeginfigContext) AllUNIT() []antlr.TerminalNode {
 
 func (s *BeginfigContext) UNIT(i int) antlr.TerminalNode {
 	return s.GetToken(PMMPostParserUNIT, i)
+}
+
+func (s *BeginfigContext) RPAREN() antlr.TerminalNode {
+	return s.GetToken(PMMPostParserRPAREN, 0)
 }
 
 func (s *BeginfigContext) SEMIC() antlr.TerminalNode {
@@ -2083,10 +2104,6 @@ func (s *PickupCmdContext) PEN() antlr.TerminalNode {
 	return s.GetToken(PMMPostParserPEN, 0)
 }
 
-func (s *PickupCmdContext) SCALED() antlr.TerminalNode {
-	return s.GetToken(PMMPostParserSCALED, 0)
-}
-
 func (s *PickupCmdContext) DECIMALTOKEN() antlr.TerminalNode {
 	return s.GetToken(PMMPostParserDECIMALTOKEN, 0)
 }
@@ -2153,10 +2170,10 @@ func (p *PMMPostParser) PickupCmd() (localctx IPickupCmdContext) {
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
-	if _la == PMMPostParserSCALED {
+	if _la == PMMPostParserT__0 {
 		{
 			p.SetState(166)
-			p.Match(PMMPostParserSCALED)
+			p.Match(PMMPostParserT__0)
 		}
 		{
 			p.SetState(167)
@@ -2300,7 +2317,7 @@ func (p *PMMPostParser) Pathjoin() (localctx IPathjoinContext) {
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
-	if _la == PMMPostParserT__0 {
+	if _la == PMMPostParserT__1 {
 		{
 			p.SetState(174)
 			p.Directionspec()
@@ -2315,7 +2332,7 @@ func (p *PMMPostParser) Pathjoin() (localctx IPathjoinContext) {
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
-	if _la == PMMPostParserT__0 {
+	if _la == PMMPostParserT__1 {
 		{
 			p.SetState(178)
 			p.Directionspec()
@@ -2488,7 +2505,7 @@ func (p *PMMPostParser) Directionspec() (localctx IDirectionspecContext) {
 		p.EnterOuterAlt(localctx, 1)
 		{
 			p.SetState(181)
-			p.Match(PMMPostParserT__0)
+			p.Match(PMMPostParserT__1)
 		}
 		{
 			p.SetState(182)
@@ -2500,7 +2517,7 @@ func (p *PMMPostParser) Directionspec() (localctx IDirectionspecContext) {
 		}
 		{
 			p.SetState(184)
-			p.Match(PMMPostParserT__1)
+			p.Match(PMMPostParserT__2)
 		}
 
 	case 2:
@@ -2508,7 +2525,7 @@ func (p *PMMPostParser) Directionspec() (localctx IDirectionspecContext) {
 		p.EnterOuterAlt(localctx, 2)
 		{
 			p.SetState(186)
-			p.Match(PMMPostParserT__0)
+			p.Match(PMMPostParserT__1)
 		}
 		{
 			p.SetState(187)
@@ -2516,7 +2533,7 @@ func (p *PMMPostParser) Directionspec() (localctx IDirectionspecContext) {
 		}
 		{
 			p.SetState(188)
-			p.Match(PMMPostParserT__1)
+			p.Match(PMMPostParserT__2)
 		}
 
 	}
@@ -2627,11 +2644,11 @@ func (p *PMMPostParser) Basicpathjoin() (localctx IBasicpathjoinContext) {
 			p.Match(PMMPostParserPATHJOIN)
 		}
 
-	case PMMPostParserT__2:
+	case PMMPostParserT__3:
 		p.EnterOuterAlt(localctx, 2)
 		{
 			p.SetState(193)
-			p.Match(PMMPostParserT__2)
+			p.Match(PMMPostParserT__3)
 		}
 		{
 			p.SetState(194)
@@ -2639,7 +2656,7 @@ func (p *PMMPostParser) Basicpathjoin() (localctx IBasicpathjoinContext) {
 		}
 		{
 			p.SetState(195)
-			p.Match(PMMPostParserT__2)
+			p.Match(PMMPostParserT__3)
 		}
 
 	default:
@@ -2923,6 +2940,136 @@ func (p *PMMPostParser) Statementlist() (localctx IStatementlistContext) {
 	return localctx
 }
 
+// IVardefContext is an interface to support dynamic dispatch.
+type IVardefContext interface {
+	antlr.ParserRuleContext
+
+	// GetParser returns the parser.
+	GetParser() antlr.Parser
+
+	// IsVardefContext differentiates from other interfaces.
+	IsVardefContext()
+}
+
+type VardefContext struct {
+	*antlr.BaseParserRuleContext
+	parser antlr.Parser
+}
+
+func NewEmptyVardefContext() *VardefContext {
+	var p = new(VardefContext)
+	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
+	p.RuleIndex = PMMPostParserRULE_vardef
+	return p
+}
+
+func (*VardefContext) IsVardefContext() {}
+
+func NewVardefContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *VardefContext {
+	var p = new(VardefContext)
+
+	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
+
+	p.parser = parser
+	p.RuleIndex = PMMPostParserRULE_vardef
+
+	return p
+}
+
+func (s *VardefContext) GetParser() antlr.Parser { return s.parser }
+
+func (s *VardefContext) VARDEF() antlr.TerminalNode {
+	return s.GetToken(PMMPostParserVARDEF, 0)
+}
+
+func (s *VardefContext) AllTAG() []antlr.TerminalNode {
+	return s.GetTokens(PMMPostParserTAG)
+}
+
+func (s *VardefContext) TAG(i int) antlr.TerminalNode {
+	return s.GetToken(PMMPostParserTAG, i)
+}
+
+func (s *VardefContext) AllCOMMA() []antlr.TerminalNode {
+	return s.GetTokens(PMMPostParserCOMMA)
+}
+
+func (s *VardefContext) COMMA(i int) antlr.TerminalNode {
+	return s.GetToken(PMMPostParserCOMMA, i)
+}
+
+func (s *VardefContext) GetRuleContext() antlr.RuleContext {
+	return s
+}
+
+func (s *VardefContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
+	return antlr.TreesStringTree(s, ruleNames, recog)
+}
+
+func (s *VardefContext) EnterRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(PMMPostListener); ok {
+		listenerT.EnterVardef(s)
+	}
+}
+
+func (s *VardefContext) ExitRule(listener antlr.ParseTreeListener) {
+	if listenerT, ok := listener.(PMMPostListener); ok {
+		listenerT.ExitVardef(s)
+	}
+}
+
+func (p *PMMPostParser) Vardef() (localctx IVardefContext) {
+	localctx = NewVardefContext(p, p.GetParserRuleContext(), p.GetState())
+	p.EnterRule(localctx, 30, PMMPostParserRULE_vardef)
+	var _la int
+
+	defer func() {
+		p.ExitRule()
+	}()
+
+	defer func() {
+		if err := recover(); err != nil {
+			if v, ok := err.(antlr.RecognitionException); ok {
+				localctx.SetException(v)
+				p.GetErrorHandler().ReportError(p, v)
+				p.GetErrorHandler().Recover(p, v)
+			} else {
+				panic(err)
+			}
+		}
+	}()
+
+	p.EnterOuterAlt(localctx, 1)
+	{
+		p.SetState(213)
+		p.Match(PMMPostParserVARDEF)
+	}
+	{
+		p.SetState(214)
+		p.Match(PMMPostParserTAG)
+	}
+	p.SetState(219)
+	p.GetErrorHandler().Sync(p)
+	_la = p.GetTokenStream().LA(1)
+
+	for _la == PMMPostParserCOMMA {
+		{
+			p.SetState(215)
+			p.Match(PMMPostParserCOMMA)
+		}
+		{
+			p.SetState(216)
+			p.Match(PMMPostParserTAG)
+		}
+
+		p.SetState(221)
+		p.GetErrorHandler().Sync(p)
+		_la = p.GetTokenStream().LA(1)
+	}
+
+	return localctx
+}
+
 // ICompoundContext is an interface to support dynamic dispatch.
 type ICompoundContext interface {
 	antlr.ParserRuleContext
@@ -3001,7 +3148,7 @@ func (s *CompoundContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *PMMPostParser) Compound() (localctx ICompoundContext) {
 	localctx = NewCompoundContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 30, PMMPostParserRULE_compound)
+	p.EnterRule(localctx, 32, PMMPostParserRULE_compound)
 
 	defer func() {
 		p.ExitRule()
@@ -3021,15 +3168,15 @@ func (p *PMMPostParser) Compound() (localctx ICompoundContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(213)
+		p.SetState(222)
 		p.Match(PMMPostParserBEGINGROUP)
 	}
 	{
-		p.SetState(214)
+		p.SetState(223)
 		p.Statementlist()
 	}
 	{
-		p.SetState(215)
+		p.SetState(224)
 		p.Match(PMMPostParserENDGROUP)
 	}
 
@@ -3095,7 +3242,7 @@ func (s *EmptyContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *PMMPostParser) Empty() (localctx IEmptyContext) {
 	localctx = NewEmptyContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 32, PMMPostParserRULE_empty)
+	p.EnterRule(localctx, 34, PMMPostParserRULE_empty)
 
 	defer func() {
 		p.ExitRule()
@@ -3202,7 +3349,7 @@ func (s *AssignmentContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *PMMPostParser) Assignment() (localctx IAssignmentContext) {
 	localctx = NewAssignmentContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 34, PMMPostParserRULE_assignment)
+	p.EnterRule(localctx, 36, PMMPostParserRULE_assignment)
 
 	defer func() {
 		p.ExitRule()
@@ -3222,15 +3369,15 @@ func (p *PMMPostParser) Assignment() (localctx IAssignmentContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(219)
+		p.SetState(228)
 		p.Variable()
 	}
 	{
-		p.SetState(220)
+		p.SetState(229)
 		p.Match(PMMPostParserASSIGN)
 	}
 	{
-		p.SetState(221)
+		p.SetState(230)
 		p.expression(0)
 	}
 
@@ -3317,7 +3464,7 @@ func (s *ConstraintContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *PMMPostParser) Constraint() (localctx IConstraintContext) {
 	localctx = NewConstraintContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 36, PMMPostParserRULE_constraint)
+	p.EnterRule(localctx, 38, PMMPostParserRULE_constraint)
 
 	defer func() {
 		p.ExitRule()
@@ -3335,20 +3482,20 @@ func (p *PMMPostParser) Constraint() (localctx IConstraintContext) {
 		}
 	}()
 
-	p.SetState(225)
+	p.SetState(234)
 	p.GetErrorHandler().Sync(p)
-	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 17, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 18, p.GetParserRuleContext()) {
 	case 1:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(223)
+			p.SetState(232)
 			p.Equation()
 		}
 
 	case 2:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(224)
+			p.SetState(233)
 			p.Orientation()
 		}
 
@@ -3448,7 +3595,7 @@ func (s *EquationContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *PMMPostParser) Equation() (localctx IEquationContext) {
 	localctx = NewEquationContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 38, PMMPostParserRULE_equation)
+	p.EnterRule(localctx, 40, PMMPostParserRULE_equation)
 	var _la int
 
 	defer func() {
@@ -3469,24 +3616,24 @@ func (p *PMMPostParser) Equation() (localctx IEquationContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(227)
+		p.SetState(236)
 		p.expression(0)
 	}
-	p.SetState(230)
+	p.SetState(239)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
 	for ok := true; ok; ok = _la == PMMPostParserEQUALS {
 		{
-			p.SetState(228)
+			p.SetState(237)
 			p.Match(PMMPostParserEQUALS)
 		}
 		{
-			p.SetState(229)
+			p.SetState(238)
 			p.expression(0)
 		}
 
-		p.SetState(232)
+		p.SetState(241)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 	}
@@ -3601,7 +3748,7 @@ func (s *OrientationContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *PMMPostParser) Orientation() (localctx IOrientationContext) {
 	localctx = NewOrientationContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 40, PMMPostParserRULE_orientation)
+	p.EnterRule(localctx, 42, PMMPostParserRULE_orientation)
 	var _la int
 
 	defer func() {
@@ -3622,29 +3769,31 @@ func (p *PMMPostParser) Orientation() (localctx IOrientationContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(234)
+		p.SetState(243)
 		p.tertiary(0)
 	}
-	p.SetState(237)
+	p.SetState(246)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
 	for ok := true; ok; ok = (((_la-31)&-(0x1f+1)) == 0 && ((1<<uint((_la-31)))&((1<<(PMMPostParserPARALLEL-31))|(1<<(PMMPostParserPERPENDIC-31))|(1<<(PMMPostParserCONGRUENT-31)))) != 0) {
-		p.SetState(235)
-		_la = p.GetTokenStream().LA(1)
+		{
+			p.SetState(244)
+			_la = p.GetTokenStream().LA(1)
 
-		if !(((_la-31)&-(0x1f+1)) == 0 && ((1<<uint((_la-31)))&((1<<(PMMPostParserPARALLEL-31))|(1<<(PMMPostParserPERPENDIC-31))|(1<<(PMMPostParserCONGRUENT-31)))) != 0) {
-			p.GetErrorHandler().RecoverInline(p)
-		} else {
-			p.GetErrorHandler().ReportMatch(p)
-			p.Consume()
+			if !(((_la-31)&-(0x1f+1)) == 0 && ((1<<uint((_la-31)))&((1<<(PMMPostParserPARALLEL-31))|(1<<(PMMPostParserPERPENDIC-31))|(1<<(PMMPostParserCONGRUENT-31)))) != 0) {
+				p.GetErrorHandler().RecoverInline(p)
+			} else {
+				p.GetErrorHandler().ReportMatch(p)
+				p.Consume()
+			}
 		}
 		{
-			p.SetState(236)
+			p.SetState(245)
 			p.tertiary(0)
 		}
 
-		p.SetState(239)
+		p.SetState(248)
 		p.GetErrorHandler().Sync(p)
 		_la = p.GetTokenStream().LA(1)
 	}
@@ -3804,7 +3953,7 @@ func (s *TokenContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *PMMPostParser) Token() (localctx ITokenContext) {
 	localctx = NewTokenContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 42, PMMPostParserRULE_token)
+	p.EnterRule(localctx, 44, PMMPostParserRULE_token)
 	var _la int
 
 	defer func() {
@@ -3824,14 +3973,16 @@ func (p *PMMPostParser) Token() (localctx ITokenContext) {
 	}()
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(241)
-	_la = p.GetTokenStream().LA(1)
+	{
+		p.SetState(250)
+		_la = p.GetTokenStream().LA(1)
 
-	if !((((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<PMMPostParserPATHJOIN)|(1<<PMMPostParserASSIGN)|(1<<PMMPostParserPLUS)|(1<<PMMPostParserMINUS)|(1<<PMMPostParserTIMES)|(1<<PMMPostParserOVER)|(1<<PMMPostParserPARALLEL))) != 0) || (((_la-32)&-(0x1f+1)) == 0 && ((1<<uint((_la-32)))&((1<<(PMMPostParserPERPENDIC-32))|(1<<(PMMPostParserCONGRUENT-32))|(1<<(PMMPostParserBEGINGROUP-32))|(1<<(PMMPostParserENDGROUP-32))|(1<<(PMMPostParserEDGECONSTR-32))|(1<<(PMMPostParserEDGE-32))|(1<<(PMMPostParserFRAME-32))|(1<<(PMMPostParserBOX-32))|(1<<(PMMPostParserSUBPATH-32))|(1<<(PMMPostParserREVERSE-32))|(1<<(PMMPostParserTRANSFORM-32))|(1<<(PMMPostParserPATHCLIPOP-32))|(1<<(PMMPostParserPROOF-32))|(1<<(PMMPostParserSAVE-32))|(1<<(PMMPostParserSHOW-32))|(1<<(PMMPostParserTAG-32)))) != 0)) {
-		p.GetErrorHandler().RecoverInline(p)
-	} else {
-		p.GetErrorHandler().ReportMatch(p)
-		p.Consume()
+		if !((((_la)&-(0x1f+1)) == 0 && ((1<<uint(_la))&((1<<PMMPostParserPATHJOIN)|(1<<PMMPostParserASSIGN)|(1<<PMMPostParserPLUS)|(1<<PMMPostParserMINUS)|(1<<PMMPostParserTIMES)|(1<<PMMPostParserOVER)|(1<<PMMPostParserPARALLEL))) != 0) || (((_la-32)&-(0x1f+1)) == 0 && ((1<<uint((_la-32)))&((1<<(PMMPostParserPERPENDIC-32))|(1<<(PMMPostParserCONGRUENT-32))|(1<<(PMMPostParserBEGINGROUP-32))|(1<<(PMMPostParserENDGROUP-32))|(1<<(PMMPostParserEDGECONSTR-32))|(1<<(PMMPostParserEDGE-32))|(1<<(PMMPostParserFRAME-32))|(1<<(PMMPostParserBOX-32))|(1<<(PMMPostParserSUBPATH-32))|(1<<(PMMPostParserREVERSE-32))|(1<<(PMMPostParserTRANSFORM-32))|(1<<(PMMPostParserPATHCLIPOP-32))|(1<<(PMMPostParserPROOF-32))|(1<<(PMMPostParserSAVE-32))|(1<<(PMMPostParserSHOW-32))|(1<<(PMMPostParserTAG-32)))) != 0)) {
+			p.GetErrorHandler().RecoverInline(p)
+		} else {
+			p.GetErrorHandler().ReportMatch(p)
+			p.Consume()
+		}
 	}
 
 	return localctx
@@ -3929,8 +4080,8 @@ func (p *PMMPostParser) expression(_p int) (localctx IExpressionContext) {
 	localctx = NewExpressionContext(p, p.GetParserRuleContext(), _parentState)
 	var _prevctx IExpressionContext = localctx
 	var _ antlr.ParserRuleContext = _prevctx // TODO: To prevent unused variable warning.
-	_startState := 44
-	p.EnterRecursionRule(localctx, 44, PMMPostParserRULE_expression, _p)
+	_startState := 46
+	p.EnterRecursionRule(localctx, 46, PMMPostParserRULE_expression, _p)
 
 	defer func() {
 		p.UnrollRecursionContexts(_parentctx)
@@ -3952,14 +4103,14 @@ func (p *PMMPostParser) expression(_p int) (localctx IExpressionContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(244)
+		p.SetState(253)
 		p.tertiary(0)
 	}
 
 	p.GetParserRuleContext().SetStop(p.GetTokenStream().LT(-1))
-	p.SetState(251)
+	p.SetState(260)
 	p.GetErrorHandler().Sync(p)
-	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 20, p.GetParserRuleContext())
+	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 21, p.GetParserRuleContext())
 
 	for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
 		if _alt == 1 {
@@ -3969,24 +4120,24 @@ func (p *PMMPostParser) expression(_p int) (localctx IExpressionContext) {
 			_prevctx = localctx
 			localctx = NewExpressionContext(p, _parentctx, _parentState)
 			p.PushNewRecursionContext(localctx, _startState, PMMPostParserRULE_expression)
-			p.SetState(246)
+			p.SetState(255)
 
 			if !(p.Precpred(p.GetParserRuleContext(), 1)) {
 				panic(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 1)", ""))
 			}
 			{
-				p.SetState(247)
+				p.SetState(256)
 				p.Match(PMMPostParserPATHCLIPOP)
 			}
 			{
-				p.SetState(248)
+				p.SetState(257)
 				p.tertiary(0)
 			}
 
 		}
-		p.SetState(253)
+		p.SetState(262)
 		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 20, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 21, p.GetParserRuleContext())
 	}
 
 	return localctx
@@ -4150,8 +4301,8 @@ func (p *PMMPostParser) tertiary(_p int) (localctx ITertiaryContext) {
 	localctx = NewTertiaryContext(p, p.GetParserRuleContext(), _parentState)
 	var _prevctx ITertiaryContext = localctx
 	var _ antlr.ParserRuleContext = _prevctx // TODO: To prevent unused variable warning.
-	_startState := 46
-	p.EnterRecursionRule(localctx, 46, PMMPostParserRULE_tertiary, _p)
+	_startState := 48
+	p.EnterRecursionRule(localctx, 48, PMMPostParserRULE_tertiary, _p)
 	var _la int
 
 	defer func() {
@@ -4173,16 +4324,16 @@ func (p *PMMPostParser) tertiary(_p int) (localctx ITertiaryContext) {
 	var _alt int
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(257)
+	p.SetState(266)
 	p.GetErrorHandler().Sync(p)
-	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 21, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 22, p.GetParserRuleContext()) {
 	case 1:
 		localctx = NewTermContext(p, localctx)
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 
 		{
-			p.SetState(255)
+			p.SetState(264)
 			p.secondary(0)
 		}
 
@@ -4191,15 +4342,15 @@ func (p *PMMPostParser) tertiary(_p int) (localctx ITertiaryContext) {
 		p.SetParserRuleContext(localctx)
 		_prevctx = localctx
 		{
-			p.SetState(256)
+			p.SetState(265)
 			p.Path()
 		}
 
 	}
 	p.GetParserRuleContext().SetStop(p.GetTokenStream().LT(-1))
-	p.SetState(264)
+	p.SetState(273)
 	p.GetErrorHandler().Sync(p)
-	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 22, p.GetParserRuleContext())
+	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 23, p.GetParserRuleContext())
 
 	for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
 		if _alt == 1 {
@@ -4209,29 +4360,31 @@ func (p *PMMPostParser) tertiary(_p int) (localctx ITertiaryContext) {
 			_prevctx = localctx
 			localctx = NewTermContext(p, NewTertiaryContext(p, _parentctx, _parentState))
 			p.PushNewRecursionContext(localctx, _startState, PMMPostParserRULE_tertiary)
-			p.SetState(259)
+			p.SetState(268)
 
 			if !(p.Precpred(p.GetParserRuleContext(), 2)) {
 				panic(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 2)", ""))
 			}
-			p.SetState(260)
-			_la = p.GetTokenStream().LA(1)
+			{
+				p.SetState(269)
+				_la = p.GetTokenStream().LA(1)
 
-			if !(_la == PMMPostParserPLUS || _la == PMMPostParserMINUS) {
-				p.GetErrorHandler().RecoverInline(p)
-			} else {
-				p.GetErrorHandler().ReportMatch(p)
-				p.Consume()
+				if !(_la == PMMPostParserPLUS || _la == PMMPostParserMINUS) {
+					p.GetErrorHandler().RecoverInline(p)
+				} else {
+					p.GetErrorHandler().ReportMatch(p)
+					p.Consume()
+				}
 			}
 			{
-				p.SetState(261)
+				p.SetState(270)
 				p.secondary(0)
 			}
 
 		}
-		p.SetState(266)
+		p.SetState(275)
 		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 22, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 23, p.GetParserRuleContext())
 	}
 
 	return localctx
@@ -4353,7 +4506,7 @@ func (s *PathContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *PMMPostParser) Path() (localctx IPathContext) {
 	localctx = NewPathContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 48, PMMPostParserRULE_path)
+	p.EnterRule(localctx, 50, PMMPostParserRULE_path)
 
 	defer func() {
 		p.ExitRule()
@@ -4375,21 +4528,21 @@ func (p *PMMPostParser) Path() (localctx IPathContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(267)
+		p.SetState(276)
 		p.secondary(0)
 	}
-	p.SetState(271)
+	p.SetState(280)
 	p.GetErrorHandler().Sync(p)
 	_alt = 1
 	for ok := true; ok; ok = _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
 		switch _alt {
 		case 1:
 			{
-				p.SetState(268)
+				p.SetState(277)
 				p.Pathjoin()
 			}
 			{
-				p.SetState(269)
+				p.SetState(278)
 				p.secondary(0)
 			}
 
@@ -4397,16 +4550,16 @@ func (p *PMMPostParser) Path() (localctx IPathContext) {
 			panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 		}
 
-		p.SetState(273)
+		p.SetState(282)
 		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 23, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 24, p.GetParserRuleContext())
 	}
-	p.SetState(276)
+	p.SetState(285)
 	p.GetErrorHandler().Sync(p)
 
-	if p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 24, p.GetParserRuleContext()) == 1 {
+	if p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 25, p.GetParserRuleContext()) == 1 {
 		{
-			p.SetState(275)
+			p.SetState(284)
 			p.Cycle()
 		}
 
@@ -4489,7 +4642,7 @@ func (s *CycleContext) ExitRule(listener antlr.ParseTreeListener) {
 
 func (p *PMMPostParser) Cycle() (localctx ICycleContext) {
 	localctx = NewCycleContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 50, PMMPostParserRULE_cycle)
+	p.EnterRule(localctx, 52, PMMPostParserRULE_cycle)
 
 	defer func() {
 		p.ExitRule()
@@ -4509,11 +4662,11 @@ func (p *PMMPostParser) Cycle() (localctx ICycleContext) {
 
 	p.EnterOuterAlt(localctx, 1)
 	{
-		p.SetState(278)
+		p.SetState(287)
 		p.Pathjoin()
 	}
 	{
-		p.SetState(279)
+		p.SetState(288)
 		p.Match(PMMPostParserCYCLE)
 	}
 
@@ -4598,14 +4751,35 @@ func (s *TransformContext) Secondary() ISecondaryContext {
 	return t.(ISecondaryContext)
 }
 
-func (s *TransformContext) Transformer() ITransformerContext {
-	var t = s.GetTypedRuleContext(reflect.TypeOf((*ITransformerContext)(nil)).Elem(), 0)
+func (s *TransformContext) AllTRANSFORM() []antlr.TerminalNode {
+	return s.GetTokens(PMMPostParserTRANSFORM)
+}
+
+func (s *TransformContext) TRANSFORM(i int) antlr.TerminalNode {
+	return s.GetToken(PMMPostParserTRANSFORM, i)
+}
+
+func (s *TransformContext) AllPrimary() []IPrimaryContext {
+	var ts = s.GetTypedRuleContexts(reflect.TypeOf((*IPrimaryContext)(nil)).Elem())
+	var tst = make([]IPrimaryContext, len(ts))
+
+	for i, t := range ts {
+		if t != nil {
+			tst[i] = t.(IPrimaryContext)
+		}
+	}
+
+	return tst
+}
+
+func (s *TransformContext) Primary(i int) IPrimaryContext {
+	var t = s.GetTypedRuleContext(reflect.TypeOf((*IPrimaryContext)(nil)).Elem(), i)
 
 	if t == nil {
 		return nil
 	}
 
-	return t.(ITransformerContext)
+	return t.(IPrimaryContext)
 }
 
 func (s *TransformContext) EnterRule(listener antlr.ParseTreeListener) {
@@ -4688,8 +4862,8 @@ func (p *PMMPostParser) secondary(_p int) (localctx ISecondaryContext) {
 	localctx = NewSecondaryContext(p, p.GetParserRuleContext(), _parentState)
 	var _prevctx ISecondaryContext = localctx
 	var _ antlr.ParserRuleContext = _prevctx // TODO: To prevent unused variable warning.
-	_startState := 52
-	p.EnterRecursionRule(localctx, 52, PMMPostParserRULE_secondary, _p)
+	_startState := 54
+	p.EnterRecursionRule(localctx, 54, PMMPostParserRULE_secondary, _p)
 	var _la int
 
 	defer func() {
@@ -4716,14 +4890,14 @@ func (p *PMMPostParser) secondary(_p int) (localctx ISecondaryContext) {
 	_prevctx = localctx
 
 	{
-		p.SetState(282)
+		p.SetState(291)
 		p.Primary()
 	}
 
 	p.GetParserRuleContext().SetStop(p.GetTokenStream().LT(-1))
-	p.SetState(291)
+	p.SetState(305)
 	p.GetErrorHandler().Sync(p)
-	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 26, p.GetParserRuleContext())
+	_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 28, p.GetParserRuleContext())
 
 	for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
 		if _alt == 1 {
@@ -4731,189 +4905,71 @@ func (p *PMMPostParser) secondary(_p int) (localctx ISecondaryContext) {
 				p.TriggerExitRuleEvent()
 			}
 			_prevctx = localctx
-			p.SetState(289)
+			p.SetState(303)
 			p.GetErrorHandler().Sync(p)
-			switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 25, p.GetParserRuleContext()) {
+			switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 27, p.GetParserRuleContext()) {
 			case 1:
 				localctx = NewFactorContext(p, NewSecondaryContext(p, _parentctx, _parentState))
 				p.PushNewRecursionContext(localctx, _startState, PMMPostParserRULE_secondary)
-				p.SetState(284)
+				p.SetState(293)
 
 				if !(p.Precpred(p.GetParserRuleContext(), 2)) {
 					panic(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 2)", ""))
 				}
-				p.SetState(285)
-				_la = p.GetTokenStream().LA(1)
+				{
+					p.SetState(294)
+					_la = p.GetTokenStream().LA(1)
 
-				if !(_la == PMMPostParserTIMES || _la == PMMPostParserOVER) {
-					p.GetErrorHandler().RecoverInline(p)
-				} else {
-					p.GetErrorHandler().ReportMatch(p)
-					p.Consume()
+					if !(_la == PMMPostParserTIMES || _la == PMMPostParserOVER) {
+						p.GetErrorHandler().RecoverInline(p)
+					} else {
+						p.GetErrorHandler().ReportMatch(p)
+						p.Consume()
+					}
 				}
 				{
-					p.SetState(286)
+					p.SetState(295)
 					p.Primary()
 				}
 
 			case 2:
 				localctx = NewTransformContext(p, NewSecondaryContext(p, _parentctx, _parentState))
 				p.PushNewRecursionContext(localctx, _startState, PMMPostParserRULE_secondary)
-				p.SetState(287)
+				p.SetState(296)
 
 				if !(p.Precpred(p.GetParserRuleContext(), 1)) {
 					panic(antlr.NewFailedPredicateException(p, "p.Precpred(p.GetParserRuleContext(), 1)", ""))
 				}
-				{
-					p.SetState(288)
-					p.Transformer()
+				p.SetState(299)
+				p.GetErrorHandler().Sync(p)
+				_alt = 1
+				for ok := true; ok; ok = _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
+					switch _alt {
+					case 1:
+						{
+							p.SetState(297)
+							p.Match(PMMPostParserTRANSFORM)
+						}
+						{
+							p.SetState(298)
+							p.Primary()
+						}
+
+					default:
+						panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
+					}
+
+					p.SetState(301)
+					p.GetErrorHandler().Sync(p)
+					_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 26, p.GetParserRuleContext())
 				}
 
 			}
 
 		}
-		p.SetState(293)
+		p.SetState(307)
 		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 26, p.GetParserRuleContext())
-	}
-
-	return localctx
-}
-
-// ITransformerContext is an interface to support dynamic dispatch.
-type ITransformerContext interface {
-	antlr.ParserRuleContext
-
-	// GetParser returns the parser.
-	GetParser() antlr.Parser
-
-	// IsTransformerContext differentiates from other interfaces.
-	IsTransformerContext()
-}
-
-type TransformerContext struct {
-	*antlr.BaseParserRuleContext
-	parser antlr.Parser
-}
-
-func NewEmptyTransformerContext() *TransformerContext {
-	var p = new(TransformerContext)
-	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(nil, -1)
-	p.RuleIndex = PMMPostParserRULE_transformer
-	return p
-}
-
-func (*TransformerContext) IsTransformerContext() {}
-
-func NewTransformerContext(parser antlr.Parser, parent antlr.ParserRuleContext, invokingState int) *TransformerContext {
-	var p = new(TransformerContext)
-
-	p.BaseParserRuleContext = antlr.NewBaseParserRuleContext(parent, invokingState)
-
-	p.parser = parser
-	p.RuleIndex = PMMPostParserRULE_transformer
-
-	return p
-}
-
-func (s *TransformerContext) GetParser() antlr.Parser { return s.parser }
-
-func (s *TransformerContext) AllTRANSFORM() []antlr.TerminalNode {
-	return s.GetTokens(PMMPostParserTRANSFORM)
-}
-
-func (s *TransformerContext) TRANSFORM(i int) antlr.TerminalNode {
-	return s.GetToken(PMMPostParserTRANSFORM, i)
-}
-
-func (s *TransformerContext) AllPrimary() []IPrimaryContext {
-	var ts = s.GetTypedRuleContexts(reflect.TypeOf((*IPrimaryContext)(nil)).Elem())
-	var tst = make([]IPrimaryContext, len(ts))
-
-	for i, t := range ts {
-		if t != nil {
-			tst[i] = t.(IPrimaryContext)
-		}
-	}
-
-	return tst
-}
-
-func (s *TransformerContext) Primary(i int) IPrimaryContext {
-	var t = s.GetTypedRuleContext(reflect.TypeOf((*IPrimaryContext)(nil)).Elem(), i)
-
-	if t == nil {
-		return nil
-	}
-
-	return t.(IPrimaryContext)
-}
-
-func (s *TransformerContext) GetRuleContext() antlr.RuleContext {
-	return s
-}
-
-func (s *TransformerContext) ToStringTree(ruleNames []string, recog antlr.Recognizer) string {
-	return antlr.TreesStringTree(s, ruleNames, recog)
-}
-
-func (s *TransformerContext) EnterRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(PMMPostListener); ok {
-		listenerT.EnterTransformer(s)
-	}
-}
-
-func (s *TransformerContext) ExitRule(listener antlr.ParseTreeListener) {
-	if listenerT, ok := listener.(PMMPostListener); ok {
-		listenerT.ExitTransformer(s)
-	}
-}
-
-func (p *PMMPostParser) Transformer() (localctx ITransformerContext) {
-	localctx = NewTransformerContext(p, p.GetParserRuleContext(), p.GetState())
-	p.EnterRule(localctx, 54, PMMPostParserRULE_transformer)
-
-	defer func() {
-		p.ExitRule()
-	}()
-
-	defer func() {
-		if err := recover(); err != nil {
-			if v, ok := err.(antlr.RecognitionException); ok {
-				localctx.SetException(v)
-				p.GetErrorHandler().ReportError(p, v)
-				p.GetErrorHandler().Recover(p, v)
-			} else {
-				panic(err)
-			}
-		}
-	}()
-
-	var _alt int
-
-	p.EnterOuterAlt(localctx, 1)
-	p.SetState(296)
-	p.GetErrorHandler().Sync(p)
-	_alt = 1
-	for ok := true; ok; ok = _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
-		switch _alt {
-		case 1:
-			{
-				p.SetState(294)
-				p.Match(PMMPostParserTRANSFORM)
-			}
-			{
-				p.SetState(295)
-				p.Primary()
-			}
-
-		default:
-			panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
-		}
-
-		p.SetState(298)
-		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 27, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 28, p.GetParserRuleContext())
 	}
 
 	return localctx
@@ -5559,18 +5615,18 @@ func (p *PMMPostParser) Primary() (localctx IPrimaryContext) {
 
 	var _alt int
 
-	p.SetState(345)
+	p.SetState(353)
 	p.GetErrorHandler().Sync(p)
-	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 29, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 30, p.GetParserRuleContext()) {
 	case 1:
 		localctx = NewFuncatomContext(p, localctx)
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(300)
+			p.SetState(308)
 			p.Match(PMMPostParserMATHFUNC)
 		}
 		{
-			p.SetState(301)
+			p.SetState(309)
 			p.Atom()
 		}
 
@@ -5578,11 +5634,11 @@ func (p *PMMPostParser) Primary() (localctx IPrimaryContext) {
 		localctx = NewScalaratomContext(p, localctx)
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(302)
+			p.SetState(310)
 			p.Scalarmulop()
 		}
 		{
-			p.SetState(303)
+			p.SetState(311)
 			p.Atom()
 		}
 
@@ -5590,27 +5646,27 @@ func (p *PMMPostParser) Primary() (localctx IPrimaryContext) {
 		localctx = NewInterpolationContext(p, localctx)
 		p.EnterOuterAlt(localctx, 3)
 		{
-			p.SetState(305)
+			p.SetState(313)
 			p.Numtokenatom()
 		}
 		{
-			p.SetState(306)
+			p.SetState(314)
 			p.Match(PMMPostParserLBRACKET)
 		}
 		{
-			p.SetState(307)
+			p.SetState(315)
 			p.tertiary(0)
 		}
 		{
-			p.SetState(308)
+			p.SetState(316)
 			p.Match(PMMPostParserCOMMA)
 		}
 		{
-			p.SetState(309)
+			p.SetState(317)
 			p.tertiary(0)
 		}
 		{
-			p.SetState(310)
+			p.SetState(318)
 			p.Match(PMMPostParserRBRACKET)
 		}
 
@@ -5618,27 +5674,27 @@ func (p *PMMPostParser) Primary() (localctx IPrimaryContext) {
 		localctx = NewInterpolationContext(p, localctx)
 		p.EnterOuterAlt(localctx, 4)
 		{
-			p.SetState(312)
+			p.SetState(320)
 			p.Atom()
 		}
 		{
-			p.SetState(313)
+			p.SetState(321)
 			p.Match(PMMPostParserLBRACKET)
 		}
 		{
-			p.SetState(314)
+			p.SetState(322)
 			p.tertiary(0)
 		}
 		{
-			p.SetState(315)
+			p.SetState(323)
 			p.Match(PMMPostParserCOMMA)
 		}
 		{
-			p.SetState(316)
+			p.SetState(324)
 			p.tertiary(0)
 		}
 		{
-			p.SetState(317)
+			p.SetState(325)
 			p.Match(PMMPostParserRBRACKET)
 		}
 
@@ -5646,7 +5702,7 @@ func (p *PMMPostParser) Primary() (localctx IPrimaryContext) {
 		localctx = NewSimpleatomContext(p, localctx)
 		p.EnterOuterAlt(localctx, 5)
 		{
-			p.SetState(319)
+			p.SetState(327)
 			p.Atom()
 		}
 
@@ -5654,11 +5710,11 @@ func (p *PMMPostParser) Primary() (localctx IPrimaryContext) {
 		localctx = NewPairpartContext(p, localctx)
 		p.EnterOuterAlt(localctx, 6)
 		{
-			p.SetState(320)
+			p.SetState(328)
 			p.Match(PMMPostParserPAIRPART)
 		}
 		{
-			p.SetState(321)
+			p.SetState(329)
 			p.Primary()
 		}
 
@@ -5666,19 +5722,19 @@ func (p *PMMPostParser) Primary() (localctx IPrimaryContext) {
 		localctx = NewPointofContext(p, localctx)
 		p.EnterOuterAlt(localctx, 7)
 		{
-			p.SetState(322)
+			p.SetState(330)
 			p.Match(PMMPostParserPOINT)
 		}
 		{
-			p.SetState(323)
+			p.SetState(331)
 			p.tertiary(0)
 		}
 		{
-			p.SetState(324)
+			p.SetState(332)
 			p.Match(PMMPostParserOF)
 		}
 		{
-			p.SetState(325)
+			p.SetState(333)
 			p.Primary()
 		}
 
@@ -5686,11 +5742,11 @@ func (p *PMMPostParser) Primary() (localctx IPrimaryContext) {
 		localctx = NewReversepathContext(p, localctx)
 		p.EnterOuterAlt(localctx, 8)
 		{
-			p.SetState(327)
+			p.SetState(335)
 			p.Match(PMMPostParserREVERSE)
 		}
 		{
-			p.SetState(328)
+			p.SetState(336)
 			p.Primary()
 		}
 
@@ -5698,33 +5754,33 @@ func (p *PMMPostParser) Primary() (localctx IPrimaryContext) {
 		localctx = NewSubpathContext(p, localctx)
 		p.EnterOuterAlt(localctx, 9)
 		{
-			p.SetState(329)
+			p.SetState(337)
 			p.Match(PMMPostParserSUBPATH)
 		}
 		{
-			p.SetState(330)
+			p.SetState(338)
 			p.tertiary(0)
 		}
 		{
-			p.SetState(331)
+			p.SetState(339)
 			p.Match(PMMPostParserOF)
 		}
 		{
-			p.SetState(332)
+			p.SetState(340)
 			p.Primary()
 		}
 
 	case 10:
 		localctx = NewEdgeconstraintContext(p, localctx)
 		p.EnterOuterAlt(localctx, 10)
-		p.SetState(335)
+		p.SetState(343)
 		p.GetErrorHandler().Sync(p)
 		_alt = 1
 		for ok := true; ok; ok = _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
 			switch _alt {
 			case 1:
 				{
-					p.SetState(334)
+					p.SetState(342)
 					p.Match(PMMPostParserEDGECONSTR)
 				}
 
@@ -5732,29 +5788,31 @@ func (p *PMMPostParser) Primary() (localctx IPrimaryContext) {
 				panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
 			}
 
-			p.SetState(337)
+			p.SetState(345)
 			p.GetErrorHandler().Sync(p)
-			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 28, p.GetParserRuleContext())
+			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 29, p.GetParserRuleContext())
 		}
 		{
-			p.SetState(339)
+			p.SetState(347)
 			p.Primary()
 		}
 
 	case 11:
 		localctx = NewBoxContext(p, localctx)
 		p.EnterOuterAlt(localctx, 11)
-		p.SetState(340)
-		_la = p.GetTokenStream().LA(1)
+		{
+			p.SetState(348)
+			_la = p.GetTokenStream().LA(1)
 
-		if !(_la == PMMPostParserFRAME || _la == PMMPostParserBOX) {
-			p.GetErrorHandler().RecoverInline(p)
-		} else {
-			p.GetErrorHandler().ReportMatch(p)
-			p.Consume()
+			if !(_la == PMMPostParserFRAME || _la == PMMPostParserBOX) {
+				p.GetErrorHandler().RecoverInline(p)
+			} else {
+				p.GetErrorHandler().ReportMatch(p)
+				p.Consume()
+			}
 		}
 		{
-			p.SetState(341)
+			p.SetState(349)
 			p.Variable()
 		}
 
@@ -5762,15 +5820,15 @@ func (p *PMMPostParser) Primary() (localctx IPrimaryContext) {
 		localctx = NewEdgepathContext(p, localctx)
 		p.EnterOuterAlt(localctx, 12)
 		{
-			p.SetState(342)
+			p.SetState(350)
 			p.Match(PMMPostParserEDGECONSTR)
 		}
 		{
-			p.SetState(343)
+			p.SetState(351)
 			p.Match(PMMPostParserEDGE)
 		}
 		{
-			p.SetState(344)
+			p.SetState(352)
 			p.secondary(0)
 		}
 
@@ -5877,24 +5935,26 @@ func (p *PMMPostParser) Scalarmulop() (localctx IScalarmulopContext) {
 	}()
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(348)
+	p.SetState(356)
 	p.GetErrorHandler().Sync(p)
 	_la = p.GetTokenStream().LA(1)
 
 	if _la == PMMPostParserPLUS || _la == PMMPostParserMINUS {
-		p.SetState(347)
-		_la = p.GetTokenStream().LA(1)
+		{
+			p.SetState(355)
+			_la = p.GetTokenStream().LA(1)
 
-		if !(_la == PMMPostParserPLUS || _la == PMMPostParserMINUS) {
-			p.GetErrorHandler().RecoverInline(p)
-		} else {
-			p.GetErrorHandler().ReportMatch(p)
-			p.Consume()
+			if !(_la == PMMPostParserPLUS || _la == PMMPostParserMINUS) {
+				p.GetErrorHandler().RecoverInline(p)
+			} else {
+				p.GetErrorHandler().ReportMatch(p)
+				p.Consume()
+			}
 		}
 
 	}
 	{
-		p.SetState(350)
+		p.SetState(358)
 		p.Numtokenatom()
 	}
 
@@ -5991,28 +6051,28 @@ func (p *PMMPostParser) Numtokenatom() (localctx INumtokenatomContext) {
 		}
 	}()
 
-	p.SetState(356)
+	p.SetState(364)
 	p.GetErrorHandler().Sync(p)
-	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 31, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 32, p.GetParserRuleContext()) {
 	case 1:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(352)
+			p.SetState(360)
 			p.Match(PMMPostParserDECIMALTOKEN)
 		}
 		{
-			p.SetState(353)
+			p.SetState(361)
 			p.Match(PMMPostParserOVER)
 		}
 		{
-			p.SetState(354)
+			p.SetState(362)
 			p.Match(PMMPostParserDECIMALTOKEN)
 		}
 
 	case 2:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(355)
+			p.SetState(363)
 			p.Match(PMMPostParserDECIMALTOKEN)
 		}
 
@@ -6340,22 +6400,22 @@ func (p *PMMPostParser) Atom() (localctx IAtomContext) {
 		}
 	}()
 
-	p.SetState(378)
+	p.SetState(386)
 	p.GetErrorHandler().Sync(p)
-	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 33, p.GetParserRuleContext()) {
+	switch p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 34, p.GetParserRuleContext()) {
 	case 1:
 		localctx = NewDecimalContext(p, localctx)
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(358)
+			p.SetState(366)
 			p.Match(PMMPostParserDECIMALTOKEN)
 		}
-		p.SetState(360)
+		p.SetState(368)
 		p.GetErrorHandler().Sync(p)
 
-		if p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 32, p.GetParserRuleContext()) == 1 {
+		if p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 33, p.GetParserRuleContext()) == 1 {
 			{
-				p.SetState(359)
+				p.SetState(367)
 				p.Match(PMMPostParserUNIT)
 			}
 
@@ -6365,7 +6425,7 @@ func (p *PMMPostParser) Atom() (localctx IAtomContext) {
 		localctx = NewVaratomContext(p, localctx)
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(362)
+			p.SetState(370)
 			p.Variable()
 		}
 
@@ -6373,23 +6433,23 @@ func (p *PMMPostParser) Atom() (localctx IAtomContext) {
 		localctx = NewLiteralpairContext(p, localctx)
 		p.EnterOuterAlt(localctx, 3)
 		{
-			p.SetState(363)
+			p.SetState(371)
 			p.Match(PMMPostParserLPAREN)
 		}
 		{
-			p.SetState(364)
+			p.SetState(372)
 			p.tertiary(0)
 		}
 		{
-			p.SetState(365)
+			p.SetState(373)
 			p.Match(PMMPostParserCOMMA)
 		}
 		{
-			p.SetState(366)
+			p.SetState(374)
 			p.tertiary(0)
 		}
 		{
-			p.SetState(367)
+			p.SetState(375)
 			p.Match(PMMPostParserRPAREN)
 		}
 
@@ -6397,15 +6457,15 @@ func (p *PMMPostParser) Atom() (localctx IAtomContext) {
 		localctx = NewSubexpressionContext(p, localctx)
 		p.EnterOuterAlt(localctx, 4)
 		{
-			p.SetState(369)
+			p.SetState(377)
 			p.Match(PMMPostParserLPAREN)
 		}
 		{
-			p.SetState(370)
+			p.SetState(378)
 			p.tertiary(0)
 		}
 		{
-			p.SetState(371)
+			p.SetState(379)
 			p.Match(PMMPostParserRPAREN)
 		}
 
@@ -6413,19 +6473,19 @@ func (p *PMMPostParser) Atom() (localctx IAtomContext) {
 		localctx = NewExprgroupContext(p, localctx)
 		p.EnterOuterAlt(localctx, 5)
 		{
-			p.SetState(373)
+			p.SetState(381)
 			p.Match(PMMPostParserBEGINGROUP)
 		}
 		{
-			p.SetState(374)
+			p.SetState(382)
 			p.Statementlist()
 		}
 		{
-			p.SetState(375)
+			p.SetState(383)
 			p.tertiary(0)
 		}
 		{
-			p.SetState(376)
+			p.SetState(384)
 			p.Match(PMMPostParserENDGROUP)
 		}
 
@@ -6572,57 +6632,19 @@ func (p *PMMPostParser) Variable() (localctx IVariableContext) {
 
 	var _alt int
 
-	p.SetState(397)
+	p.SetState(405)
 	p.GetErrorHandler().Sync(p)
 
 	switch p.GetTokenStream().LA(1) {
 	case PMMPostParserMIXEDTAG:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(380)
-			p.Match(PMMPostParserMIXEDTAG)
-		}
-		p.SetState(385)
-		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 35, p.GetParserRuleContext())
-
-		for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
-			if _alt == 1 {
-				p.SetState(383)
-				p.GetErrorHandler().Sync(p)
-
-				switch p.GetTokenStream().LA(1) {
-				case PMMPostParserLBRACKET, PMMPostParserDECIMALTOKEN:
-					{
-						p.SetState(381)
-						p.Subscript()
-					}
-
-				case PMMPostParserTAG, PMMPostParserMIXEDTAG:
-					{
-						p.SetState(382)
-						p.Anytag()
-					}
-
-				default:
-					panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
-				}
-
-			}
-			p.SetState(387)
-			p.GetErrorHandler().Sync(p)
-			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 35, p.GetParserRuleContext())
-		}
-
-	case PMMPostParserTAG:
-		p.EnterOuterAlt(localctx, 2)
-		{
 			p.SetState(388)
-			p.Match(PMMPostParserTAG)
+			p.Match(PMMPostParserMIXEDTAG)
 		}
 		p.SetState(393)
 		p.GetErrorHandler().Sync(p)
-		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 37, p.GetParserRuleContext())
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 36, p.GetParserRuleContext())
 
 		for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
 			if _alt == 1 {
@@ -6649,13 +6671,51 @@ func (p *PMMPostParser) Variable() (localctx IVariableContext) {
 			}
 			p.SetState(395)
 			p.GetErrorHandler().Sync(p)
-			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 37, p.GetParserRuleContext())
+			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 36, p.GetParserRuleContext())
+		}
+
+	case PMMPostParserTAG:
+		p.EnterOuterAlt(localctx, 2)
+		{
+			p.SetState(396)
+			p.Match(PMMPostParserTAG)
+		}
+		p.SetState(401)
+		p.GetErrorHandler().Sync(p)
+		_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 38, p.GetParserRuleContext())
+
+		for _alt != 2 && _alt != antlr.ATNInvalidAltNumber {
+			if _alt == 1 {
+				p.SetState(399)
+				p.GetErrorHandler().Sync(p)
+
+				switch p.GetTokenStream().LA(1) {
+				case PMMPostParserLBRACKET, PMMPostParserDECIMALTOKEN:
+					{
+						p.SetState(397)
+						p.Subscript()
+					}
+
+				case PMMPostParserTAG, PMMPostParserMIXEDTAG:
+					{
+						p.SetState(398)
+						p.Anytag()
+					}
+
+				default:
+					panic(antlr.NewNoViableAltException(p, nil, nil, nil, nil, nil))
+				}
+
+			}
+			p.SetState(403)
+			p.GetErrorHandler().Sync(p)
+			_alt = p.GetInterpreter().AdaptivePredict(p.GetTokenStream(), 38, p.GetParserRuleContext())
 		}
 
 	case PMMPostParserLAMBDAARG:
 		p.EnterOuterAlt(localctx, 3)
 		{
-			p.SetState(396)
+			p.SetState(404)
 			p.Match(PMMPostParserLAMBDAARG)
 		}
 
@@ -6766,29 +6826,29 @@ func (p *PMMPostParser) Subscript() (localctx ISubscriptContext) {
 		}
 	}()
 
-	p.SetState(404)
+	p.SetState(412)
 	p.GetErrorHandler().Sync(p)
 
 	switch p.GetTokenStream().LA(1) {
 	case PMMPostParserDECIMALTOKEN:
 		p.EnterOuterAlt(localctx, 1)
 		{
-			p.SetState(399)
+			p.SetState(407)
 			p.Match(PMMPostParserDECIMALTOKEN)
 		}
 
 	case PMMPostParserLBRACKET:
 		p.EnterOuterAlt(localctx, 2)
 		{
-			p.SetState(400)
+			p.SetState(408)
 			p.Match(PMMPostParserLBRACKET)
 		}
 		{
-			p.SetState(401)
+			p.SetState(409)
 			p.tertiary(0)
 		}
 		{
-			p.SetState(402)
+			p.SetState(410)
 			p.Match(PMMPostParserRBRACKET)
 		}
 
@@ -6887,14 +6947,16 @@ func (p *PMMPostParser) Anytag() (localctx IAnytagContext) {
 	}()
 
 	p.EnterOuterAlt(localctx, 1)
-	p.SetState(406)
-	_la = p.GetTokenStream().LA(1)
+	{
+		p.SetState(414)
+		_la = p.GetTokenStream().LA(1)
 
-	if !(_la == PMMPostParserTAG || _la == PMMPostParserMIXEDTAG) {
-		p.GetErrorHandler().RecoverInline(p)
-	} else {
-		p.GetErrorHandler().ReportMatch(p)
-		p.Consume()
+		if !(_la == PMMPostParserTAG || _la == PMMPostParserMIXEDTAG) {
+			p.GetErrorHandler().RecoverInline(p)
+		} else {
+			p.GetErrorHandler().ReportMatch(p)
+			p.Consume()
+		}
 	}
 
 	return localctx
@@ -6902,21 +6964,21 @@ func (p *PMMPostParser) Anytag() (localctx IAnytagContext) {
 
 func (p *PMMPostParser) Sempred(localctx antlr.RuleContext, ruleIndex, predIndex int) bool {
 	switch ruleIndex {
-	case 22:
+	case 23:
 		var t *ExpressionContext = nil
 		if localctx != nil {
 			t = localctx.(*ExpressionContext)
 		}
 		return p.Expression_Sempred(t, predIndex)
 
-	case 23:
+	case 24:
 		var t *TertiaryContext = nil
 		if localctx != nil {
 			t = localctx.(*TertiaryContext)
 		}
 		return p.Tertiary_Sempred(t, predIndex)
 
-	case 26:
+	case 27:
 		var t *SecondaryContext = nil
 		if localctx != nil {
 			t = localctx.(*SecondaryContext)

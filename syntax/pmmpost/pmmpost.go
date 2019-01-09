@@ -1,4 +1,6 @@
 /*
+Package pmmpost implements an interpreter for "Poor Man's MetaPost".
+
 This is the implementation of an interpreter for "Poor Man's MetaPost",
 my variant of the MetaPost graphical language. There is an accompanying
 ANTLR grammar file, which describes the features and limitations of PMMPost.
@@ -9,11 +11,10 @@ description in "The METAFONTBook".
 The implementation is tightly coupled to the ANTLR V4 parser generator.
 ANTLR is a great tool and I see no use in being independent from it.
 
-----------------------------------------------------------------------
 
 BSD License
 
-Copyright (c) 2017, Norbert Pillmayer
+Copyright (c) 2017–18, Norbert Pillmayer
 
 All rights reserved.
 
@@ -44,10 +45,12 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-----------------------------------------------------------------------
 */
 package pmmpost
 
+//go:generate antlr -Dlanguage=Go -o grammar -lib ../corelang -package grammar -Werror PMMPost.g4
+
 import "github.com/npillmayer/gotype/core/config/tracing"
 
-var T tracing.Trace = tracing.InterpreterTracer
+// We will trace to the InterpreterTracer
+var T tracing.Trace

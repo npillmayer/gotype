@@ -870,15 +870,14 @@ func (pl *GalleryParseListener) ExitScalaratom(ctx *grammar.ScalaratomContext) {
 	pl.rt.ExprStack.MultiplyTOS2OS()
 }
 
-/*
-Attach a (signed) coefficient to a variable, e.g.  +3x, -1/3y.  We just have
-to leave a numeric constant on the stack.
-
-   scalarmulop : (PLUS|MINUS)? numtokenatom
-
-We have to handle the MINUS case only, as the rule for numtokenatom
-already left a numeric constant on the expression stack.
-*/
+// Attach a (signed) coefficient to a variable, e.g.  +3x, -1/3y.  We just have
+// to leave a numeric constant on the stack.
+//
+//    scalarmulop : (PLUS|MINUS)? numtokenatom
+//
+// We have to handle the MINUS case only, as the rule for numtokenatom
+// already left a numeric constant on the expression stack.
+//
 func (pl *GalleryParseListener) ExitScalarmulop(ctx *grammar.ScalarmulopContext) {
 	if ctx.MINUS() != nil {
 		pl.rt.ExprStack.PushConstant(arithm.MinusOne) // -1 on stack
@@ -886,13 +885,12 @@ func (pl *GalleryParseListener) ExitScalarmulop(ctx *grammar.ScalarmulopContext)
 	}
 }
 
-/*
-Numeric prefix for a variable, e.g., "3x", "1/2y.r", "0.25z".
-
-   numtokenatom : DECIMALTOKEN '/' DECIMALTOKEN
-                | DECIMALTOKEN
-
-*/
+// Numeric prefix for a variable, e.g., "3x", "1/2y.r", "0.25z".
+//
+//    numtokenatom : DECIMALTOKEN '/' DECIMALTOKEN
+//                 | DECIMALTOKEN
+//
+//
 func (pl *GalleryParseListener) ExitNumtokenatom(ctx *grammar.NumtokenatomContext) {
 	numbers := ctx.AllDECIMALTOKEN()
 	num1, _ := dec.NewFromString(numbers[0].GetText())
@@ -906,28 +904,25 @@ func (pl *GalleryParseListener) ExitNumtokenatom(ctx *grammar.NumtokenatomContex
 	}
 }
 
-/*
-Start a new scope within expressions.
-
-   atom :  BEGINGROUP statementlist tertiary ENDGROUP     # exprgroup
-
-MetaFont allows "begingroup ... ; <expr> endgroup"  within expressions,
-providing brackets around some statements and returning a (sub-)
-expression.
-
-*/
+// Start a new scope within expressions.
+//
+//    atom :  BEGINGROUP statementlist tertiary ENDGROUP     # exprgroup
+//
+// MetaFont allows "begingroup ... ; <expr> endgroup"  within expressions,
+// providing brackets around some statements and returning a (sub-)
+// expression.
+//
 func (pl *GalleryParseListener) EnterExprgroup(ctx *grammar.ExprgroupContext) {
 	groupscope, _ := corelang.Begingroup(pl.rt, "expr-group")
 	pl.annotate(ctx, groupscope, "") // Annotate the AST node with this scope
 }
 
-/*
-See rule ExitCompound.
-
-   atom :  BEGINGROUP statementlist tertiary ENDGROUP     # exprgroup
-
-Additionally leave the return expression on the stack.
-*/
+// See rule ExitCompound.
+//
+//    atom :  BEGINGROUP statementlist tertiary ENDGROUP     # exprgroup
+//
+// Additionally leave the return expression on the stack.
+//
 func (pl *GalleryParseListener) ExitExprgroup(ctx *grammar.ExprgroupContext) {
 	corelang.Endgroup(pl.rt)
 	// the return expression is already on the stack

@@ -5,6 +5,7 @@ import (
 	"github.com/emirpasic/gods/stacks/linkedliststack"
 	arithm "github.com/npillmayer/gotype/core/arithmetic"
 	"github.com/npillmayer/gotype/core/path"
+	"github.com/npillmayer/gotype/syntax/runtime"
 )
 
 /*
@@ -46,9 +47,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // The type we will push onto the stack
 type PathNode struct {
-	Symbol Symbol      // a pair- or path-variable
-	Path   *path.Path  // a MetaFont-like path
-	Pair   arithm.Pair // a 2D-point
+	Symbol runtime.Symbol // a pair- or path-variable
+	Path   *path.Path     // a MetaFont-like path
+	Pair   arithm.Pair    // a 2D-point
 }
 
 type PathStack struct {
@@ -95,7 +96,7 @@ func (ps *PathStack) Push(pn *PathNode) *PathStack {
 
 /* Push a path variable. Both arguments may be nil.
  */
-func (ps *PathStack) PushPath(sym Symbol, path *path.Path) {
+func (ps *PathStack) PushPath(sym runtime.Symbol, path *path.Path) {
 	pn := &PathNode{
 		Symbol: sym,
 		Path:   path,
@@ -105,7 +106,7 @@ func (ps *PathStack) PushPath(sym Symbol, path *path.Path) {
 
 /* Push a pair variable. Both arguments may be nil.
  */
-func (ps *PathStack) PushPair(sym Symbol, pr arithm.Pair) {
+func (ps *PathStack) PushPair(sym runtime.Symbol, pr arithm.Pair) {
 	pn := &PathNode{
 		Symbol: sym,
 		Pair:   pr,
@@ -133,7 +134,7 @@ type PathBuilder struct {
 	iscycle bool
 }
 
-func NewBuilder() *PathBuilder {
+func NewPathBuilder() *PathBuilder {
 	pb := &PathBuilder{}
 	pb.q = dll.New()
 	return pb
@@ -166,7 +167,7 @@ func (pb *PathBuilder) MakePath() *path.Path {
 			if issubp && subpath != nil {
 				pb.path.AppendSubpath(subpath)
 			} else {
-				T.Error("strange path fragment detected, ignoring")
+				T.Errorf("strange path fragment detected, ignoring")
 			}
 		}
 	}

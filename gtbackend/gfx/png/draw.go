@@ -48,9 +48,9 @@ import (
 	"io"
 
 	"github.com/fogleman/gg"
+	arithm "github.com/npillmayer/gotype/core/arithmetic"
+	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/gtbackend/gfx"
-	arithm "github.com/npillmayer/gotype/gtcore/arithmetic"
-	"github.com/npillmayer/gotype/gtcore/config/tracing"
 )
 
 // We are tracing to the graphics trace
@@ -94,7 +94,7 @@ If tracing mode is DebugLevel red dots are drawn for the contour's knots.
 func (ggc *GGCanvas) AddContour(contour gfx.DrawableContour, linethickness float64,
 	linecol color.Color, fillcol color.Color) {
 	//
-	T.P("fmt", "PNG").Debug("add contour")
+	T.P("fmt", "PNG").Debugf("add contour")
 	pt := contour.Start()
 	px, py := arithm.Pr2Pt(pt)
 	ggc.context.MoveTo(px, ggc.yflip(py))
@@ -129,7 +129,7 @@ func (ggc *GGCanvas) AddContour(contour gfx.DrawableContour, linethickness float
 
 func (ggc *GGCanvas) drawKnotsDebug(contour gfx.DrawableContour) {
 	if T.Level == tracing.LevelDebug {
-		T.P("fmt", "PNG").Debug("draw knots (debug)")
+		T.P("fmt", "PNG").Debugf("draw knots (debug)")
 		pt := contour.Start()
 		px, py := arithm.Pr2Pt(pt)
 		ggc.context.MoveTo(px, ggc.yflip(py))
@@ -155,7 +155,7 @@ func (ggc *GGCanvas) yflip(y float64) float64 {
 
 // Return the drawing as a stdlib image.
 func (ggc *GGCanvas) AsImage() image.Image {
-	T.P("fmt", "PNG").Debug("converting image")
+	T.P("fmt", "PNG").Debugf("converting image")
 	return ggc.context.Image()
 }
 

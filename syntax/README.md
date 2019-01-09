@@ -3,7 +3,7 @@ Purposes of Macro Languages
 ----------------------
 
 TeX features a powerful macro language. For newcomers to TeX-typesetting its
-language may look cumbersome -- or even ugly or funny -- but it is well thought
+language may look cumbersome—or even ugly or funny—but it is well thought
 out and surprisingly versatile. It serves a couple of purposes, which we will
 discuss.
 
@@ -36,9 +36,14 @@ the page output routine. There is even a generic extension mechanism called
 
 ## Lua
 
-Modern versions of TeX support Lua as an extension language. Embedding Lua in an application is all the rage today, and we will follow this tradition. However, we will employ at least one Domain Specific Language: a derivate of MetaPost, which will be called (working title) "Poor Man's MetaPost" (PMMPos). MetaPost includes a powerful macro-language, which we will not support. Instead, we will make PMMPost extensible via Lua.
+Modern versions of TeX support Lua as an extension language. Embedding Lua in an application is all the
+rage today, and we will follow this tradition. However, we will employ at least one Domain Specific
+Language: a derivate of MetaPost, which will be called (working title) "Poor Man's MetaPost" (PMMPost).
+MetaPost includes a powerful macro-language, which we will not support. Instead, we will make PMMPost
+extensible via Lua.
 
 ## Parser Generators
 
 We use ANTLR V4 as our goto-tool for implementing grammars, e.g., for PMMPost.
-Additionally we will create an experimental GLR parser. It is intended for parsing Markdown, but the idea still needs some working-on.
+Additionally we will create an experimental GLR parser. It is intended for parsing Markdown,
+but the idea still needs some working-on.
