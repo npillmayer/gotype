@@ -211,9 +211,17 @@ func (pipe *pipeline) empty() bool {
 // of a pipeline.
 func (f *filter) pushResult(node *Node) {
 	f.env.queuecounter.Add(1)
-	go func(node *Node) {
-		f.results <- node
-	}(node)
+	written := true
+	select { // try to send it synchronously without blocking
+	case f.results <- node:
+	default:
+		written = false
+	}
+	if !written { // nope, we'll have to go async
+		go func(node *Node) {
+			f.results <- node
+		}(node)
+	}
 }
 
 // pushBuffer asynchronously puts a node on the buffer queue of a filter.
