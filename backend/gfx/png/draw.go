@@ -48,9 +48,9 @@ import (
 	"io"
 
 	"github.com/fogleman/gg"
+	"github.com/npillmayer/gotype/backend/gfx"
 	arithm "github.com/npillmayer/gotype/core/arithmetic"
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/gtbackend/gfx"
 )
 
 // We are tracing to the graphics trace
@@ -128,7 +128,7 @@ func (ggc *GGCanvas) AddContour(contour gfx.DrawableContour, linethickness float
 }
 
 func (ggc *GGCanvas) drawKnotsDebug(contour gfx.DrawableContour) {
-	if T.Level == tracing.LevelDebug {
+	if T.GetTraceLevel() == tracing.LevelDebug {
 		T.P("fmt", "PNG").Debugf("draw knots (debug)")
 		pt := contour.Start()
 		px, py := arithm.Pr2Pt(pt)
