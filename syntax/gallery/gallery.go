@@ -1,4 +1,6 @@
 /*
+Work on this package is suspended and it will probably get removed.
+
 This is the implementation of an interpreter for 'Gallery', a DSL for
 placing frames on pages.
 
