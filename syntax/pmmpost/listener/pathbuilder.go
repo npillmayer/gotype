@@ -1,4 +1,4 @@
-package pmmpost
+package listener
 
 import (
 	dll "github.com/emirpasic/gods/lists/doublylinkedlist"
@@ -46,20 +46,20 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 // The type we will push onto the stack
-type PathNode struct {
+type pathNode struct {
 	Symbol runtime.Symbol // a pair- or path-variable
 	Path   *path.Path     // a MetaFont-like path
 	Pair   arithm.Pair    // a 2D-point
 }
 
-type PathStack struct {
+type pathStack struct {
 	stack *linkedliststack.Stack // a stack of paths
 }
 
 /* Create a new path stack. It is fully initialized and empty.
  */
-func NewPathStack() *PathStack {
-	pst := &PathStack{
+func newPathStack() *pathStack {
+	pst := &pathStack{
 		stack: linkedliststack.New(), // stack of interface{}
 	}
 	return pst
@@ -67,28 +67,28 @@ func NewPathStack() *PathStack {
 
 /* Stack functionality. Will return an invalid nullpath if stack is empty.
  */
-func (ps *PathStack) Top() *PathNode {
+func (ps *pathStack) Top() *pathNode {
 	tos, ok := ps.stack.Peek()
 	if !ok {
-		tos = &PathNode{
+		tos = &pathNode{
 			Symbol: nil,
 			Path:   nil,
 			Pair:   nil,
 		}
 	}
-	return tos.(*PathNode)
+	return tos.(*pathNode)
 }
 
 /* Stack functionality.
  */
-func (ps *PathStack) Pop() (*PathNode, bool) {
+func (ps *pathStack) Pop() (*pathNode, bool) {
 	tos, ok := ps.stack.Pop()
-	return tos.(*PathNode), ok
+	return tos.(*pathNode), ok
 }
 
 /* Stack functionality.
  */
-func (ps *PathStack) Push(pn *PathNode) *PathStack {
+func (ps *pathStack) Push(pn *pathNode) *pathStack {
 	ps.stack.Push(pn)
 	//T.Debugf("TOS is now %v", ps.Top())
 	return ps
@@ -96,8 +96,8 @@ func (ps *PathStack) Push(pn *PathNode) *PathStack {
 
 /* Push a path variable. Both arguments may be nil.
  */
-func (ps *PathStack) PushPath(sym runtime.Symbol, path *path.Path) {
-	pn := &PathNode{
+func (ps *pathStack) PushPath(sym runtime.Symbol, path *path.Path) {
+	pn := &pathNode{
 		Symbol: sym,
 		Path:   path,
 	}
@@ -106,8 +106,8 @@ func (ps *PathStack) PushPath(sym runtime.Symbol, path *path.Path) {
 
 /* Push a pair variable. Both arguments may be nil.
  */
-func (ps *PathStack) PushPair(sym runtime.Symbol, pr arithm.Pair) {
-	pn := &PathNode{
+func (ps *pathStack) PushPair(sym runtime.Symbol, pr arithm.Pair) {
+	pn := &pathNode{
 		Symbol: sym,
 		Pair:   pr,
 	}
@@ -116,46 +116,46 @@ func (ps *PathStack) PushPair(sym runtime.Symbol, pr arithm.Pair) {
 
 /* Stack functionality.
  */
-func (ps *PathStack) IsEmpty() bool {
+func (ps *pathStack) IsEmpty() bool {
 	return ps.stack.Empty()
 }
 
 /* Stack functionality.
  */
-func (ps *PathStack) Size() int {
+func (ps *pathStack) Size() int {
 	return ps.stack.Size()
 }
 
 // === Operations on Paths ===================================================
 
-type PathBuilder struct {
+type pathBuilder struct {
 	q       *dll.List  // linked list of path fragments
 	path    *path.Path // the path to build
 	iscycle bool
 }
 
-func NewPathBuilder() *PathBuilder {
-	pb := &PathBuilder{}
+func newPathBuilder() *pathBuilder {
+	pb := &pathBuilder{}
 	pb.q = dll.New()
 	return pb
 }
 
-func (pb *PathBuilder) CollectKnot(pr arithm.Pair) *PathBuilder {
+func (pb *pathBuilder) CollectKnot(pr arithm.Pair) *pathBuilder {
 	pb.q.Prepend(pr)
 	return pb
 }
 
-func (pb *PathBuilder) CollectSubpath(sp *path.Path) *PathBuilder {
+func (pb *pathBuilder) CollectSubpath(sp *path.Path) *pathBuilder {
 	pb.q.Prepend(sp)
 	return pb
 }
 
-func (pb *PathBuilder) Cycle() *PathBuilder {
+func (pb *pathBuilder) Cycle() *pathBuilder {
 	pb.iscycle = true
 	return pb
 }
 
-func (pb *PathBuilder) MakePath() *path.Path {
+func (pb *pathBuilder) MakePath() *path.Path {
 	pb.path = path.Nullpath()
 	it := pb.q.Iterator()
 	for it.Next() {
@@ -167,7 +167,7 @@ func (pb *PathBuilder) MakePath() *path.Path {
 			if issubp && subpath != nil {
 				pb.path.AppendSubpath(subpath)
 			} else {
-				T.Errorf("strange path fragment detected, ignoring")
+				T().Errorf("strange path fragment detected, ignoring")
 			}
 		}
 	}
@@ -178,6 +178,6 @@ func (pb *PathBuilder) MakePath() *path.Path {
 			pb.path.End()
 		}
 	}
-	T.Infof("new path = %s", path.PathAsString(pb.path, nil))
+	T().Infof("new path = %s", path.PathAsString(pb.path, nil))
 	return pb.path
 }

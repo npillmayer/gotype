@@ -89,7 +89,7 @@ with the y-part set to 0.
 
 Sometimes it is convenient to push a different type of expression onto
 the stack (or to complement a numeric expression with additional info), so
-expressions are allowed to point to 'other' data (GetOther()).
+expressions are allowed to point to 'other' data.
 type Expression interface {
 	fmt.Stringer
 	XPolyn arithm.Polynomial // x-part
@@ -138,7 +138,7 @@ func NewNumericExpression(p arithm.Polynomial) *ExprNode {
 /*
 Create a new pair expression node. Arguments are x-part and y-part
 for the pair. If no y-part is supplied, the type of the expression will
-still be type pair - although an invalid one.
+still be type pair – although an invalid one.
 */
 func NewPairExpression(xp arithm.Polynomial, yp arithm.Polynomial) *ExprNode {
 	return &ExprNode{XPolyn: xp, YPolyn: yp, IsPair: true}
@@ -277,10 +277,10 @@ func NewExprStack() *ExprStack {
 Give notice of a new variable used in expressions / polynomials.
 This will put the variable's symbol into the variable resolver's table.
 
-Example: symbol "a"|ID=7  =>  resolver table[i] = "a"
+Example: symbol "a"|ID=7  ⟹  resolver table[7] = "a"
 
 If a variable ID is not known by the resolver, it is assumed to be
-a "capsule", which is MetaFont's notation for a variable, which has
+a "capsule", which is MetaFont's notation for a variable that has
 fallen out of scope.
 */
 func (es *ExprStack) AnnounceVariable(v Symbol) {

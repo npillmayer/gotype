@@ -1,4 +1,4 @@
-package pmmpost
+package listener
 
 /*
 ---------------------------------------------------------------------------
@@ -54,17 +54,22 @@ type backend struct {
 	outputRoutine gfx.OutputRoutine // for shipping out images
 }
 
+// TODO create more transparent interface to gfx formats.
+func (pl *PMMPostParseListener) SetOutputRoutine(o gfx.OutputRoutine) {
+	pl.backend.outputRoutine = o
+}
+
 // Pickup a drawing pen. The pen is set as current pen for the current picture.
-func (b *backend) pickupPen(pentype string, diam dec.Decimal, color color.Color) *gfx.Pen {
+func pickupPen(pic *gfx.Picture, pentype string, diam dec.Decimal, color color.Color) *gfx.Pen {
 	var pen *gfx.Pen
 	if pentype == "pencircle" {
 		pen = gfx.NewPencircle(diam)
 	} else {
 		pen = gfx.NewPensquare(diam)
 	}
-	if b.picture != nil {
-		b.picture.SetPen(pen)
-		b.picture.SetColor(color)
+	if pic != nil {
+		pic.SetPen(pen)
+		pic.SetColor(color)
 	}
 	return pen
 }
