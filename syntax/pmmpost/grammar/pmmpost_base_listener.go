@@ -20,18 +20,6 @@ func (s *BasePMMPostListener) EnterEveryRule(ctx antlr.ParserRuleContext) {}
 // ExitEveryRule is called when any rule is exited.
 func (s *BasePMMPostListener) ExitEveryRule(ctx antlr.ParserRuleContext) {}
 
-// EnterFigures is called when production figures is entered.
-func (s *BasePMMPostListener) EnterFigures(ctx *FiguresContext) {}
-
-// ExitFigures is called when production figures is exited.
-func (s *BasePMMPostListener) ExitFigures(ctx *FiguresContext) {}
-
-// EnterFigure is called when production figure is entered.
-func (s *BasePMMPostListener) EnterFigure(ctx *FigureContext) {}
-
-// ExitFigure is called when production figure is exited.
-func (s *BasePMMPostListener) ExitFigure(ctx *FigureContext) {}
-
 // EnterBeginfig is called when production beginfig is entered.
 func (s *BasePMMPostListener) EnterBeginfig(ctx *BeginfigContext) {}
 
@@ -295,24 +283,6 @@ func (s *BasePMMPostListener) EnterSubpath(ctx *SubpathContext) {}
 
 // ExitSubpath is called when production subpath is exited.
 func (s *BasePMMPostListener) ExitSubpath(ctx *SubpathContext) {}
-
-// EnterEdgeconstraint is called when production edgeconstraint is entered.
-func (s *BasePMMPostListener) EnterEdgeconstraint(ctx *EdgeconstraintContext) {}
-
-// ExitEdgeconstraint is called when production edgeconstraint is exited.
-func (s *BasePMMPostListener) ExitEdgeconstraint(ctx *EdgeconstraintContext) {}
-
-// EnterBox is called when production box is entered.
-func (s *BasePMMPostListener) EnterBox(ctx *BoxContext) {}
-
-// ExitBox is called when production box is exited.
-func (s *BasePMMPostListener) ExitBox(ctx *BoxContext) {}
-
-// EnterEdgepath is called when production edgepath is entered.
-func (s *BasePMMPostListener) EnterEdgepath(ctx *EdgepathContext) {}
-
-// ExitEdgepath is called when production edgepath is exited.
-func (s *BasePMMPostListener) ExitEdgepath(ctx *EdgepathContext) {}
 
 // EnterScalarmulop is called when production scalarmulop is entered.
 func (s *BasePMMPostListener) EnterScalarmulop(ctx *ScalarmulopContext) {}

@@ -47,11 +47,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package gfx
 
 import (
-	"fmt"
 	"image/color"
-	"io"
 	"math/cmplx"
-	"os"
 
 	arithm "github.com/npillmayer/gotype/core/arithmetic"
 	"github.com/npillmayer/gotype/core/config/tracing"
@@ -65,34 +62,11 @@ func G() tracing.Trace {
 	return tracing.GraphicsTracer
 }
 
-// Table of canvas creation methods
-var supportedGfxFormats map[string](func(float64, float64) Canvas)
-
-// Engines for different output types register themselves for the
-// Canvas factory method.
-func RegisterCanvasCreator(gfxFormat string, cc func(float64, float64) Canvas) {
-	if supportedGfxFormats == nil {
-		supportedGfxFormats = make(map[string](func(float64, float64) Canvas))
-	}
-	supportedGfxFormats[gfxFormat] = cc
-}
-
-// Factory method to create a new canvas for the given format.
-func NewCanvas(width, height float64, gfxFormat string) Canvas {
-	var cc func(float64, float64) Canvas
-	cc = supportedGfxFormats[gfxFormat]
-	if cc == nil {
-		panic(fmt.Sprintf("unknown graphics format for canvas request: %s", gfxFormat))
-	}
-	return cc(width, height)
-}
-
 // The interface type for a drawing canvas
 type Canvas interface {
 	W() float64                                                    // width
 	H() float64                                                    // height
 	AddContour(DrawableContour, float64, color.Color, color.Color) // filldraw with pen with colors
-	Shipout(io.Writer) bool                                        // encode to a writer
 	SetOption(int)                                                 // set a drawing option
 }
 
@@ -103,7 +77,6 @@ type Picture struct {
 	currentColor color.Color
 	currentPen   *Pen
 	output       OutputRoutine
-	gfxFormat    string
 }
 
 // A drawing pen
@@ -118,18 +91,14 @@ const PENCIRCLE int = 1
 // A pen with a square nib
 const PENSQUARE int = 2
 
-/*
-Create a new Picture. Caller has to provide an identifier, a width and
-height.
-*/
-func NewPicture(name string, w float64, h float64, gfxFormat string) *Picture {
-	canvas := NewCanvas(w, h, gfxFormat)
+// Create a new Picture. Caller has to provide an identifier, a width,
+// a height and a Canvas.
+func NewPicture(name string, canvas Canvas) *Picture {
 	pic := &Picture{
 		Name:         name,
 		canvas:       canvas,
 		currentColor: color.Black,
 		currentPen:   NewPencircle(arithm.ConstOne),
-		gfxFormat:    gfxFormat,
 	}
 	return pic
 }
@@ -182,51 +151,16 @@ func (pic *Picture) SetColor(color color.Color) {
 	pic.currentColor = color
 }
 
-// Shipout the picture to an output device.
-func (pic *Picture) Shipout() bool {
-	var ok bool
-	if pic.output == nil {
-		ok = GfxStandardOutputRoutine(pic, pic.gfxFormat)
-	} else {
-		ok = pic.output.Shipout(pic, pic.gfxFormat)
-	}
-	return ok
-}
-
-// Set a custom output routine. If nil, the standard output routine is used
-// for shipout
-func (pic *Picture) SetOutputRoutine(o OutputRoutine) {
-	pic.output = o
-}
-
-// Standard output routine for graphics: Shipout the picture to an output
-// device. Returns true on success. May panic.
-func GfxStandardOutputRoutine(pic *Picture, gfxFormat string) bool {
-	// TODO: connect to correct io.Writer (Afero FS, possibly memory-FS)
-	picname := pic.Name + "." + pic.gfxFormat
-	f, err := os.Create(picname)
-	defer f.Close()
-	if err != nil { // TODO which directory?
-		G().Errorf("file error while shipping picture '%s': %s", picname, err.Error())
-	}
-	ok := pic.canvas.Shipout(f)
-	if !ok {
-		G().Errorf("error while shipping picture '%s'", picname)
-	}
-	return ok
-}
-
 // === Drawable Contour ======================================================
 
-/*
-The central operation on Canvases is AddContour, the drawing or filling of
-a path. Different clients may have a different understanding of what a path
-is and how to store it. Interface DrawableContour trys to be a common
-denomiator for drawing operations on paths.
-
-The 3 parameters for ToNextKnot() are the target point, together with 2
-optional control points for spline curves (quadratic or cubic).
-*/
+// The central operation on Canvases is AddContour, the drawing or filling of
+// a path. Different clients may have a different understanding of what a path
+// is and how to store it. Interface DrawableContour trys to be a common
+// denomiator for drawing operations on paths.
+//
+// The 3 parameters for ToNextKnot() are the target point, together with 2
+// optional control points for spline curves (quadratic or cubic).
+//
 type DrawableContour interface {
 	IsCycle() bool
 	Start() arithm.Pair

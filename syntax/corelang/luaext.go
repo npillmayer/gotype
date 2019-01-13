@@ -215,7 +215,7 @@ func (it *ScriptingReturnValueIterator) Next() bool {
 // Get the value of the scripting argument under the iterator's cursor.
 // Returns the value and a type (see package 'variables' for the
 // definition of variable types).
-func (it *ScriptingReturnValueIterator) Value() (interface{}, int) {
+func (it *ScriptingReturnValueIterator) Value() (interface{}, variables.VariableType) {
 	if it.inx < len(it.values.values) {
 		a := it.values.values[it.inx]
 		if a == nil {
@@ -603,7 +603,11 @@ Essentially performs a call to MakeCanonicalAndResolve(...).
 func referToVar(L *lua.LState) int {
 	varname := L.CheckString(1)
 	if lrt := getGlobalDSLRuntimeEnv(L); lrt != nil {
-		vref := MakeCanonicalAndResolve(lrt.rt, varname, true)
+		vref, err := MakeCanonicalAndResolve(lrt.rt, varname, true)
+		if err != nil {
+			T().Errorf(err.Error())
+			return 0
+		}
 		T().Debugf("var. ref. = %v", vref)
 		vudata := newVarRefUserData(L, vref)
 		L.Push(vudata)
@@ -715,7 +719,11 @@ func (lscript *Scripting) registerDSLRuntimeEnvType() {
 func runtimeConnectVar(L *lua.LState) int {
 	varname := L.CheckString(1)
 	if lrt := getGlobalDSLRuntimeEnv(L); lrt != nil {
-		vref := MakeCanonicalAndResolve(lrt.rt, varname, true)
+		vref, err := MakeCanonicalAndResolve(lrt.rt, varname, true)
+		if err != nil {
+			T().Errorf(err.Error())
+			return 0
+		}
 		T().Debugf("variable reference = %v", vref)
 		vudata := newVarRefUserData(L, vref)
 		L.Push(vudata)

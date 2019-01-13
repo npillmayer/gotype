@@ -1,31 +1,9 @@
 /*
-Package pmmpost implements an interpreter for "Poor Man's MetaPost".
-
-This is the implementation of an interpreter for "Poor Man's MetaPost",
-my variant of the MetaPost graphical language. There is an accompanying
-ANTLR grammar file, which describes the features and limitations of PMMPost.
-I will sometimes refer to MetaFont, the original language underlying
-MetaPost, as the grammar definitions are taken from Don Knuth's grammar
-description in "The METAFONTBook".
-
-The intent of PMMPost is to produce scalable drawings.
-To accomplish this, users write a PMMPost program.
-A typical PMMPost looks like this (statements for drawing a triangle):
-
-	beginfig("triangle", 1cm, 1cm);
-	   pair A, B, C;
-	   A:=(0,0); B:=(1cm,0); C:=(0.5cm,1cm);
-	   draw A--B--C--cycle;
-	endfig;
-
-PMMPost will, depending on the backend configuration, output a picture
-for each "beginfig() ... endfig"-statement in the program.
-For more information, please refer to
-https://www.tug.org/docs/metapost/mpman.pdf.
+Package vectorcanvas implements a canvas type for vector drawings.
 
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017, Norbert Pillmayer <norbert@pillmayer.com>
 
 All rights reserved.
 
@@ -57,12 +35,73 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
-package pmmpost
+package vectorcanvas
 
-//go:generate antlr -Dlanguage=Go -o grammar -lib ../corelang -package grammar -Werror PMMPost.g4
-//go:generate sh tagdoc.sh
+import (
+	"image/color"
 
-import "github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/backend/gfx"
+)
 
-// We will trace to the InterpreterTracer
-var T tracing.Trace
+type VCanvas struct {
+	w, h     float64
+	strokes  []*stroke
+	gfxState *graphicsState
+}
+
+func New(w, h float64) *VCanvas {
+	canv := &VCanvas{}
+	canv.w = w
+	canv.h = h
+	return canv
+}
+
+func (canv *VCanvas) W() float64 {
+	return canv.w
+}
+
+func (canv *VCanvas) H() float64 {
+	return canv.h
+}
+
+func (canv *VCanvas) AddContour(c gfx.DrawableContour, linew float64,
+	linecol color.Color, fillcol color.Color) {
+	//
+	g := canv.pushGraphicsStateIfNecessary(linew, linecol, fillcol)
+	canv.strokes = append(canv.strokes, &stroke{
+		contour: c,
+		gfxCtx:  g,
+	})
+}
+func (canv *VCanvas) SetOption(int) {
+	// TODO
+}
+
+func (canv *VCanvas) pushGraphicsStateIfNecessary(linew float64, linecol color.Color,
+	fillcol color.Color) *graphicsState {
+	//
+	g := canv.gfxState
+	if g == nil ||
+		linew != g.penwidth || linecol != g.color || fillcol != g.fillcolor {
+		//
+		g := &graphicsState{next: canv.gfxState}
+		g.color = linecol
+		g.fillcolor = fillcol
+		g.penwidth = linew
+	}
+	return g
+}
+
+// ----------------------------------------------------------------------
+
+type graphicsState struct {
+	color     color.Color
+	fillcolor color.Color
+	penwidth  float64
+	next      *graphicsState
+}
+
+type stroke struct {
+	contour gfx.DrawableContour
+	gfxCtx  *graphicsState
+}

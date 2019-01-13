@@ -50,11 +50,11 @@ Usage: pmmpost [-d <output-dir>] [-f png|svg] [-x] [-m] inputfile.pmp
 
 import (
 	"fmt"
+	"io"
 	"log"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"github.com/npillmayer/gotype/backend/gfx"
-	"github.com/npillmayer/gotype/backend/gfx/png"
 	"github.com/npillmayer/gotype/core/config"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/pmmpost"
@@ -75,8 +75,7 @@ var pmmpostCmd = &cobra.Command{
 	Run:  runPMMPostCmd,
 }
 
-/* COBRA init method. Defines command and flags.
- */
+// COBRA init method. Defines command and flags.
 func init() {
 	rootCmd.AddCommand(pmmpostCmd)
 	pmmpostCmd.Flags().BoolP("vi", "m", false, "Set vi editing mode")
@@ -91,14 +90,17 @@ type PMMPostREPL struct {
 	pmmpintp *pmmpost.PMMPostInterpreter
 }
 
-/* Bridge to the PMMPost interpreter.
- */
+// Bridge to the PMMPost interpreter.
 func (pmmprepl *PMMPostREPL) InterpretCommand(input string) {
-	pmmprepl.pmmpintp.ParseStatements(antlr.NewInputStream(input))
+	errors := pmmprepl.pmmpintp.ParseStatements([]byte(input))
+	if errors != nil {
+		for _, err := range errors {
+			io.WriteString(pmmprepl.readline.Stderr(), err.Error())
+		}
+	}
 }
 
-/* The PMMPost command (pmmp).
- */
+// The PMMPost command (pmmp).
 func runPMMPostCmd(cmd *cobra.Command, args []string) {
 	fmt.Println(pmmpWelcomeMessage)
 	welcomeMessage = pmmpWelcomeMessage
@@ -108,14 +110,11 @@ func runPMMPostCmd(cmd *cobra.Command, args []string) {
 		inputfilename = args[0]
 	}
 	defer tracing.Tracefile.Close()
-	//gfx.GlobalCanvasFactory = png.NewContextFactory() // use GG drawing package
-	gfx.RegisterCanvasCreator("png", png.NewCanvas)
 	startPMMPostInput(inputfilename)
 }
 
-/* Start PMMPost input. if a filename is given, opens the file and reads from
- * there. Otherwise starts an interactive shell (REPL).
- */
+// Start PMMPost input. if a filename is given, opens the file and reads from
+// there. Otherwise starts an interactive shell (REPL).
 func startPMMPostInput(inputfilename string) {
 	if inputfilename == "" {
 		config.IsInteractive = true
@@ -143,16 +142,18 @@ func startPMMPostInput(inputfilename string) {
 	}
 }
 
-/* Set up a new REPL entity. It contains a readline-instance (for putting
- * out a prompt and read in a line) and a PMMetaPost parser. The REPL will
- * then forward PMMetaPost statements to the parser.
- */
+// Set up a new REPL entity. It contains a readline-instance (for putting
+// out a prompt and read in a line) and a PMMetaPost parser. The REPL will
+// then forward PMMetaPost statements to the parser.
 func NewPMMPostREPL() *PMMPostREPL {
 	rl := NewReadline("pmmpost")
 	repl := &PMMPostREPL{}
 	repl.readline = rl
 	repl.interpreter = repl // we are our own bridge to the interpreter
-	repl.pmmpintp = pmmpost.NewPMMPostInterpreter(true)
+	repl.pmmpintp = pmmpost.NewPMMPostInterpreter(true, func(pic *gfx.Picture) {
+		//
+		io.WriteString(repl.readline.Stderr(), fmt.Sprintf("SHIPPING PICTURE '%s'\n", pic.Name))
+	})
 	//repl.pmmpintp.SetOutputRoutine(png.NewPNGOutputRoutine()) // will produce PNG format
 	repl.toolname = "pmmpost"
 	return repl

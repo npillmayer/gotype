@@ -7,12 +7,6 @@ import "github.com/antlr/antlr4/runtime/Go/antlr"
 type PMMPostListener interface {
 	antlr.ParseTreeListener
 
-	// EnterFigures is called when entering the figures production.
-	EnterFigures(c *FiguresContext)
-
-	// EnterFigure is called when entering the figure production.
-	EnterFigure(c *FigureContext)
-
 	// EnterBeginfig is called when entering the beginfig production.
 	EnterBeginfig(c *BeginfigContext)
 
@@ -145,15 +139,6 @@ type PMMPostListener interface {
 	// EnterSubpath is called when entering the subpath production.
 	EnterSubpath(c *SubpathContext)
 
-	// EnterEdgeconstraint is called when entering the edgeconstraint production.
-	EnterEdgeconstraint(c *EdgeconstraintContext)
-
-	// EnterBox is called when entering the box production.
-	EnterBox(c *BoxContext)
-
-	// EnterEdgepath is called when entering the edgepath production.
-	EnterEdgepath(c *EdgepathContext)
-
 	// EnterScalarmulop is called when entering the scalarmulop production.
 	EnterScalarmulop(c *ScalarmulopContext)
 
@@ -183,12 +168,6 @@ type PMMPostListener interface {
 
 	// EnterAnytag is called when entering the anytag production.
 	EnterAnytag(c *AnytagContext)
-
-	// ExitFigures is called when exiting the figures production.
-	ExitFigures(c *FiguresContext)
-
-	// ExitFigure is called when exiting the figure production.
-	ExitFigure(c *FigureContext)
 
 	// ExitBeginfig is called when exiting the beginfig production.
 	ExitBeginfig(c *BeginfigContext)
@@ -321,15 +300,6 @@ type PMMPostListener interface {
 
 	// ExitSubpath is called when exiting the subpath production.
 	ExitSubpath(c *SubpathContext)
-
-	// ExitEdgeconstraint is called when exiting the edgeconstraint production.
-	ExitEdgeconstraint(c *EdgeconstraintContext)
-
-	// ExitBox is called when exiting the box production.
-	ExitBox(c *BoxContext)
-
-	// ExitEdgepath is called when exiting the edgepath production.
-	ExitEdgepath(c *EdgepathContext)
 
 	// ExitScalarmulop is called when exiting the scalarmulop production.
 	ExitScalarmulop(c *ScalarmulopContext)

@@ -65,9 +65,10 @@ var logLevelPrefix = []string{"ERROR ", "INFO  ", "DEBUG "}
 
 // New creates a new Tracer instance based on a logrus logger.
 func New() tracing.Trace {
-	return &Tracer{log.New(os.Stderr, logLevelPrefix[0], log.Ltime),
-		"",
-		tracing.LevelError,
+	return &Tracer{
+		log:   log.New(os.Stderr, logLevelPrefix[0], log.Ltime),
+		p:     "",
+		level: tracing.LevelError,
 	}
 }
 
@@ -120,6 +121,7 @@ func (t *Tracer) Errorf(s string, args ...interface{}) {
 
 // Interface Trace
 func (t *Tracer) SetTraceLevel(l tracing.TraceLevel) {
+	t.p = ""
 	t.level = l
 	t.log.SetPrefix(logLevelPrefix[int(l)])
 }

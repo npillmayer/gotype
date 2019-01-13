@@ -50,57 +50,51 @@ grammar PMMPost;
 
 import PMMPostTerminals, CoreLang;
 
-figures
-    : figure* EOF
-    ;
-
-figure
-    : beginfig statementlist endfig
-    ;
-
 beginfig
-    : FIGURE '(' LABEL ',' DECIMALTOKEN UNIT ',' DECIMALTOKEN UNIT ')' SEMIC
+    : 'beginfig' '(' LABEL ',' DECIMALTOKEN UNIT ',' DECIMALTOKEN UNIT ')'
     ;
 
 endfig
-    : ENDFIG SEMIC
-    ;
+	: 'endfig'
+	;
 
 statement
-    : compound
-    | declaration
-    | assignment
-    | constraint
-    | command
-    | empty
+    : compound ';'
+    | declaration ';'
+    | assignment ';'
+    | constraint ';'
+    | command ';'
+    | empty ';'
+	| beginfig ';'
+	| endfig ';'
     ;
 
 declaration
-    : TYPE TAG ( COMMA TAG )*                        # typedecl
-    | LOCAL TYPE? TAG ( COMMA TAG )*                 # localdecl
+    : TYPE TAG ( ',' TAG )*                      # typedecl
+    | 'local' TYPE? TAG ( ',' TAG )*             # localdecl
     ;
 
 command
-    : SAVE TAG (COMMA TAG)*          # savecmd
-    | SHOW TAG (COMMA TAG)*          # showcmd
-    | PROOF LABEL                    # proofcmd
-    | LET token EQUALS MATHFUNC      # letcmd
-    | pickupCmd                      # cmdpickup
-    | drawCmd                        # cmddraw
-    | fillCmd                        # cmdfill
+    : 'save' TAG (',' TAG)*        # savecmd
+    | 'show' TAG (',' TAG)*        # showcmd
+    | 'proof' LABEL                # proofcmd
+    | 'let' token '=' MATHFUNC     # letcmd
+    | pickupCmd                    # cmdpickup
+    | drawCmd                      # cmddraw
+    | fillCmd                      # cmdfill
     ;
 
 drawCmd
-    : DRAW expression
+    : 'draw' expression
     ;
 
 fillCmd
-    : FILL expression
+    : 'fill' expression
     ;
 
 pickupCmd
 	  // only scaling allowed; do not change
-    : PICKUP PEN ( 'scaled' DECIMALTOKEN )? ( WITHCOLOR COLOR )?
+    : 'pickup' PEN ( 'scaled' DECIMALTOKEN )? ( WITHCOLOR COLOR )?
     ;
 
 

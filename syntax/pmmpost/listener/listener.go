@@ -10,8 +10,25 @@ Interplay with ANTLR looks like this:
 
 2. We use a listener to walk the AST and execute the statements.
 
-The listener is instantiated and controlled by an interpreter object
-(see package pmmpost).
+We use AST-driven interpretation to execute the input program. Input
+is more or less a list of statements and function definitions.
+We will annotate the AST with scope-information, holding the symbols of
+dynamic scopes. Scopes stem from either:
+
+- function definitions (macros in MetaFont: def and vardef)
+
+- compound statements, i.e. groups (begingroup ... endgroup)
+
+The interpreter relies on the scopes and definitions constructed earlier.
+It manages a memory frame stack to track the calling sequence of functions
+and groups.
+
+Metafont, and therefore PMMPost, is a dynamically scoped language. This means,
+functions can access local variables from calling functions or groups.
+Nevertheless we will find the definition of all variables (which are explicitly
+defined) in a scope definition. This is mainly for type checking reasons and
+due to the complex structure of MetaFont variable identifiers.
+
 
 BSD License
 
@@ -49,12 +66,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package listener
 
 import (
+	"fmt"
 	"image/color"
+	"strconv"
 	"strings"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	colorful "github.com/lucasb-eyer/go-colorful"
 	"github.com/npillmayer/gotype/backend/gfx"
+	"github.com/npillmayer/gotype/backend/gfx/vectorcanvas"
 	arithm "github.com/npillmayer/gotype/core/arithmetic"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/path"
@@ -84,7 +104,9 @@ type PMMPostParseListener struct {
 	expectingLvalue              bool                       // do not evaluate variable
 	rt                           *runtime.Runtime           // runtime environment
 	scripting                    *corelang.Scripting        // (Lua) scripting environment
-	backend                      *backend                   // where to draw to
+	picture                      *gfx.Picture               // where to draw to
+	picCallback                  func(*gfx.Picture)         // callback for completed pictures
+	errors                       []error                    // collect parse errors
 }
 
 // We will annotate the AST. Functions and groups will get a scope, filled with
@@ -108,23 +130,32 @@ type annotation struct {
 
 // Construct a new AST listener.
 // Callers have to provide a runtime-environment and a scripting-environment.
-func NewParseListener(rt *runtime.Runtime, scr *corelang.Scripting) *PMMPostParseListener {
+// The callback is used to signal the caller that a picture has been completed
+// and should be shipped out.
+func NewParseListener(rt *runtime.Runtime, scr *corelang.Scripting,
+	pictureCallback func(*gfx.Picture)) *PMMPostParseListener {
+	//
 	pl := &PMMPostParseListener{} // no need to initialize base class
 	pl.rt = rt
 	pl.scripting = scr
 	pl.annotations = make(map[interface{}]annotation)
 	pl.annotate("global", rt.ScopeTree.Globals(), "")
+	pl.picCallback = pictureCallback
 	return pl
 }
 
 // We use ANTLR V4 for parsing the statement grammar.
-func (pl *PMMPostParseListener) ParseStatements(input antlr.CharStream) {
-	pl.LazyCreateParser(input)
-	tree := pl.statemParser.Statement() // TODO: Figures()
-	//tree := pl.statemParser.Figures()
+func (pl *PMMPostParseListener) ParseStatements(input antlr.CharStream) []error {
+	errListener := pl.LazyCreateParser(input)
+	tree := pl.statemParser.Statementlist()
 	sexpr := antlr.TreesStringTree(tree, nil, pl.statemParser)
-	T().Debugf("### figures = %s", sexpr)
+	T().Debugf("### statements = %s", sexpr)
 	antlr.ParseTreeWalkerDefault.Walk(pl, tree)
+	errs := errListener.err
+	for _, err := range pl.errors {
+		errs = append(errs, err)
+	}
+	return errs
 }
 
 // Create an ANTLR V4 parser. This function should cache
@@ -133,20 +164,29 @@ func (pl *PMMPostParseListener) ParseStatements(input antlr.CharStream) {
 // new parser every time seems to be the accepted mode of operation and should
 // not carry too much of a performance penalty.
 //
-func (pl *PMMPostParseListener) LazyCreateParser(input antlr.CharStream) {
-	// We let ANTLR to the heavy lifting.
+// To better support a REPL I'll implement some day a different antl.InputStream,
+// which should be able to wait for the next chunk of text input in the middle
+// of grammar productions.
+//
+func (pl *PMMPostParseListener) LazyCreateParser(input antlr.CharStream) parseErrorListener {
+	// We let ANTLR do the heavy lifting.
+	errListener := parseErrorListener{}
 	lexer := grammar.NewPMMPostLexer(input)
 	lexer.RemoveErrorListeners()
-	lexer.AddErrorListener(&corelang.TracingErrorListener{})
+	// see https://stackoverflow.com/questions/39690505/antlr4-grun-java-error-listener
+	//lexer.AddErrorListener(errListener)
 	stream := antlr.NewCommonTokenStream(lexer, 0)
 	if pl.statemParser == nil {
 		pl.statemParser = grammar.NewPMMPostParser(stream)
 		pl.statemParser.RemoveErrorListeners()
-		pl.statemParser.AddErrorListener(&corelang.TracingErrorListener{})
+		pl.statemParser.AddErrorListener(errListener)
 		pl.statemParser.BuildParseTrees = true
 	} else {
-		pl.statemParser.SetInputStream(stream) // this should work
+		pl.statemParser.RemoveErrorListeners()
+		pl.statemParser.AddErrorListener(errListener)
+		pl.statemParser.SetInputStream(stream) // this should be enough
 	}
+	return errListener
 }
 
 // Annotate an AST node, i.e., attach a scope information.
@@ -180,7 +220,10 @@ func (pl *PMMPostParseListener) Summary() {
 
 // Print an error to the trace.
 func (pl *PMMPostParseListener) VisitErrorNode(node antlr.ErrorNode) {
-	T().Errorf("parser error: %s", node.GetText())
+	T().Errorf("syntax error: %s", node.GetText())
+	start := node.GetSourceInterval().Start
+	err := fmt.Errorf("parse error [%d]: %s", start, node.GetText())
+	pl.errors = append(pl.errors, err)
 }
 
 /* Helper to trace terminal symbols. Just traces to T.
@@ -192,21 +235,15 @@ func (pl *PMMPostParseListener) VisitTerminal(node antlr.TerminalNode) {
 // --- Statements ------------------------------------------------------------
 
 // A picture has been completed.
+/*
 func (pl *PMMPostParseListener) ExitFigure(ctx *grammar.FigureContext) {
-	if pl.backend.picture != nil {
-		T().Debugf("figure complete")
-		pl.backend.picture.Shipout()
-		/*
-			//image := pl.backend.picture.AsImage()
-			if pl.backend.outputRoutine != nil {
-				//pl.backend.outputRoutine.Shipout(pl.backend.picture, "png")
-			} else {
-				T().Errorf("no output routine set")
-			}
-		*/
-		pl.backend.picture = nil
+	if pl.picture != nil {
+		T().Debugf("figure complete: %s", pl.picture.Name)
+		pl.picCallback(pl.picture) // ship out picture
+		pl.picture = nil
 	}
 }
+*/
 
 // Start a figure. Name, width and height are given.
 //
@@ -223,7 +260,7 @@ func (pl *PMMPostParseListener) ExitBeginfig(ctx *grammar.BeginfigContext) {
 		fh, _ := h.Float64()
 		name := strings.Trim(ctx.LABEL().GetText(), "\"")
 		T().P("figure", name).Debugf("dimension %s x %s", w, h)
-		pl.backend.picture = gfx.NewPicture(name, fw, fh, "png") // TODO: format?
+		pl.picture = gfx.NewPicture(name, vectorcanvas.New(fw, fh))
 		corelang.Begingroup(pl.rt, "figure")
 		wdecl := corelang.Declare(pl.rt, "w", variables.NumericType)
 		_ = corelang.Variable(pl.rt, wdecl, w, nil, true)
@@ -236,8 +273,11 @@ func (pl *PMMPostParseListener) ExitBeginfig(ctx *grammar.BeginfigContext) {
 
 // End a figure.
 func (pl *PMMPostParseListener) ExitEndfig(ctx *grammar.EndfigContext) {
-	if pl.backend.picture != nil {
+	if pl.picture != nil {
 		corelang.Endgroup(pl.rt)
+		T().Debugf("figure complete: %s", pl.picture.Name)
+		pl.picCallback(pl.picture) // ship out picture
+		pl.picture = nil
 	}
 }
 
@@ -257,7 +297,7 @@ func (pl *PMMPostParseListener) ExitPickupCmd(ctx *grammar.PickupCmdContext) {
 		color = colorFromHex(ctx.COLOR().GetText())
 	}
 	pentype := ctx.PEN().GetText()
-	pickupPen(pl.backend.picture, pentype, diam, color)
+	pickupPen(pl.picture, pentype, diam, color)
 }
 
 // Draw command: draw a path. Draws a path using current pen and current color.
@@ -268,8 +308,12 @@ func (pl *PMMPostParseListener) ExitPickupCmd(ctx *grammar.PickupCmdContext) {
 //
 func (pl *PMMPostParseListener) ExitDrawCmd(ctx *grammar.DrawCmdContext) {
 	e, _ := pl.rt.ExprStack.Pop()
-	path := e.Other.(*path.Path)
-	pl.backend.picture.Draw(gfx.NewDrawablePath(path, path.Controls))
+	p := e.Other.(*path.Path)
+	path.FindHobbyControls(p, nil)
+	if pl.picture != nil {
+		pl.picture.Draw(gfx.NewDrawablePath(p, p.Controls))
+		T().Debugf("drawing %v", p)
+	}
 }
 
 // Fill command: fill a cloxed path. Fills a path using current color.
@@ -280,9 +324,11 @@ func (pl *PMMPostParseListener) ExitDrawCmd(ctx *grammar.DrawCmdContext) {
 //
 func (pl *PMMPostParseListener) ExitFillCmd(ctx *grammar.FillCmdContext) {
 	e, _ := pl.rt.ExprStack.Pop()
-	path := e.Other.(*path.Path)
-	if pl.backend.picture != nil {
-		pl.backend.picture.Fill(gfx.NewDrawablePath(path, path.Controls))
+	p := e.Other.(*path.Path)
+	path.FindHobbyControls(p, p.Controls)
+	if pl.picture != nil {
+		pl.picture.Fill(gfx.NewDrawablePath(p, p.Controls))
+		T().Debugf("filling %v", p)
 	}
 }
 
@@ -386,11 +432,13 @@ func (pl *PMMPostParseListener) ExitAssignment(ctx *grammar.AssignmentContext) {
 	} else {
 		if v := corelang.GetVariableFromExpression(pl.rt, lvalue); v != nil {
 			varname := v.GetName()
-			t := v.GetType()
+			t := v.Type()
 			T().P("var", varname).Debugf("lvalue type is %s", variables.TypeString(t))
-			if !pl.rt.ExprStack.CheckTypeMatch(lvalue, e) {
+			//if !pl.rt.ExprStack.CheckTypeMatch(lvalue, e) {
+			if isAssignableFrom(t, e) {
 				T().P("var", varname).Errorf("type mismatch in assignment")
-				panic("type mismatch in assignment")
+				pl.errors = append(pl.errors,
+					fmt.Errorf("type mismatch in assignment (variable %s)", varname))
 			} else {
 				corelang.Assign(pl.rt, v, e)
 			}
@@ -425,13 +473,14 @@ func (pl *PMMPostParseListener) equate() {
 	lhs := pl.rt.ExprStack.Top()
 	etype := getExprType(lhs)
 	T().Debugf("%s equation: %v = %v", variables.TypeString(etype), lhs, rhs)
+	var err error
 	switch etype {
 	case variables.NumericType:
 		pl.rt.ExprStack.Push(rhs)
-		pl.rt.ExprStack.EquateTOS2OS()
+		err = pl.rt.ExprStack.EquateTOS2OS()
 	case variables.PairType:
 		pl.rt.ExprStack.Push(rhs)
-		pl.rt.ExprStack.EquateTOS2OS()
+		err = pl.rt.ExprStack.EquateTOS2OS()
 	case variables.PathType:
 		lhs.Other = rhs.Other // now the path is on the stack
 		sym := pl.rt.ExprStack.GetVariable(lhs)
@@ -439,7 +488,9 @@ func (pl *PMMPostParseListener) equate() {
 		vref.SetValue(rhs.Other)
 	default:
 		T().P("op", "=").Errorf("not implemented: equation for type %s", variables.TypeString(etype))
+		err = fmt.Errorf("not implemented: equation for type %s", variables.TypeString(etype))
 	}
+	collectError(pl, err)
 }
 
 // --- Commands --------------------------------------------------------------
@@ -515,11 +566,13 @@ func (pl *PMMPostParseListener) ExitExpression(ctx *grammar.ExpressionContext) {
 //            | tertiary (PLUS|MINUS) secondary            # term
 //
 func (pl *PMMPostParseListener) ExitTerm(ctx *grammar.TermContext) {
+	var err error
 	if ctx.PLUS() != nil {
-		pl.rt.ExprStack.AddTOS2OS()
+		err = pl.rt.ExprStack.AddTOS2OS()
 	} else if ctx.MINUS() != nil {
-		pl.rt.ExprStack.SubtractTOS2OS()
+		err = pl.rt.ExprStack.SubtractTOS2OS()
 	} // fallthrough for lone secondary
+	collectError(pl, err)
 }
 
 // Multiply/divide 2 factors. Factors may be of any kind.
@@ -533,11 +586,13 @@ func (pl *PMMPostParseListener) ExitTerm(ctx *grammar.TermContext) {
 //             | secondary (TIMES|OVER) primary             # factor
 //
 func (pl *PMMPostParseListener) ExitFactor(ctx *grammar.FactorContext) {
+	var err error
 	if ctx.TIMES() != nil {
-		pl.rt.ExprStack.MultiplyTOS2OS()
+		err = pl.rt.ExprStack.MultiplyTOS2OS()
 	} else if ctx.OVER() != nil {
-		pl.rt.ExprStack.DivideTOS2OS()
+		err = pl.rt.ExprStack.DivideTOS2OS()
 	} // fallthrough for lone primary
+	collectError(pl, err)
 }
 
 // Create a path by joining path fragments.
@@ -551,6 +606,7 @@ func (pl *PMMPostParseListener) ExitFactor(ctx *grammar.FactorContext) {
 // The completed path is pushed onto the path stack.
 //
 func (pl *PMMPostParseListener) ExitPath(ctx *grammar.PathContext) {
+	var err error
 	builder := newPathBuilder()
 	l := len(ctx.AllSecondary()) - 1
 	for i, _ := range ctx.AllSecondary() {
@@ -559,16 +615,19 @@ func (pl *PMMPostParseListener) ExitPath(ctx *grammar.PathContext) {
 				T().P("op", "path").Debugf(" fragment %d is pair: %s", l-i, e.String())
 				builder.CollectKnot(pr)
 			} else {
-				T().Errorf("polygon elements must be known")
+				T().Errorf("path elements must be known")
+				err = fmt.Errorf("Path elements must be known")
 			}
 		} else if e.Other != nil {
 			if p, ispath := e.Other.(*path.Path); ispath {
 				builder.CollectSubpath(p)
 			} else {
 				T().P("op", "path").Errorf(" fragment %d is unknown type", l-i)
+				err = fmt.Errorf("Path fragment %d is unknown type", l-i)
 			}
 		} else {
 			T().P("op", "path").Errorf(" fragment %d is empty", l-i)
+			err = fmt.Errorf("Path fragment %d is empty", l-i)
 		}
 	}
 	if ctx.Cycle() != nil {
@@ -577,6 +636,7 @@ func (pl *PMMPostParseListener) ExitPath(ctx *grammar.PathContext) {
 	path := builder.MakePath()
 	e := runtime.NewOtherExpression(path) // return the new path on the stack
 	pl.rt.ExprStack.Push(e)
+	collectError(pl, err)
 }
 
 // Apply a chain of affine transforms to a pair or a path.
@@ -613,38 +673,43 @@ func (pl *PMMPostParseListener) transformPair(e *runtime.ExprNode, transforms []
 	parameters []*runtime.ExprNode) {
 	//
 	_, isknown := e.GetConstPair()
+	var err error
 	for i, t := range transforms {
 		switch t {
 		case "scaled":
 			_, isconst := parameters[i].GetConstNumeric()
 			if !isknown && !isconst {
 				T().Errorf("not implemented: <unknown pair> scaled <unknown>")
+				err = fmt.Errorf("not implemented: <unknown pair> scaled <unknown>")
 			} else {
 				pl.rt.ExprStack.Push(parameters[i])
-				pl.rt.ExprStack.MultiplyTOS2OS()
+				err = pl.rt.ExprStack.MultiplyTOS2OS()
 				T().P("op", "scale").Debugf("result = %v", pl.rt.ExprStack.Top())
 			}
 		case "shifted":
 			_, isconst := parameters[i].GetConstPair()
 			if !isknown && !isconst {
 				T().Errorf("not implemented: <unknown pair> shifted <unknown>")
+				err = fmt.Errorf("not implemented: <unknown pair> shifted <unknown>")
 			} else {
 				pl.rt.ExprStack.Push(parameters[i])
-				pl.rt.ExprStack.AddTOS2OS()
+				err = pl.rt.ExprStack.AddTOS2OS()
 				T().P("op", "shift").Debugf("result = %v", pl.rt.ExprStack.Top())
 			}
 		case "rotated":
 			_, isconst := parameters[i].GetConstNumeric()
 			if !isconst {
 				T().Errorf("not implemented: rotated <unknown>")
+				err = fmt.Errorf("not implemented: rotated <unknown>")
 			} else {
 				pl.rt.ExprStack.Push(parameters[i])
-				pl.rt.ExprStack.Rotate2OSbyTOS()
+				err = pl.rt.ExprStack.Rotate2OSbyTOS()
 				T().P("op", "rotate").Debugf("result = %v", pl.rt.ExprStack.Top())
 			}
 		default:
 			T().Errorf("ignoring unknown transform: %s", t)
 		}
+		collectError(pl, err)
 	}
 }
 
@@ -808,16 +873,23 @@ func (pl *PMMPostParseListener) ExitVariable(ctx *grammar.VariableContext) {
 		corelang.PushVariable(pl.rt, vref, pl.expectingLvalue)
 	} else {
 		s := corelang.CollectVarRefParts(pl.rt, t, ctx.GetChildren())
-		vref = corelang.MakeCanonicalAndResolve(pl.rt, s, true)
-		if vref.GetType() == variables.VardefType {
-			pl.callVardef(vref, pl.expectingLvalue)
-		} else {
+		var err error
+		vref, err = corelang.MakeCanonicalAndResolve(pl.rt, s, true)
+		if err != nil {
+			pl.errors = append(pl.errors, err)
+			vref = corelang.Whatever(pl.rt)
 			corelang.PushVariable(pl.rt, vref, pl.expectingLvalue)
+		} else {
+			if vref.Type() == variables.VardefType {
+				pl.callVardef(vref, pl.expectingLvalue)
+			} else {
+				corelang.PushVariable(pl.rt, vref, pl.expectingLvalue)
+			}
 		}
 	}
 	if pl.expectingLvalue {
 		T().P("var", vref.GetName()).Debugf("lvalue type is %s",
-			variables.TypeString(vref.GetType()))
+			variables.TypeString(vref.Type()))
 		pl.expectingLvalue = false
 	}
 }
@@ -874,7 +946,8 @@ func (pl *PMMPostParseListener) ExitLiteralpair(ctx *grammar.LiteralpairContext)
 //    ## a=4
 //
 func (pl *PMMPostParseListener) ExitScalaratom(ctx *grammar.ScalaratomContext) {
-	pl.rt.ExprStack.MultiplyTOS2OS()
+	err := pl.rt.ExprStack.MultiplyTOS2OS()
+	collectError(pl, err)
 }
 
 // Attach a (signed) coefficient to a variable, e.g.  +3x, -1/3y.  We just have
@@ -886,10 +959,12 @@ func (pl *PMMPostParseListener) ExitScalaratom(ctx *grammar.ScalaratomContext) {
 // already left a numeric constant on the expression stack.
 //
 func (pl *PMMPostParseListener) ExitScalarmulop(ctx *grammar.ScalarmulopContext) {
+	var err error
 	if ctx.MINUS() != nil {
 		pl.rt.ExprStack.PushConstant(arithm.MinusOne) // -1 on stack
-		pl.rt.ExprStack.MultiplyTOS2OS()              // multiply with numtokenatom
+		err = pl.rt.ExprStack.MultiplyTOS2OS()        // multiply with numtokenatom
 	}
+	collectError(pl, err)
 }
 
 // Numeric prefix for a variable, e.g., "3x", "1/2y.r", "0.25z".
@@ -907,7 +982,8 @@ func (pl *PMMPostParseListener) ExitNumtokenatom(ctx *grammar.NumtokenatomContex
 		num2, _ := dec.NewFromString(numbers[1].GetText())
 		T().P("token", num2.String()).Debugf("numeric token")
 		pl.rt.ExprStack.PushConstant(num2)
-		pl.rt.ExprStack.DivideTOS2OS()
+		err := pl.rt.ExprStack.DivideTOS2OS()
+		collectError(pl, err)
 	}
 }
 
@@ -940,22 +1016,12 @@ func (pl *PMMPostParseListener) ExitExprgroup(ctx *grammar.ExprgroupContext) {
 
 // Helper: get the (variable) type of an item of the expression stack
 //func (pl *PMMPostParseListener) getExprType(e *runtime.ExprNode) int {
-func getExprType(e *runtime.ExprNode) int {
+func getExprType(e *runtime.ExprNode) variables.VariableType {
 	if e != nil {
 		if e.IsValid() {
 			if e.IsPair {
 				return variables.PairType
 			} else {
-				/*
-					sym := pl.rt.ExprStack.GetVariable(e)
-					if sym != nil {
-						if t, ok := sym.(runtime.Typed); ok {
-							return t.GetType()
-						}
-					} else if _, ok := e.GetConstNumeric(); ok {
-						return variables.NumericType
-					}
-				*/
 				if e.XPolyn.IsValid() {
 					return variables.NumericType
 				}
@@ -971,6 +1037,15 @@ func getExprType(e *runtime.ExprNode) int {
 	return variables.Undefined
 }
 
+// Predicate: are two types compatible for assignment?
+func isAssignableFrom(vartype variables.VariableType, e *runtime.ExprNode) bool {
+	t := getExprType(e)
+	if vartype == t {
+		return true
+	}
+	return false
+}
+
 // Create a color from a hex string. Returns black if the string cannot
 // be interpreted as a color hex code.
 func colorFromHex(hex string) color.Color {
@@ -979,5 +1054,25 @@ func colorFromHex(hex string) color.Color {
 		return c
 	} else {
 		return color.Black
+	}
+}
+
+// ----------------------------------------------------------------------
+
+type parseErrorListener struct {
+	*antlr.DefaultErrorListener // use default as base class
+	err                         []error
+}
+
+func (el parseErrorListener) SyntaxError(r antlr.Recognizer, sym interface{},
+	line, column int, msg string, e antlr.RecognitionException) {
+	//
+	errmsg := fmt.Errorf("[%s|%s] %.44s", strconv.Itoa(line), strconv.Itoa(column), msg)
+	el.err = append(el.err, errmsg)
+}
+
+func collectError(pl *PMMPostParseListener, err error) {
+	if pl != nil && err != nil {
+		pl.errors = append(pl.errors, err)
 	}
 }

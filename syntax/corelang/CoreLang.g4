@@ -39,7 +39,7 @@ documentation for details.
 parser grammar CoreLang;
 
 statementlist
-    : ( statement SEMIC )*
+    : ( statement )+ EOF
     ;
 
 vardef
@@ -55,7 +55,8 @@ empty
     ;
 
 assignment
-    :  variable ASSIGN expression
+    /*: variable ASSIGN expression*/
+	: variable ASSIGN path
     ;
 
 constraint
@@ -86,13 +87,13 @@ expression
     ;
 
 tertiary
-    : secondary                                  # term
+    : path                                       # pathtertiary
     | tertiary (PLUS|MINUS) secondary            # term
-    | path                                       # pathtertiary
+    | secondary                                  # term
     ;
 
 path
-    : secondary ( pathjoin secondary )+ cycle?
+    : secondary ( '..' secondary )+ cycle?
     ; 
 
 cycle
@@ -115,9 +116,6 @@ primary
     | POINT tertiary OF primary                   # pointof        // => pair
     | REVERSE primary                             # reversepath    // => path
     | SUBPATH tertiary OF primary                 # subpath        // => path
-    | EDGECONSTR+ primary                         # edgeconstraint // => pair
-    | (FRAME|BOX) variable                        # box            // => 4-path?
-    | EDGECONSTR EDGE secondary                   # edgepath       // => 2-path
     ;
 
 scalarmulop

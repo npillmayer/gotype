@@ -137,8 +137,10 @@ import (
 	dec "github.com/shopspring/decimal"
 )
 
-// We are tracing to the equation solver's tracer.
-var T tracing.Trace
+// We are tracing to the graphics tracer.
+func T() tracing.Trace {
+	return tracing.GraphicsTracer
+}
 
 const pi float64 = 3.14159265
 const pi2 float64 = 6.28318530
@@ -368,11 +370,9 @@ func (path *Path) SmoothKnot(pr a.Pair) JoinAdder {
 	return path
 }
 
-/*
-Add a path with curl information to a path. Callers may specify pre- and/or
-post-curl. A curl value of 1.0 is considered neutral.
-Part of builder functionality.
-*/
+// Add a path with curl information to a path. Callers may specify pre- and/or
+// post-curl. A curl value of 1.0 is considered neutral.
+// Part of builder functionality.
 func (path *Path) CurlKnot(pr a.Pair, precurl, postcurl dec.Decimal) JoinAdder {
 	path.points = append(path.points, pair2cmplx(pr))
 	path.SetPreCurl(path.N()-1, precurl)
@@ -441,7 +441,7 @@ func (path *Path) Concat() KnotAdder {
 */
 
 func (path *Path) AppendSubpath(sp *Path) JoinAdder {
-	T.Errorf("AppendSubpath not yet implemented")
+	T().Errorf("AppendSubpath not yet implemented")
 	return path
 }
 
@@ -686,7 +686,7 @@ func FindHobbyControls(path HobbyPath, controls SplineControls) SplineControls {
 	if len(segments) > 0 {
 		for _, segment := range segments {
 			segment.controls = controls
-			T.Infof("find controls for segment %s", PathAsString(segment, nil))
+			T().Infof("find controls for segment %s", PathAsString(segment, nil))
 			findSegmentControls(segment, segment)
 		}
 	}
@@ -733,16 +733,16 @@ func startOpen(path HobbyPath, theta, u, v []float64) {
 	if cmplx.IsNaN(path.PostDir(0)) {
 		a := recip(path.PostTension(0))
 		b := recip(path.PreTension(1))
-		T.Debugf("path.PostCurl(0) = %.4g", path.PostCurl(0))
+		T().Debugf("path.PostCurl(0) = %.4g", path.PostCurl(0))
 		c := square(a) * path.PostCurl(0) / square(b)
-		T.Debugf("a = %.4g, b = %.4g, c = %.4g", a, b, c)
+		T().Debugf("a = %.4g, b = %.4g, c = %.4g", a, b, c)
 		u[0] = ((3-a)*c + b) / (a*c + 3 - b)
 		v[0] = -u[0] * psi(path, 1)
 	} else {
 		u[0] = 0
 		v[0] = reduceAngle(angle(path.PostDir(0)) - angle(delta(path, 0)))
 	}
-	T.Debugf("u.0 = %.4g, v.0 = %.4g", u[0], v[0])
+	T().Debugf("u.0 = %.4g, v.0 = %.4g", u[0], v[0])
 }
 
 func endOpen(path HobbyPath, theta, u, v []float64) {
@@ -750,18 +750,18 @@ func endOpen(path HobbyPath, theta, u, v []float64) {
 	if cmplx.IsNaN(path.PreDir(last)) {
 		a := recip(path.PostTension(last - 1))
 		b := recip(path.PreTension(last))
-		T.Debugf("path.PreCurl(%d) = %.4g", last, path.PostCurl(last))
+		T().Debugf("path.PreCurl(%d) = %.4g", last, path.PostCurl(last))
 		c := square(b) * path.PreCurl(last) / square(a)
 		u[last] = (b*c + 3 - a) / ((3-b)*c + a)
-		T.Debugf("u.%d = %g", last, u[last])
+		T().Debugf("u.%d = %g", last, u[last])
 		theta[last] = v[last-1] / (u[last-1] - u[last])
 	} else {
 		theta[last] = reduceAngle(angle(path.PreDir(last)) - angle(delta(path, last-1)))
 	}
-	T.Debugf("theta.%d = %.4g", last, rad2deg(theta[last]))
+	T().Debugf("theta.%d = %.4g", last, rad2deg(theta[last]))
 	for i := last - 1; i >= 0; i-- {
 		theta[i] = v[i] - u[i]*theta[i+1]
-		T.Debugf("theta.%d = %.4g", i, rad2deg(theta[i]))
+		T().Debugf("theta.%d = %.4g", i, rad2deg(theta[i]))
 	}
 }
 
@@ -799,19 +799,19 @@ func buildEqs(path HobbyPath, u, v, w []float64) {
 		a1 := recip(path.PostTension(i))
 		b1 := recip(path.PreTension(i))
 		b2 := recip(path.PreTension(i + 1))
-		T.Debugf("1/tensions: %.4g, %.4g, %.4g, %.4g", a0, a1, b1, b2)
+		T().Debugf("1/tensions: %.4g, %.4g, %.4g, %.4g", a0, a1, b1, b2)
 		A := a0 / (square(b1) * d(path, i-1))
 		B := (3 - a0) / (square(b1) * d(path, i-1))
 		C := (3 - b2) / (square(a1) * d(path, i))
 		D := b2 / (square(a1) * d(path, i))
-		T.Debugf("A, B, C, D: %.4g, %.4g, %.4g, %.4g", A, B, C, D)
+		T().Debugf("A, B, C, D: %.4g, %.4g, %.4g, %.4g", A, B, C, D)
 		t := B - u[i-1]*A + C
 		u[i] = D / t
 		v[i] = (-B*psi(path, i) - D*psi(path, i+1) - A*v[i-1]) / t
 		if path.IsCycle() {
 			w[i] = -A * w[i-1] / t
 		}
-		T.Debugf("u.%d = %.4g, v.%d = %.4g", i, u[i], i, v[i])
+		T().Debugf("u.%d = %.4g, v.%d = %.4g", i, u[i], i, v[i])
 	}
 }
 
@@ -860,7 +860,7 @@ func setControls(path HobbyPath, theta []float64, controls SplineControls) Splin
 		controls.SetPreControl((i+1)%n, path.Z(i+1)-p3)
 	}
 	if config.IsSet("tracingchoices") {
-		T.Infof(PathAsString(path, controls))
+		T().Infof(PathAsString(path, controls))
 	}
 	return controls
 }
@@ -938,7 +938,7 @@ func splitSegments(path HobbyPath) []*pathPartial {
 	var segments []*pathPartial
 	segcnt, at := 0, 0
 	for i := 1; i < path.N(); i++ {
-		//T.Debugf("analyzing z.%d = %s\n", i, ptstring(path.Z(i), false))
+		//T().Debugf("analyzing z.%d = %s\n", i, ptstring(path.Z(i), false))
 		if isrough(path, i) {
 			segments = append(segments, makePathSegment(path, at, i))
 			segcnt++
@@ -968,9 +968,9 @@ func makePathSegment(path HobbyPath, from, to int) *pathPartial {
 		end:   to,   // last index within parent path
 	}
 	if config.IsSet("tracingchoices") {
-		T.Debugf("breaking segment %d - %d of length %d, at %s and %s", from, to, partial.N(),
+		T().Debugf("breaking segment %d - %d of length %d, at %s and %s", from, to, partial.N(),
 			ptstring(path.Z(from), false), ptstring(path.Z(to), false))
-		T.Infof("partial = %s", PathAsString(partial, nil))
+		T().Infof("partial = %s", PathAsString(partial, nil))
 	}
 	return partial
 }

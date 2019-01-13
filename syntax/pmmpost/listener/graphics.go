@@ -48,17 +48,6 @@ import (
 	dec "github.com/shopspring/decimal"
 )
 
-// A simple backend type
-type backend struct {
-	picture       *gfx.Picture      // the picture we're drawing
-	outputRoutine gfx.OutputRoutine // for shipping out images
-}
-
-// TODO create more transparent interface to gfx formats.
-func (pl *PMMPostParseListener) SetOutputRoutine(o gfx.OutputRoutine) {
-	pl.backend.outputRoutine = o
-}
-
 // Pickup a drawing pen. The pen is set as current pen for the current picture.
 func pickupPen(pic *gfx.Picture, pentype string, diam dec.Decimal, color color.Color) *gfx.Pen {
 	var pen *gfx.Pen

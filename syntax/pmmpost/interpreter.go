@@ -42,53 +42,29 @@ import (
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"github.com/npillmayer/gotype/backend/gfx"
+	"github.com/npillmayer/gotype/core/arithmetic"
 	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/path"
 	"github.com/npillmayer/gotype/syntax/corelang"
 	"github.com/npillmayer/gotype/syntax/pmmpost/listener"
 	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables"
+	"github.com/npillmayer/gotype/syntax/variables/varparse"
+	"github.com/shopspring/decimal"
 )
 
 // === Interpreter ===========================================================
 
-/*
-We use AST-driven interpretation to execute the input program. Input
-is more or less a list of statements and function definitions.
-We will annotate the AST with scope-information, holding the symbols of
-dynamic scopes. Scopes stem from either:
-
-- function definitions (macros in MetaFont: def and vardef)
-
-- compound statements, i.e. groups (begingroup ... endgroup)
-
-The interpreter relies on the scopes and definitions constructed earlier.
-It manages a memory frame stack to track the calling sequence of functions
-and groups.
-
-So the overall picture looks like this:
-
-1. ANTLR V4 constructs an AST for us.
-
-2. We use a listener to walk the AST and execute the statements.
-
-Metafont, and therefore PMMPost, is a dynamically scoped language. This means,
-functions can access local variables from calling functions or groups.
-Nevertheless we will find the definition of all variables (which are explicitly
-defined) in a scope definition. This is mainly for type checking reasons and
-due to the complex structure of MetaFont variable identifiers.
-
-PMMPostInterpreter
-
-This is an umbrella object to hold together the various tools needed to
-execute steps 1 to 3 from above. It will orchestrate and instrument the
-tools and execute them in the correct order. Also, this object will hold
-and respect parameters we pass to the interpreter, so we can alter the
-behaviour in certain aspects.
-*/
+// This is an umbrella object to hold together the various tools needed to
+// parse and execute PMMPost statements. It will orchestrate and instrument the
+// tools and execute them in the correct order. Also, this object will hold
+// and respect parameters we pass to the interpreter, so we can alter the
+// behaviour in certain aspects.
+//
 type PMMPostInterpreter struct {
-	ASTListener *listener.PMMPostParseListener // parse / AST listener
-	runtime     *runtime.Runtime               // runtime environment
-	scripting   *corelang.Scripting            // Lua scripting subsystem
+	listener  *listener.PMMPostParseListener // parse-listener
+	runtime   *runtime.Runtime               // runtime environment
+	scripting *corelang.Scripting            // Lua scripting subsystem
 }
 
 // Create a new Interpreter for the "Poor Man's MetaPost". This is the top-level
@@ -99,7 +75,7 @@ type PMMPostInterpreter struct {
 //
 // Loads builtin symbols (variables and types) if argument is true.
 //
-func NewPMMPostInterpreter(loadBuiltins bool) *PMMPostInterpreter {
+func NewPMMPostInterpreter(loadBuiltins bool, callback func(*gfx.Picture)) *PMMPostInterpreter {
 	T = tracing.InterpreterTracer
 	intp := &PMMPostInterpreter{}
 	intp.runtime = runtime.NewRuntimeEnvironment(variables.NewPMMPVarDecl)
@@ -108,23 +84,18 @@ func NewPMMPostInterpreter(loadBuiltins bool) *PMMPostInterpreter {
 		corelang.LoadBuiltinSymbols(intp.runtime, intp.scripting) // load syms into global scope
 		intp.loadAdditionalBuiltinSymbols(intp.runtime, intp.scripting)
 	}
-	intp.ASTListener = listener.NewParseListener(intp.runtime, intp.scripting) // listener for ANTLR
+	intp.listener = listener.NewParseListener(intp.runtime, intp.scripting,
+		callback) // listener for ANTLR
 	return intp
-}
-
-// Set an output routine for drawing. Default is nil.
-func (intp *PMMPostInterpreter) SetOutputRoutine(o gfx.OutputRoutine) {
-	if intp.ASTListener != nil {
-		intp.ASTListener.SetOutputRoutine(o)
-	}
 }
 
 // Parse and interpret a statement list.
 //
-func (intp *PMMPostInterpreter) ParseStatements(input []byte) {
-	// func (intp *PMMPostInterpreter) ParseStatements(input antlr.CharStream) {
+func (intp *PMMPostInterpreter) ParseStatements(input []byte) []error {
 	inputStream := antlr.NewInputStream(string(input))
-	intp.ASTListener.ParseStatements(inputStream)
+	errs := intp.listener.ParseStatements(inputStream)
+	//T.Infof("ParseStmt: ERR = %v", errs)
+	return errs
 }
 
 // Load additionl builtins for this language (added to the core symbols)
@@ -134,26 +105,120 @@ func (intp *PMMPostInterpreter) loadAdditionalBuiltinSymbols(rt *runtime.Runtime
 	//scripting.RegisterHook("TODO: z", ping)
 }
 
+// ----------------------------------------------------------------------
+
+// VarValue is a wrapper type for variable values. It hides the complexities
+// of the various types of variables from clients.
+//
+// This is part of an API for the interpreter. The PMMPost interpreter can
+// be used as a standalone batch drawing CLI, but its foremost purpose
+// is to be integrated in applications.
+type VarValue struct {
+	VariableFullName string      // full name of the variable this value is from
+	val              interface{} // variable's value
+}
+
+// IsSet checks if a variable's value is set.
+func (vval VarValue) IsSet() bool {
+	return vval.val != nil
+}
+
+// String returns a variable's value as a string.
+func (vval VarValue) String() string {
+	if vval.val == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", vval.val)
+}
+
+// Type returns the type of a variable's value.
+func (vval VarValue) Type() variables.VariableType {
+	if vval.IsSet() {
+		switch vval.val.(type) {
+		case arithmetic.Pair:
+			return variables.PairType
+		case *path.Path:
+			return variables.PathType
+		case decimal.Decimal:
+			return variables.NumericType
+		default:
+			return variables.Undefined
+		}
+	}
+	return variables.Undefined
+}
+
+func (vval VarValue) AsNumeric() decimal.Decimal {
+	return vval.val.(decimal.Decimal)
+}
+
+func (vval VarValue) AsPair() arithmetic.Pair {
+	return vval.val.(arithmetic.Pair)
+}
+
+func (vval VarValue) AsPath() *path.Path {
+	return vval.val.(*path.Path)
+}
+
 // Value returns the current value of a variable.
 // Return values are: canonical name of the variable & value of the
 // variable as string.
-func (intp *PMMPostInterpreter) Value(variable string) (string, string) {
+func (intp *PMMPostInterpreter) ValueOf(variable string) (VarValue, error) {
+	variable = strings.TrimSpace(variable)
+	r, _ := utf8.DecodeRuneInString(variable)
+	if !unicode.IsLetter(r) {
+		return VarValue{
+			VariableFullName: variable,
+			val:              nil,
+		}, fmt.Errorf("Illegal variable name: %s", variable)
+	}
+	resolve, err := varparse.ParseVariableName(variable)
+	if err != nil {
+		return VarValue{
+			VariableFullName: variable,
+			val:              nil,
+		}, fmt.Errorf("Illegal variable name: %s", variable)
+	}
+	vref := resolve.VariableReference(intp.runtime.ScopeTree)
+	if vref == nil {
+		return VarValue{
+			VariableFullName: resolve.VariableName(),
+			val:              nil,
+		}, fmt.Errorf("Variable is undefined")
+	}
+	v, _ := corelang.FindVariableReferenceInMemory(intp.runtime, vref, false)
+	if v == nil {
+		return VarValue{
+			VariableFullName: vref.GetFullName(),
+			val:              nil,
+		}, nil
+	}
+	return VarValue{
+		VariableFullName: v.GetFullName(),
+		val:              v.GetValue(),
+	}, nil
+}
+
+// ValueString returns the current value of a variable.
+// Return values are: canonical name of the variable & value of the
+// variable as string.
+func (intp *PMMPostInterpreter) ValueString(variable string) (string, string) {
 	variable = strings.TrimSpace(variable)
 	r, _ := utf8.DecodeRuneInString(variable)
 	if !unicode.IsLetter(r) {
 		return variable, "<illegal variable name>"
 	}
-	vtree := variables.ParseVariableFromString(variable, nil)
-	if vtree == nil {
+	resolve, err := varparse.ParseVariableName(variable)
+	if err != nil {
 		return variable, "<illegal variable name>"
 	}
-	vref := variables.GetVarRefFromVarSyntax(vtree, intp.runtime.ScopeTree)
+	vref := resolve.VariableReference(intp.runtime.ScopeTree)
 	if vref == nil {
 		return variable, "<undefined>"
 	}
-	v := corelang.MakeCanonicalAndResolve(intp.runtime, variable, false)
+	v, _ := corelang.FindVariableReferenceInMemory(intp.runtime, vref, false)
 	if v == nil {
-		t := variables.TypeString(vref.GetType())
+		t := variables.TypeString(vref.Type())
 		return vref.GetFullName(), fmt.Sprintf("<unset %s>", t)
 	}
 	return v.GetFullName(), v.ValueString()

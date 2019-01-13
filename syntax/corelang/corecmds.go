@@ -32,7 +32,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ---------------------------------------------------------------------------
 
- * Internal commands for our core DSL, borrowing from MetaFont/MetaPost.
+Internal commands for our core DSL, borrowing from MetaFont/MetaPost.
 
 */
 
@@ -47,6 +47,7 @@ import (
 	"github.com/npillmayer/gotype/core/arithmetic"
 	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables"
+	"github.com/npillmayer/gotype/syntax/variables/varparse"
 	dec "github.com/shopspring/decimal"
 )
 
@@ -133,18 +134,24 @@ Example:
 If a variable has been undeclared and is now created, the top-most scope
 and memory-frame will hold the newly created variable.
 */
-func MakeCanonicalAndResolve(rt *runtime.Runtime, v string, create bool) *variables.PMMPVarRef {
-	vtree := variables.ParseVariableFromString(v, &TracingErrorListener{})
-	vref := variables.GetVarRefFromVarSyntax(vtree, rt.ScopeTree)
-	vref, _ = FindVariableReferenceInMemory(rt, vref, create)
-	return vref
+func MakeCanonicalAndResolve(rt *runtime.Runtime, v string, create bool) (
+	*variables.PMMPVarRef, error) {
+	//
+	var vref *variables.PMMPVarRef
+	resolve, err := varparse.ParseVariableName(v)
+	if err != nil {
+		return nil, err
+	}
+	vref = resolve.VariableReference(rt.ScopeTree)
+	if vref != nil {
+		vref, _ = FindVariableReferenceInMemory(rt, vref, create)
+	}
+	return vref, nil
 }
 
-/*
-Allocate a variable in a memory frame. Existing variable references in
-this memory frame will be overwritten !
-Clients should probably first call FindVariableReferenceInMemory(vref).
-*/
+// Allocate a variable in a memory frame. Existing variable references in
+// this memory frame will be overwritten !
+// Clients should probably first call FindVariableReferenceInMemory(vref).
 func AllocateVariableInMemory(vref *variables.PMMPVarRef,
 	mf *runtime.DynamicMemoryFrame) *variables.PMMPVarRef {
 	//
@@ -204,13 +211,12 @@ func FindVariableReferenceInMemory(rt *runtime.Runtime, vref *variables.PMMPVarR
 	return sym, memframe
 }
 
-/*
-The expression stack knows nothing about the interpreter's symbols, except
-the few properties of interface Symbol. The expression stack deals with
-polynomials and serial IDs of variables.
-
-Push a variable (numeric or pair type) onto the expression stack.
-*/
+// The expression stack knows nothing about the interpreter's symbols, except
+// the few properties of interface Symbol. The expression stack deals with
+// polynomials and serial IDs of variables.
+//
+// Push a variable (numeric or pair type) onto the expression stack.
+//
 func PushVariable(rt *runtime.Runtime, vref *variables.PMMPVarRef, asLValue bool) {
 	if vref.IsPair() {
 		if vref.IsKnown() && !asLValue {
@@ -230,25 +236,36 @@ func PushVariable(rt *runtime.Runtime, vref *variables.PMMPVarRef, asLValue bool
 
 // Push a constant (numeric or pair type) onto the expression stack.
 func PushConstant(rt *runtime.Runtime, vref *variables.PMMPVarRef) {
-	if vref.IsPair() {
+	switch vref.Decl.Type() {
+	case variables.NumericType:
+		rt.ExprStack.PushConstant(vref.Value.(dec.Decimal))
+	case variables.PairType:
 		x := vref.XPart().GetValue()
 		y := vref.YPart().GetValue()
 		pair := arithmetic.MakePair(x.(dec.Decimal), y.(dec.Decimal))
 		rt.ExprStack.PushPairConstant(pair)
-	} else {
-		rt.ExprStack.PushConstant(vref.Value.(dec.Decimal))
+	case variables.PathType:
+		rt.ExprStack.PushOtherConstant(vref.Value)
 	}
+	/*
+		if vref.IsPair() {
+			x := vref.XPart().GetValue()
+			y := vref.YPart().GetValue()
+			pair := arithmetic.MakePair(x.(dec.Decimal), y.(dec.Decimal))
+			rt.ExprStack.PushPairConstant(pair)
+		} else {
+			rt.ExprStack.PushConstant(vref.Value.(dec.Decimal))
+		}
+	*/
 }
 
-/*
-The expression stack knows nothing about the interpreter's symbols, except
-the few properties of interface Symbol. The expression stack deals with
-polynomials and serial IDs of variables. To get back from IDs to
-variable references, we ask the expression stack for a Symbol (from an
-ID). If the variable is of type pair, the Symbol may be a pair part (x-part
-or y-part). Parts point to their parent symbol, thus giving us the
-variable reference.
-*/
+// The expression stack knows nothing about the interpreter's symbols, except
+// the few properties of interface Symbol. The expression stack deals with
+// polynomials and serial IDs of variables. To get back from IDs to
+// variable references, we ask the expression stack for a Symbol (from an
+// ID). If the variable is of type pair, the Symbol may be a pair part (x-part
+// or y-part). Parts point to their parent symbol, thus giving us the
+// variable reference.
 func GetVariableFromExpression(rt *runtime.Runtime, e *runtime.ExprNode) *variables.PMMPVarRef {
 	var v *variables.PMMPVarRef
 	if sym := rt.ExprStack.GetVariable(e); sym != nil {
@@ -258,16 +275,14 @@ func GetVariableFromExpression(rt *runtime.Runtime, e *runtime.ExprNode) *variab
 			sym = part.Pairvar
 		}
 		v = sym.(*variables.PMMPVarRef)
-		T().P("var", v.GetName()).Debugf("variable of type %s", variables.TypeString(v.GetType()))
+		T().P("var", v.GetName()).Debugf("variable of type %s", variables.TypeString(v.Type()))
 	}
 	return v
 }
 
-/*
-A variable which goes out of scope becomes a "capsule". We send a message
-to the expression stack to forget the Symbol(s) for the ID(s) of a
-variable. Variables are of type numeric or pair.
-*/
+// A variable which goes out of scope becomes a "capsule". We send a message
+// to the expression stack to forget the Symbol(s) for the ID(s) of a
+// variable. Variables are of type numeric or pair.
 func EncapsulateVariable(rt *runtime.Runtime, v *variables.PMMPVarRef) {
 	rt.ExprStack.EncapsuleVariable(v.GetID())
 	if v.IsPair() {
@@ -276,13 +291,12 @@ func EncapsulateVariable(rt *runtime.Runtime, v *variables.PMMPVarRef) {
 	}
 }
 
-/*
-Make all variables in a memory frame "capsules".
-When a memory frame is popped from the stack, the local variables living
-in the frame have to be made "capsules". This is necessary, because they
-may still be relevant to the LEQ-solver. The LEQ will finally decide
-when to abondon the "zombie" variable.
-*/
+// Make all variables in a memory frame "capsules".
+//
+// When a memory frame is popped from the stack, the local variables living
+// in the frame have to be made "capsules". This is necessary, because they
+// may still be relevant to the LEQ-solver. The LEQ will finally decide
+// when to abondon the "zombie" variable.
 func EncapsulateVarsInMemory(rt *runtime.Runtime, mf *runtime.DynamicMemoryFrame) {
 	mf.Symbols().Each(func(name string, sym runtime.Symbol) {
 		vref := sym.(*variables.PMMPVarRef)
@@ -291,10 +305,8 @@ func EncapsulateVarsInMemory(rt *runtime.Runtime, mf *runtime.DynamicMemoryFrame
 	})
 }
 
-/*
-Load builtin symbols into a scope (usually the global scope).
-Additionally loads initial Lua definitions.
-*/
+// Load builtin symbols into a scope (usually the global scope).
+// Additionally loads initial Lua definitions.
 func LoadBuiltinSymbols(rt *runtime.Runtime, scripting *Scripting) {
 	originDef := Declare(rt, "origin", variables.PairType)
 	origin := arithmetic.MakePair(arithmetic.ConstZero, arithmetic.ConstZero)
@@ -313,6 +325,7 @@ func LoadBuiltinSymbols(rt *runtime.Runtime, scripting *Scripting) {
 	_ = Variable(rt, leftDef, left, nil, true)
 	_ = Declare(rt, "p", variables.PairType)
 	_ = Declare(rt, "q", variables.PairType)
+	_ = Declare(rt, "P", variables.PathType)
 	w := Declare(rt, "_whtvr", variables.NumericType) // 'whatever' variables
 	// make whatever[]
 	WhateverDeclaration = variables.CreatePMMPVarDecl("<array>", variables.ComplexArray, w)
@@ -331,7 +344,8 @@ Variable assignment.
 
 (3) Re-incarnate lvalue (get a new ID for it)
 
-(4) Create equation on expression stack
+(4) If type is numeric or pair: Create equation on expression stack,
+else assign a path value to a path variable.
 */
 func Assign(rt *runtime.Runtime, lvalue *variables.PMMPVarRef, e *runtime.ExprNode) {
 	varname := lvalue.GetName()
@@ -343,16 +357,18 @@ func Assign(rt *runtime.Runtime, lvalue *variables.PMMPVarRef, e *runtime.ExprNo
 	T().P("var", varname).Debugf("unset in %v", mf)
 	vref.Reincarnate()
 	T().P("var", vref.GetName()).Debugf("new lvalue incarnation #%d", vref.GetID())
-	PushVariable(rt, vref, false) // push LHS on stack
-	rt.ExprStack.Push(e)          // push RHS on stack
-	rt.ExprStack.EquateTOS2OS()   // construct equation
+	if vref.Type() == variables.PathType {
+		vref.SetValue(e.Other)
+	} else { // create linear equation
+		PushVariable(rt, vref, false) // push LHS on stack
+		rt.ExprStack.Push(e)          // push RHS on stack
+		rt.ExprStack.EquateTOS2OS()   // construct equation
+	}
 }
 
-/*
-Save a tag within a group. The tag will be restored at the end of the
-group. Save-commands within global scope will be ignored.
-This method simply creates a var decl for the tag in the current scope.
-*/
+// Save a tag within a group. The tag will be restored at the end of the
+// group. Save-commands within global scope will be ignored.
+// This method simply creates a var decl for the tag in the current scope.
 func Save(rt *runtime.Runtime, tag string) {
 	sym, scope := rt.ScopeTree.Current().ResolveSymbol(tag)
 	if sym != nil { // already found in scope stack
@@ -363,42 +379,39 @@ func Save(rt *runtime.Runtime, tag string) {
 	rt.ScopeTree.Current().DefineSymbol(tag)
 }
 
-/*
-Declare a tag to be of type tp.
-
-If the tag is not declared, insert a new symbol in global scope. If a
-declaration already exists, erase all variables and re-enter a declaration
-(MetaFont semantics). If the tag has been "saved" in the current or in an outer
-scope, make this tag a new undefined symbol.
-*/
-func Declare(rt *runtime.Runtime, tag string, tp int) *variables.PMMPVarDecl {
+// Declare a tag to be of type tp.
+//
+// If the tag is not declared, insert a new symbol in global scope. If a
+// declaration already exists, erase all variables and re-enter a declaration
+// (MetaFont semantics). If the tag has been "saved" in the current or in an outer
+// scope, make this tag a new undefined symbol.
+//
+func Declare(rt *runtime.Runtime, tag string, tp variables.VariableType) *variables.PMMPVarDecl {
 	sym, scope := rt.ScopeTree.Current().ResolveSymbol(tag)
 	if sym != nil { // already found in scope stack
 		T().P("tag", tag).Debugf("declare: found tag in scope %s", scope.GetName())
 		T().P("decl", tag).Debugf("variable already declared - re-declaring")
 		// Erase all existing variables and re-define symbol
 		sym, _ = scope.DefineSymbol(tag)
-		sym.(*variables.PMMPVarDecl).SetType(tp)
+		sym.(*variables.PMMPVarDecl).SetType(int(tp))
 	} else { // enter new symbol in global scope
 		scope = rt.ScopeTree.Globals()
 		sym, _ = scope.DefineSymbol(tag)
-		sym.(*variables.PMMPVarDecl).SetType(tp)
+		sym.(*variables.PMMPVarDecl).SetType(int(tp))
 	}
 	T().P("decl", sym.GetName()).Debugf("declared symbol in %s", scope.GetName())
 	return sym.(*variables.PMMPVarDecl)
 }
 
-/*
-Create a variable reference. Parameters are the declaration for the variable,
-a value and a flag, indicating if this variable should go to global memory.
-The subscripts parameter is a slice of array-subscripts, if the variable
-declaration is of array (complex) type.
-*/
+// Create a variable reference. Parameters are the declaration for the variable,
+// a value and a flag, indicating if this variable should go to global memory.
+// The subscripts parameter is a slice of array-subscripts, if the variable
+// declaration is of array (complex) type.
 func Variable(rt *runtime.Runtime, decl *variables.PMMPVarDecl, value interface{},
 	subscripts []dec.Decimal, global bool) *variables.PMMPVarRef {
 	//
 	var v *variables.PMMPVarRef
-	if decl.GetType() == variables.NumericType {
+	if decl.Type() == variables.NumericType {
 		v = variables.CreatePMMPVarRef(decl, value, subscripts)
 	} else {
 		v = variables.CreatePMMPPairTypeVarRef(decl, value, subscripts)
@@ -411,10 +424,8 @@ func Variable(rt *runtime.Runtime, decl *variables.PMMPVarDecl, value interface{
 	return v
 }
 
-/*
-Create a whatever anonymous variable. In MetaFont this is a macro, but
-it is a frequent use case, so we put it in the core.
-*/
+// Create a whatever anonymous variable. In MetaFont this is a macro, but
+// it is a frequent use case, so we put it in the core.
 func Whatever(rt *runtime.Runtime) *variables.PMMPVarRef {
 	var vref *variables.PMMPVarRef
 	sym, _ := rt.ScopeTree.Globals().ResolveSymbol("_whtvr")
@@ -433,13 +444,12 @@ func Whatever(rt *runtime.Runtime) *variables.PMMPVarRef {
 // Counter for 'whatever' anonymous variables.
 var whateverCounter int64
 
-/*
-Apply a (math or scripting) function, given by name, to a known/constant argument.
-Internal math functions are floor(), ceil() and sqrt(). Other function names
-will be delegated to the scripting subsystem (Lua).
-
-Lua function may return just one value (of type numeric, pair or path).
-*/
+// Apply a (math or scripting) function, given by name, to a known/constant argument.
+// Internal math functions are floor(), ceil() and sqrt(). Other function names
+// will be delegated to the scripting subsystem (Lua).
+//
+// Lua functions will return just one value (of type numeric, pair or path).
+//
 func CallFunc(val interface{}, fun string, scripting *Scripting) (*runtime.ExprNode, []*variables.PMMPVarRef) {
 	n := arithmetic.ConstZero
 	if strings.HasPrefix(fun, "@") {
@@ -474,15 +484,14 @@ func CallFunc(val interface{}, fun string, scripting *Scripting) (*runtime.ExprN
 	return e, nil
 }
 
-/*
-Call the Lua script for a vardef variable. The parameters of the call will
-be the suffixes of the variable, i.e. all subscripts and tags after the base
-tag.
-
-Return values are wrapped into an expression node. If variables are part of
-the returned expressions, they are packed into an array of variable
-references.
-*/
+// Call the Lua script for a vardef variable. The parameters of the call will
+// be the suffixes of the variable, i.e. all subscripts and tags after the base
+// tag.
+//
+// Return values are wrapped into an expression node. If variables are part of
+// the returned expressions, they are packed into an array of variable
+// references.
+//
 func CallVardef(vref *variables.PMMPVarRef, scripting *Scripting) (*runtime.ExprNode, []*variables.PMMPVarRef) {
 	basetag := vref.Decl.BaseTag
 	suffixes := vref.GetSuffixesString()
@@ -500,11 +509,9 @@ func CallVardef(vref *variables.PMMPVarRef, scripting *Scripting) (*runtime.Expr
 	return nil, nil
 }
 
-/*
-MetaFont begingroup command: push a new scope and memory frame.
-Clients may supply a name for the group, otherwise it will be set
-to "group".
-*/
+// MetaFont begingroup command: push a new scope and memory frame.
+// Clients may supply a name for the group, otherwise it will be set
+// to "group".
 func Begingroup(rt *runtime.Runtime, name string) (*runtime.Scope, *runtime.DynamicMemoryFrame) {
 	if name == "" {
 		name = "group"
@@ -514,21 +521,18 @@ func Begingroup(rt *runtime.Runtime, name string) (*runtime.Scope, *runtime.Dyna
 	return groupscope, groupmf
 }
 
-/*
-MetaFont endgroup command: pop scope and memory frame of group.
-*/
+//MetaFont endgroup command: pop scope and memory frame of group.
 func Endgroup(rt *runtime.Runtime) {
 	mf := PopScopeAndMemory(rt)
 	EncapsulateVarsInMemory(rt, mf)
 }
 
-/*
-Decrease grouping level.
-We pop the topmost scope and topmost memory frame. This happens after
-a group is left.
-
-Returns the previously topmost memory frame.
-*/
+// Decrease grouping level.
+// We pop the topmost scope and topmost memory frame. This happens after
+// a group is left.
+//
+// Returns the previously topmost memory frame.
+//
 func PopScopeAndMemory(rt *runtime.Runtime) *runtime.DynamicMemoryFrame {
 	hidden := rt.ScopeTree.PopScope()
 	hidden.Name = "(hidden)"
@@ -585,22 +589,18 @@ func ScaleDimension(dimen dec.Decimal, unit string) dec.Decimal {
 
 // --- Utilities -------------------------------------------------------------
 
-/*
-I do not always understand ANTLR V4's Go runtime typing and tree semantics
-(rather poorly documented), so I introduce some helpers. Some of these are
-probably unnecessary for a better versed ANTLR Go user...
-*/
+// I do not always understand ANTLR V4's Go runtime typing and tree semantics
+// (rather poorly documented), so I introduce some helpers. Some of these are
+// probably unnecessary for a better versed ANTLR Go user...
 func IsTerminal(node antlr.Tree) bool {
 	_, ok := node.GetPayload().(antlr.RuleNode)
 	//fmt.Printf("node is terminal: %v\n", !ok)
 	return !ok
 }
 
-/*
-I do not always understand ANTLR V4's Go runtime typing and tree semantics
-(rather poorly documented), so I introduce some helpers. Some of these are
-probably unnecessary for a better versed ANTLR Go user...
-*/
+// I do not always understand ANTLR V4's Go runtime typing and tree semantics
+// (rather poorly documented), so I introduce some helpers. Some of these are
+// probably unnecessary for a better versed ANTLR Go user...
 func GetCtxText(ctx antlr.Tree) string {
 	t := ctx.(antlr.ParseTree).GetText()
 	return t

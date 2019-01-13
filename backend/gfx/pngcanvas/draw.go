@@ -1,8 +1,11 @@
 /*
-Package png implements a canvas type as a bridge to the Go Graphics
-drawing package.
+Package pngcanvas implements a canvas type as an adapter to the Go-Graphics
+drawing library.
 
-----------------------------------------------------------------------
+Note: With the image/vector package, this package seems to be unnecessary.
+It will probably be smarter to draw to an SVG canvas and then use package
+vector's rasterizer to produce a pixel image.
+
 
 BSD License
 
@@ -37,9 +40,8 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-----------------------------------------------------------------------
 */
-package png
+package pngcanvas
 
 import (
 	"image"

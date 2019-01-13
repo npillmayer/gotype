@@ -38,8 +38,9 @@ of type numeric, too. This is different from MetaFont, where x2r may be of a
 different type than x2. Nevertheless, I'll stick to my interpretation,
 which I find less confusing.
 
-The implementation is tightly coupled to the ANTLR V4 parser generator.
-ANTLR is a great tool and I see no use in being independent from it.
+The implementation currently is tightly coupled to the ANTLR V4 parser
+generator. Using ANTLR vor this task is a bit of overkill. Maybe I'll
+some day write a recursive descent parser from scratch as a substitute.
 
 
 BSD License
@@ -83,12 +84,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/antlr/antlr4/runtime/Go/antlr"
-	sll "github.com/emirpasic/gods/lists/singlylinkedlist"
 	"github.com/npillmayer/gotype/core/arithmetic"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/runtime"
-	"github.com/npillmayer/gotype/syntax/variables/grammar"
 	dec "github.com/shopspring/decimal"
 )
 
@@ -102,9 +100,12 @@ func T() tracing.Trace {
 
 // === Variable Type Declarations ============================================
 
-// Variable types
+// VariableType represents the type of a variable (obviously).
+type VariableType int8
+
+// Predefined variable types
 const (
-	Undefined = iota
+	Undefined VariableType = iota
 	NumericType
 	PairType
 	PathType
@@ -118,7 +119,7 @@ const (
 )
 
 // Helper: get a type as string
-func TypeString(vt int) string {
+func TypeString(vt VariableType) string {
 	switch vt {
 	case Undefined:
 		return "<undefined>"
@@ -147,7 +148,7 @@ func TypeString(vt int) string {
 }
 
 // Helper: get a type from a string
-func TypeFromString(str string) int {
+func TypeFromString(str string) VariableType {
 	switch str {
 	case "numeric":
 		return NumericType
@@ -169,12 +170,12 @@ func TypeFromString(str string) int {
 
 /*
 MetaFont declares variables explicitly ("numeric x;") or dynamically
-("x=1" => x is of type numeric). Dynamic variable use is permitted for
+("x=1" ⟹ x is of type numeric). Dynamic variable use is permitted for
 numeric variables only. All other types must be declared. Declaration
 is for tags only, i.e. the "x" in "x2r". This differs from MetaFont,
 where x2r can have a separate type from x.
 
-We build up doubly-linked tree of variable declarations to describe a
+We build up a doubly-linked tree of variable declarations to describe a
 variable with a single defining tag. The tag is the entity that goes to
 the symbol table (of a scope). Suffixes and subscripts are attached to
 the tag, but invisible as symbols.
@@ -184,7 +185,7 @@ Example:
    numeric x; x2r := 7; x.b := 77;
 
 Result:
-  tag = "x"  of type NumericType => into symbol table of a scope
+  tag = "x"  of type NumericType ⟹ into symbol table of a scope
      +-- suffix ".b" of type ComplexSuffix         "x.b"
      +-- subscript "[]" of type ComplexArray:      "x[]"
          +--- suffix ".r" of type ComplexSuffix:  "x[].r"
@@ -201,11 +202,16 @@ func (d *PMMPVarDecl) String() string {
 	return fmt.Sprintf("<decl %s/%s>", d.GetFullName(), TypeString(d.GetBaseType()))
 }
 
+func (d *PMMPVarDecl) Type() VariableType {
+	t := d.GetType()
+	return VariableType(t)
+}
+
 // Get isolated name of declaration partial (tag, array or suffix).
 func (d *PMMPVarDecl) GetName() string {
-	if d.GetType() == ComplexArray {
+	if d.Type() == ComplexArray {
 		return "[]"
-	} else if d.GetType() == ComplexSuffix {
+	} else if d.Type() == ComplexSuffix {
 		return "." + d.StdSymbol.GetName()
 	} else {
 		return d.StdSymbol.GetName()
@@ -223,7 +229,7 @@ func (d *PMMPVarDecl) GetFullName() string {
 	} else { // we are in a declaration for a complex type
 		var s bytes.Buffer
 		s.WriteString(d.Parent.GetFullName()) // recursive
-		t := d.StdSymbol.GetType()
+		t := d.Type()
 		if t == ComplexArray {
 			s.WriteString("[]")
 		} else if t == ComplexSuffix {
@@ -237,8 +243,8 @@ func (d *PMMPVarDecl) GetFullName() string {
 }
 
 // Returns the type of the base tag.
-func (d *PMMPVarDecl) GetBaseType() int {
-	return d.BaseTag.StdSymbol.GetType()
+func (d *PMMPVarDecl) GetBaseType() VariableType {
+	return d.BaseTag.Type()
 }
 
 // Create and initialize a new variable type declaration.
@@ -246,7 +252,7 @@ func (d *PMMPVarDecl) GetBaseType() int {
 func NewPMMPVarDecl(nm string) runtime.Symbol {
 	sym := &PMMPVarDecl{}
 	sym.Name = nm
-	sym.Symtype = Undefined
+	sym.Symtype = int(Undefined)
 	sym.BaseTag = sym // this pointer should never be nil
 	T().P("decl", sym.GetFullName()).Debugf("atomic variable type declaration created")
 	return sym
@@ -259,13 +265,13 @@ If the parent is given and already has a child / suffix-partial with
 the same signature as the one to create, this function will not create
 a new partial, but provide the existing one.
 */
-func CreatePMMPVarDecl(nm string, tp int, parent *PMMPVarDecl) *PMMPVarDecl {
+func CreatePMMPVarDecl(nm string, tp VariableType, parent *PMMPVarDecl) *PMMPVarDecl {
 	if parent != nil { // check if already exists as child of parent
 		if parent.GetFirstChild() != nil {
 			ch := parent.GetFirstChild().(*PMMPVarDecl)
 			for ch != nil { // as long as there are children, i.e. partials
 				if (tp == ComplexSuffix && ch.GetName() == nm) ||
-					(ch.GetType() == ComplexArray && tp == ComplexArray) {
+					(ch.Type() == ComplexArray && tp == ComplexArray) {
 					T().P("decl", ch.GetFullName()).Debugf("variable type already declared")
 					return ch // we're done
 				}
@@ -278,7 +284,7 @@ func CreatePMMPVarDecl(nm string, tp int, parent *PMMPVarDecl) *PMMPVarDecl {
 		}
 	}
 	sym := NewPMMPVarDecl(nm).(*PMMPVarDecl) // not found, create a new one
-	sym.Symtype = tp
+	sym.Symtype = int(tp)
 	T().P("decl", sym.GetFullName()).Debugf("variable type declaration created")
 	if parent != nil {
 		sym.AppendToVarDecl(parent)
@@ -295,7 +301,7 @@ func (d *PMMPVarDecl) AppendToVarDecl(v *PMMPVarDecl) *PMMPVarDecl {
 	if v == nil {
 		panic("attempt to append type declaration to nil-tag")
 	}
-	t := d.StdSymbol.GetType()
+	t := d.Type()
 	if t != ComplexSuffix && t != ComplexArray {
 		panic(fmt.Sprintf("attempt to append simple type (%d) to tag", t))
 	}
@@ -346,7 +352,7 @@ type PMMPVarRef struct {
 	cachedName        string        // store full name
 	Decl              *PMMPVarDecl  // type declaration for this variable
 	subscripts        []dec.Decimal // list of subscripts, first to last
-	Value             interface{}   // if known: has a value (numeric or pair)
+	Value             interface{}   // if known: has a value (numeric, pair, path, ...)
 }
 
 /*
@@ -370,13 +376,13 @@ func CreatePMMPVarRef(decl *PMMPVarDecl, value interface{}, indices []dec.Decima
 	if decl.GetBaseType() == PairType {
 		return CreatePMMPPairTypeVarRef(decl, value, indices)
 	} else {
-		T().Debugf("creating %s var for %v", TypeString(decl.GetType()), decl)
+		T().Debugf("creating %s var for %v", TypeString(decl.Type()), decl)
 		v := &PMMPVarRef{
 			Decl:       decl,
 			subscripts: indices,
 			Value:      value,
 		}
-		v.SetType(decl.GetBaseType())
+		v.SetType(int(decl.GetBaseType()))
 		v.Id = newVarSerial() // TODO: check, when this is needed (now: id leak)
 		//T().Debugf("created var ref: subscripts = %v", indices)
 		return v
@@ -391,7 +397,7 @@ func CreatePMMPPairTypeVarRef(decl *PMMPVarDecl, value interface{}, indices []de
 		subscripts: indices,
 		Value:      value,
 	}
-	v.SetType(PairType)
+	v.SetType(int(PairType))
 	v.Id = newVarSerial() // TODO: check, when this is needed (now: id leak)
 	var pair arithmetic.Pair
 	var ok bool
@@ -438,6 +444,14 @@ func (v *PMMPVarRef) GetName() string {
 	return v.cachedName
 }
 
+// Type returns the variable's type.
+func (v *PMMPVarRef) Type() VariableType {
+	if v.Decl != nil {
+		return v.Decl.GetBaseType()
+	}
+	return Undefined
+}
+
 /*
 Strip the base tag string off of a variable and return all the suffxies
 as string.
@@ -470,13 +484,13 @@ func (ppart *PairPartRef) GetID() int {
 }
 
 // Interface Typed.
-func (ppart *PairPartRef) GetType() int {
+func (ppart *PairPartRef) Type() VariableType {
 	return NumericType
 }
 
 // Predicate: is this variable of type pair?
 func (v *PMMPVarRef) IsPair() bool {
-	return v.GetType() == PairType
+	return v.Type() == PairType
 }
 
 // Get the x-part of a pair variable
@@ -548,7 +562,7 @@ func (v *PMMPVarRef) GetFullName() string {
 	subscriptcount := len(v.subscripts) - 1
 	for sfx := v.Decl; sfx != nil; sfx = sfx.Parent { // iterate backwards
 		//T().Printf("sfx = %v", sfx)
-		if sfx.GetType() == ComplexArray {
+		if sfx.Type() == ComplexArray {
 			s := "[" + v.subscripts[subscriptcount].String() + "]"
 			suffixes = append(suffixes, s)
 			subscriptcount -= 1
@@ -688,202 +702,3 @@ var _ runtime.Assignable = &PMMPVarRef{}
 var _ runtime.Symbol = &PairPartRef{}
 var _ runtime.TreeNode = &PairPartRef{}
 var _ runtime.Assignable = &PairPartRef{}
-
-// === Variable Parser =======================================================
-
-/*
-We use a small ANTLR V4 sub-grammar for parsing variable references.
-We'll attach a listener to ANTLR's AST walker.
-*/
-type VarParseListener struct {
-	*grammar.BasePMMPVarListener // build on top of ANTLR's base 'class'
-	scopeTree                    *runtime.ScopeTree
-	def                          *PMMPVarDecl
-	ref                          *PMMPVarRef
-	suffixes                     *sll.List
-}
-
-// Construct a new variable parse listener.
-func NewVarParseListener() *VarParseListener {
-	pl := &VarParseListener{} // no need to initialize base class
-	return pl
-}
-
-/*
-Parse a variable from a string. This function will try to find an existing
-declaration and extend it accordingly. If no declaration can be found, this
-function will construct a new one from the variable reference.
-
-To find a variable in memory we first construct the "canonical" form.
-Variables live in symbol tables and are resolved by name, so the exact
-spelling of the variable's name is important. The canonical form uses
-brackets for subscripts and dots for suffixes.
-
-Examples:
-
-  x => x
-  x3 => x[3]
-  z4r => z[4].r
-  hello.world => hello.world
-
-*/
-func ParseVariableFromString(vstr string, err antlr.ErrorListener) antlr.RuleContext {
-	// We let ANTLR to the heavy lifting. This may change in the future,
-	// as it would be fairly straightforward to implement this by hand.
-	input := antlr.NewInputStream(vstr + "@")
-	T().Debugf("parsing variable ref = %s", vstr)
-	varlexer := grammar.NewPMMPVarLexer(input)
-	stream := antlr.NewCommonTokenStream(varlexer, 0)
-	// TODO: make the parser re-usable....!
-	// TODO: We can re-use the parser, but not the lexer (see ANTLR book, chapter 10).
-	varParser := grammar.NewPMMPVarParser(stream)
-	if err == nil {
-		err = antlr.NewDiagnosticErrorListener(true)
-	} else {
-		T().Debugf("setting error listener")
-	}
-	varParser.RemoveErrorListeners()
-	varParser.AddErrorListener(err)
-	varlexer.RemoveErrorListeners()
-	varlexer.AddErrorListener(err)
-	varParser.BuildParseTrees = true
-	tree := varParser.Variable()
-	sexpr := antlr.TreesStringTree(tree, nil, varParser)
-	T().Debugf("### VAR = %s", sexpr)
-	return tree
-}
-
-/* TODO remove this
-func (pl *ParseListener) ParseVarFromString(vstr string) antlr.RuleContext {
-	// We let ANTLR to the heavy lifting. This may change in the future,
-	// as it would be fairly straightforward to implement this by hand.
-	input := antlr.NewInputStream(vstr + "@")
-	T().Debugf("parsing variable ref = %s", vstr)
-	varlexer := grammar.NewPMMPVarLexer(input)
-	stream := antlr.NewCommonTokenStream(varlexer, 0)
-	// TODO: make the parser re-usable....!
-	// TODO: We can re-use the parser, but not the lexer (see ANTLR book, chapter 10).
-	pl.varParser = grammar.NewPMMPVarParser(stream)
-	pl.varParser.AddErrorListener(antlr.NewDiagnosticErrorListener(true))
-	pl.varParser.BuildParseTrees = true
-	tree := pl.varParser.Variable()
-	sexpr := antlr.TreesStringTree(tree, nil, pl.varParser)
-	T().Debugf("### VAR = %s", sexpr)
-	return tree
-}
-*/
-
-/*
-After having ANTLR create us a parse tree for a variable identifier, we
-will construct a variable reference from the parse tree. This var ref
-has an initial serial which is unique. This may not be what you want:
-usually you will try to find an existing incarnation (with a lower serial)
-in the memory (see method FindVariableReferenceInMemory).
-
-We walk the ANTLR parse tree using a listener (VarParseListener).
-*/
-func GetVarRefFromVarSyntax(vtree antlr.RuleContext, scopes *runtime.ScopeTree) *PMMPVarRef {
-	listener := NewVarParseListener()
-	listener.scopeTree = scopes                        // where variables declarations have to be found
-	listener.suffixes = sll.New()                      // list to collect suffixes
-	antlr.ParseTreeWalkerDefault.Walk(listener, vtree) // fills listener.ref
-	return listener.ref
-}
-
-/* TODO remove this
-func (pl *ParseListener) GetPMMPVarRefFromVarSyntax(vtree antlr.RuleContext) *PMMPVarRef {
-	listener := NewVarParseListener()
-	listener.scopeTree = pl.interpreter.scopeTree      // variables declarations have to be found
-	listener.suffixes = sll.New()                      // list to collect suffixes
-	antlr.ParseTreeWalkerDefault.Walk(listener, vtree) // fills listener.ref
-	return listener.ref
-}
-*/
-
-// Helper struct to collect suffixes
-type varsuffix struct {
-	text   string
-	number bool
-}
-
-/*
-Listener callback, receiving a complete variable reference.
-
-   variable : tag (suffix | subscript)* MARKER
-
-A variable has been referenced. We will have to find the declaration of
-this variable and push a variable reference onto the expression stack.
-A variable reference looks something like this: "x2a.b" or "y[3.14]".
-
-Some complications may arise:
-
-- No declaration for the variable's tag can be found: we will create
-a declaration for the tag in global scope with type numeric.
-
-- The declaration is incomplete, i.e. the tag is declared, but not the
-suffix(es). We will extend the declaration appropriately.
-
-- We will have to create a subscript vector for the var reference.
-we'll collect them (together with suffixes) in a list.
-
-Example:
-
-  Parser reads "x2a", thus tag="x" + subscript="2" + suffix="a"
-  We create (if not yet known) vl.def="x[].a" and vl.ref="x[2].a"
-
-The MARKER will be ignored.
-*/
-func (vl *VarParseListener) ExitVariable(ctx *grammar.VariableContext) {
-	tag := ctx.Tag().GetText()
-	T().P("tag", tag).Debugf("looking for declaration for tag")
-	sym, scope := vl.scopeTree.Current().ResolveSymbol(tag)
-	if sym != nil {
-		vl.def = sym.(*PMMPVarDecl) // scopes are assumed to create these
-		T().P("decl", vl.def.GetFullName()).Debugf("found %v in scope %s", vl.def, scope.GetName())
-	} else { // variable declaration for tag not found => create it
-		sym, _ = vl.scopeTree.Globals().DefineSymbol(tag)
-		vl.def = sym.(*PMMPVarDecl) // scopes are assumed to create these
-		vl.def.SetType(NumericType) // un-declared variables default to type numeric
-		T().P("decl", vl.def.GetName()).Debugf("created %v in global scope", vl.def)
-	} // now def declaration of <tag> is in vl.def
-	// produce declarations for suffixes, if necessary
-	it := vl.suffixes.Iterator()
-	subscrCount := 0
-	for it.Next() {
-		i, vs := it.Index(), it.Value().(varsuffix)
-		T().P("decl", vl.def.GetFullName()).Debugf("appending suffix #%d: %s", i, vs)
-		if vs.number { // subscript
-			vl.def = CreatePMMPVarDecl("<array>", ComplexArray, vl.def)
-			subscrCount += 1
-		} else { // tag suffix
-			vl.def = CreatePMMPVarDecl(vs.text, ComplexSuffix, vl.def)
-		}
-	}
-	T().P("decl", vl.def.GetFullName()).Debugf("full declared type: %v", vl.def)
-	// now create variable ref and push onto expression stack
-	var subscripts []dec.Decimal = make([]dec.Decimal, subscrCount, subscrCount+1)
-	it = vl.suffixes.Iterator()
-	for it.Next() { // extract subscripts -> array
-		_, vs2 := it.Index(), it.Value().(varsuffix)
-		if vs2.number { // subscript
-			d, _ := dec.NewFromString(vs2.text)
-			subscripts = append(subscripts, d)
-		}
-	}
-	vl.ref = CreatePMMPVarRef(vl.def, nil, subscripts)
-	T().P("var", vl.ref.GetName()).Debugf("var ref %v", vl.ref)
-}
-
-// Variable parsing: Collect a suffix.
-func (vl *VarParseListener) ExitSuffix(ctx *grammar.SuffixContext) {
-	tag := ctx.TAG().GetText()
-	T().Debugf("suffix tag: %s", tag)
-	vl.suffixes.Add(varsuffix{tag, false})
-}
-
-// Variable parsing: Collect a numeric subscript.
-func (vl *VarParseListener) ExitSubscript(ctx *grammar.SubscriptContext) {
-	d := ctx.DECIMAL().GetText()
-	T().Debugf("subscript: %s", d)
-	vl.suffixes.Add(varsuffix{d, true})
-}

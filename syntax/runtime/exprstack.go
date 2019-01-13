@@ -414,6 +414,13 @@ func (es *ExprStack) PushPairConstant(pc arithm.Pair) *ExprStack {
 	return es.Push(e)
 }
 
+// Push a typeless constant onto the stack.
+func (es *ExprStack) PushOtherConstant(o interface{}) *ExprStack {
+	e := &ExprNode{Other: o}
+	T().Debugf("pushing tyoeless constant = %v", e)
+	return es.Push(e)
+}
+
 /*
 Push a variable onto the stack. The ID of the variable must be > 0 !
 It will be wrapped into a polynomial p = 0 + 1 * v.
@@ -517,32 +524,22 @@ func (es *ExprStack) TraceString(e *ExprNode) string {
 	}
 }
 
-// Predicate: is an expression of a certain type?
-func (es *ExprStack) CheckTypeMatch(e1 *ExprNode, e2 *ExprNode) bool {
-	match := false
-	if e1.IsValid() && e2.IsValid() {
-		if e1.IsPair == e2.IsPair {
-			match = true
-		}
-	}
-	return match
-}
-
 /*
 Check the operands on the stack for an arithmetic operation.
 Currently will panic if operands are invalid or not enough operands (n) on
 stack.
 */
-func (es *ExprStack) CheckOperands(n int, op string) {
+func (es *ExprStack) CheckOperands(n int, op string) error {
 	if n <= 0 {
-		return
+		return fmt.Errorf("Internal error: Illegal count for stack operands")
 	}
 	if es.Size() < n {
-		panic(fmt.Sprintf("attempt to %s %d operand(s), but %d on stack", op, n, es.Size()))
+		return fmt.Errorf("Attempt to %s %d operand(s), but %d on stack", op, n, es.Size())
 	}
 	if !es.isValid(es.Top()) {
-		panic(fmt.Sprintf("TOS operand is invalid for <%s>", op))
+		return fmt.Errorf("TOS operand is invalid for <%s>", op)
 	}
+	return nil
 }
 
 // Check interface assignabiliy
@@ -551,14 +548,16 @@ var _ arithm.VariableResolver = &ExprStack{}
 // === Arithmetic Operations =================================================
 
 // Length of a pair (i.e., distance from origin). Argument must be a known pair.
-func (es *ExprStack) LengthTOS() {
-	es.CheckOperands(1, "get length of")
+func (es *ExprStack) LengthTOS() error {
+	if err := es.CheckOperands(1, "get length of"); err != nil {
+		return err
+	}
 	e, _ := es.Pop()
 	cx, isconstx := e.XPolyn.IsConstant()
 	cy, isconsty := e.YPolyn.IsConstant()
 	if !e.IsPair || !isconstx || !isconsty {
 		T().P("op", "length").Errorf("argument must be known pair")
-		panic("not implemented: length(<unknown>)")
+		return fmt.Errorf("not implemented: length(<unknown>)")
 	} else {
 		T().P("op", "length").Debugf("length of (%s,%s)", cx, cy)
 		x, _ := cx.Float64()
@@ -566,18 +565,21 @@ func (es *ExprStack) LengthTOS() {
 		l := math.Sqrt(math.Pow(x, 2.0) + math.Pow(y, 2.0))
 		es.PushConstant(dec.NewFromFloat(l))
 	}
+	return nil
 }
 
 // Add TOS and 2ndOS. Allowed for known and unknown terms.
-func (es *ExprStack) AddTOS2OS() {
+func (es *ExprStack) AddTOS2OS() error {
 	var e, e1, e2 *ExprNode
-	es.CheckOperands(2, "add")
+	if err := es.CheckOperands(2, "add"); err != nil {
+		return err
+	}
 	e2, _ = es.Pop()
 	e1, _ = es.Pop()
 	if e1.IsPair {
 		if !e2.IsPair {
 			T().Errorf("type mismatch: <pair> + <numeric>")
-			panic("not implemented: <pair> + <numeric>")
+			return fmt.Errorf("not implemented: <pair> + <numeric>")
 		}
 		px := e1.XPolyn.Add(e2.XPolyn, false)
 		py := e1.YPolyn.Add(e2.YPolyn, false)
@@ -585,7 +587,7 @@ func (es *ExprStack) AddTOS2OS() {
 	} else {
 		if e2.IsPair {
 			T().Errorf("type mismatch: <numeric> + <pair>")
-			panic("not implemented: <numeric> + <pair>")
+			return fmt.Errorf("not implemented: <numeric> + <pair>")
 		}
 		px := e1.XPolyn.Add(e2.XPolyn, false)
 		e = NewNumericExpression(px)
@@ -593,18 +595,21 @@ func (es *ExprStack) AddTOS2OS() {
 	//es.Push(&ExprNode{p})
 	es.Push(e)
 	T().P("op", "ADD").Debugf("result %s", e.String())
+	return nil
 }
 
 // Subtract TOS from 2ndOS. Allowed for known and unknown terms.
-func (es *ExprStack) SubtractTOS2OS() {
+func (es *ExprStack) SubtractTOS2OS() error {
 	var e, e1, e2 *ExprNode
-	es.CheckOperands(2, "subtract")
+	if err := es.CheckOperands(2, "subtract"); err != nil {
+		return err
+	}
 	e2, _ = es.Pop()
 	e1, _ = es.Pop()
 	if e1.IsPair {
 		if !e2.IsPair {
 			T().Errorf("type mismatch: <pair> - <numeric>")
-			panic("not implemented: <pair> - <numeric>")
+			return fmt.Errorf("not implemented: <pair> - <numeric>")
 		}
 		px := e1.XPolyn.Subtract(e2.XPolyn, false)
 		py := e1.YPolyn.Subtract(e2.YPolyn, false)
@@ -612,7 +617,7 @@ func (es *ExprStack) SubtractTOS2OS() {
 	} else {
 		if e2.IsPair {
 			T().Errorf("type mismatch: <numeric> - <pair>")
-			panic("not implemented: <numeric> - <pair>")
+			return fmt.Errorf("not implemented: <numeric> - <pair>")
 		}
 		px := e1.XPolyn.Subtract(e2.XPolyn, false)
 		e = NewNumericExpression(px)
@@ -620,12 +625,15 @@ func (es *ExprStack) SubtractTOS2OS() {
 	//es.Push(&ExprNode{p})
 	es.Push(e)
 	T().P("op", "SUB").Debugf("result %s", e.String())
+	return nil
 }
 
 // Multiply TOS and 2ndOS. One multiplicant must be a known numeric constant.
-func (es *ExprStack) MultiplyTOS2OS() {
+func (es *ExprStack) MultiplyTOS2OS() error {
 	var e, e1, e2 *ExprNode
-	es.CheckOperands(2, "multiply")
+	if err := es.CheckOperands(2, "multiply"); err != nil {
+		return err
+	}
 	e2, _ = es.Pop()
 	e1, _ = es.Pop()
 	if e2.IsPair {
@@ -634,7 +642,7 @@ func (es *ExprStack) MultiplyTOS2OS() {
 	if e1.IsPair {
 		if e2.IsPair {
 			T().Errorf("one multiplicant must be a known numeric")
-			panic("not implemented: <pair> * <pair>")
+			fmt.Errorf("not implemented: <pair> * <pair>")
 		} else {
 			n := e2.XPolyn
 			nn := n.CopyPolynomial()
@@ -648,17 +656,20 @@ func (es *ExprStack) MultiplyTOS2OS() {
 	}
 	es.Push(e)
 	T().P("op", "MUL").Debugf("result = %s", e.String())
+	return nil
 }
 
 // Divide 2ndOS by TOS. Divisor must be numeric non-0 constant.
-func (es *ExprStack) DivideTOS2OS() {
+func (es *ExprStack) DivideTOS2OS() error {
 	var e, e1, e2 *ExprNode
-	es.CheckOperands(2, "divide")
+	if err := es.CheckOperands(2, "divide"); err != nil {
+		return err
+	}
 	e2, _ = es.Pop()
 	e1, _ = es.Pop()
 	if e2.IsPair {
 		T().Errorf("divisor must be a known non-zero numeric")
-		panic("not implemented: division by <pair>")
+		return fmt.Errorf("not implemented: division by <pair>")
 	}
 	if e1.IsPair {
 		n := e2.XPolyn
@@ -672,39 +683,41 @@ func (es *ExprStack) DivideTOS2OS() {
 	}
 	es.Push(e)
 	T().P("op", "DIV").Debugf("result = %s", e.String())
+	return nil
 }
 
-/*
-Numeric interpolation operation. Either n must be known or a and b.
-
-n[a,b] => a - na + nb.
-*/
-func (es *ExprStack) Interpolate() {
-	es.CheckOperands(3, "interpolate")
-	var n, a, b *ExprNode
-	b, _ = es.Pop()
-	a, _ = es.Pop()
-	n, _ = es.Pop()
-	if a.IsPair {
-		es.InterpolatePair(n, a, b)
-	} else {
-		// second operand will be destroyed, n must be first !
-		p1 := n.XPolyn.Multiply(a.XPolyn, false)
-		p2 := n.XPolyn.Multiply(b.XPolyn, false)
-		p := a.XPolyn.Subtract(p1, false)
-		p = p.Add(p2, false)
-		e := NewNumericExpression(p)
-		es.Push(e)
-		T().P("op", "INTERP").Debugf("result = %s", p.String())
+//Numeric interpolation operation. Either n must be known or a and b.
+//Calulated as:
+//
+//   n[a,b] ⟹ a - na + nb.
+//
+func (es *ExprStack) Interpolate() (err error) {
+	if err = es.CheckOperands(2, "interpolate"); err == nil {
+		var n, a, b *ExprNode
+		b, _ = es.Pop()
+		a, _ = es.Pop()
+		n, _ = es.Pop()
+		if a.IsPair {
+			err = es.InterpolatePair(n, a, b)
+		} else {
+			// second operand will be destroyed, n must be first !
+			p1 := n.XPolyn.Multiply(a.XPolyn, false)
+			p2 := n.XPolyn.Multiply(b.XPolyn, false)
+			p := a.XPolyn.Subtract(p1, false)
+			p = p.Add(p2, false)
+			e := NewNumericExpression(p)
+			es.Push(e)
+			T().P("op", "INTERP").Debugf("result = %s", p.String())
+		}
 	}
+	return
 }
 
-/*
-Pair interpolation operation. Either n must be known or z1 and z2.
-
-n[z1,z2] => z1 - n*z1 + n*z2.
-*/
-func (es *ExprStack) InterpolatePair(n *ExprNode, z1 *ExprNode, z2 *ExprNode) {
+// Pair interpolation operation. Either n must be known or z1 and z2.
+//
+//    n[z1,z2] ⟹ z1 - n*z1 + n*z2.
+//
+func (es *ExprStack) InterpolatePair(n *ExprNode, z1 *ExprNode, z2 *ExprNode) error {
 	// second operand will be destroyed, n must be first !
 	px1 := n.XPolyn.Multiply(z1.XPolyn, false)
 	px2 := n.XPolyn.Multiply(z2.XPolyn, false)
@@ -717,14 +730,15 @@ func (es *ExprStack) InterpolatePair(n *ExprNode, z1 *ExprNode, z2 *ExprNode) {
 	e := NewPairExpression(px, py)
 	es.Push(e)
 	T().P("op", "INTERP").Debugf("result = %s", e.String())
+	return nil
 }
 
-/*
-Rotate a pair around origin for TOS degrees, counterclockwise.
-TOS must be a known numeric constant.
-*/
-func (es *ExprStack) Rotate2OSbyTOS() {
-	es.CheckOperands(2, "rotate")
+// Rotate a pair around origin for TOS degrees, counterclockwise.
+// TOS must be a known numeric constant.
+func (es *ExprStack) Rotate2OSbyTOS() error {
+	if err := es.CheckOperands(2, "rotate"); err != nil {
+		return err
+	}
 	e, _ := es.Pop()
 	c, _ := e.XPolyn.IsConstant()
 	angle, _ := c.Mul(arithm.Deg2Rad).Float64()
@@ -746,27 +760,31 @@ func (es *ExprStack) Rotate2OSbyTOS() {
 		es.Push(e)
 	} else {
 		T().P("op", "rotate").Errorf("not implemented: rotate <non-pair>")
+		return fmt.Errorf("Not implemented: rotate <non-pair>")
 	}
+	return nil
 }
 
-/*
-Create an equation of the polynomials of TOS and 2ndOS.
-Introduces the equation to the solver's linear equation system.
-
-If the polynomials are of type pair polynomial, then there will be 2
-equations, one for the x-part and one for the y-part. LEQ will only handle
-numeric linear equations.
-*/
-func (es *ExprStack) EquateTOS2OS() {
-	es.SubtractTOS2OS() // now 0 = p1 - p2
-	e, _ := es.Pop()    // e is interpreted as an equation, one side 0
-	if e.IsPair {
-		var eqs = []arithm.Polynomial{
-			e.XPolyn,
-			e.YPolyn,
+// Create an equation of the polynomials of TOS and 2ndOS.
+// Introduces the equation to the solver's linear equation system.
+//
+// If the polynomials are of type pair polynomial, then there will be 2
+// equations, one for the x-part and one for the y-part. LEQ will only handle
+// numeric linear equations.
+//
+func (es *ExprStack) EquateTOS2OS() error {
+	err := es.SubtractTOS2OS() // now 0 = p1 - p2
+	if err == nil {
+		e, _ := es.Pop() // e is interpreted as an equation, one side 0
+		if e.IsPair {
+			var eqs = []arithm.Polynomial{
+				e.XPolyn,
+				e.YPolyn,
+			}
+			es.leq.AddEqs(eqs)
+		} else {
+			es.leq.AddEq(e.XPolyn)
 		}
-		es.leq.AddEqs(eqs)
-	} else {
-		es.leq.AddEq(e.XPolyn)
 	}
+	return err
 }

@@ -84,8 +84,7 @@ type REPLCommandInterpreter interface {
 	InterpretCommand(string)
 }
 
-/* Create a readline instance.
- */
+// Create a readline instance.
 func NewReadline(toolname string) *readline.Instance {
 	histfile := fmt.Sprintf("/tmp/%s-repl-history.tmp", toolname)
 	prompt := fmt.Sprintf(stdprompt, toolname)
@@ -104,10 +103,9 @@ func NewReadline(toolname string) *readline.Instance {
 	return rl
 }
 
-/* Enter a REPL and execute each command.
- * Commands are either tool-commands (setprompt, help, etc.)
- * or Gallery statements.
- */
+// Enter a REPL and execute each command.
+// Commands are either tool-commands (setprompt, help, etc.)
+// or Gallery statements.
 func (repl *BaseREPL) doLoop() {
 	for {
 		line, err := repl.readline.Readline()
@@ -132,11 +130,10 @@ func (repl *BaseREPL) doLoop() {
 	}
 }
 
-/* Central dispatcher function to execute internal commands and PMMetaPost
- * statements. It receives the command (i.e. the first word of the line),
- * a list of words (args) including the command, and the complete line of text.
- * If it returns true, the REPL should terminate.
- */
+// Central dispatcher function to execute internal commands and PMMetaPost
+// statements. It receives the command (i.e. the first word of the line),
+// a list of words (args) including the command, and the complete line of text.
+// If it returns true, the REPL should terminate.
 func (repl *BaseREPL) executeCommand(cmd string, args []string, line string) bool {
 	switch {
 	case cmd == "help":
@@ -178,8 +175,7 @@ func (repl *BaseREPL) executeCommand(cmd string, args []string, line string) boo
 	return false // do not exit
 }
 
-/* Call the Gallery interpreter, sending a statement.
- */
+// Call the PMMPost interpreter, sending a statement.
 func (repl *BaseREPL) callInterpreter(line string) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -190,8 +186,7 @@ func (repl *BaseREPL) callInterpreter(line string) {
 	repl.interpreter.InterpretCommand(line)
 }
 
-/* Input filter for REPL. Blocks ctrl-z.
- */
+// Input filter for REPL. Blocks ctrl-z.
 func filterReplInput(r rune) (rune, bool) {
 	switch r {
 	// block CtrlZ feature
