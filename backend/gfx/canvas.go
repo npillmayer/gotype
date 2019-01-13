@@ -167,7 +167,7 @@ type DrawableContour interface {
 	ToNextKnot() (k arithm.Pair, c1 arithm.Pair, c2 arithm.Pair)
 }
 
-// An immutable bridge to contours from cubic splines.
+// An immutable adapter to contours from cubic splines.
 func NewDrawablePath(path path.HobbyPath, controls path.SplineControls) DrawableContour {
 	pdrw := &pathdrawer{p: path, c: controls}
 	if path.IsCycle() {
@@ -178,7 +178,7 @@ func NewDrawablePath(path path.HobbyPath, controls path.SplineControls) Drawable
 	return pdrw
 }
 
-// internal type: immutable bridge to contours from cubic splines
+// internal type: immutable adapter to contours from cubic splines
 type pathdrawer struct {
 	p       path.HobbyPath
 	c       path.SplineControls

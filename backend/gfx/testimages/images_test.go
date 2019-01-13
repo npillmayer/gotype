@@ -3,18 +3,17 @@ package testimages
 import (
 	"testing"
 
-	"github.com/npillmayer/gotype/gtbackend/gfx"
-	_ "github.com/npillmayer/gotype/gtbackend/gfx/png"
-	"github.com/npillmayer/gotype/gtcore/config"
-	"github.com/npillmayer/gotype/gtcore/config/tracing"
-	"github.com/npillmayer/gotype/gtcore/path"
+	"github.com/npillmayer/gotype/backend/gfx"
+	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+	"github.com/npillmayer/gotype/core/path"
 )
 
 var T tracing.Trace = tracing.GraphicsTracer
 
 func TestEnvironment(t *testing.T) {
-	config.Initialize()
-	T.SetLevel(tracing.LevelDebug)
+	tracing.GraphicsTracer = gologadapter.New()
+	T.SetTraceLevel(tracing.LevelDebug)
 }
 
 func TestEmptyPath1(t *testing.T) {
