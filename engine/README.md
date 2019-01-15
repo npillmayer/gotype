@@ -24,6 +24,6 @@ From a high level view the creation of documents from the internal
 representation looks something like this:
 
 <div style="width:480px;padding:5px;padding-bottom:10px">
-<img alt="gotype document creation flow overview" src="http://pillmayercom/TySE-Notes/img/TySE-Concurrency-Overview.svg">
+<img alt="gotype document creation flow overview" src="http://pillmayer.com/TySE-Notes/img/TySE-Concurrency-Overview.svg">
 </div>
 
