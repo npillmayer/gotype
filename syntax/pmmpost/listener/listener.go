@@ -662,7 +662,7 @@ func (pl *PMMPostParseListener) ExitTransform(ctx *grammar.TransformContext) {
 		T().Debugf("transform of pair")
 		pl.transformPair(e, transforms, trArgs) // transform a pair
 	case variables.PathType:
-		T().Debugf("transform of polygon")
+		T().Debugf("transform of path")
 		pl.transformPath(e, transforms, trArgs) // transform a path
 	default: // TODO: transform of transform
 		T().Errorf("cannot transform type %s", variables.TypeString(etype))
