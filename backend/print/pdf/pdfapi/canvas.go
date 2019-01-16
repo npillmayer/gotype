@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/color"
 	"io"
 	"math"
 )
@@ -59,9 +60,11 @@ func (canvas *Canvas) Size() (width, height Unit) {
 }
 
 // SetSize changes the page's media box (the size of the physical medium).
+/*
 func (canvas *Canvas) SetSize(width, height Unit) {
 	canvas.page.MediaBox = Rectangle{Point{0, 0}, Point{width, height}}
 }
+*/
 
 // CropBox returns the page's crop box.
 func (canvas *Canvas) CropBox() Rectangle {
@@ -69,9 +72,11 @@ func (canvas *Canvas) CropBox() Rectangle {
 }
 
 // SetCropBox changes the page's crop box.
+/*
 func (canvas *Canvas) SetCropBox(crop Rectangle) {
 	canvas.page.CropBox = crop
 }
+*/
 
 // FillStroke fills then strokes the given path.  This operation has the same
 // effect as performing a fill then a stroke, but does not repeat the path in
@@ -109,56 +114,42 @@ func (canvas *Canvas) SetLineDash(phase Unit, dash []Unit) {
 	writeCommand(canvas.contents, "d", dash, phase)
 }
 
-// SetColor changes the current fill color to the given RGB triple (in device
+// SetFillColor changes the current fill color to the given RGB triple (in device
 // RGB space).
-func (canvas *Canvas) SetColor(r, g, b float32) {
-	writeCommand(canvas.contents, "rg", r, g, b)
+func (canvas *Canvas) SetFillColor(c color.Color) {
+	r, g, b, _ := c.RGBA()
+	rf := float32(r) / float32(0xffff)
+	gf := float32(g) / float32(0xffff)
+	bf := float32(b) / float32(0xffff)
+	writeCommand(canvas.contents, "rg", rf, gf, bf)
 }
 
 // SetStrokeColor changes the current stroke color to the given RGB triple (in
 // device RGB space).
-func (canvas *Canvas) SetStrokeColor(r, g, b float32) {
-	writeCommand(canvas.contents, "RG", r, g, b)
+func (canvas *Canvas) SetStrokeColor(c color.Color) {
+	r, g, b, _ := c.RGBA()
+	rf := float32(r) / float32(0xffff)
+	gf := float32(g) / float32(0xffff)
+	bf := float32(b) / float32(0xffff)
+	writeCommand(canvas.contents, "RG", rf, gf, bf)
 }
 
-// Push saves a copy of the current graphics state.  The state can later be
+// PushState saves a copy of the current graphics state.  The state can later be
 // restored using Pop.
-func (canvas *Canvas) Push() {
+func (canvas *Canvas) PushState() {
 	writeCommand(canvas.contents, "q")
 }
 
-// Pop restores the most recently saved graphics state by popping it from the
+// PopState restores the most recently saved graphics state by popping it from the
 // stack.
-func (canvas *Canvas) Pop() {
+func (canvas *Canvas) PopState() {
 	writeCommand(canvas.contents, "Q")
 }
 
-// Translate moves the canvas's coordinates system by the given offset.
-func (canvas *Canvas) Translate(x, y Unit) {
-	writeCommand(canvas.contents, "cm", 1, 0, 0, 1, x, y)
-}
-
-// Rotate rotates the canvas's coordinate system by a given angle (in radians).
-func (canvas *Canvas) Rotate(theta float32) {
-	s, c := math.Sin(float64(theta)), math.Cos(float64(theta))
-	writeCommand(canvas.contents, "cm", c, s, -s, c, 0, 0)
-}
-
-// Scale multiplies the canvas's coordinate system by the given scalars.
-func (canvas *Canvas) Scale(x, y float32) {
-	writeCommand(canvas.contents, "cm", x, 0, 0, y, 0, 0)
-}
-
 // Transform concatenates a 3x3 matrix with the current transformation matrix.
-// The arguments map to values in the matrix as shown below:
-//
-//  / a b 0 \
-//  | c d 0 |
-//  \ e f 1 /
-//
-// For more information, see Section 8.3.4 of ISO 32000-1.
-func (canvas *Canvas) Transform(a, b, c, d, e, f float32) {
-	writeCommand(canvas.contents, "cm", a, b, c, d, e, f)
+// See type Transform.
+func (canvas *Canvas) Transform(t Transform) {
+	writeCommand(canvas.contents, "cm", t[0], t[1], t[2], t[3], t[4], t[5])
 }
 
 // DrawText paints a text object onto the canvas.
@@ -187,10 +178,12 @@ func (canvas *Canvas) DrawImageReference(ref Reference, rect Rectangle) {
 	name := canvas.nextImageName()
 	canvas.page.Resources.XObject[name] = ref
 
-	canvas.Push()
-	canvas.Transform(float32(rect.Dx()), 0, 0, float32(rect.Dy()), float32(rect.Min.X), float32(rect.Min.Y))
+	canvas.PushState()
+	t := Identity().Shifted(rect.Min).Scaled(float32(rect.Dx()), float32(rect.Dy()))
+	canvas.Transform(t)
+	//canvas.Transform(float32(rect.Dx()), 0, 0, float32(rect.Dy()), float32(rect.Min.X), float32(rect.Min.Y))
 	writeCommand(canvas.contents, "Do", name)
-	canvas.Pop()
+	canvas.PopState()
 }
 
 // DrawLine paints a straight line from pt1 to pt2 using the current stroke
@@ -224,30 +217,143 @@ func (canvas *Canvas) MoveTo(pt Point) {
 // path.
 type Path struct {
 	buf bytes.Buffer
+	at  Point
 }
 
-// Move begins a new subpath by moving the current point to the given location.
+// MoveTo begins a new subpath by moving the current point to the given location.
+func (path *Path) MoveTo(pt Point) {
+	path.at = pt
+	writeCommand(&path.buf, "m", pt.X, pt.Y)
+}
+
+// Move begins a new subpath by moving the current point by a vector.
 func (path *Path) Move(pt Point) {
+	path.at.X += pt.X
+	path.at.Y += pt.Y
 	writeCommand(&path.buf, "m", pt.X, pt.Y)
 }
 
 // Line appends a line segment from the current point to the given location.
+func (path *Path) LineTo(pt Point) {
+	path.at = pt
+	writeCommand(&path.buf, "l", pt.X, pt.Y)
+}
+
+// Line appends a line segment from the current point to the given location.
 func (path *Path) Line(pt Point) {
+	path.at.X += pt.X
+	path.at.Y += pt.Y
 	writeCommand(&path.buf, "l", pt.X, pt.Y)
 }
 
 // Curve appends a cubic Bezier curve to the path.
-func (path *Path) Curve(pt1, pt2, pt3 Point) {
+func (path *Path) CurveTo(pt1, pt2, pt3 Point) {
 	writeCommand(&path.buf, "c", pt1.X, pt1.Y, pt2.X, pt2.Y, pt3.X, pt3.Y)
 }
 
-// Rectangle appends a complete rectangle to the path.
-func (path *Path) Rectangle(rect Rectangle) {
-	writeCommand(&path.buf, "re", rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy())
+// Rectangle appends a complete rectangle to the path. If corner > 0, the
+// corners of the rectangle will be rounded. All four corners will have the
+// same radius.
+func (path *Path) Rectangle(rect Rectangle, corner Unit) {
+	if corner <= 0 {
+		writeCommand(&path.buf, "re", rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy())
+	} else {
+		off := 0.45 * corner
+		corner = min(corner, rect.Dy()/2)
+		corner = min(corner, rect.Dx()/2)
+		path.Move(Point{rect.Max.X - corner, rect.Min.Y})
+		path.CurveTo(
+			Point{rect.Max.X - corner + off, rect.Min.Y},
+			Point{rect.Max.X, rect.Min.Y + corner - off},
+			Point{rect.Max.X, rect.Min.Y + corner})
+		path.Line(Point{rect.Max.X, rect.Max.Y - corner})
+		path.CurveTo(
+			Point{rect.Max.X, rect.Max.Y - corner + off},
+			Point{rect.Max.X - corner + off, rect.Max.Y},
+			Point{rect.Max.X - corner, rect.Max.Y})
+		path.Line(Point{rect.Min.X + corner, rect.Max.Y})
+		path.CurveTo(
+			Point{rect.Min.X + corner - off, rect.Max.Y},
+			Point{rect.Min.X, rect.Max.Y - corner + off},
+			Point{rect.Min.X, rect.Max.Y - corner})
+		path.Line(Point{rect.Min.X, rect.Min.Y + corner})
+		path.CurveTo(
+			Point{rect.Min.X, rect.Min.Y + corner - off},
+			Point{rect.Min.X + corner - off, rect.Min.Y},
+			Point{rect.Min.X + corner, rect.Min.Y})
+		path.Close()
+	}
 }
 
 // Close appends a line segment from the current point to the starting point of
 // the subpath.
 func (path *Path) Close() {
 	writeCommand(&path.buf, "h")
+}
+
+// ----------------------------------------------------------------------
+
+// Transform represents an affine transformation (on a PDF graphics state).
+// The six indices map to values in a 3x3-matrix as shown below:
+//
+//  ⎛ a b 0 ⎞
+//  ⎜ c d 0 ⎥
+//  ⎝ e f 1 ⎠
+//
+// For more information, see Section 8.3.4 of ISO 32000-1.
+type Transform [6]float32
+
+// Identity is the neutral transformation. This is the starting point for
+// chaining transform operations.
+// To create a transformation which shifts a point by vector (a, b) and
+// then rotates around origin by 30 degrees:
+//
+//    vector := Point{a, b}
+//    T := Identity().Shifted(vector).Rotated(Deg2Rad(30))
+//    mycanvas.Transform(T)
+//
+func Identity() Transform {
+	return Transform{1, 0, 0, 1, 0, 0}
+}
+
+// Shifted moves the canvas's coordinates system by the given offset.
+func (t Transform) Shifted(by Point) Transform {
+	t[4] += float32(by.X)
+	t[5] += float32(by.Y)
+	return t
+}
+
+// Rotate rotates the canvas's coordinate system by a given angle (in radians),
+// counterclockwise.
+func (t Transform) Rotated(theta float32) Transform {
+	tt := Identity()
+	s, c := float32(math.Sin(float64(theta))), float32(math.Cos(float64(theta)))
+	tt[0] = t[0]*c - t[1]*s
+	tt[1] = t[0]*s + t[1]*c
+	tt[2] = t[2]*c - t[3]*s
+	tt[3] = t[2]*s + t[3]*c
+	tt[4] = t[4]*c - t[5]*s
+	tt[5] = t[4]*s + t[5]*c
+	return tt
+}
+
+// Scale multiplies the canvas's coordinate system by the given scalars.
+func (t Transform) Scaled(x, y float32) Transform {
+	t[0] *= x
+	t[3] *= y
+	return t
+}
+
+// ----------------------------------------------------------------------
+
+func min(u1 Unit, u2 Unit) Unit {
+	if u1 < u2 {
+		return u1
+	}
+	return u2
+}
+
+// Deg2Rad returns degree angle coordinates to radians.
+func Deg2Rad(theta float32) float32 {
+	return theta * 0.01745329252
 }

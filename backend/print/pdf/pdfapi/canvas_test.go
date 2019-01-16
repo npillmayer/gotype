@@ -17,7 +17,7 @@ func TestPath(t *testing.T) {
 	path.Move(Point{12, 34})
 	path.Line(Point{-56, 78})
 	path.Close()
-	path.Rectangle(Rectangle{Point{3.1, -5.9}, Point{24.2, 75.0}})
+	path.Rectangle(Rectangle{Point{3.1, -5.9}, Point{24.2, 75.0}}, 0)
 
 	if path.buf.String() != pathExpectedOutput {
 		t.Errorf("Output was %q, expected %q", path.buf.String(), pathExpectedOutput)

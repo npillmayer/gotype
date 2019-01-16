@@ -8,36 +8,46 @@ import (
 
 // Text is a PDF text object.  The zero value is an empty text object.
 type Text struct {
-	buf              bytes.Buffer
-	usedFonts        map[*Font]bool
-	CursorX, CursorY Unit
-	currFont         *Font
-	fontSize         Unit
+	buf       bytes.Buffer
+	usedFonts map[*Font]bool
+	cursor    Point
+	currFont  *Font
+	fontSize  Unit
+	leading   Unit
 }
 
 // Text adds a string to the text object.
-func (text *Text) Text(s string) {
+func (text *Text) AddGlyphs(s string) {
 	writeCommand(&text.buf, "Tj", s)
 	if widths := getFontWidths(text.currFont.fontIdent); widths != nil {
-		text.CursorX += computeStringWidth(s, widths, text.fontSize)
+		text.cursor.X += computeStringWidth(s, widths, text.fontSize)
 	}
 }
 
+// Cursor returns the current cursor location.
+// This is where new glyphs will be positioned.
+func (text *Text) Cursor() Point {
+	return text.cursor
+}
+
+// MoveCursorTo moves the text cursor to a point.
 func (text *Text) MoveCursorTo(pt Point) {
-	text.CursorX = pt.X
-	text.CursorY = pt.Y
-	writeCommand(&text.buf, "Td", text.CursorX, text.CursorY)
+	text.cursor.X = pt.X
+	text.cursor.Y = pt.Y
+	writeCommand(&text.buf, "Td", text.cursor.X, text.cursor.Y)
 }
 
+// MoveCursor moves the text cursor by a vector.
 func (text *Text) MoveCursor(diff Point) {
-	text.CursorX += diff.X
-	text.CursorY += diff.Y
-	writeCommand(&text.buf, "Td", text.CursorX, text.CursorY)
+	text.cursor.X += diff.X
+	text.cursor.Y += diff.Y
+	writeCommand(&text.buf, "Td", text.cursor.X, text.cursor.Y)
 }
 
+// AdvanceCursor moves the text cursor in x-direction.
 func (text *Text) AdvanceCursor(x Unit) {
-	text.CursorX += x
-	writeCommand(&text.buf, "Td", text.CursorX, text.CursorY)
+	text.cursor.X += x
+	writeCommand(&text.buf, "Td", text.cursor.X, text.cursor.Y)
 }
 
 // SetFont changes the current font to a standard font.
@@ -47,14 +57,14 @@ func (text *Text) SetFont(font *Font, size Unit) {
 	}
 	text.usedFonts[font] = true
 	text.currFont, text.fontSize = font, size
-	writeCommand(&text.buf, "Tf", font.Name, size)
+	writeCommand(&text.buf, "Tf", font.fontIdent, size)
 }
 
 // SetLeading changes the amount of space between lines.
 /*
 func (text *Text) SetLeading(leading Unit) {
 	writeCommand(&text.buf, "TL", leading)
-	text.currLeading = leading
+	text.leading = leading
 }
 */
 
@@ -80,6 +90,7 @@ func (text *Text) NextLineOffset(tx, ty Unit) {
 
 // --- Fonts ------------------------------------------------------------
 
+// Font is a type representing fonts in PDF documents.
 type Font struct {
 	Name      string
 	fontIdent name
@@ -97,7 +108,24 @@ const (
 	TrueType_Mac
 	TrueType_Win
 	OpenType
+	WOFF
+	WOFF2
 )
+
+// NewInternalFont creates a font for one of the PDF standard fonts,
+// given a font's name (e.g., "Helveltica").
+func NewInternalFont(fname string) *Font {
+	fn := &Font{}
+	fn.Name = fname
+	fn.fontIdent = name(fname)
+	fn.format = Type1
+	return fn
+}
+
+// String returns the Font's indentifier string.
+func (fn *Font) String() string {
+	return string(fn.fontIdent)
+}
 
 // Standard 14 fonts
 const (

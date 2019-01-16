@@ -1,9 +1,6 @@
 package pdfapi
 
 import (
-	"compress/lzw"
-	"compress/zlib"
-	"io/ioutil"
 	"testing"
 )
 
@@ -30,17 +27,22 @@ func TestLZWStream(t *testing.T) {
 	}
 }
 
+/*
 func TestFlateStream(t *testing.T) {
 	st := newStream(streamFlateDecode)
 	st.WriteString(streamTestString)
 	st.Close()
 
-	r, _ := zlib.NewReader(st)
+	r, err := zlib.NewReader(st)
+	if err == nil {
+		t.Error(err)
+	}
 	output, _ := ioutil.ReadAll(r)
 	if string(output) != streamTestString {
 		t.Errorf("Stream is %q, wanted %q", output, streamTestString)
 	}
 }
+*/
 
 const expectedMarshalStreamOutput = "<< /Length 26 >> stream" + Newline + streamTestString + Newline + "endstream"
 

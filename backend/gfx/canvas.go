@@ -153,9 +153,9 @@ func (pic *Picture) SetColor(color color.Color) {
 
 // === Drawable Contour ======================================================
 
-// The central operation on Canvases is AddContour, the drawing or filling of
-// a path. Different clients may have a different understanding of what a path
-// is and how to store it. Interface DrawableContour trys to be a common
+// The central operation on Canvases is AddContour, the drawing and/or filling
+// of a path. Different clients may have a different understanding of what a
+// path is and how to store it. Interface DrawableContour tries to be a common
 // denomiator for drawing operations on paths.
 //
 // The 3 parameters for ToNextKnot() are the target point, together with 2

@@ -41,7 +41,7 @@ type Document struct {
 }
 
 // New creates a new document with no pages.
-func New() *Document {
+func NewDocument() *Document {
 	doc := new(Document)
 	doc.catalog = &catalog{
 		Type: catalogType,

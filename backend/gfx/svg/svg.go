@@ -103,7 +103,7 @@ func (pic *SvgPicture) AddContour(contour gfx.DrawableContour, linethickness flo
 	}
 	T().Debugf("SVG drawing path '%s'", svgpath)
 	style := fmt.Sprintf("stroke:#%s;stroke-width:%d", hexcolor(linecol), int(linethickness))
-	if contour.IsCycle() { // close path ?
+	if contour.IsCycle() && fillcol != nil {
 		style += fmt.Sprintf(";fill:#%s", hexcolor(fillcol))
 	}
 	pic.svgCanvas.Path(svgpath, style)
