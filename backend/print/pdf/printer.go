@@ -36,6 +36,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 import (
+	"fmt"
 	"io"
 	"sync"
 
@@ -70,11 +71,13 @@ const (
 
 // ----------------------------------------------------------------------
 
+// PdfPrinter is used for outputting a render tree in PDF format.
 type PdfPrinter struct {
 	doc       *pdfapi.Document // PDF document to assemble
 	Proofing  bool             // are we in proof mode?
 	Colormode bool             // color or b/w ?
 	papersize pdfapi.Point     // paper geometry in PDF points
+	scale     float64          // scale factor for pages
 	pageQ     *pageQueue       // input queue for pages to print
 	assemblyQ *pageheap        // queue to collect and assemble completed pages
 	done      chan bool        // signal to abort (regular or interrupt)
@@ -97,9 +100,11 @@ func Printer(papersize dimen.Point, scale float64) *PdfPrinter {
 	if scale <= 0 {
 		scale = 1
 	}
+	pr.scale = scale
 	pr.doc = pdfapi.NewDocument()
 	pr.papersize = dpt2upt(papersize)
-	pr.pageQ = newQueue()
+	T().Debugf("Printing on paper %v", pr.papersize)
+	pr.pageQ = newQueue(pr)
 	pr.assemblyQ = newPageAssemblyQueue()
 	pr.done = make(chan bool, 1)
 	pr.errch = make(chan error)
@@ -127,6 +132,23 @@ func (pr *PdfPrinter) pageComplete(page *Page) {
 		T().Debugf("Printer already stopped, page [%d] not queued for assembly",
 			page.pageNo)
 	}
+}
+
+// pageFailed signals the page assembler that this page failed to render.
+// We will create an error page instead and queue it for the assembler.
+func (pr *PdfPrinter) pageFailed(page *Page, err error) {
+	page.pdfcanvas = pr.doc.NewPage(pr.papersize.X, pr.papersize.Y)
+	errtext := &pdfapi.Text{}
+	cv := makeConv(pr.papersize, page.pageGeom, pr.scale)
+	errtext.MoveCursor(cv.toPdfPoint(pdfapi.Point{20, 20}))
+	errtext.SetFont(pdfapi.NewInternalFont(pdfapi.Helvetica), 12)
+	errtext.AddGlyphs(fmt.Sprintf("Error rendering page [%d]", page.pageNo))
+	if err != nil {
+		errtext.MoveCursor(cv.toPdfPoint(pdfapi.Point{20, 40}))
+		errtext.AddGlyphs(err.Error())
+	}
+	page.pdfcanvas.DrawText(errtext)
+	pr.pageComplete(page)
 }
 
 // IsRunning returns true if the printer is accepting input, false otherwise.
@@ -182,14 +204,15 @@ func assemblePagesToDocument(pr *PdfPrinter, w io.Writer) {
 			pr.mtx.Unlock()
 		}
 		if !pr.IsRunning() {
-			drainAssemblyQueueAndStop(pr)
+			pr.drainAssemblyQueueAndStop()
+			pr.serialize(w)
 			close(pr.errch) // signal to printing clients
 		}
 	}
 	tracing.EngineTracer.Debugf("Assembly worker stopped")
 }
 
-func drainAssemblyQueueAndStop(pr *PdfPrinter) {
+func (pr *PdfPrinter) drainAssemblyQueueAndStop() {
 	// We are fetching pending page events from the assembly queue.
 	// This is for the regular case only. For an interrupt, we currently
 	// have no means to detect how many page workers will return.
@@ -268,12 +291,13 @@ func (pr *PdfPrinter) Abort(err error) {
 // numbers. The printer expects pages ranging from 1..n, where n is set
 // by SetMaxPage(n). If this constraint is violated, the printer may stall
 // waiting for non-existent pages. Page numbers range from 0 to 32767.
-func (pr *PdfPrinter) PrintPage(pageno int, pageGeom dimen.Rect, content *BoxTree) *Page {
+func (pr *PdfPrinter) PrintPage(pageno int, pageGeom dimen.Rect, content *RenderTree) *Page {
 	page := &Page{}
 	page.pageNo = contPageNo(pageno)
 	page.pageGeom.Min = dpt2upt(pageGeom.TopL)
 	page.pageGeom.Max = dpt2upt(pageGeom.BotR)
 	page.content = content
+	page.pdfcanvas = pr.doc.NewPage(pr.papersize.X, pr.papersize.Y)
 	pr.pageQ.enqueue(page)
 	return page
 }
@@ -287,20 +311,29 @@ func (pr *PdfPrinter) PageCount() int {
 
 func (pr *PdfPrinter) appendToDocument(page *Page) error {
 	tracing.EngineTracer.Infof("OUTPUT PAGE [%d]", page.pageNo)
+	page.pdfcanvas.Close()
+	pr.doc.Assemble(page.pdfcanvas)
 	return nil
 }
 
+// serialize outputs the PDF structure to a writer.
+func (pr *PdfPrinter) serialize(w io.Writer) {
+	T().Debugf("Serializing document")
+	pr.doc.Encode(w)
+}
+
 // TODO
-type BoxTree struct{}
+type RenderTree struct{}
 
 // Page represents a page in the printer queue, as part of a print job.
 // Pages will be created by Printer.PrintPage(...).
 type Page struct {
 	// https://www.prepressure.com/pdf/basics/page-boxes
-	pageGeom pdfapi.Rectangle // position and size on paper
-	status   PageStatus       // print status
-	pageNo   contPageNo       // page number
-	content  *BoxTree         // page contents
+	pageGeom  pdfapi.Rectangle // position and size on paper
+	status    PageStatus       // print status
+	pageNo    contPageNo       // page number
+	content   *RenderTree      // page contents
+	pdfcanvas *pdfapi.Canvas   // canvas to render onto
 }
 
 // PageNo returns the contiguous page number of a page.
@@ -308,22 +341,29 @@ func (page *Page) PageNo() int {
 	return int(page.pageNo)
 }
 
-// ----------------------------------------------------------------------
+// --- Page Queue -------------------------------------------------------
 
+// A pageQueue is the input queue for the printer. New pages to print
+// will be enqueued into this queue.
 type pageQueue struct {
 	sync.RWMutex
-	running bool       // guarded by mutex
-	pages   chan *Page // pages in print
+	printer *PdfPrinter // the printer this queue is attached to
+	running bool        // guarded by mutex
+	working bool        // guarded by mutex
+	pages   chan *Page  // pages in print
 }
 
-func newQueue() *pageQueue {
+//Create a new printer queue. pr must not be nil.
+func newQueue(pr *PdfPrinter) *pageQueue {
 	q := &pageQueue{}
+	q.printer = pr
 	q.pages = make(chan *Page, 10)
 	q.running = true
 	return q
 }
 
 // enqueue will not block, is concurrency safe.
+// Will start workers if not already done.
 func (pq *pageQueue) enqueue(page *Page) {
 	page.status = Queued
 	queued := true
@@ -340,13 +380,42 @@ func (pq *pageQueue) enqueue(page *Page) {
 				pq.pages <- p
 			}(page)
 		}
+		if !pq.working {
+			pq.startWorkers()
+			pq.working = true
+		}
+	}
+}
+
+// We will start this many render workers.
+const workerCount = 3
+
+// startWorkers starts the render workers. These workers read pages from
+// the printer's intput queue and render them.
+func (pq *pageQueue) startWorkers() {
+	for i := 0; i < workerCount; i++ {
+		go func(pages <-chan *Page, printer *PdfPrinter) {
+			for page := range pages {
+				err := printer.render(page)
+				if err == nil {
+					pq.printer.pageComplete(page)
+				} else {
+					pq.printer.pageFailed(page, err)
+				}
+			}
+			T().Debugf("Render worker stopped")
+		}(pq.pages, pq.printer)
 	}
 }
 
 func (pq *pageQueue) Stop() {
 	pq.Lock()
 	pq.running = false
+	working := pq.working
 	pq.Unlock()
+	if working {
+		close(pq.pages)
+	}
 }
 
 func (pq *pageQueue) IsRunning() bool {
@@ -355,7 +424,7 @@ func (pq *pageQueue) IsRunning() bool {
 	return pq.running
 }
 
-// ----------------------------------------------------------------------
+// --- Helpers ----------------------------------------------------------
 
 func upt2dpt(p pdfapi.Point) dimen.Point {
 	return dimen.Point{

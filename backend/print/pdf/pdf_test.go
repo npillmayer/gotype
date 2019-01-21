@@ -37,5 +37,6 @@ func TestSimple(t *testing.T) {
 	txt.AddGlyphs("Hello world!")
 	canvas.DrawText(txt)
 	canvas.Close()
+	api.Assemble(canvas)
 	api.Encode(pdffile)
 }

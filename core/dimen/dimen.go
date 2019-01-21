@@ -38,19 +38,20 @@ package dimen
 
 import "fmt"
 
+// Online dimension conversion for print:
+// http://www.unitconversion.org/unit_converter/typography-ex.html
+
 // A dimension type.
 // Values are in scaled big points (different from TeX).
 type Dimen int32
 
 const (
-	SP Dimen = 1     // scaled point = BP / 65536
-	BP Dimen = 65536 // big point = 1/72 inch
-	PT Dimen = 7     // printers point   // TODO
-	MM Dimen = 7     // millimeters
-	CM Dimen = 7     // centimeters
-	PC Dimen = 7     // pica
-	CC Dimen = 7     // cicero
-	IN Dimen = 7     // inch
+	SP Dimen = 1       // scaled point = BP / 65536
+	BP Dimen = 65536   // big point (PDF) = 1/72 inch
+	PT Dimen = 65291   // printers point 1/72.27 inch
+	MM Dimen = 185771  // millimeters
+	CM Dimen = 1857710 // centimeters
+	IN Dimen = 4718592 // inch
 )
 
 // Infinite dimensions
@@ -60,6 +61,9 @@ const Filll Dimen = 3 * BP * 10000
 
 // An infinite numeric
 const Infty int = 100000000 // TODO
+
+var DINA4 = Point{210 * MM, 297 * MM}
+var DINA5 = Point{148 * MM, 210 * MM}
 
 // Stringer implementation.
 func (d Dimen) String() string {

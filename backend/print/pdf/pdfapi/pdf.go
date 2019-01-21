@@ -52,6 +52,8 @@ func NewDocument() *Document {
 }
 
 // NewPage creates a new canvas with the given dimensions.
+// TODO: do not directly couple to document
+// TODO de-couple page geometry from document geometry
 func (doc *Document) NewPage(width, height Unit) *Canvas {
 	page := &pageDict{
 		Type:     pageType,
@@ -63,8 +65,6 @@ func (doc *Document) NewPage(width, height Unit) *Canvas {
 			XObject: make(map[name]interface{}),
 		},
 	}
-	pageRef := doc.add(page)
-	doc.pages = append(doc.pages, indirectObject{pageRef, page})
 
 	stream := newStream(streamFlateDecode)
 	page.Contents = doc.add(stream)
@@ -72,9 +72,15 @@ func (doc *Document) NewPage(width, height Unit) *Canvas {
 	return &Canvas{
 		doc:      doc,
 		page:     page,
-		ref:      pageRef,
 		contents: stream,
 	}
+}
+
+// Assemble takes a page and integrates it into the document's structure.
+func (doc *Document) Assemble(c *Canvas) {
+	page := c.page
+	c.ref = c.doc.add(page)
+	doc.pages = append(doc.pages, indirectObject{c.ref, page})
 }
 
 // standardFont returns a reference to a standard font dictionary.  If there is
