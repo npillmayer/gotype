@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/antchfx/xpath"
-	"github.com/npillmayer/gotype/engine/dom/cssom/style"
+	"github.com/npillmayer/gotype/engine/dom/tree"
 )
 
 /* -----------------------------------------------------------------
@@ -55,7 +55,7 @@ type XPath struct {
 
 // NodeExtracotorFunc is a supporting function to get the current node
 // from an xpath.NodeNavigator.
-type NodeExtractorFunc func(xpath.NodeNavigator) (style.TreeNode, error)
+type NodeExtractorFunc func(xpath.NodeNavigator) (*tree.Node, error)
 
 // NewXPath creates a new XPath walker for a styled tree, with the root
 // wrapped into an xpath.NodeNavigator.
@@ -74,8 +74,8 @@ func NewXPath(nav xpath.NodeNavigator, extract NodeExtractorFunc) (*XPath, error
 // Find searches the styled nodes that match the specified XPath expr.
 // Find returns a slice of tree nodes, together with the last non-nil error
 // that occured.
-func (xp *XPath) Find(xpathexpr string) ([]style.TreeNode, error) {
-	var elems []style.TreeNode
+func (xp *XPath) Find(xpathexpr string) ([]*tree.Node, error) {
+	var elems []*tree.Node
 	compiled, err := xpath.Compile(xpathexpr)
 	if err != nil {
 		return nil, errInvalidXPathExpr
@@ -95,13 +95,13 @@ func (xp *XPath) Find(xpathexpr string) ([]style.TreeNode, error) {
 
 // FindOne searches the styled nodes that match the specified XPath expr
 // and returns the first match.
-func (xp *XPath) FindOne(xpathexpr string) (style.TreeNode, error) {
+func (xp *XPath) FindOne(xpathexpr string) (*tree.Node, error) {
 	compiled, comperr := xpath.Compile(xpathexpr)
 	if comperr != nil {
 		return nil, errInvalidXPathExpr
 	}
 	t := compiled.Select(xp.navigator)
-	var elem style.TreeNode
+	var elem *tree.Node
 	var err error
 	if t.MoveNext() {
 		elem, err = xp.getCurrentNode(t)
@@ -115,7 +115,7 @@ func (xp *XPath) FindOne(xpathexpr string) (style.TreeNode, error) {
 // If brkOnErr is set to false,
 // Each will return the last non-nil error returned by the callback function,
 // after calling callback for each selected node.
-func (xp *XPath) Each(xpathexpr string, callback func(int, style.TreeNode) error, brkOnErr bool) error {
+func (xp *XPath) Each(xpathexpr string, callback func(int, *tree.Node) error, brkOnErr bool) error {
 	compiled, err := xpath.Compile(xpathexpr)
 	if err != nil {
 		return errInvalidXPathExpr
@@ -141,7 +141,7 @@ func (xp *XPath) Each(xpathexpr string, callback func(int, style.TreeNode) error
 }
 
 // Returns the next styled node pointed to by the navigator.
-func (xp *XPath) getCurrentNode(it *xpath.NodeIterator) (style.TreeNode, error) {
+func (xp *XPath) getCurrentNode(it *xpath.NodeIterator) (*tree.Node, error) {
 	nav := it.Current()
 	node, err := xp.extractor(nav)
 	return node, err

@@ -89,6 +89,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/npillmayer/gotype/engine/dom/tree"
 )
 
 // Property is a raw value for a CSS property. For example, with
@@ -601,16 +603,8 @@ func InitializeDefaultPropertyValues(additionalProps []KeyValue) *PropertyMap {
 	return &PropertyMap{m}
 }
 
-// GetCascadedProperty gets the value of a property. The search cascades to
-// parent property maps, if available.
-//
-// This is normally called on a tree of styled nodes and it will cascade
-// all the way up to the default properties, if necessary.
-//
-// Will flag an error if the style property isn't found (which should not
-// happen, as every property should be included in the 'user-agent' default
-// style properties.
-func GetCascadedProperty(sn TreeNode, key string) (Property, error) {
+/*
+func GetCascadedProperty(sn *styledtree.StyNode, key string) (Property, error) {
 	groupname := GroupNameFromPropertyKey(key)
 	var group *PropertyGroup
 	for sn != nil && group == nil {
@@ -623,13 +617,51 @@ func GetCascadedProperty(sn TreeNode, key string) (Property, error) {
 	}
 	return group.Cascade(key).Get(key), nil // must succeed
 }
+*/
 
-// GetLocalProperty returns a style property value, if it is set locally
-// for the styled node. No cascading is performed.
-func GetLocalProperty(sn TreeNode, key string) (Property, bool) {
+// GetCascadedProperty gets the value of a property. The search cascades to
+// parent property maps, if available.
+//
+// This is normally called on a tree of styled nodes and it will cascade
+// all the way up to the default properties, if necessary.
+//
+// Will flag an error if the style property isn't found (which should not
+// happen, as every property should be included in the 'user-agent' default
+// style properties.
+func GetCascadedProperty(n *tree.Node, key string,
+	compstyles func(n *tree.Node) *PropertyMap) (Property, error) {
+	//
+	groupname := GroupNameFromPropertyKey(key)
+	var group *PropertyGroup
+	for n != nil && group == nil {
+		group = compstyles(n).Group(groupname)
+		n = n.Parent()
+	}
+	if group == nil {
+		errmsg := fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", groupname)
+		return Property(""), errors.New(errmsg)
+	}
+	return group.Cascade(key).Get(key), nil // must succeed
+}
+
+/*
+func GetLocalProperty(sn *styledtree.StyNode, key string) (Property, bool) {
 	groupname := GroupNameFromPropertyKey(key)
 	var group *PropertyGroup
 	group = sn.ComputedStyles().Group(groupname)
+	if group == nil {
+		return "", false
+	}
+	return group.Get(key), true
+}
+*/
+
+// GetLocalProperty returns a style property value, if it is set locally
+// for a styled node's property map. No cascading is performed.
+func GetLocalProperty(pmap *PropertyMap, key string) (Property, bool) {
+	groupname := GroupNameFromPropertyKey(key)
+	var group *PropertyGroup
+	group = pmap.Group(groupname)
 	if group == nil {
 		return "", false
 	}

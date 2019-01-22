@@ -15,6 +15,7 @@ import (
 	"github.com/npillmayer/gotype/engine/dom/styledtree"
 	"github.com/npillmayer/gotype/engine/dom/styledtree/builder"
 	"github.com/npillmayer/gotype/engine/dom/styledtree/xpathadapter"
+	"github.com/npillmayer/gotype/engine/dom/tree"
 	"golang.org/x/net/html"
 )
 
@@ -39,7 +40,7 @@ func Test1(t *testing.T) {
 	if tree == nil {
 		t.Error("failed to setup test")
 	}
-	paras := findNodesFor("p", q, tree)
+	paras := findNodesFor("p", q, &tree.Node)
 	if !assertProperty(paras, "padding-top").equals("10px") {
 		t.Error("padding-top of paragraphs should be 10px")
 	}
@@ -50,7 +51,7 @@ func Test2(t *testing.T) {
 	if tree == nil {
 		t.Error("failed to setup test")
 	}
-	paras := findNodesFor("p.hello", q, tree)
+	paras := findNodesFor("p.hello", q, &tree.Node)
 	if !assertProperty(paras, "color").equals("blue") {
 		t.Error("color of paragraph with class=hello should be blue")
 	}
@@ -82,8 +83,8 @@ func setupTest(htmlStr string, cssStr string) (*goquery.Document, *styledtree.St
 	return doc, styledTree.(*styledtree.StyNode)
 }
 
-func findNodesFor(xpath string, doc *goquery.Document, tree style.TreeNode) []style.TreeNode {
-	nav := xpathadapter.NewNavigator(tree.(*styledtree.StyNode))
+func findNodesFor(xpath string, doc *goquery.Document, tree *tree.Node) []*tree.Node {
+	nav := xpathadapter.NewNavigator(styledtree.Node(tree))
 	xp, _ := dom.NewXPath(nav, xpathadapter.CurrentNode)
 	nodes, _ := xp.Find(xpath)
 	T.Debugf("found styled nodes: %v", nodes)
@@ -92,13 +93,13 @@ func findNodesFor(xpath string, doc *goquery.Document, tree style.TreeNode) []st
 
 type props []style.Property
 
-func assertProperty(nodes []style.TreeNode, key string) props {
+func assertProperty(nodes []*tree.Node, key string) props {
 	if nodes == nil {
 		return nil
 	}
 	var pp props
 	for _, sn := range nodes {
-		p, _ := style.GetCascadedProperty(sn, key)
+		p, _ := style.GetCascadedProperty(sn, key, styledtree.StylesGetter)
 		T.Debugf("property %s of %s = %s", key, sn, p)
 		pp = append(pp, p)
 	}

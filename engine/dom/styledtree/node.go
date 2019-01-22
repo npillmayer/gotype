@@ -72,11 +72,18 @@ func NewNodeForHtmlNode(html *html.Node) *tree.Node {
 	return &sn.Node
 }
 
+// Node gets the styled node from a generic tree node.
 func Node(n *tree.Node) *StyNode {
 	if n == nil {
 		return nil
 	}
 	return n.Payload.(*StyNode)
+}
+
+//
+func StylesGetter(n *tree.Node) *style.PropertyMap {
+	sn := Node(n)
+	return sn.computedStyles
 }
 
 // ----------------------------------------------------------------------
@@ -115,7 +122,6 @@ func (sn *Node) AddChild(ch *Node) {
 	}
 	sn.children.addChild(ch, sn)
 }
-*/
 
 // ParentNode returns the parent node of this node, as a style.TreeNode.
 //
@@ -131,6 +137,7 @@ func (sn StyNode) ChildNode(n int) style.TreeNode {
 	ch, _ := sn.Child(n)
 	return ch.Payload.(*StyNode)
 }
+*/
 
 // ----------------------------------------------------------------------
 
@@ -145,7 +152,6 @@ func (sn *StyNode) SetComputedStyles(styles *style.PropertyMap) {
 }
 
 var _ cssom.StyledNode = &StyNode{}
-var _ style.TreeNode = &StyNode{}
 
 // ----------------------------------------------------------------------
 

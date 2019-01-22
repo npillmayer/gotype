@@ -54,8 +54,8 @@ import (
 	"fmt"
 
 	"github.com/antchfx/xpath"
-	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/dom/styledtree"
+	"github.com/npillmayer/gotype/engine/dom/tree"
 	"golang.org/x/net/html"
 )
 
@@ -75,12 +75,15 @@ func NewNavigator(styledtree *styledtree.StyNode) *NodeNavigator {
 }
 
 // CurrentNode implements dom.NodeExtractorFunc
-func CurrentNode(nav xpath.NodeNavigator) (style.TreeNode, error) {
+func CurrentNode(nav xpath.NodeNavigator) (*tree.Node, error) {
 	mynav, ok := nav.(*NodeNavigator)
 	if !ok {
 		return nil, errors.New("Navigator is not of type xpathadapter.NodeNavigator")
 	}
-	return mynav.current, nil
+	if mynav.current == nil {
+		return nil, nil
+	}
+	return &mynav.current.Node, nil
 }
 
 func (nav *NodeNavigator) NodeType() xpath.NodeType {
