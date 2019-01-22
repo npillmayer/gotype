@@ -615,7 +615,7 @@ func GetCascadedProperty(sn TreeNode, key string) (Property, error) {
 	var group *PropertyGroup
 	for sn != nil && group == nil {
 		group = sn.ComputedStyles().Group(groupname)
-		sn = sn.Parent()
+		sn = sn.ParentNode()
 	}
 	if group == nil {
 		errmsg := fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", groupname)

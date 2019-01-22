@@ -24,7 +24,7 @@ func newPageAssemblyQueue() *pageheap {
 // LowestPageNo returns the lowest page number of the pages in the
 // pageheap. If the heap is empty, LowestPageNo will return math.MaxInt16.
 // This operation is concurrency safe.
-func (h pageheap) LowestPageNo() contPageNo {
+func (h *pageheap) LowestPageNo() contPageNo {
 	h.RLock()
 	defer h.RUnlock()
 	if len(h.pages) == 0 {
@@ -54,7 +54,7 @@ func (h *pageheap) Close() {
 // interfacace heap.Interface ----------------------------------------
 
 // Len is the number of elements in the collection.
-func (h pageheap) Len() int {
+func (h *pageheap) Len() int {
 	h.RLock()
 	defer h.RUnlock()
 	return len(h.pages)
@@ -62,14 +62,14 @@ func (h pageheap) Len() int {
 
 // Less reports whether the element with
 // index i should sort before the element with index j.
-func (h pageheap) Less(i, j int) bool {
+func (h *pageheap) Less(i, j int) bool {
 	h.RLock()
 	defer h.RUnlock()
 	return h.pages[i].pageNo < h.pages[j].pageNo
 }
 
 // Swap swaps the elements with indexes i and j.
-func (h pageheap) Swap(i, j int) {
+func (h *pageheap) Swap(i, j int) {
 	h.Lock()
 	defer h.Unlock()
 	h.pages[i], h.pages[j] = h.pages[j], h.pages[i]

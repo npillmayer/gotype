@@ -55,8 +55,8 @@ type Builder struct{}
 //
 // Interface cssom.StyledTreeBuilder.
 func (b Builder) MakeNodeFor(n *html.Node) cssom.StyledNode {
-	sn := styledtree.NewNodeForHtmlNode(n)
-	return sn
+	node := styledtree.NewNodeForHtmlNode(n)
+	return styledtree.Node(node)
 }
 
 // LinkNodeToParent attaches a styled node to the tree. ATTENTION:
@@ -67,18 +67,18 @@ func (b Builder) MakeNodeFor(n *html.Node) cssom.StyledNode {
 //
 // Interface cssom.StyledTreeBuilder.
 func (b Builder) LinkNodeToParent(sn cssom.StyledNode, parent cssom.StyledNode) {
-	p, ok := parent.(*styledtree.Node)
+	p, ok := parent.(*styledtree.StyNode)
 	if !ok {
 		panic("LinkNodeToParent: cannot link to unknown type of styled node")
 	}
-	this := sn.(*styledtree.Node)
-	p.AddChild(this) // concurrency-safe operation
+	this := sn.(*styledtree.StyNode)
+	p.AddChild(&this.Node) // concurrency-safe operation
 }
 
 // WalkUpwards walks to parent of node.
 //
 // Interface cssom.StyledTreeBuilder.
 func (b Builder) WalkUpwards(sn cssom.StyledNode) cssom.StyledNode {
-	this := sn.(*styledtree.Node)
-	return this.Parent().(*styledtree.Node)
+	this := sn.(*styledtree.StyNode)
+	return styledtree.Node(this.Parent())
 }

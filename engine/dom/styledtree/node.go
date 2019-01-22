@@ -51,33 +51,42 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // https://godoc.org/github.com/jiangmitiao/ebook-go
 
 import (
-	"sync"
-
 	"github.com/npillmayer/gotype/engine/dom/cssom"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
+	"github.com/npillmayer/gotype/engine/dom/tree"
 	"golang.org/x/net/html"
 )
 
 // StyledNodes are the building blocks of the styled tree.
-type Node struct {
+type StyNode struct {
+	tree.Node      // we build on top of general purpose tree
 	htmlNode       *html.Node
 	computedStyles *style.PropertyMap
-	parent         *Node
-	children       childrenSlice
 }
 
 // NewNodeForHtmlNode creates a new styled node linked to an HTML DOM node.
-func NewNodeForHtmlNode(n *html.Node) *Node {
-	return &Node{htmlNode: n}
+func NewNodeForHtmlNode(html *html.Node) *tree.Node {
+	sn := &StyNode{}
+	sn.Payload = sn // Payload will always reference the node itself
+	sn.htmlNode = html
+	return &sn.Node
+}
+
+func Node(n *tree.Node) *StyNode {
+	if n == nil {
+		return nil
+	}
+	return n.Payload.(*StyNode)
 }
 
 // ----------------------------------------------------------------------
 
 // HtmlNode gets the HTML DOM node corresponding to this styled node.
-func (sn Node) HtmlNode() *html.Node {
-	return sn.htmlNode
+func (sn StyNode) HtmlNode() *html.Node {
+	return sn.Payload.(*StyNode).htmlNode
 }
 
+/*
 // ParentNode returns the parent node or nil (for the root of the tree).
 func (sn Node) ParentNode() *Node {
 	return sn.parent
@@ -106,39 +115,41 @@ func (sn *Node) AddChild(ch *Node) {
 	}
 	sn.children.addChild(ch, sn)
 }
+*/
 
-// Parent returns the parent node of this node, as a style.TreeNode.
+// ParentNode returns the parent node of this node, as a style.TreeNode.
 //
 // Interface style.TreeNode.
-func (sn Node) Parent() style.TreeNode {
-	return sn.parent
+func (sn StyNode) ParentNode() style.TreeNode {
+	return sn.Parent().Payload.(*StyNode)
 }
 
-// Child returns the child at position n, as a style.TreeNode
+// ChildNode returns the child at position n, as a style.TreeNode
 //
 // Interface style.TreeNode.
-func (sn Node) Child(n int) style.TreeNode {
-	ch, _ := sn.ChildNode(n)
-	return ch
+func (sn StyNode) ChildNode(n int) style.TreeNode {
+	ch, _ := sn.Child(n)
+	return ch.Payload.(*StyNode)
 }
 
 // ----------------------------------------------------------------------
 
 // Interface style.TreeNode.
-func (sn Node) ComputedStyles() *style.PropertyMap {
+func (sn StyNode) ComputedStyles() *style.PropertyMap {
 	return sn.computedStyles
 }
 
 // Interface cssom.StyledNode.
-func (sn *Node) SetComputedStyles(styles *style.PropertyMap) {
+func (sn *StyNode) SetComputedStyles(styles *style.PropertyMap) {
 	sn.computedStyles = styles
 }
 
-var _ cssom.StyledNode = &Node{}
-var _ style.TreeNode = &Node{}
+var _ cssom.StyledNode = &StyNode{}
+var _ style.TreeNode = &StyNode{}
 
 // ----------------------------------------------------------------------
 
+/*
 type childrenSlice struct {
 	sync.RWMutex
 	slice []*Node
@@ -168,6 +179,9 @@ func (chs *childrenSlice) child(n int) *Node {
 	defer chs.RUnlock()
 	return chs.slice[n]
 }
+*/
+
+// ----------------------------------------------------------------------
 
 /*
 type StyledNodeQuery struct {

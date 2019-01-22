@@ -1,6 +1,6 @@
-// Package box deals with typesetting boxes.
-//
 /*
+Package box deals with typesetting boxes.
+
 Typesetting may be understood as the process of placing boxes within
 larger boxes. The smallest type of box is a glyph, i.e. a printable
 letter. The largest type of box is a page—or even a book, where

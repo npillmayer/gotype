@@ -68,7 +68,7 @@ func getTestCSS(s string) cssom.StyleSheet {
 	return douceuradapter.Wrap(css)
 }
 
-func setupTest(htmlStr string, cssStr string) (*goquery.Document, *styledtree.Node) {
+func setupTest(htmlStr string, cssStr string) (*goquery.Document, *styledtree.StyNode) {
 	dom := getTestDOM(htmlStr)
 	css := getTestCSS(cssStr)
 	styler := cssom.NewCSSOM(nil)
@@ -79,11 +79,11 @@ func setupTest(htmlStr string, cssStr string) (*goquery.Document, *styledtree.No
 		return nil, nil
 	}
 	doc := goquery.NewDocumentFromNode(dom)
-	return doc, styledTree.(*styledtree.Node)
+	return doc, styledTree.(*styledtree.StyNode)
 }
 
 func findNodesFor(xpath string, doc *goquery.Document, tree style.TreeNode) []style.TreeNode {
-	nav := xpathadapter.NewNavigator(tree.(*styledtree.Node))
+	nav := xpathadapter.NewNavigator(tree.(*styledtree.StyNode))
 	xp, _ := dom.NewXPath(nav, xpathadapter.CurrentNode)
 	nodes, _ := xp.Find(xpath)
 	T.Debugf("found styled nodes: %v", nodes)

@@ -60,13 +60,13 @@ import (
 )
 
 type NodeNavigator struct {
-	root, current *styledtree.Node
+	root, current *styledtree.StyNode
 	chinx         int // index into children slice
 	attr          int // attributes index
 }
 
 // NewNavigator creates a new xpath.NodeNavigator for a styled tree.
-func NewNavigator(styledtree *styledtree.Node) *NodeNavigator {
+func NewNavigator(styledtree *styledtree.StyNode) *NodeNavigator {
 	return &NodeNavigator{
 		current: styledtree,
 		root:    styledtree,
@@ -146,9 +146,8 @@ func (nav *NodeNavigator) MoveToParent() bool {
 	if nav.current == nav.root {
 		return false
 	}
-	ok := true
-	nav.current, ok = nav.current.Parent().(*styledtree.Node)
-	if !ok {
+	nav.current = styledtree.Node(nav.current.Parent())
+	if nav.current == nil {
 		return false
 	}
 	nav.chinx = 0
@@ -172,7 +171,10 @@ func (nav *NodeNavigator) MoveToChild() bool {
 	}
 	nav.chinx = 0
 	ok := false
-	nav.current, ok = nav.current.ChildNode(0)
+	child, ok := nav.current.Child(0)
+	if ok {
+		nav.current = styledtree.Node(child)
+	}
 	return ok
 }
 
@@ -181,9 +183,11 @@ func (nav *NodeNavigator) MoveToFirst() bool {
 		return false
 	}
 	nav.chinx = 0
-	ok := true
-	parent := nav.current.Parent().(*styledtree.Node)
-	nav.current, ok = parent.ChildNode(0)
+	parent := styledtree.Node(nav.current.Parent())
+	child, ok := parent.Child(0)
+	if ok {
+		nav.current = styledtree.Node(child)
+	}
 	return ok
 }
 
@@ -195,12 +199,12 @@ func (nav *NodeNavigator) MoveToNext() bool {
 	if nav.attr != -1 {
 		return false
 	}
-	parent := nav.current.Parent().(*styledtree.Node)
+	parent := styledtree.Node(nav.current.Parent())
 	if nav.chinx < parent.ChildCount()-1 {
 		nav.chinx++
-		ch, ok := parent.ChildNode(nav.chinx)
+		ch, ok := parent.Child(nav.chinx)
 		if ok {
-			nav.current = ch
+			nav.current = styledtree.Node(ch)
 		}
 		return ok
 	}
@@ -213,10 +217,10 @@ func (nav *NodeNavigator) MoveToPrevious() bool {
 	}
 	if nav.chinx > 0 {
 		nav.chinx--
-		parent := nav.current.Parent().(*styledtree.Node)
-		ch, ok := parent.ChildNode(nav.chinx)
+		parent := styledtree.Node(nav.current.Parent())
+		ch, ok := parent.Child(nav.chinx)
 		if ok {
-			nav.current = ch
+			nav.current = styledtree.Node(ch)
 		}
 		return ok
 	}
@@ -235,7 +239,6 @@ func (nav *NodeNavigator) MoveTo(other xpath.NodeNavigator) bool {
 }
 
 var _ xpath.NodeNavigator = &NodeNavigator{}
-var _ style.TreeNode = &styledtree.Node{}
 
 // InnerText returns the text between the start and end tags of the object.
 func innerText(n *html.Node) string {

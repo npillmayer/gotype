@@ -179,7 +179,7 @@ func (c *Container) Add(child *Container) {
 	c.content = append(c.content, child)
 }
 
-// ----------------------------------------------------------------------
+// --- Default Display Properties ---------------------------------------
 
 // GetFormattingContextForStyledNode gets the formatting context for a
 // container resulting from a

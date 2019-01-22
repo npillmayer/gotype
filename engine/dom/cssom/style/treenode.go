@@ -11,7 +11,7 @@ import "golang.org/x/net/html"
 type TreeNode interface {
 	HtmlNode() *html.Node         // the HTML DOM node related to this styled node
 	ComputedStyles() *PropertyMap // get the computed styles of this styled node
-	Parent() TreeNode             // safe getter (concurrency safe)
-	Child(int) TreeNode           // safe getter (concurrency safe)
+	ParentNode() TreeNode         // safe getter (concurrency safe)
+	ChildNode(int) TreeNode       // safe getter (concurrency safe)
 	ChildCount() int              // number of children
 }
