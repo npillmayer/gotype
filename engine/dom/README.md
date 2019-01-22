@@ -20,3 +20,5 @@ From the O'Reilly page:
 For an in-depth description of HTMLbook please refer to the
 O'Reilly [HTMLBook Github-page](https://oreillymedia.github.io/HTMLBook/).
 
+For another source thinking about HTML and book publishing, consider
+this [blog entry](https://www.adamhyde.net/tag/html-book/) by Adam Hyde.
