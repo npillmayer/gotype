@@ -1,10 +1,10 @@
-package dom
+package xpath
 
 import (
 	"errors"
 
 	"github.com/antchfx/xpath"
-	"github.com/npillmayer/gotype/engine/dom/tree"
+	"github.com/npillmayer/gotype/engine/tree"
 )
 
 /* -----------------------------------------------------------------

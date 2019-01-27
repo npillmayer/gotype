@@ -90,8 +90,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/npillmayer/gotype/engine/dom/tree"
+	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/engine/tree"
 )
+
+// We trace to the EngineTracer
+func T() tracing.Trace {
+	return tracing.EngineTracer
+}
 
 // Property is a raw value for a CSS property. For example, with
 //     color: black
@@ -99,6 +105,8 @@ import (
 // the raw string value into type Property is to provide a set of
 // convenient type conversion functions.
 type Property string
+
+const NullStyle Property = ""
 
 func (p Property) String() string {
 	return string(p)
@@ -168,11 +176,12 @@ func (pg *PropertyGroup) IsSet(key string) bool {
 // Get a property's value.
 //
 // Style property values are always converted to lower case.
-func (pg *PropertyGroup) Get(key string) Property {
+func (pg *PropertyGroup) Get(key string) (Property, bool) {
 	if pg.propertiesMap == nil {
-		return ""
+		return NullStyle, false
 	}
-	return pg.propertiesMap[key]
+	p, ok := pg.propertiesMap[key]
+	return p, ok
 }
 
 // Set a property's value. Overwrites an existing value, if present.
@@ -201,8 +210,11 @@ func (pg *PropertyGroup) ForkOnProperty(key string, p Property, cascade bool) (*
 	var ancestor *PropertyGroup
 	if cascade {
 		ancestor = pg.Cascade(key)
-		if ancestor != nil && ancestor.Get(key) == p {
-			return pg, false
+		if ancestor != nil {
+			p2, _ := ancestor.Get(key)
+			if p2 == p {
+				return pg, false
+			}
 		}
 	}
 	npg := NewPropertyGroup(pg.name)
@@ -264,11 +276,20 @@ func GroupNameFromPropertyKey(key string) string {
 	return groupname
 }
 
+const (
+	PG_Margins   = "Margins"
+	PG_Padding   = "Padding"
+	PG_Border    = "Border"
+	PG_Dimension = "Dimension"
+	PG_Display   = "Display"
+	PG_Region    = "Region"
+)
+
 var groupNameFromPropertyKey = map[string]string{
-	"margin-top":                 "Margins", // Margins
-	"margin-left":                "Margins",
-	"margin-right":               "Margins",
-	"margin-bottom":              "Margins",
+	"margin-top":                 PG_Margins, // Margins
+	"margin-left":                PG_Margins,
+	"margin-right":               PG_Margins,
+	"margin-bottom":              PG_Margins,
 	"padding-top":                "Padding", // Padding
 	"padding-left":               "Padding",
 	"padding-right":              "Padding",
@@ -296,6 +317,8 @@ var groupNameFromPropertyKey = map[string]string{
 	"max-width":                  "Dimension",
 	"max-height":                 "Dimension",
 	"display":                    "Display", // Display
+	"flow-into":                  PG_Region,
+	"flow-from":                  PG_Region,
 }
 
 // SplitCompountProperty splits up a shortcut property into its individual
@@ -372,6 +395,8 @@ func p(prefix string, suffix string, tag string) string {
 	return prefix + "-" + tag + "-" + suffix
 }
 
+// --- Property Map -----------------------------------------------------
+
 // PropertyMap holds CSS properties. nil is a legal (empty) property map.
 type PropertyMap struct {
 	// As CSS defines a whole lot of properties, we segment them into logical groups.
@@ -398,6 +423,18 @@ func (pmap *PropertyMap) Group(groupname string) *PropertyGroup {
 	}
 	group, _ := pmap.m[groupname]
 	return group
+}
+
+// Property returns a style property value, together with an indicator
+// wether it has been found in the properties map.
+// No cascading is performed
+func (pmap *PropertyMap) Property(key string) (Property, bool) {
+	groupname := GroupNameFromPropertyKey(key)
+	group := pmap.Group(groupname)
+	if group == nil {
+		return NullStyle, false
+	}
+	return group.Get(key)
 }
 
 // AddAllFromGroup transfers all style properties from a property group
@@ -430,18 +467,18 @@ func (pmap *PropertyMap) AddAllFromGroup(group *PropertyGroup, overwrite bool) *
 
 // Add adds a property to this property map, e.g.,
 //    pm.Add("funny-margin", "big")
-/*
-func (pm *PropertyMap) Add(key string, value string) {
-	if pm != nil {
-		group, found := pm.m["X"]
-		if !found {
-			group = newPropertyGroup("X")
-			pm.m["X"] = group
-		}
-		group.Set(key, Property(value))
+func (pm *PropertyMap) Add(key string, value Property) {
+	if pm == nil {
+		return
 	}
+	groupname := GroupNameFromPropertyKey(key)
+	group, found := pm.m[groupname]
+	if !found {
+		group = NewPropertyGroup(groupname)
+		pm.m[groupname] = group
+	}
+	group.Set(key, value)
 }
-*/
 
 // InitializeDefaultPropertyValues creates an internal data structure to
 // hold all the default values for CSS properties.
@@ -505,6 +542,11 @@ func InitializeDefaultPropertyValues(additionalProps []KeyValue) *PropertyMap {
 	display := NewPropertyGroup("Display")
 	display.Set("display", "block")
 	m["Display"] = display
+
+	region := NewPropertyGroup(PG_Region)
+	display.Set("flow-from", "")
+	display.Set("flow-into", "")
+	m[PG_Region] = region
 
 	/*
 	   type ColorModel string
@@ -603,6 +645,8 @@ func InitializeDefaultPropertyValues(additionalProps []KeyValue) *PropertyMap {
 	return &PropertyMap{m}
 }
 
+// --- Package Level Functions ------------------------------------------
+
 /*
 func GetCascadedProperty(sn *styledtree.StyNode, key string) (Property, error) {
 	groupname := GroupNameFromPropertyKey(key)
@@ -622,26 +666,47 @@ func GetCascadedProperty(sn *styledtree.StyNode, key string) (Property, error) {
 // GetCascadedProperty gets the value of a property. The search cascades to
 // parent property maps, if available.
 //
-// This is normally called on a tree of styled nodes and it will cascade
-// all the way up to the default properties, if necessary.
+// Clients will usually call GetProperty(…) instead as this will respect
+// CSS semantics for inherited properties.
 //
-// Will flag an error if the style property isn't found (which should not
-// happen, as every property should be included in the 'user-agent' default
-// style properties.
-func GetCascadedProperty(n *tree.Node, key string,
-	compstyles func(n *tree.Node) *PropertyMap) (Property, error) {
+// The call to GetCascadedProperty will flag an error if the style property
+// isn't found (which should not happen, as every property should be included
+// in the 'user-agent' default style properties).
+func GetCascadedProperty(n *tree.Node, key string, sty StyleInterf) (Property, error) {
 	//
 	groupname := GroupNameFromPropertyKey(key)
 	var group *PropertyGroup
 	for n != nil && group == nil {
-		group = compstyles(n).Group(groupname)
+		styler := sty(n)
+		group = styler.ComputedStyles().Group(groupname)
 		n = n.Parent()
 	}
 	if group == nil {
 		errmsg := fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", groupname)
-		return Property(""), errors.New(errmsg)
+		return NullStyle, errors.New(errmsg)
 	}
-	return group.Cascade(key).Get(key), nil // must succeed
+	p, _ := group.Cascade(key).Get(key)
+	return p, nil // must succeed
+}
+
+// GetProperty gets the value of a property. If the property is not set
+// locally on the style node and the property is inheritable, he search
+// cascades to parent property maps, if available.
+//
+// The call to GetProperty will flag an error if the style property isn't found
+// (which should not happen, as every property should be included in the
+// 'user-agent' default style properties).
+func GetProperty(n *tree.Node, key string, sty StyleInterf) (Property, error) {
+	if nonInherited[key] {
+		T().Debugf("Property %s is not inherited", key)
+		styler := sty(n)
+		p, ok := GetLocalProperty(styler.ComputedStyles(), key)
+		if !ok {
+			p = GetDefaultProperty(styler, key)
+		}
+		return p, nil
+	}
+	return GetCascadedProperty(n, key, sty)
 }
 
 /*
@@ -665,5 +730,5 @@ func GetLocalProperty(pmap *PropertyMap, key string) (Property, bool) {
 	if group == nil {
 		return "", false
 	}
-	return group.Get(key), true
+	return group.Get(key)
 }

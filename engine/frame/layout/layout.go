@@ -7,7 +7,7 @@ import (
 	"github.com/npillmayer/gotype/core/dimen"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/frame/box"
-	"golang.org/x/net/html"
+	"github.com/npillmayer/gotype/engine/tree"
 )
 
 // TODO:
@@ -21,64 +21,43 @@ import (
 // Regions:
 // http://cna.mamk.fi/Public/FJAK/MOAC_MTA_HTML5_App_Dev/c06.pdf
 
-// We trace to the engine tracer. Will be set when calling Layout().
-var T tracing.Trace
+// We trace to the engine tracer.
+func T() tracing.Trace {
+	return tracing.EngineTracer
+}
+
+// Layouter is a layout engine.
+type Layouter struct {
+	styleroot    *tree.Node    // input styled tree
+	boxroot      *Container    // layout tree to contruct
+	styleCreator style.Creator // to create a style node
+	err          error         // remember last error
+}
+
+// NewLayouter creates a new layout engine for a given style tree.
+// The tree's styled nodes will be accessed using styler(node).
+func NewLayouter(styles *tree.Node, creator style.Creator) *Layouter {
+	//
+	l := &Layouter{
+		styleroot:    styles,
+		styleCreator: creator,
+	}
+	return l
+}
 
 // Layout produces a render tree from walking the nodes
 // of a styled tree.
-func Layout(styledTree style.TreeNode, viewport *dimen.Rect) *Container {
-	T = tracing.EngineTracer
+func (l *Layouter) Layout(viewport *dimen.Rect) *Container {
 	// First create the tree without calculating the dimensions
+	/* TODO
 	layoutTree := buildLayoutTree(styledTree)
+	*/
 	// Next calculate position and dimensions for every box
+	/* TODO
 	layoutBoxes(layoutTree, viewport)
+	*/
 	//renderTree := layoutBoxes(layoutTree, viewport)
 	return nil
-}
-
-// BuildLayoutTree constructs a tree of containers and boxes from a tree
-// of styled tree nodes. The boxes are not layouted yet, i.e. they have
-// neither position nor size.
-func buildLayoutTree(styledTree style.TreeNode) *Container {
-	if styledTree == nil {
-		return nil // nothing to layout
-	}
-	rootContainer := newVBox(nil) // outermost display context is block
-	runner := &constructionRunner{rootContainer}
-	runner.construct(styledTree, rootContainer) // start at root node of styled tree
-	return rootContainer
-}
-
-type constructionRunner struct {
-	root *Container
-}
-
-func (crun *constructionRunner) construct(sn style.TreeNode, parent *Container) {
-	if sn == nil || parent == nil { // should not happen, but be safe
-		return
-	}
-	c := boxForNode(sn, parent)
-	if c != nil {
-		if requiresAnonBox(c.mode, parent.orientation) {
-			T.Debugf("creating anon box for %s in %s", sn.HtmlNode().Data, parent)
-			if len(parent.content) > 0 &&
-				parent.content[len(parent.content)-1].styleNode == nil {
-				// re-use previous anon box
-				prevSibling := parent.content[len(parent.content)-1]
-				prevSibling.Add(c)
-			} else {
-				c = wrapInAnonymousBox(c)
-				parent.Add(c)
-			}
-		} else {
-			parent.Add(c)
-		}
-		// now recurse into styled children nodes
-		chcnt := sn.ChildCount()
-		for i := 0; i < chcnt; i++ {
-			crun.construct(sn.Child(i), c)
-		}
-	}
 }
 
 func requiresAnonBox(mode uint8, orientation uint8) bool {
@@ -87,24 +66,13 @@ func requiresAnonBox(mode uint8, orientation uint8) bool {
 
 func wrapInAnonymousBox(c *Container) *Container {
 	if c.mode == VMODE {
-		vbox := newVBox(nil)
+		vbox := newVBox(nil, c.styleInterf)
 		vbox.Add(c)
 		return vbox
 	}
-	hbox := newHBox(nil)
+	hbox := newHBox(nil, c.styleInterf)
 	hbox.Add(c)
 	return hbox
-}
-
-// LayoutBoxes finds the positions and sizes of boxes of a previously constructed
-// layout tree.
-func layoutBoxes(renderTree *Container, viewport *dimen.Rect) *Container {
-	// TODO
-	return nil
-}
-
-type layoutRunner struct {
-	root *Container
 }
 
 // Flags for box context and display mode.
@@ -116,55 +84,60 @@ const (
 	NONE
 )
 
-func boxForNode(sn style.TreeNode, parent *Container) *Container {
-	disp := GetFormattingContextForStyledNode(sn)
-	if disp == NONE {
-		return nil
-	}
-	var c *Container
-	if disp == VBOX {
-		c = newVBox(sn)
-	} else {
-		c = newHBox(sn)
-	}
-	c.mode = getDisplayPropertyForStyledNode(sn)
-	return c
-}
-
 // newVBox creates a container with context VBOX.
-func newVBox(sn style.TreeNode) *Container {
-	c := NewContainer(VBOX)
+//
+// Sometimes I miss subclassing dearly.
+func newVBox(sn *tree.Node, styleInterf style.StyleInterf) *Container {
+	c := newContainer(VBOX)
 	c.styleNode = sn
+	c.styleInterf = styleInterf
 	return c
 }
 
 // newHBox creates a container with context HBOX.
-func newHBox(sn style.TreeNode) *Container {
-	c := NewContainer(HBOX)
+//
+// Sometimes I miss subclassing dearly.
+func newHBox(sn *tree.Node, styleInterf style.StyleInterf) *Container {
+	c := newContainer(HBOX)
 	c.styleNode = sn
+	c.styleInterf = styleInterf
 	return c
 }
 
 // Container is a (CSS-)styled box which may contain other boxes and/or
 // containers.
 type Container struct {
-	box.StyledBox
-	//sync.RWMutex       // used to protect non-threadsafe code
+	tree.Node
+	Box         box.StyledBox
 	orientation uint8 // context of children V or H
 	mode        uint8 // container lives in this mode
-	styleNode   style.TreeNode
-	content     []*Container
+	styleNode   *tree.Node
+	styleInterf style.StyleInterf
 }
 
-// NewContainer creates a container with orientation of either VBOX or HBOX.
-func NewContainer(orientation uint8) *Container {
-	return &Container{orientation: orientation}
+// newContainer creates a container with orientation of either VBOX or HBOX.
+func newContainer(orientation uint8) *Container {
+	c := &Container{orientation: orientation}
+	c.Payload = c // always points to itself
+	return c
+}
+
+// Node gets the payload of a tree node as a Container.
+// Called from clients as
+//
+//    container := layout.Node(n)
+//
+func Node(n *tree.Node) *Container {
+	if n == nil {
+		return nil
+	}
+	return n.Payload.(*Container)
 }
 
 func (c *Container) String() string {
 	n := "_"
 	if c.styleNode != nil {
-		n = c.styleNode.HtmlNode().Data
+		n = c.styleInterf(c.styleNode).HtmlNode().Data
 	}
 	b := "hbox"
 	if c.orientation == VBOX {
@@ -173,97 +146,12 @@ func (c *Container) String() string {
 	return fmt.Sprintf("\\%s<%s>", b, n)
 }
 
-// TODO make concurrency-safe (see styledtree.Node)
+// Add appends a child container as the last sibling of existing
+// child containers for c. Does nothing if child is nil.
 func (c *Container) Add(child *Container) {
-	tracing.EngineTracer.Debugf("Adding child to %s", c)
-	c.content = append(c.content, child)
-}
-
-// --- Default Display Properties ---------------------------------------
-
-// GetFormattingContextForStyledNode gets the formatting context for a
-// container resulting from a
-// styled node. The context denotes the orientation in which a box's content
-// is layed out. It may be either HBOX, VBOX or NONE.
-func GetFormattingContextForStyledNode(sn style.TreeNode) uint8 {
-	if sn == nil {
-		return NONE
+	T().Debugf("Adding child to %s", c)
+	if child == nil {
+		return
 	}
-	if val, _ := style.GetLocalProperty(sn, "display"); val == "none" {
-		return NONE
-	}
-	if sn.HtmlNode().Type != html.ElementNode {
-		T.Debugf("Have styled node for non-element ?!?")
-		return HBOX
-	}
-	switch sn.HtmlNode().Data {
-	case "body":
-	case "div":
-	case "ul":
-	case "ol":
-	case "section":
-		return VBOX
-	case "p":
-	case "span":
-	case "it":
-	case "h1":
-	case "h2":
-	case "h3":
-	case "h4":
-	case "h5":
-	case "h6":
-	case "h7":
-	case "b":
-	case "i":
-	case "strong":
-		return HBOX
-	}
-	tracing.EngineTracer.Infof("unknown HTML element %s will stack children vertically",
-		sn.HtmlNode().Data)
-	return VBOX
-}
-
-func getDisplayPropertyForStyledNode(sn style.TreeNode) uint8 {
-	if sn == nil {
-		return NONE
-	}
-	dispProp, isSet := style.GetLocalProperty(sn, "display")
-	if isSet {
-		if dispProp == "None" {
-			return NONE
-		} else if dispProp == "block" {
-			return VMODE
-		} else if dispProp == "inline" {
-			return HMODE
-		}
-	}
-	if sn.HtmlNode().Type != html.ElementNode {
-		T.Debugf("Have styled node for non-element ?!?")
-		return HMODE
-	}
-	switch sn.HtmlNode().Data {
-	case "body": // should not be contained
-	case "p":
-	case "div":
-	case "ul":
-	case "ol":
-	case "it":
-	case "section":
-	case "h1":
-	case "h2":
-	case "h3":
-	case "h4":
-	case "h5":
-	case "h6":
-	case "h7":
-		return VMODE
-	case "span":
-	case "b":
-	case "i":
-	case "strong":
-		return HMODE
-	}
-	tracing.EngineTracer.Infof("unknown HTML element %s will be set to display: block",
-		sn.HtmlNode().Data)
-	return VMODE
+	c.AddChild(&child.Node)
 }

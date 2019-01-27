@@ -53,7 +53,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import (
 	"github.com/npillmayer/gotype/engine/dom/cssom"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
-	"github.com/npillmayer/gotype/engine/dom/tree"
+	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
 )
 
@@ -81,9 +81,18 @@ func Node(n *tree.Node) *StyNode {
 }
 
 //
-func StylesGetter(n *tree.Node) *style.PropertyMap {
-	sn := Node(n)
-	return sn.computedStyles
+func Creator() style.Creator {
+	return creator{}
+}
+
+type creator struct{}
+
+func (c creator) ToStyler(n *tree.Node) style.Styler {
+	return Node(n)
+}
+
+func (c creator) StyleForHtmlNode(htmlnode *html.Node) *tree.Node {
+	return NewNodeForHtmlNode(htmlnode)
 }
 
 // ----------------------------------------------------------------------

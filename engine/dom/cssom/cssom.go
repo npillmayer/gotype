@@ -393,9 +393,11 @@ func findAncestorWithPropertyGroup(sn StyledNode, group string, builder StyledTr
 	it := sn
 	for it != nil && pg == nil {
 		if it == nil {
-			panic("this cannot happen")
+			panic("this should not happen: user agent defaults not set?")
 		}
-		pg = it.ComputedStyles().Group(group)
+		if it.ComputedStyles() != nil {
+			pg = it.ComputedStyles().Group(group)
+		}
 		it = builder.WalkUpwards(it)
 	}
 	return it, pg

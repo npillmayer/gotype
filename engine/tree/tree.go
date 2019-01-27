@@ -38,7 +38,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import (
 	"errors"
 	"sync"
+
+	"github.com/npillmayer/gotype/core/config/tracing"
 )
+
+// We're tracing to the EngineTracer
+func T() tracing.Trace {
+	return tracing.EngineTracer
+}
 
 // Error to be emitted if a pipeline filter step is defunct.
 var ErrInvalidFilter error = errors.New("Filter stage is invalid")
@@ -281,14 +288,14 @@ func descendentsWith(node *Node, isBuffered bool, udata interface{}, push func(*
 	if isBuffered {
 		predicate := udata.(Predicate)
 		matches, err := predicate(node)
+		T().Debugf("Predicate for node %s returned: %v, err=%v", node, matches, err)
 		if err != nil {
 			return err // do not descend further
 		}
 		if matches {
 			push(node) // found one, put on output channel for next pipeline stage
-		} else {
-			revisitChildrenOf(node, pushBuf)
 		}
+		revisitChildrenOf(node, pushBuf)
 	} else {
 		revisitChildrenOf(node, pushBuf)
 	}
@@ -301,6 +308,15 @@ func revisitChildrenOf(node *Node, pushBuf func(*Node)) {
 		ch, _ := node.Child(i)
 		pushBuf(ch)
 	}
+}
+
+// AllDescendents traverses all descendents.
+// The traversal does not include the start node.
+// This is just a wrapper around `w.DescendentsWith(Whatever)`.
+//
+// If w is nil, AllDescendents will return nil.
+func (w *Walker) AllDescendents() *Walker {
+	return w.DescendentsWith(Whatever)
 }
 
 // AttributeIs checks a node's attributes and filters all nodes with
@@ -405,4 +421,49 @@ func clientFilter(node *Node, isBuffered bool, udata interface{}, push func(*Nod
 		push(n) // forward filtered node to next pipeline stage
 	}
 	return err
+}
+
+// Action is a function type to operate on tree nodes.
+// Resulting nodes will be pushed to the next pipeline stage, if
+// no error occured.
+type Action func(*Node) (*Node, error)
+
+// TopDown traverses a tree starting at (and including) the root node.
+// The traversal guarantees that parents are always processed before
+// their children.
+//
+// If the action function returns an error or does not return a node,
+// descending this branch is aborted.
+//
+// If w is nil, TopDown will return nil.
+func (w *Walker) TopDown(action Action) *Walker {
+	if w == nil {
+		return nil
+	}
+	if action == nil {
+		w.pipe.errors <- ErrInvalidFilter
+	} else {
+		w.appendFilterForTask(topDown, action, 5) // need a helper queue
+	}
+	return w
+}
+
+func topDown(node *Node, isBuffered bool, udata interface{}, push func(*Node),
+	pushBuf func(*Node)) error {
+	//
+	if isBuffered {
+		action := udata.(Action)
+		result, err := action(node)
+		T().Debugf("Action for node %s returned: %v, err=%v", node, result, err)
+		if err != nil {
+			return err // do not descend further
+		}
+		if result != nil {
+			push(result) // put result on output channel for next pipeline stage
+			revisitChildrenOf(node, pushBuf)
+		}
+	} else {
+		pushBuf(node) // simply move incoming nodes over to buffer queue
+	}
+	return nil
 }

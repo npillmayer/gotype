@@ -55,7 +55,7 @@ import (
 
 	"github.com/antchfx/xpath"
 	"github.com/npillmayer/gotype/engine/dom/styledtree"
-	"github.com/npillmayer/gotype/engine/dom/tree"
+	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
 )
 

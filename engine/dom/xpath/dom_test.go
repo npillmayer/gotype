@@ -1,4 +1,4 @@
-package dom_test
+package xpath_test
 
 import (
 	"strings"
@@ -8,14 +8,14 @@ import (
 	"github.com/aymerick/douceur/parser"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/logrusadapter"
-	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/dom/cssom"
 	"github.com/npillmayer/gotype/engine/dom/cssom/douceuradapter"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/dom/styledtree"
 	"github.com/npillmayer/gotype/engine/dom/styledtree/builder"
 	"github.com/npillmayer/gotype/engine/dom/styledtree/xpathadapter"
-	"github.com/npillmayer/gotype/engine/dom/tree"
+	"github.com/npillmayer/gotype/engine/dom/xpath"
+	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
 )
 
@@ -83,10 +83,10 @@ func setupTest(htmlStr string, cssStr string) (*goquery.Document, *styledtree.St
 	return doc, styledTree.(*styledtree.StyNode)
 }
 
-func findNodesFor(xpath string, doc *goquery.Document, tree *tree.Node) []*tree.Node {
+func findNodesFor(xpstr string, doc *goquery.Document, tree *tree.Node) []*tree.Node {
 	nav := xpathadapter.NewNavigator(styledtree.Node(tree))
-	xp, _ := dom.NewXPath(nav, xpathadapter.CurrentNode)
-	nodes, _ := xp.Find(xpath)
+	xp, _ := xpath.NewXPath(nav, xpathadapter.CurrentNode)
+	nodes, _ := xp.Find(xpstr)
 	T.Debugf("found styled nodes: %v", nodes)
 	return nodes
 }
@@ -98,8 +98,9 @@ func assertProperty(nodes []*tree.Node, key string) props {
 		return nil
 	}
 	var pp props
+	sncreat := styledtree.Creator()
 	for _, sn := range nodes {
-		p, _ := style.GetCascadedProperty(sn, key, styledtree.StylesGetter)
+		p, _ := style.GetCascadedProperty(sn, key, sncreat.ToStyler)
 		T.Debugf("property %s of %s = %s", key, sn, p)
 		pp = append(pp, p)
 	}

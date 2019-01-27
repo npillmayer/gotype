@@ -1,18 +1,12 @@
 package layout
 
 import (
-	"testing"
-
-	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
-	"github.com/npillmayer/gotype/engine/dom/cssom/style"
-	"github.com/npillmayer/gotype/engine/dom/styledtree"
 	"golang.org/x/net/html"
 )
 
+/*
 func Test0(t *testing.T) {
 	tracing.EngineTracer = gologadapter.New()
-	T = tracing.EngineTracer
 }
 
 func TestLayout1(t *testing.T) {
@@ -51,6 +45,7 @@ func TestLayout1(t *testing.T) {
 	tree = buildLayoutTree(root)
 	PrintTree(tree, t)
 }
+*/
 
 // ----------------------------------------------------------------------
 
@@ -67,6 +62,8 @@ func makeCData(s string) *html.Node {
 	n.Data = s
 	return n
 }
+
+/*
 
 func PrintTree(c *Container, t *testing.T) {
 	indent := 0
@@ -89,3 +86,4 @@ func indent(w int) string {
 	}
 	return s
 }
+*/

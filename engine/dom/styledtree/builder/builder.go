@@ -51,6 +51,11 @@ import (
 // Builder builds styled trees.
 type Builder struct{}
 
+// New creates a new builder.
+func New() Builder {
+	return Builder{}
+}
+
 // MakeNodeFor creates a new styled node corresponding to an HTML DOM node.
 //
 // Interface cssom.StyledTreeBuilder.

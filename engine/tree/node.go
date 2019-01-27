@@ -54,7 +54,7 @@ func NewNode(payload interface{}) *Node {
 
 // String is a simple Stringer which the node's Payload packaged in a string.
 func (node *Node) String() string {
-	return fmt.Sprintf("(Node %v)", node.Payload)
+	return fmt.Sprintf("(Node #ch=%d)", node.ChildCount())
 }
 
 // AddChild inserts a new child node into the tree.
