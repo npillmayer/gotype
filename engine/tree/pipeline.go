@@ -70,18 +70,25 @@ const (
 const maxBufferLength int = 128
 
 // Workers will be tasked a series of workerTasks.
-type workerTask func(*Node, bool, interface{}, func(*Node), func(*Node)) error
+type workerTask func(*Node, bool, userdata, func(*Node), func(*Node, interface{})) error
 
 // filter is part of a pipeline, i.e. a stage of the overall pipeline to
 // process input (Nodes) and produce results (Nodes).
 // filters will perform concurrently.
 type filter struct {
-	next    *filter      // filters are chained
-	results chan<- *Node // results of this filter (pipeline stage)
-	queue   chan *Node   // helper queue if necessary
-	task    workerTask   // the task this filter performs
-	udata   interface{}  // additional information needed to perform task
-	env     *filterenv   // connection to outside world
+	next       *filter          // filters are chained
+	results    chan<- *Node     // results of this filter (pipeline stage)
+	queue      chan nodeSupport // helper queue if necessary
+	task       workerTask       // the task this filter performs
+	filterdata interface{}      // additional information needed to perform task
+	env        *filterenv       // connection to outside world
+}
+
+// nodeSupport is a small helper type to let clients store arbitrary
+// user data together with nodes in a buffer queue.
+type nodeSupport struct {
+	node     *Node       // buffered node
+	nodedata interface{} // arbitrary user dataarbitrary user data
 }
 
 // filterenv holds information about the outside world to be referenced by
@@ -93,19 +100,27 @@ type filterenv struct {
 	queuecounter *sync.WaitGroup // counter for overall work load
 }
 
+// userdata is a container to provide user data for both information global
+// to a filter, as well as information companying a single node.
+// The user data information will be provided to filter actions.
+type userdata struct {
+	filterdata interface{}
+	nodedata   interface{}
+}
+
 // newFilter creates a new pipeline stage, i.e. a filter fed from an input
 // channel (workload) and putting processed nodes into an output channel (results).
 // Errors are reported to an error channel.
-func newFilter(task workerTask, udata interface{}, buflen int) *filter {
+func newFilter(task workerTask, filterdata interface{}, buflen int) *filter {
 	f := &filter{}
 	if buflen > 0 {
 		if buflen > maxBufferLength {
 			buflen = maxBufferLength
 		}
-		f.queue = make(chan *Node, buflen)
+		f.queue = make(chan nodeSupport, buflen)
 	}
 	f.task = task
-	f.udata = udata
+	f.filterdata = filterdata
 	return f
 }
 
@@ -142,7 +157,8 @@ func filterWorker(f *filter, wno int) {
 		f.pushResult(node)
 	}
 	for inNode := range f.env.input { // get workpackages until drained
-		err := f.task(inNode, false, f.udata, push, nil) // perform task on workpackage
+		udata := userdata{f.filterdata, nil}
+		err := f.task(inNode, false, udata, push, nil) // perform task on workpackage
 		if err != nil {
 			f.env.errors <- err // signal error to caller
 		}
@@ -154,20 +170,25 @@ func filterWorkerWithQueue(f *filter, wno int) {
 	push := func(node *Node) { // worker will use this to hand result to next stage
 		f.pushResult(node)
 	}
-	pushBuf := func(node *Node) { // worker will use this to queue work internally
-		f.pushBuffer(node)
+	pushBuf := func(sup *Node, udata interface{}) { // worker will use this to queue work internally
+		f.pushBuffer(sup, udata)
 	}
 	var buffered bool
 	var node *Node
+	var udata userdata
 	for {
 		select { // get upstream and buffered workpackages until drained
 		case node = <-f.env.input:
+			udata.filterdata = f.filterdata
 			buffered = false
-		case node = <-f.queue:
+		case supdata := <-f.queue:
+			node = supdata.node
+			udata.filterdata = f.filterdata
+			udata.nodedata = supdata.nodedata
 			buffered = true
 		}
 		if node != nil {
-			err := f.task(node, buffered, f.udata, push, pushBuf) // perform filter task
+			err := f.task(node, buffered, udata, push, pushBuf) // perform filter task
 			if err != nil {
 				f.env.errors <- err // signal error to caller
 			}
@@ -226,18 +247,19 @@ func (f *filter) pushResult(node *Node) {
 
 // pushBuffer puts a node on the buffer queue of a filter
 // (non-blocking).
-func (f *filter) pushBuffer(node *Node) {
-	f.env.queuecounter.Add(1)
+func (f *filter) pushBuffer(node *Node, udata interface{}) {
+	nodesup := nodeSupport{node, udata}
+	f.env.queuecounter.Add(1) // overall workload increases
 	written := true
 	select { // try to send it synchronously without blocking
-	case f.queue <- node:
+	case f.queue <- nodesup:
 	default:
 		written = false
 	}
 	if !written { // nope, we'll have to go async
-		go func(node *Node) {
-			f.queue <- node
-		}(node)
+		go func(sup nodeSupport) {
+			f.queue <- sup
+		}(nodesup)
 	}
 }
 

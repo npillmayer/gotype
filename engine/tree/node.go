@@ -69,6 +69,20 @@ func (node *Node) AddChild(ch *Node) *Node {
 	return node
 }
 
+// SetChildAt inserts a new child node into the tree.
+// The newly inserted node is connected to this node as its parent.
+// The child is set at a given position in relation to other children,
+// replacing the child at position i if it exists.
+// It returns the parent node to allow for chaining.
+//
+// This operation is concurrency-safe.
+func (node *Node) SetChildAt(i int, ch *Node) *Node {
+	if ch != nil {
+		node.children.setChild(i, ch, node)
+	}
+	return node
+}
+
 // ParentNode returns the parent node or nil (for the root of the tree).
 func (node Node) Parent() *Node {
 	return node.parent
@@ -108,6 +122,28 @@ func (chs *childrenSlice) addChild(child *Node, parent *Node) {
 	chs.Lock()
 	defer chs.Unlock()
 	chs.slice = append(chs.slice, child)
+	child.parent = parent
+}
+
+func (chs *childrenSlice) setChild(i int, child *Node, parent *Node) {
+	if child == nil {
+		return
+	}
+	chs.Lock()
+	defer chs.Unlock()
+	if len(chs.slice) <= i {
+		l := len(chs.slice)
+		c := make([]*Node, i+1)
+		for j := 0; j <= i; j++ {
+			if j < l {
+				c[j] = chs.slice[j]
+			} else {
+				c[j] = nil
+			}
+		}
+		chs.slice = c
+	}
+	chs.slice[i] = child
 	child.parent = parent
 }
 

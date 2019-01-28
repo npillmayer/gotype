@@ -5,7 +5,14 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 )
+
+func Test0(t *testing.T) {
+	tracing.EngineTracer = gologadapter.New()
+}
 
 func TestEmptyWalker(t *testing.T) {
 	n := checkRuntime(t, -1)
@@ -129,7 +136,7 @@ func ExampleWalker_Promise() {
 		fmt.Print(err)
 	}
 	for _, node := range nodes {
-		fmt.Printf("matching descendent found: %v\n", node)
+		fmt.Printf("matching descendent found: (Node %d)\n", node.Payload.(int))
 	}
 	// Output:
 	// matching descendent found: (Node 10)

@@ -220,8 +220,8 @@ func (w *Walker) Parent() *Walker {
 
 // parent is a very simple filter task to retrieve the parent of a tree node.
 // if the node is the tree root node, parent() will not produce a result.
-func parent(node *Node, isBuffered bool, udata interface{}, push func(*Node),
-	pushBuf func(*Node)) error {
+func parent(node *Node, isBuffered bool, udata userdata, push func(*Node),
+	pushBuf func(*Node, interface{})) error {
 	//
 	p := node.Parent()
 	if p != nil {
@@ -248,10 +248,10 @@ func (w *Walker) AncestorWith(predicate Predicate) *Walker {
 
 // ancestorWith searches iteratively for a node matching a predicate.
 // node is at least the parent of the start node.
-func ancestorWith(node *Node, isBuffered bool, udata interface{}, push func(*Node),
-	pushBuf func(*Node)) error {
+func ancestorWith(node *Node, isBuffered bool, udata userdata, push func(*Node),
+	pushBuf func(*Node, interface{})) error {
 	//
-	predicate := udata.(Predicate)
+	predicate := udata.filterdata.(Predicate)
 	anc := node.Parent()
 	for anc != nil {
 		matches, err := predicate(anc)
@@ -282,11 +282,11 @@ func (w *Walker) DescendentsWith(predicate Predicate) *Walker {
 	return w
 }
 
-func descendentsWith(node *Node, isBuffered bool, udata interface{}, push func(*Node),
-	pushBuf func(*Node)) error {
+func descendentsWith(node *Node, isBuffered bool, udata userdata, push func(*Node),
+	pushBuf func(*Node, interface{})) error {
 	//
 	if isBuffered {
-		predicate := udata.(Predicate)
+		predicate := udata.filterdata.(Predicate)
 		matches, err := predicate(node)
 		T().Debugf("Predicate for node %s returned: %v, err=%v", node, matches, err)
 		if err != nil {
@@ -302,11 +302,12 @@ func descendentsWith(node *Node, isBuffered bool, udata interface{}, push func(*
 	return nil
 }
 
-func revisitChildrenOf(node *Node, pushBuf func(*Node)) {
+func revisitChildrenOf(node *Node, pushBuf func(*Node, interface{})) {
 	chcnt := node.ChildCount()
 	for i := 0; i < chcnt; i++ {
 		ch, _ := node.Child(i)
-		pushBuf(ch)
+		pp := parentAndPosition{node, i}
+		pushBuf(ch, pp)
 	}
 }
 
@@ -348,10 +349,10 @@ type attrInfo struct {
 // nil is a valid attribute value to compare.
 //
 // If no attribute handler is provided, no tree node will match.
-func attributeIs(node *Node, isBuffered bool, udata interface{}, push func(*Node),
-	pushBuf func(*Node)) error {
+func attributeIs(node *Node, isBuffered bool, udata userdata, push func(*Node),
+	pushBuf func(*Node, interface{})) error {
 	//
-	attr := udata.(attrInfo)
+	attr := udata.filterdata.(attrInfo)
 	if attr.handler != nil {
 		val := attr.handler.GetAttribute(node.Payload, attr.key)
 		if attr.handler.AttributesEqual(val, attr.value) {
@@ -382,10 +383,10 @@ func (w *Walker) SetAttribute(key interface{}, value interface{}) *Walker {
 // The attribute handler has to be provided by the caller.
 //
 // If no attribute handler is provided, no tree node will match.
-func setAttribute(node *Node, isBuffered bool, udata interface{}, push func(*Node),
-	pushBuf func(*Node)) error {
+func setAttribute(node *Node, isBuffered bool, udata userdata, push func(*Node),
+	pushBuf func(*Node, interface{})) error {
 	//
-	attr := udata.(attrInfo)
+	attr := udata.filterdata.(attrInfo)
 	if attr.handler != nil {
 		ok := attr.handler.SetAttribute(node.Payload, attr.key, attr.value)
 		if ok {
@@ -412,10 +413,10 @@ func (w *Walker) Filter(f func(*Node) (*Node, error)) *Walker {
 	return w
 }
 
-func clientFilter(node *Node, isBuffered bool, udata interface{}, push func(*Node),
-	pushBuf func(*Node)) error {
+func clientFilter(node *Node, isBuffered bool, udata userdata, push func(*Node),
+	pushBuf func(*Node, interface{})) error {
 	//
-	userfunc := udata.(func(*Node) (*Node, error))
+	userfunc := udata.filterdata.(func(*Node) (*Node, error))
 	n, err := userfunc(node)
 	if n != nil {
 		push(n) // forward filtered node to next pipeline stage
@@ -426,7 +427,7 @@ func clientFilter(node *Node, isBuffered bool, udata interface{}, push func(*Nod
 // Action is a function type to operate on tree nodes.
 // Resulting nodes will be pushed to the next pipeline stage, if
 // no error occured.
-type Action func(*Node) (*Node, error)
+type Action func(n *Node, parent *Node, position int) (*Node, error)
 
 // TopDown traverses a tree starting at (and including) the root node.
 // The traversal guarantees that parents are always processed before
@@ -448,22 +449,30 @@ func (w *Walker) TopDown(action Action) *Walker {
 	return w
 }
 
-func topDown(node *Node, isBuffered bool, udata interface{}, push func(*Node),
-	pushBuf func(*Node)) error {
+// ad-hoc container
+type parentAndPosition struct {
+	parent   *Node
+	position int
+}
+
+func topDown(node *Node, isBuffered bool, udata userdata, push func(*Node),
+	pushBuf func(*Node, interface{})) error {
 	//
 	if isBuffered {
-		action := udata.(Action)
-		result, err := action(node)
+		action := udata.filterdata.(Action)
+		parent := udata.nodedata.(parentAndPosition).parent
+		position := udata.nodedata.(parentAndPosition).position
+		result, err := action(node, parent, position)
 		T().Debugf("Action for node %s returned: %v, err=%v", node, result, err)
 		if err != nil {
 			return err // do not descend further
 		}
 		if result != nil {
-			push(result) // put result on output channel for next pipeline stage
-			revisitChildrenOf(node, pushBuf)
+			push(result)                     // result -> next pipeline stage
+			revisitChildrenOf(node, pushBuf) // hand over node as parent
 		}
 	} else {
-		pushBuf(node) // simply move incoming nodes over to buffer queue
+		pushBuf(node, nil) // simply move incoming nodes over to buffer queue
 	}
 	return nil
 }
