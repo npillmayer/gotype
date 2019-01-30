@@ -1,6 +1,8 @@
 package dom
 
 import (
+	"strings"
+
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/tree"
@@ -44,11 +46,12 @@ func T() tracing.Trace {
 
 type RODomNode interface {
 	String() string
-	TagName() string
+	IsText() bool
 	Style(string) style.Property
 	HtmlNode() *html.Node
 	Parent() RODomNode
 	ChildrenIterator() DomNodeChildrenIterator
+	//TreeNode() *tree.Node
 }
 
 type DomNodeChildrenIterator func() RODomNode
@@ -66,18 +69,19 @@ func NewRONode(sn *tree.Node, toStyler style.StyleInterf) RODomNode {
 }
 
 func (dn domnode) String() string {
-	s := dn.TagName()
 	if dn.HtmlNode().Type == html.TextNode {
 		return shortText(dn.HtmlNode())
+	} else if dn.HtmlNode().Type == html.ElementNode {
+		return dn.HtmlNode().Data
 	}
-	return s
+	return "<>"
 }
 
-func (dn domnode) TagName() string {
+func (dn domnode) IsText() bool {
 	if dn.HtmlNode().Type == html.TextNode {
-		return "CDATA"
+		return true
 	}
-	return dn.HtmlNode().Data
+	return false
 }
 
 func (dn domnode) Style(key string) style.Property {
@@ -127,6 +131,10 @@ func (dn domnode) ChildrenIterator() DomNodeChildrenIterator {
 	}
 }
 
+// func (dn domnode) TreeNode() *tree.Node {
+// 	return dn.stylednode
+// }
+
 // --- Text Nodes -------------------------------------------------------
 
 type textNode struct {
@@ -145,8 +153,8 @@ func (tn textNode) String() string {
 	return shortText(tn.htmlTextNode)
 }
 
-func (tn textNode) TagName() string {
-	return shortText(tn.HtmlNode())
+func (tn textNode) IsText() bool {
+	return true
 }
 
 func (tn textNode) Style(string) style.Property {
@@ -162,19 +170,26 @@ func (tn textNode) Parent() RODomNode {
 }
 
 func (tn textNode) ChildrenIterator() DomNodeChildrenIterator {
-	return func() RODomNode {
-		return nil
-	}
+	return zeroChildren
 }
+
+func zeroChildren() RODomNode {
+	return nil
+}
+
+// func (tn textNode) TreeNode() *tree.Node {
+// 	return nil
+// }
 
 // --- Helpers ----------------------------------------------------------
 
 func shortText(h *html.Node) string {
 	s := "CDATA\""
 	if len(h.Data) > 10 {
-		s += h.Data[:10] + "\""
+		s += h.Data[:10] + "...\""
 	} else {
 		s += h.Data + "\""
 	}
+	s = strings.Replace(s, "\n", `\n`, -1)
 	return s
 }

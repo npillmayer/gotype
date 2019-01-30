@@ -51,7 +51,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // https://godoc.org/github.com/jiangmitiao/ebook-go
 
 import (
-	"github.com/npillmayer/gotype/engine/dom/cssom"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
@@ -159,8 +158,6 @@ func (sn StyNode) ComputedStyles() *style.PropertyMap {
 func (sn *StyNode) SetComputedStyles(styles *style.PropertyMap) {
 	sn.computedStyles = styles
 }
-
-var _ cssom.StyledNode = &StyNode{}
 
 // ----------------------------------------------------------------------
 

@@ -1,7 +1,6 @@
 package dom
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 	"github.com/npillmayer/gotype/engine/dom/cssom"
 	"github.com/npillmayer/gotype/engine/dom/cssom/douceuradapter"
-	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/dom/styledtree"
 	"github.com/npillmayer/gotype/engine/dom/styledtree/builder"
 	"github.com/npillmayer/gotype/engine/tree"
@@ -57,39 +55,35 @@ func prepareStyledTree(t *testing.T) *styledtree.StyNode {
 func TestDom1(t *testing.T) {
 	tracing.EngineTracer.Debugf("-------------------------------------------")
 	sn := prepareStyledTree(t)
-	PrintTree(&sn.Node, t, stylestring)
+	PrintTree(&sn.Node, t, domFmt)
 	tracing.EngineTracer.Debugf("-------------------------------------------")
 }
 
 // --- Helpers ----------------------------------------------------------
 
-func PrintTree(n *tree.Node, t *testing.T, fmtnode func(*tree.Node) string) {
+func domFmt(dn RODomNode) string {
+	return dn.String()
+}
+
+func PrintTree(n *tree.Node, t *testing.T, fmtnode func(RODomNode) string) {
 	indent := 0
-	printNode(n, indent, t, fmtnode)
+	dn := NewRONode(n, styledtree.Creator().ToStyler)
+	printNode(dn, indent, t, fmtnode)
 }
 
-func stylestring(n *tree.Node) string {
-	props := " ["
-	pmap := styledtree.Creator().ToStyler(n).ComputedStyles()
-	if pmap != nil {
-		if p, ok := style.GetLocalProperty(pmap, "margin-bottom"); ok {
-			props += fmt.Sprintf("%s: %s;", "margin-bottom", p)
+func printNode(dn RODomNode, w int, t *testing.T, fmtnode func(RODomNode) string) {
+	if dn.IsText() {
+		t.Logf("%s%s", indent(w), fmtnode(dn))
+	} else {
+		t.Logf("%s%s = {", indent(w), fmtnode(dn))
+		it := dn.ChildrenIterator()
+		ch := it()
+		for ch != nil {
+			printNode(ch, w+1, t, fmtnode)
+			ch = it()
 		}
-		if p, ok := style.GetLocalProperty(pmap, "margin-top"); ok {
-			props += fmt.Sprintf("%s: %s;", "margin-top", p)
-		}
+		t.Logf("%s}", indent(w))
 	}
-	props += "]"
-	return n.Payload.(*styledtree.StyNode).HtmlNode().Data + props
-}
-
-func printNode(n *tree.Node, w int, t *testing.T, fmtnode func(*tree.Node) string) {
-	t.Logf("%s%s = {", indent(w), fmtnode(n))
-	for i := 0; i < n.ChildCount(); i++ {
-		ch, _ := n.Child(i)
-		printNode(ch, w+1, t, fmtnode)
-	}
-	t.Logf("%s}", indent(w))
 }
 
 func indent(w int) string {
