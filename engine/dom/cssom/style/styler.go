@@ -24,4 +24,5 @@ type StyleInterf func(*tree.Node) Styler
 type Creator interface {
 	StyleForHtmlNode(*html.Node) *tree.Node
 	ToStyler(*tree.Node) Styler
+	SetComputedStyles(*tree.Node, *PropertyMap)
 }
