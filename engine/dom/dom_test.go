@@ -1,4 +1,4 @@
-package dom
+package dom_test
 
 import (
 	"strings"

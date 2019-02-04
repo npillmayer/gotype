@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/andybalholm/cascadia"
 	"github.com/npillmayer/gotype/core/config/tracing"
@@ -27,7 +28,7 @@ TODO
   + create StyledTree using factory
   + define extension points for future properties: group "X"; registerCompound(key, func(...))
 - write lots of tests
-- make concurrent
++ make concurrent
 + Document code
 - Create Diagram -> Wiki
 */
@@ -79,20 +80,126 @@ func T() tracing.Trace {
 //
 // Stylesheets are wrapped into an internal rules tree.
 type CSSOM struct {
-	rules             map[*html.Node]rulesTree // CSS rules from stylesheets
-	defaultProperties *style.PropertyMap       // "user agent" style properties
-	compoundSplitters []CompoundPropertiesSplitter
+	rulesTree         *rulesTreeType               // style sheets
+	defaultProperties *style.PropertyMap           // "user agent" style properties
+	compoundSplitters []CompoundPropertiesSplitter // split up compound properties
 }
+
+// NewCSSOM creates an empty CSSOM.
+// Clients are allowed to supply a map of additional/custom CSS property values.
+// These may override values of the default ("user-agent") style sheet,
+// or introduce completely new styling properties.
+func NewCSSOM(additionalProperties []style.KeyValue) CSSOM {
+	cssom := CSSOM{}
+	cssom.rulesTree = newRulesTree()
+	cssom.defaultProperties = style.InitializeDefaultPropertyValues(additionalProperties)
+	cssom.compoundSplitters = make([]CompoundPropertiesSplitter, 1)
+	cssom.compoundSplitters[0] = style.SplitCompoundProperty
+	return cssom
+}
+
+// AddStylesForScope includes a stylesheet to a CSSOM and sets the scope for
+// the stylesheet. If a stylesheet for the scope already exists, the
+// styles are merged. css may be nil. If scope is nil then scope is the
+// root (i.e., top-level content element) of a future document.
+//
+// source hints to where the stylesheet comes from.
+// Its value will affect the calculation of specifity for rules of this
+// stylesheet.
+func (cssom CSSOM) AddStylesForScope(scope *html.Node, css StyleSheet, source PropertySource) error {
+	if scope != nil && scope.Type != html.ElementNode {
+		return errors.New("Can style element nodes only")
+	}
+	if css != nil {
+		cssom.rulesTree.StoreStylesheetForHtmlNode(scope, css, source)
+	}
+	// sheets := cssom.rulesTree.StylesheetsForHtmlNode(scope)
+	// rules, exists := cssom.rules.Load(scope)
+	// rtree := rules.(rulesTreeType)
+	// if exists && css != nil {
+	// 	rtree.stylesheet.AppendRules(css)
+	// } else {
+	// 	if scope == nil {
+	// 		scope = rootElement
+	// 	} else {
+	// 		if scope.Type != html.ElementNode {
+	// 			return errors.New("Can style element nodes only")
+	// 		}
+	// 	}
+	// 	//cssom.rules[scope] = rulesTree{css, nil, source}
+	// 	cssom.rules.Store(scope, rulesTreeType{css, nil, source})
+	// }
+	return nil
+}
+
+// --- A rules tree -----------------------------------------------------
 
 // RulesTree holds the styling rules of a stylesheet.
 //
 // Status: Currently this is not really a tree.
 // Optimize some day (see
 // https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/).
-type rulesTree struct {
-	stylesheet StyleSheet                   // stylesheet holding the rules
-	selectors  map[string]cascadia.Selector // cache of compiled selectors
-	source     PropertySource               // where do these rules come from?
+type rulesTreeType struct {
+	stylesheets sync.Map                     // of type []stylesheetType
+	selectors   map[string]cascadia.Selector // cache of compiled selectors
+	source      PropertySource               // where do these rules come from?
+}
+
+// ad-hoc container type for stylesheets and their origin.
+// To be stored in a map (per HTML node).
+type stylesheetType struct {
+	stylesheet StyleSheet
+	source     PropertySource
+}
+
+func newRulesTree() *rulesTreeType {
+	rt := &rulesTreeType{}
+	rt.selectors = make(map[string]cascadia.Selector)
+	return rt
+}
+
+// StylesheetsForHtmlNode retrieves all style sheets registered for
+// an html node. If h is nil it is interpreted as the root scope.
+func (rt rulesTreeType) StylesheetsForHtmlNode(h *html.Node) []stylesheetType {
+	if h == nil {
+		h = rootElement
+	}
+	sheets, found := rt.stylesheets.Load(h)
+	if !found {
+		return nil
+	}
+	return sheets.([]stylesheetType)
+}
+
+// StoreStylesheetForHtmlNode registers a style sheet for
+// an html node. If h is nil it is interpreted as the root scope.
+func (rt rulesTreeType) StoreStylesheetForHtmlNode(h *html.Node, sheet StyleSheet,
+	source PropertySource) {
+	//
+	if h == nil {
+		h = rootElement
+	}
+	sheets := rt.StylesheetsForHtmlNode(h)
+	if sheets == nil {
+		rt.stylesheets.Store(h, []stylesheetType{stylesheetType{sheet, source}})
+	} else {
+		sheets = append(sheets, stylesheetType{sheet, source})
+		rt.stylesheets.Store(h, sheets)
+	}
+}
+
+// Empty is a predicate wether a rulestree is empty, i.e. does not contain
+// any rules.
+func (rt *rulesTreeType) Empty() bool {
+	if rt == nil {
+		return true
+	}
+	csscnt := 0
+	rt.stylesheets.Range(func(interface{}, interface{}) bool {
+		csscnt++
+		return true
+	})
+	return csscnt == 0
 }
 
 // Compound properties are properties which abbreviate the
@@ -107,42 +214,12 @@ type rulesTree struct {
 // allowed to extend the set of compound properties.
 type CompoundPropertiesSplitter func(string, style.Property) ([]style.KeyValue, error)
 
-// NewCSSOM creates an empty CSSOM.
-// Clients are allowed to supply a map of additional/custom CSS property values.
-// These may override values of the default ("user-agent") style sheet,
-// or introduce completely new styling properties.
-func NewCSSOM(additionalProperties []style.KeyValue) CSSOM {
-	cssom := CSSOM{}
-	cssom.rules = make(map[*html.Node]rulesTree)
-	cssom.defaultProperties = style.InitializeDefaultPropertyValues(additionalProperties)
-	cssom.compoundSplitters = make([]CompoundPropertiesSplitter, 1)
-	cssom.compoundSplitters[0] = style.SplitCompoundProperty
-	return cssom
-}
-
-// AddStylesForScope includes a stylesheet to a CSSOM and sets the scope for
-// the stylesheet. If a stylesheet for the scope already exists, the
-// styles are merged. css may be nil. If scope is nil then scope is the
-// body (i.e., top-level content element) of a future document.
-//
-// source hints to where the stylesheet comes from.
-// Its value will affect the calculation of specifity for rules of this
-// stylesheet.
-func (cssom CSSOM) AddStylesForScope(scope *html.Node, css StyleSheet, source PropertySource) error {
-	rules, exists := cssom.rules[scope]
-	if exists && css != nil {
-		rules.stylesheet.AppendRules(css)
-	} else {
-		if scope == nil {
-			scope = bodyElement
-		} else {
-			if scope.Type != html.ElementNode {
-				return errors.New("Can style element nodes only")
-			}
-		}
-		cssom.rules[scope] = rulesTree{css, nil, source}
+// RegisterCompoundSplitter allows clients to handle additional compound
+// properties. See type CompoundPropertiesSplitter.
+func (cssom CSSOM) RegisterCompoundSplitter(splitter CompoundPropertiesSplitter) {
+	if splitter != nil {
+		cssom.compoundSplitters = append(cssom.compoundSplitters, splitter)
 	}
-	return nil
 }
 
 // --- Style Rule Matching ----------------------------------------------
@@ -162,35 +239,21 @@ const (
 	Attribute                           // in an element's attribute(s)
 )
 
-// bodyElement is a symbolic node to denote the body element of a future
+// rootElement is a symbolic node to denote the body element of a future
 // HTML document. AddStylesFor(...) with nil as a scope will replace it
 // with this marker for scoping the complete document body.
-var bodyElement *html.Node = &html.Node{}
-
-// RegisterCompoundSplitter allows clients to handle additional compound
-// properties. See type CompoundPropertiesSplitter.
-func (cssom CSSOM) RegisterCompoundSplitter(splitter CompoundPropertiesSplitter) {
-	if splitter != nil {
-		cssom.compoundSplitters = append(cssom.compoundSplitters, splitter)
-	}
-}
-
-// Empty is a predicate wether a stylesheet is empty, i.e. does not contain
-// any rules.
-func (rt rulesTree) Empty() bool {
-	return rt.stylesheet == nil || rt.stylesheet.Empty()
-}
+var rootElement *html.Node = &html.Node{}
 
 // Internal helper for applying rules to an HTML node.
-// In a first step it holds all the rules matching for node.
+// In a first step it holds all the rules matching for an HTML node.
 // In a second step it collects all the properties set in those rules,
 // then orderes them by specifity.
 type matchesList struct {
 	matchingRules   []Rule
-	propertiesTable []specifity
+	propertiesTable []propertyPlusSpecifityType
 }
 
-// Rules matches are collected from more than one stylesheet. Matching
+// Rule-matchings are collected from more than one stylesheet. Matching
 // rules from these stylesheets will be merged to one list.
 func (mlist *matchesList) mergeMatchesWith(m *matchesList) *matchesList {
 	if mlist == nil {
@@ -204,18 +267,18 @@ func (mlist *matchesList) mergeMatchesWith(m *matchesList) *matchesList {
 	return mlist
 }
 
-// Rules matches have to be sorted by specifity. We'll sort the highest
+// Rule-matchings have to be sorted by specifity. We'll sort the highest
 // specifity up and won't overwrite earlier matches with later matches.
 
 // sorter
-type byHighestSpecifity []specifity
+type byHighestSpecifity []propertyPlusSpecifityType
 
 // make specifities sortable by highest sp.spec
 func (sp byHighestSpecifity) Len() int           { return len(sp) }
 func (sp byHighestSpecifity) Swap(i, j int)      { sp[i], sp[j] = sp[j], sp[i] }
 func (sp byHighestSpecifity) Less(i, j int) bool { return sp[i].spec > sp[j].spec }
 
-// This is a small helper to print out a table with rules matches for node.
+// This is a small helper to print out a table with rule-matches for a node.
 func (m *matchesList) String() string {
 	s := fmt.Sprintf("match of %d rules:\n", len(m.matchingRules))
 	s += "Src +-- Spec. --+------------- Key --------------+------- Value ---------------\n"
@@ -226,15 +289,39 @@ func (m *matchesList) String() string {
 }
 
 // FilterMatchesFor(node) iterates through all the rules relevant at this
-// point and looks for rules matching the current HTML node.
+// point and looks for rules matching the current HTML node h.
 // The heavy lifting is done by cascadia. We have to 'compile' all rules
 // and will cache compiled rules.
 //
-// Will return a slice of CSS rules matched for node.
-func (rt *rulesTree) FilterMatchesFor(node *html.Node) *matchesList {
-	list := &matchesList{}
-	for _, rule := range rt.stylesheet.Rules() {
-		selectorString := rule.Selector()
+// Will return a slice of CSS rules matched for h.
+func (rt *rulesTreeType) FilterMatchesFor(h *html.Node) *matchesList {
+	//list := &matchesList{}
+	matchingRules := make([]Rule, 0, 3)
+	sheets := rt.StylesheetsForHtmlNode(rootElement)
+	for _, s := range sheets {
+		for _, rule := range s.stylesheet.Rules() {
+			if rt.matchRuleForHtmlNode(h, rule) {
+				matchingRules = append(matchingRules, rule)
+			}
+		}
+	}
+	sheets = rt.StylesheetsForHtmlNode(h)
+	for _, s := range sheets {
+		for _, rule := range s.stylesheet.Rules() {
+			if rt.matchRuleForHtmlNode(h, rule) {
+				matchingRules = append(matchingRules, rule)
+			}
+		}
+	}
+	return &matchesList{matchingRules, nil}
+}
+
+func (rt *rulesTreeType) matchRuleForHtmlNode(h *html.Node, rule Rule) bool {
+	selectorString := rule.Selector()
+	if selectorString == "" { // style-attribute local for this HTML node
+		//matchingRules = append(matchingRules, rule)
+		return true
+	} else { // try to match selector for this rule against HTML node
 		var sel cascadia.Selector
 		found := false
 		if sel, found = rt.selectors[selectorString]; !found {
@@ -242,19 +329,16 @@ func (rt *rulesTree) FilterMatchesFor(node *html.Node) *matchesList {
 			sel, err = cascadia.Compile(selectorString)
 			if err != nil {
 				T().Errorf("CSS selector seems not to work: %s", selectorString)
-				break
-			}
-			if rt.selectors == nil {
-				rt.selectors = make(map[string]cascadia.Selector)
+				return false
 			}
 			rt.selectors[selectorString] = sel
 		}
-		if sel.Match(node) {
-			list.matchingRules = append(list.matchingRules, rule)
+		if sel.Match(h) {
+			//list.matchingRules = append(list.matchingRules, rule)
+			return true
 		}
 	}
-	T().Debugf("matching rules for %s", nodePath(node))
-	return list
+	return false
 }
 
 // SortProperties takes a slice of CSS rules (matched for an HTML node) and
@@ -264,13 +348,13 @@ func (rt *rulesTree) FilterMatchesFor(node *html.Node) *matchesList {
 //     "margin" ⟹ "margin-top", "margin-right", ...
 // Finally all property entries are sorted by specifity of the enclosing rule.
 func (matches *matchesList) SortProperties(splitters []CompoundPropertiesSplitter) {
-	var proptable []specifity
+	var proptable []propertyPlusSpecifityType
 	for rno, rule := range matches.matchingRules {
 		for _, propertyKey := range rule.Properties() {
 			value := style.Property(rule.Value(propertyKey))
 			props, err := splitCompoundProperty(splitters, propertyKey, value)
 			if err != nil {
-				sp := specifity{Author, rule, propertyKey, value, rule.IsImportant(propertyKey), 0}
+				sp := propertyPlusSpecifityType{Author, rule, propertyKey, value, rule.IsImportant(propertyKey), 0}
 				sp.calcSpecifity(rno)
 				proptable = append(proptable, sp)
 			} else {
@@ -278,7 +362,7 @@ func (matches *matchesList) SortProperties(splitters []CompoundPropertiesSplitte
 				for _, kv := range props {
 					key := kv.Key
 					val := kv.Value
-					sp := specifity{Author, rule, key, val, rule.IsImportant(propertyKey), 0}
+					sp := propertyPlusSpecifityType{Author, rule, key, val, rule.IsImportant(propertyKey), 0}
 					sp.calcSpecifity(rno)
 					proptable = append(proptable, sp)
 				}
@@ -296,7 +380,7 @@ func (matches *matchesList) SortProperties(splitters []CompoundPropertiesSplitte
 
 // --- Specifity of rules -----------------------------------------------
 
-type specifity struct {
+type propertyPlusSpecifityType struct {
 	source        PropertySource // where the property has been defined
 	rule          Rule           // the rule containing the property definition
 	propertyKey   string         // CSS property name
@@ -310,7 +394,7 @@ type specifity struct {
 //
 // no is a sequence number for rules, ensuring that later rules override
 // previously defined rules / properties.
-func (sp *specifity) calcSpecifity(no int) {
+func (sp *propertyPlusSpecifityType) calcSpecifity(no int) {
 	if sp.rule.IsImportant(sp.propertyKey) {
 		sp.spec = 99999 // max
 		return
@@ -447,18 +531,25 @@ func (cssom CSSOM) Style(dom *html.Node, creator style.Creator) (*tree.Node, err
 	if creator == nil {
 		return nil, errors.New("Cannot style: no builder to create styles nodes")
 	}
-	if cssom.rules == nil {
+	if cssom.rulesTree.Empty() {
 		T().Infof("Styling HTML tree without having any CSS rules")
 	}
 	styledRootNode := setupStyledNodeTree(dom, cssom.defaultProperties, creator)
 	walker := tree.NewWalker(styledRootNode) // create a concurrent tree walker
-	doStyle := func(node *tree.Node, parent *tree.Node, pos int) (*tree.Node, error) {
-		// provide closure with style creator
-		return createStyledChildren(node, creator)
+	createNodes := func(node *tree.Node, parent *tree.Node, pos int) (*tree.Node, error) {
+		return createStyledChildren(node, cssom.rulesTree, creator) // provide closure with style creator
 	}
-	future := walker.TopDown(doStyle).Promise() // build the style tree
+	future := walker.TopDown(createNodes).Promise() // build the style tree
 	if _, err := future(); err != nil {
 		T().Errorf("Error while creating styled tree: %v", err)
+		return nil, err
+	}
+	createStyles := func(node *tree.Node, parent *tree.Node, pos int) (*tree.Node, error) {
+		return createStylesForNode(node, cssom.rulesTree, creator, cssom.compoundSplitters)
+	}
+	future = walker.TopDown(createStyles).Promise() // build the style tree
+	if _, err := future(); err != nil {
+		T().Errorf("Error while creating style properties: %v", err)
 		return nil, err
 	}
 	// runner := newStylingRunner(creator, cssom.compoundS()plitters)
@@ -472,14 +563,16 @@ func (cssom CSSOM) Style(dom *html.Node, creator style.Creator) (*tree.Node, err
 
 // Pre-condition: sn has been styled and points to an HTML node.
 // Now iterate through the HTML children and create styled nodes for each.
-func createStyledChildren(parent *tree.Node, creator style.Creator) (*tree.Node, error) {
+func createStyledChildren(parent *tree.Node, rulesTree *rulesTreeType,
+	creator style.Creator) (*tree.Node, error) {
+	//
 	domnode := dom.NewRONode(parent, creator.ToStyler) // interface RODomNode
 	h := domnode.HtmlNode()
 	if h.Type == html.ElementNode {
 		ch := h.FirstChild
 		for ch != nil {
 			if ch.DataAtom == atom.Style { // <style> element
-				T().Debugf("<style> node has Data = %v", h.Data)
+				T().Debugf("TODO: <style> node has Data = %v", h.Data)
 				if ch.FirstChild.Type == html.TextNode {
 					T().Debugf("first child is text: %v", ch.FirstChild.Data)
 				}
@@ -487,12 +580,15 @@ func createStyledChildren(parent *tree.Node, creator style.Creator) (*tree.Node,
 			} else if isStylable(ch.DataAtom) {
 				sn := creator.StyleForHtmlNode(ch)
 				parent.AddChild(sn) // sn will be sent to next pipeline stage
-				// TODO attach style attributes
+				if styleAttr := getStyleAttribute(ch); styleAttr != nil {
+					//rulesMap.Store(h, styleAttr) // attach local style attributes
+					rulesTree.StoreStylesheetForHtmlNode(h, styleAttr, Attribute)
+				}
 			}
 			ch = ch.NextSibling
 		}
 	} else if h.Type == html.TextNode {
-		// do not send text node to next pipeline stage => will not be styled
+		// do not send text node to next pipeline stage
 		return nil, nil
 	}
 	return parent, nil
@@ -517,36 +613,49 @@ func isStylable(a atom.Atom) bool {
 	return false
 }
 
+func createStylesForNode(node *tree.Node, rulesTree *rulesTreeType, creator style.Creator,
+	splitters []CompoundPropertiesSplitter) (*tree.Node, error) {
+	//
+	styler := creator.ToStyler(node)
+	matchingRules := rulesTree.FilterMatchesFor(styler.HtmlNode())
+	if matchingRules != nil {
+		matchingRules.SortProperties(splitters)
+		pmap := matchingRules.createStyleGroups(node.Parent(), creator)
+		creator.SetComputedStyles(node, pmap)
+	}
+	return node, nil
+}
+
 // Scopes for all ruletrees have to be HTML element nodes.
 // This is enforced during construction of the rules trees (adding to CSSDOM).
-func (cssom CSSOM) attachStylesheets(dom *html.Node) error {
-	for scope, rulestree := range cssom.rules {
-		var stylingRootElement *html.Node
-		if scope == bodyElement { // scope is body element, i.e. whole document
-			stylingRootElement := findBodyElement(dom)
-			if stylingRootElement == nil { // no body element found
-				T().Infof("Misconstructed DOM: cannot find <body>. Proceeding.")
-				stylingRootElement = dom // root of fragment, try our best
-			}
-			// runner.activeStylers[stylingRootElement] = rulestree
-			// runner.startNode = stylingRootElement
-		} else {
-			stylingRootElement = findThisNode(dom, scope)
-			if stylingRootElement == nil { // scope not not found in DOM
-				// do not try to proceed: client meant something else...
-				return errors.New(fmt.Sprintf("Scope '%s' not found in DOM", scope.Data))
-			}
-			if stylingRootElement.Type != html.ElementNode {
-				return errors.New(fmt.Sprintf("Scope '%s' is not of element type", shorten(scope.Data)))
-			}
-			//runner.inactiveStylers[stylingRootElement] = rulestree
-		}
-	}
-	// if runner.startNode == nil {
-	// 	runner.startNode = dom
-	// }
-	return nil
-}
+// func (cssom CSSOM) attachStylesheets(dom *html.Node) error {
+// 	for scope, rulestree := range cssom.rules {
+// 		var stylingRootElement *html.Node
+// 		if scope == rootElement { // scope is body element, i.e. whole document
+// 			stylingRootElement := findBodyElement(dom)
+// 			if stylingRootElement == nil { // no body element found
+// 				T().Infof("Misconstructed DOM: cannot find <body>. Proceeding.")
+// 				stylingRootElement = dom // root of fragment, try our best
+// 			}
+// 			// runner.activeStylers[stylingRootElement] = rulestree
+// 			// runner.startNode = stylingRootElement
+// 		} else {
+// 			stylingRootElement = findThisNode(dom, scope)
+// 			if stylingRootElement == nil { // scope not not found in DOM
+// 				// do not try to proceed: client meant something else...
+// 				return errors.New(fmt.Sprintf("Scope '%s' not found in DOM", scope.Data))
+// 			}
+// 			if stylingRootElement.Type != html.ElementNode {
+// 				return errors.New(fmt.Sprintf("Scope '%s' is not of element type", shorten(scope.Data)))
+// 			}
+// 			//runner.inactiveStylers[stylingRootElement] = rulestree
+// 		}
+// 	}
+// 	// if runner.startNode == nil {
+// 	// 	runner.startNode = dom
+// 	// }
+// 	return nil
+// }
 
 // stylingRunner is a helper type for concurrent execution of node styling.
 // type stylingRunner struct {
@@ -777,4 +886,81 @@ func nodePath(node *html.Node) string {
 		s += "(unknown)"
 	}
 	return s
+}
+
+// --- Local pseudo rules -----------------------------------------------
+
+func getStyleAttribute(h *html.Node) *localPseudoStylesheetType {
+	if h != nil && h.Type == html.ElementNode {
+		for _, attr := range h.Attr {
+			if attr.Key == "style" {
+				return &localPseudoStylesheetType{newLocalPseudoRule(attr.Val)}
+			}
+		}
+	}
+	return nil
+}
+
+type localPseudoRuleType []style.KeyValue
+
+func newLocalPseudoRule(styleAttr string) localPseudoRuleType {
+	styles := strings.Split(styleAttr, ";")
+	//kv := make([]style.KeyValue, 0, 3)
+	kv := make(localPseudoRuleType, 0, 3)
+	for _, st := range styles {
+		st = strings.TrimSpace(st)
+		s := strings.Split(st, ":")
+		if len(s) < 2 {
+			T().Errorf("Skipping ill-formed style rule: %s", st)
+		} else {
+			k := strings.TrimSpace(s[0])
+			v := strings.TrimSpace(s[1])
+			kv = append(kv, style.KeyValue{k, style.Property(v)})
+		}
+	}
+	return kv
+}
+
+func (pseudorule localPseudoRuleType) Selector() string {
+	return ""
+}
+
+func (pseudorule localPseudoRuleType) Properties() []string {
+	var p []string
+	for _, kv := range pseudorule {
+		p = append(p, kv.Key)
+	}
+	return p
+}
+func (pseudorule localPseudoRuleType) Value(key string) style.Property {
+	for _, kv := range pseudorule {
+		if key == kv.Key {
+			return kv.Value
+		}
+	}
+	return style.NullStyle
+}
+
+func (pseudorule localPseudoRuleType) IsImportant(string) bool {
+	return false
+}
+
+type localPseudoStylesheetType struct {
+	rule localPseudoRuleType
+}
+
+func (pseudosheet *localPseudoStylesheetType) AppendRules(s StyleSheet) {
+	for _, r := range s.Rules() {
+		for _, k := range r.Properties() {
+			pseudosheet.rule = append(pseudosheet.rule, style.KeyValue{k, r.Value(k)})
+		}
+	}
+}
+
+func (pseudosheet *localPseudoStylesheetType) Empty() bool {
+	return false
+}
+
+func (pseudosheet *localPseudoStylesheetType) Rules() []Rule {
+	return []Rule{pseudosheet.rule}
 }

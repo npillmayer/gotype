@@ -1,5 +1,7 @@
 package cssom
 
+import "github.com/npillmayer/gotype/engine/dom/cssom/style"
+
 /* -----------------------------------------------------------------
 BSD License
 
@@ -58,8 +60,8 @@ type StyleSheet interface {
 //
 // See interface StyleSheet.
 type Rule interface {
-	Selector() string        // the prelude / selectors of the rule
-	Properties() []string    // property keys, e.g. "margin-top"
-	Value(string) string     // property value for key, e.g. "15px"
-	IsImportant(string) bool // is property key marked as important?
+	Selector() string            // the prelude / selectors of the rule
+	Properties() []string        // property keys, e.g. "margin-top"
+	Value(string) style.Property // property value for key, e.g. "15px"
+	IsImportant(string) bool     // is property key marked as important?
 }

@@ -155,6 +155,12 @@ func NewPropertyGroup(groupname string) *PropertyGroup {
 	return pg
 }
 
+// Name returns the name of the property group. Once named (during
+// construction, property groups may not be renamed.
+func (pg *PropertyGroup) Name() string {
+	return pg.name
+}
+
 // Stringer for property groups; used for debugging.
 func (pg *PropertyGroup) String() string {
 	s := "[" + pg.name + "] =\n"
@@ -162,6 +168,16 @@ func (pg *PropertyGroup) String() string {
 		s += fmt.Sprintf("  %s = %s\n", k, v)
 	}
 	return s
+}
+
+// Properties returns all properties of a group.
+func (pg *PropertyGroup) Properties() []KeyValue {
+	i := 0
+	r := make([]KeyValue, len(pg.propertiesMap))
+	for k, v := range pg.propertiesMap {
+		r[i] = KeyValue{k, v}
+	}
+	return r
 }
 
 // IsSet is a predicated wether a property is set within this group.

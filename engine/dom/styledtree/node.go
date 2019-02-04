@@ -94,6 +94,10 @@ func (c creator) StyleForHtmlNode(htmlnode *html.Node) *tree.Node {
 	return NewNodeForHtmlNode(htmlnode)
 }
 
+func (c creator) SetComputedStyles(n *tree.Node, m *style.PropertyMap) {
+	Node(n).SetComputedStyles(m)
+}
+
 // ----------------------------------------------------------------------
 
 // HtmlNode gets the HTML DOM node corresponding to this styled node.

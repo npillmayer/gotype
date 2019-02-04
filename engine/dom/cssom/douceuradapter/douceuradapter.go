@@ -39,6 +39,7 @@ package douceuradapter
 import (
 	"github.com/aymerick/douceur/css"
 	"github.com/npillmayer/gotype/engine/dom/cssom"
+	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 )
 
 // CssStyle is an adapter for interface cssom.StyleSheet.
@@ -105,11 +106,11 @@ func (r Rule) Properties() []string {
 }
 
 // Property value for key, e.g. "15px"
-func (r Rule) Value(key string) string {
+func (r Rule) Value(key string) style.Property {
 	decl := r.Declarations
 	for _, d := range decl {
 		if d.Property == key {
-			return d.Value
+			return style.Property(d.Value)
 		}
 	}
 	return ""
