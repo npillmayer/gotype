@@ -33,7 +33,8 @@ and a style sheet like this:
     	padding-top: 20pt;
     }
 
-a styling engine wil produce a tree like this:
+a styling engine wil produce a tree like this (simpified version – the
+real data structures are more involved):
 
 ![styling](https://user-images.githubusercontent.com/4531688/52282401-a4ccdf80-2960-11e9-8ede-0ceee394b6ab.png)
 
