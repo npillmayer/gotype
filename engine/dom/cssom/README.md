@@ -38,12 +38,12 @@ real data structures are more involved):
 
 ![styling](https://user-images.githubusercontent.com/4531688/52282401-a4ccdf80-2960-11e9-8ede-0ceee394b6ab.png)
 
-Browsers are large and complex pieces of code, a fact that implies that
-we should seek out where to reduce complexity.
+CSSOM is the "CSS Object Model", similar to the DOM for HTML.
 
 ## Caveats
 
-CSSOM is the "CSS Object Model", similar to the DOM for HTML.
+Browsers are large and complex pieces of code, a fact that implies that
+we should seek out where to reduce complexity.
 There is not very much open source Go code around for supporting us
 in implementing a styling engine, except the great work of
 https://godoc.org/github.com/andybalholm/cascadia.
