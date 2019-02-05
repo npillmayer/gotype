@@ -44,16 +44,20 @@ func T() tracing.Trace {
 	return tracing.EngineTracer
 }
 
+// RODomNode is an interface type which represents nodes of a DOM tree
+// in read-only mode, i.e. the node may not be modified by the client.
 type RODomNode interface {
-	String() string
-	IsText() bool
-	Style(string) style.Property
-	HtmlNode() *html.Node
-	Parent() RODomNode
-	ChildrenIterator() DomNodeChildrenIterator
+	String() string                            // default string representation
+	HtmlNode() *html.Node                      // return the underlying HTML node
+	IsText() bool                              // is this an HTML CDATA node?
+	Parent() RODomNode                         // give the parent node
+	ChildrenIterator() DomNodeChildrenIterator // iterate over children
+	ComputedStyles() *style.PropertyMap        // all CSS style properties
+	Style(string) style.Property               // return a CSS style property
 	//TreeNode() *tree.Node
 }
 
+// A DomNodeChildrenIterator iterates over the children nodes of a DOM node.
 type DomNodeChildrenIterator func() RODomNode
 
 type domnode struct {
@@ -61,6 +65,9 @@ type domnode struct {
 	toStyler   style.StyleInterf
 }
 
+// NewRONode wraps a tree node into an RODomNode. Callers must supply
+// a style.Styler interface converters, which is responsible for
+// giving a Styler for a generic tree node.
 func NewRONode(sn *tree.Node, toStyler style.StyleInterf) RODomNode {
 	dn := domnode{}
 	dn.stylednode = sn
@@ -73,6 +80,8 @@ func (dn domnode) String() string {
 		return shortText(dn.HtmlNode())
 	} else if dn.HtmlNode().Type == html.ElementNode {
 		return dn.HtmlNode().Data
+	} else if dn.HtmlNode().Type == html.DocumentNode {
+		return ":root"
 	}
 	return "<>"
 }
@@ -102,6 +111,10 @@ func (dn domnode) Parent() RODomNode {
 
 func (dn domnode) styler() style.Styler {
 	return dn.toStyler(dn.stylednode)
+}
+
+func (dn domnode) ComputedStyles() *style.PropertyMap {
+	return dn.styler().ComputedStyles()
 }
 
 func (dn domnode) ChildrenIterator() DomNodeChildrenIterator {
@@ -155,6 +168,10 @@ func (tn textNode) String() string {
 
 func (tn textNode) IsText() bool {
 	return true
+}
+
+func (tn textNode) ComputedStyles() *style.PropertyMap {
+	return nil
 }
 
 func (tn textNode) Style(string) style.Property {

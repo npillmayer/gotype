@@ -12,7 +12,7 @@ type Styler interface {
 	ComputedStyles() *PropertyMap
 }
 
-// StyleInterf is a mapper from a concrete tree node to a interface
+// StyleInterf is a mapper from a concrete tree node to an interface
 // implementation for Styler. You can think of this function type as
 // an adapter from a certain tree implementation to a styled tree.
 type StyleInterf func(*tree.Node) Styler

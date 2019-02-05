@@ -166,6 +166,8 @@ func filterWorker(f *filter, wno int) {
 	}
 }
 
+// filterWorkerWithQueue is a worker function which uses a separate support
+// queue, the 'buffer queue'.
 func filterWorkerWithQueue(f *filter, wno int) {
 	push := func(node *Node) { // worker will use this to hand result to next stage
 		f.pushResult(node)
@@ -177,7 +179,7 @@ func filterWorkerWithQueue(f *filter, wno int) {
 	var node *Node
 	var udata userdata
 	for {
-		select { // get upstream and buffered workpackages until drained
+		select { // get upstream workpackages and buffered workpackages until drained
 		case node = <-f.env.input:
 			udata.filterdata = f.filterdata
 			buffered = false

@@ -16,23 +16,6 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-/*
-TODO
-+ implement shortcut-properties: "border", "background" etc.
-+ style from header: link and sytle tags
-+ Locally scoped style (inline or <style> in body)
-+ Specifity
-+ be independent from goquery
-+ be independent form douceur.css
-- Fix API:
-  + create StyledTree using factory
-  + define extension points for future properties: group "X"; registerCompound(key, func(...))
-- write lots of tests
-+ make concurrent
-+ Document code
-- Create Diagram -> Wiki
-*/
-
 /* -----------------------------------------------------------------
 BSD License
 
@@ -103,6 +86,7 @@ func NewCSSOM(additionalProperties []style.KeyValue) CSSOM {
 // styles are merged. css may be nil. If scope is nil then scope is the
 // root (i.e., top-level content element) of a future document.
 //
+// The stylse sheet may not be nil.
 // source hints to where the stylesheet comes from.
 // Its value will affect the calculation of specifity for rules of this
 // stylesheet.
@@ -110,9 +94,10 @@ func (cssom CSSOM) AddStylesForScope(scope *html.Node, css StyleSheet, source Pr
 	if scope != nil && scope.Type != html.ElementNode {
 		return errors.New("Can style element nodes only")
 	}
-	if css != nil {
-		cssom.rulesTree.StoreStylesheetForHtmlNode(scope, css, source)
+	if css == nil {
+		return errors.New("Style sheet is nil")
 	}
+	cssom.rulesTree.StoreStylesheetForHtmlNode(scope, css, source)
 	// sheets := cssom.rulesTree.StylesheetsForHtmlNode(scope)
 	// rules, exists := cssom.rules.Load(scope)
 	// rtree := rules.(rulesTreeType)
@@ -140,7 +125,7 @@ func (cssom CSSOM) AddStylesForScope(scope *html.Node, css StyleSheet, source Pr
 // Optimize some day (see
 // https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/).
 type rulesTreeType struct {
-	stylesheets sync.Map                     // of type []stylesheetType
+	stylesheets *sync.Map                    // of type []stylesheetType
 	selectors   map[string]cascadia.Selector // cache of compiled selectors
 	source      PropertySource               // where do these rules come from?
 }
@@ -154,6 +139,7 @@ type stylesheetType struct {
 
 func newRulesTree() *rulesTreeType {
 	rt := &rulesTreeType{}
+	rt.stylesheets = &sync.Map{}
 	rt.selectors = make(map[string]cascadia.Selector)
 	return rt
 }
@@ -181,6 +167,7 @@ func (rt rulesTreeType) StoreStylesheetForHtmlNode(h *html.Node, sheet StyleShee
 	}
 	sheets := rt.StylesheetsForHtmlNode(h)
 	if sheets == nil {
+		T().Debugf("Adding first style sheet for HTML node %v", h)
 		rt.stylesheets.Store(h, []stylesheetType{stylesheetType{sheet, source}})
 	} else {
 		sheets = append(sheets, stylesheetType{sheet, source})
@@ -199,6 +186,7 @@ func (rt *rulesTreeType) Empty() bool {
 		csscnt++
 		return true
 	})
+	T().Debugf("Counting style sheet entries in rules tree: %d", csscnt)
 	return csscnt == 0
 }
 
@@ -242,7 +230,7 @@ const (
 // rootElement is a symbolic node to denote the body element of a future
 // HTML document. AddStylesFor(...) with nil as a scope will replace it
 // with this marker for scoping the complete document body.
-var rootElement *html.Node = &html.Node{}
+var rootElement *html.Node = &html.Node{Data: "root"}
 
 // Internal helper for applying rules to an HTML node.
 // In a first step it holds all the rules matching for an HTML node.
@@ -442,7 +430,7 @@ func (matches *matchesList) createStyleGroups(parent *tree.Node,
 		if group != nil {
 			group.Set(pspec.propertyKey, pspec.propertyValue)
 		} else {
-			//T.Infof("parent is %s", parent)
+			T().Infof("parent is %s, searching for prop group %s", parent, groupname)
 			_, pg := findAncestorWithPropertyGroup(parent, groupname, creator) // must succeed
 			if pg == nil {
 				panic(fmt.Sprintf("Cannot find ancestor with prop-group %s -- did you create global properties?", groupname))
@@ -491,10 +479,12 @@ func (matches *matchesList) createStyleGroups(parent *tree.Node,
 func setupStyledNodeTree(domRoot *html.Node, defaults *style.PropertyMap,
 	creator style.Creator) *tree.Node {
 	//
-	//viewport := builder.MakeNodeFor(domRoot)
-	viewportNode := creator.StyleForHtmlNode(domRoot)
-	creator.SetComputedStyles(viewportNode, defaults)
-	return viewportNode
+	rootNode := creator.StyleForHtmlNode(domRoot)
+	creator.SetComputedStyles(rootNode, defaults)
+	//T().Debugf("UA node has styles = %s", creator.ToStyler(rootNode).ComputedStyles())
+	docNode := creator.StyleForHtmlNode(domRoot)
+	rootNode.AddChild(docNode)
+	return docNode
 }
 
 //func findAncestorWithPropertyGroup(sn StyledNode, group string, builder StyledTreeBuilder) (StyledNode, *style.PropertyGroup) {
@@ -502,18 +492,30 @@ func findAncestorWithPropertyGroup(sn *tree.Node, group string,
 	creator style.Creator) (*tree.Node, *style.PropertyGroup) {
 	//
 	var pg *style.PropertyGroup
+	if sn == nil {
+		T().Errorf("Search for ancestor with property group %s started with nil", group)
+		return nil, nil
+	}
 	it := sn // start search at styled node itself, then proceed upwards
+	last := sn
 	for it != nil && pg == nil {
-		if it == nil {
-			panic("this should not happen: user agent defaults not set?")
-		}
-		styles := creator.ToStyler(sn).ComputedStyles()
+		styles := creator.ToStyler(it).ComputedStyles()
 		if styles != nil {
 			pg = styles.Group(group)
 		}
 		it = it.Parent()
+		if it != nil {
+			last = it
+		}
 	}
-	return it, pg
+	// if it == nil {
+	// 	T().Debugf("At root of tree searching for property group %s", group)
+	// 	if pg == nil {
+	// 		T().Errorf("Property group %s not found", group)
+	// 		T().Debugf("Property map of last node %v =\n%s", last, creator.ToStyler(last).ComputedStyles())
+	// 	}
+	// }
+	return last, pg
 }
 
 // Style() gets things rolling. It styles a DOM, referred to by the root
@@ -534,6 +536,7 @@ func (cssom CSSOM) Style(dom *html.Node, creator style.Creator) (*tree.Node, err
 	if cssom.rulesTree.Empty() {
 		T().Infof("Styling HTML tree without having any CSS rules")
 	}
+	T().Debugf("--- Creating style nodes for HTML nodes ----")
 	styledRootNode := setupStyledNodeTree(dom, cssom.defaultProperties, creator)
 	walker := tree.NewWalker(styledRootNode) // create a concurrent tree walker
 	createNodes := func(node *tree.Node, parent *tree.Node, pos int) (*tree.Node, error) {
@@ -544,6 +547,8 @@ func (cssom CSSOM) Style(dom *html.Node, creator style.Creator) (*tree.Node, err
 		T().Errorf("Error while creating styled tree: %v", err)
 		return nil, err
 	}
+	T().Debugf("--- Now styling newly created nodes --------")
+	walker = tree.NewWalker(styledRootNode)
 	createStyles := func(node *tree.Node, parent *tree.Node, pos int) (*tree.Node, error) {
 		return createStylesForNode(node, cssom.rulesTree, creator, cssom.compoundSplitters)
 	}
@@ -567,8 +572,9 @@ func createStyledChildren(parent *tree.Node, rulesTree *rulesTreeType,
 	creator style.Creator) (*tree.Node, error) {
 	//
 	domnode := dom.NewRONode(parent, creator.ToStyler) // interface RODomNode
+	T().Debugf("Input node = %v, creating styled children", domnode)
 	h := domnode.HtmlNode()
-	if h.Type == html.ElementNode {
+	if h.Type == html.ElementNode || h.Type == html.DocumentNode {
 		ch := h.FirstChild
 		for ch != nil {
 			if ch.DataAtom == atom.Style { // <style> element
@@ -617,11 +623,14 @@ func createStylesForNode(node *tree.Node, rulesTree *rulesTreeType, creator styl
 	splitters []CompoundPropertiesSplitter) (*tree.Node, error) {
 	//
 	styler := creator.ToStyler(node)
-	matchingRules := rulesTree.FilterMatchesFor(styler.HtmlNode())
-	if matchingRules != nil {
-		matchingRules.SortProperties(splitters)
-		pmap := matchingRules.createStyleGroups(node.Parent(), creator)
+	matchlist := rulesTree.FilterMatchesFor(styler.HtmlNode())
+	if matchlist != nil && len(matchlist.matchingRules) != 0 {
+		matchlist.SortProperties(splitters)
+		pmap := matchlist.createStyleGroups(node.Parent(), creator)
+		T().Debugf("Setting styles for node %v =\n%s", node, pmap)
 		creator.SetComputedStyles(node, pmap)
+	} else {
+		T().Debugf("Node %v matched no style rules", node)
 	}
 	return node, nil
 }
@@ -781,20 +790,19 @@ func styleSingleNode() error {
 }
 */
 
-func calcComputedStylesForNode(node *html.Node, parent *tree.Node) *style.PropertyMap {
-	//
-	// var matchingRules *matchesList
-	// for _, rulesTree := range runner.activeStylers {
-	// 	matches := rulesTree.FilterMatchesFor(node)
-	// 	matchingRules = matchingRules.mergeMatchesWith(matches)
-	// }
-	// if matchingRules != nil {
-	// 	matchingRules.SortProperties(runner.splitters)
-	// 	pmap := matchingRules.createStyleGroups(parent, runner.builder)
-	// 	return pmap
-	// }
-	return nil
-}
+// func calcComputedStylesForNode(node *html.Node, parent *tree.Node) *style.PropertyMap {
+// 	var matchingRules *matchesList
+// 	for _, rulesTree := range runner.activeStylers {
+// 		matches := rulesTree.FilterMatchesFor(node)
+// 		matchingRules = matchingRules.mergeMatchesWith(matches)
+// 	}
+// 	if matchingRules != nil {
+// 		matchingRules.SortProperties(runner.splitters)
+// 		pmap := matchingRules.createStyleGroups(parent, runner.builder)
+// 		return pmap
+// 	}
+// 	return nil
+// }
 
 // node is exclusive for a worker; no other goroutine can access its children.
 // func createWorkPackagesForChildrenNodes(node *html.Node, parent *tree.Node) {

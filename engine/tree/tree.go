@@ -54,6 +54,10 @@ var ErrInvalidFilter error = errors.New("Filter stage is invalid")
 // the documentation of NewWalker() for details about this scenario.
 var ErrEmptyTree error = errors.New("Cannot walk empty tree")
 
+// Error to emit if a client already called Promise(), but tried to
+// re-use a walker with another filter.
+var ErrNoMoreFiltersAccepted error = errors.New("In promise mode; will not accept new filters; use a new walker")
+
 // Walker holds information for operating on trees: finding nodes and
 // doing work on them. Clients usually create a Walker for a (sub-)tree
 // to search for a selection of nodes matching certain criteria, and
@@ -86,6 +90,7 @@ type Walker struct {
 	initial          *Node     // initial node of (sub-)tree
 	pipe             *pipeline // pipeline of filters to perform work on tree nodes.
 	attributeHandler AttributeHandler
+	promising        bool // client has called Promis()
 }
 
 // NewWalker creates a Walker for the initial node of a (sub-)tree.
@@ -105,13 +110,17 @@ func NewWalker(initial *Node) *Walker {
 // appendFilterForTask will create a new filter for a task and append
 // that filter at the end of the pipeline. If processing has not
 // been started yet, it will be started.
-func (w *Walker) appendFilterForTask(task workerTask, udata interface{}, buflen int) {
+func (w *Walker) appendFilterForTask(task workerTask, udata interface{}, buflen int) error {
+	if w.promising {
+		return ErrNoMoreFiltersAccepted
+	}
 	newFilter := newFilter(task, udata, buflen)
 	if w.pipe.empty() { // quick check, may be false positive when in if-block
 		// now we know the new filter might be the first one
 		w.startProcessing() // this will check again, and startup if pipe empty
 	}
 	w.pipe.appendFilter(newFilter) // insert filter in running pipeline
+	return nil
 }
 
 // startProcessing should be called as soon as the first filter is inserted
@@ -146,6 +155,7 @@ func (w *Walker) Promise() func() ([]*Node, error) {
 		}
 	} else {
 		// drain the result channel and the error channel
+		w.promising = true // will block calls to establish new filters
 		errch := w.pipe.errors
 		results := w.pipe.results
 		counter := &w.pipe.queuecount
@@ -214,7 +224,10 @@ func (w *Walker) Parent() *Walker {
 	if w == nil {
 		return nil
 	}
-	w.appendFilterForTask(parent, nil, 0)
+	if err := w.appendFilterForTask(parent, nil, 0); err != nil {
+		T().Errorf(err.Error())
+		panic(err)
+	}
 	return w
 }
 
@@ -241,7 +254,11 @@ func (w *Walker) AncestorWith(predicate Predicate) *Walker {
 	if predicate == nil {
 		w.pipe.errors <- ErrInvalidFilter
 	} else {
-		w.appendFilterForTask(ancestorWith, predicate, 0) // hook in this filter
+		err := w.appendFilterForTask(ancestorWith, predicate, 0) // hook in this filter
+		if err != nil {
+			T().Errorf(err.Error())
+			panic(err)
+		}
 	}
 	return w
 }
@@ -277,7 +294,11 @@ func (w *Walker) DescendentsWith(predicate Predicate) *Walker {
 	if predicate == nil {
 		w.pipe.errors <- ErrInvalidFilter
 	} else {
-		w.appendFilterForTask(descendentsWith, predicate, 5) // need a helper queue
+		err := w.appendFilterForTask(descendentsWith, predicate, 5) // need a helper queue
+		if err != nil {
+			T().Errorf(err.Error())
+			panic(err)
+		}
 	}
 	return w
 }
@@ -332,7 +353,11 @@ func (w *Walker) AttributeIs(key interface{}, value interface{}) *Walker {
 		w.pipe.errors <- ErrInvalidFilter
 	} else {
 		attr := attrInfo{w.attributeHandler, key, value}
-		w.appendFilterForTask(attributeIs, attr, 0) // hook in this filter
+		err := w.appendFilterForTask(attributeIs, attr, 0) // hook in this filter
+		if err != nil {
+			T().Errorf(err.Error())
+			panic(err)
+		}
 	}
 	return w
 }
@@ -374,7 +399,11 @@ func (w *Walker) SetAttribute(key interface{}, value interface{}) *Walker {
 		w.pipe.errors <- ErrInvalidFilter
 	} else {
 		attr := attrInfo{w.attributeHandler, key, value}
-		w.appendFilterForTask(attributeIs, attr, 0) // hook in this filter
+		err := w.appendFilterForTask(attributeIs, attr, 0) // hook in this filter
+		if err != nil {
+			T().Errorf(err.Error())
+			panic(err)
+		}
 	}
 	return w
 }
@@ -408,7 +437,11 @@ func (w *Walker) Filter(f func(*Node) (*Node, error)) *Walker {
 	if f == nil {
 		w.pipe.errors <- ErrInvalidFilter
 	} else {
-		w.appendFilterForTask(clientFilter, f, 0) // hook in this filter
+		err := w.appendFilterForTask(clientFilter, f, 0) // hook in this filter
+		if err != nil {
+			T().Errorf(err.Error())
+			panic(err)
+		}
 	}
 	return w
 }
@@ -444,7 +477,11 @@ func (w *Walker) TopDown(action Action) *Walker {
 	if action == nil {
 		w.pipe.errors <- ErrInvalidFilter
 	} else {
-		w.appendFilterForTask(topDown, action, 5) // need a helper queue
+		err := w.appendFilterForTask(topDown, action, 5) // need a helper queue
+		if err != nil {
+			T().Errorf(err.Error())
+			panic(err)
+		}
 	}
 	return w
 }
@@ -460,17 +497,21 @@ func topDown(node *Node, isBuffered bool, udata userdata, push func(*Node),
 	//
 	if isBuffered {
 		action := udata.filterdata.(Action)
-		parent := udata.nodedata.(parentAndPosition).parent
-		position := udata.nodedata.(parentAndPosition).position
+		var parent *Node
+		var position int
+		if udata.nodedata != nil {
+			parent = udata.nodedata.(parentAndPosition).parent
+			position = udata.nodedata.(parentAndPosition).position
+		}
 		result, err := action(node, parent, position)
 		T().Debugf("Action for node %s returned: %v, err=%v", node, result, err)
 		if err != nil {
 			return err // do not descend further
 		}
 		if result != nil {
-			push(result)                     // result -> next pipeline stage
-			revisitChildrenOf(node, pushBuf) // hand over node as parent
+			push(result) // result -> next pipeline stage
 		}
+		revisitChildrenOf(node, pushBuf) // hand over node as parent
 	} else {
 		pushBuf(node, nil) // simply move incoming nodes over to buffer queue
 	}

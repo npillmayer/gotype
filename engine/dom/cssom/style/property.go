@@ -1,55 +1,6 @@
+package style
+
 /*
-Package style provides functionality for CSS styling properties.
-
-Status
-
-This is a very first draft. It is unstable and the API will change without
-notice. Please be patient.
-
-Overview
-
-We strive to separate content from presentation. In typesetting, this is
-probably an impossible claim, but we'll try anyway. Presentation
-is governed with CSS (Cascading Style Sheets). CSS uses a box model more
-complex than TeX's, which is well described here:
-
-   https://developer.mozilla.org/en-US/docs/Learn/CSS/Introduction_to_CSS/Box_model
-
-If you think about it: a typesetter using the HTML/CSS box model is
-effectively a browser with output type PDF.
-Browsers are large and complex pieces of code, a fact that implies that
-we should seek out where to reduce complexity.
-
-A good explanation of styling may be found in
-
-   https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/
-
-CSSOM is the "CSS Object Model", similar to the DOM for HTML.
-There is not very much open source Go code around for supporting us
-in implementing a styling engine, except the great work of
-https://godoc.org/github.com/andybalholm/cascadia.
-Therefore we will have to compromise
-on many feature in order to complete this in a realistic time frame.
-For a reminder of why that is, refer to
-https://www.youtube.com/watch?v=S68fcV09nGQ .
-
-The styling engine produces a tree data structure, called "styled tree".
-Different web browser implementations call it differentyl ("render tree", ...).
-We define appropriate interfaces to de-couple the styled tree implmentation
-from the styling engine. This may sound odd, as the styled tree is such a
-central data structure to the engine. However, we expect to use different
-implementations of styled trees, depending on wether it is used for print
-or for interactive use.
-
-A concrete default implementations may be found in package dom.styledtree.
-
-References
-
-   https://www.tutorialrepublic.com/css-reference/css3-properties.php
-   https://www.w3schools.com/css/css3_multiple_columns.asp
-   https://www.mediaevent.de/xhtml/kernattribute.html
-
-
 BSD License
 
 Copyright (c) 2017–18, Norbert Pillmayer
@@ -83,7 +34,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-package style
 
 import (
 	"errors"
@@ -176,6 +126,7 @@ func (pg *PropertyGroup) Properties() []KeyValue {
 	r := make([]KeyValue, len(pg.propertiesMap))
 	for k, v := range pg.propertiesMap {
 		r[i] = KeyValue{k, v}
+		i++
 	}
 	return r
 }
@@ -299,6 +250,7 @@ const (
 	PG_Dimension = "Dimension"
 	PG_Display   = "Display"
 	PG_Region    = "Region"
+	PG_X         = "X"
 )
 
 var groupNameFromPropertyKey = map[string]string{
@@ -306,10 +258,10 @@ var groupNameFromPropertyKey = map[string]string{
 	"margin-left":                PG_Margins,
 	"margin-right":               PG_Margins,
 	"margin-bottom":              PG_Margins,
-	"padding-top":                "Padding", // Padding
-	"padding-left":               "Padding",
-	"padding-right":              "Padding",
-	"padding-bottom":             "Padding",
+	"padding-top":                PG_Padding, // Padding
+	"padding-left":               PG_Padding,
+	"padding-right":              PG_Padding,
+	"padding-bottom":             PG_Padding,
 	"border-top-color":           "Border", // Border
 	"border-left-color":          "Border",
 	"border-right-color":         "Border",
@@ -332,7 +284,7 @@ var groupNameFromPropertyKey = map[string]string{
 	"min-height":                 "Dimension",
 	"max-width":                  "Dimension",
 	"max-height":                 "Dimension",
-	"display":                    "Display", // Display
+	"display":                    PG_Display, // Display
 	"flow-into":                  PG_Region,
 	"flow-from":                  PG_Region,
 }
@@ -424,6 +376,15 @@ func NewPropertyMap() *PropertyMap {
 	return &PropertyMap{}
 }
 
+func (pmap *PropertyMap) String() string {
+	s := "Property Map = {\n"
+	for _, v := range pmap.m {
+		s += v.String()
+	}
+	s += "}"
+	return s
+}
+
 // Size returns the number of style property entries.
 func (pmap *PropertyMap) Size() int {
 	if pmap == nil {
@@ -503,29 +464,29 @@ func InitializeDefaultPropertyValues(additionalProps []KeyValue) *PropertyMap {
 	m := make(map[string]*PropertyGroup, 15)
 	root := NewPropertyGroup("Root")
 
-	x := NewPropertyGroup("X") // special group for extension properties
+	x := NewPropertyGroup(PG_X) // special group for extension properties
 	for _, kv := range additionalProps {
 		x.Set(kv.Key, kv.Value)
 	}
-	m["X"] = x
+	m[PG_X] = x
 
-	margins := NewPropertyGroup("Margins")
+	margins := NewPropertyGroup(PG_Margins)
 	margins.Set("margin-top", "0")
 	margins.Set("margin-left", "0")
 	margins.Set("margin-right", "0")
 	margins.Set("margin-bottom", "0")
 	margins.Parent = root
-	m["Margins"] = margins
+	m[PG_Margins] = margins
 
-	padding := NewPropertyGroup("Padding")
+	padding := NewPropertyGroup(PG_Padding)
 	padding.Set("padding-top", "0")
 	padding.Set("padding-left", "0")
 	padding.Set("padding-right", "0")
 	padding.Set("padding-bottom", "0")
 	padding.Parent = root
-	m["Padding"] = padding
+	m[PG_Padding] = padding
 
-	border := NewPropertyGroup("Border")
+	border := NewPropertyGroup(PG_Border)
 	border.Set("border-top-color", "black")
 	border.Set("border-left-color", "black")
 	border.Set("border-right-color", "black")
@@ -543,9 +504,9 @@ func InitializeDefaultPropertyValues(additionalProps []KeyValue) *PropertyMap {
 	border.Set("border-bottom-left-radius", "0")
 	border.Set("border-bottom-right-radius", "0")
 	border.Parent = root
-	m["Border"] = border
+	m[PG_Border] = border
 
-	dimension := NewPropertyGroup("Dimension")
+	dimension := NewPropertyGroup(PG_Dimension)
 	dimension.Set("width", "10%")
 	dimension.Set("width", "100pt")
 	dimension.Set("min-width", "0")
@@ -553,15 +514,15 @@ func InitializeDefaultPropertyValues(additionalProps []KeyValue) *PropertyMap {
 	dimension.Set("max-width", "10000pt")
 	dimension.Set("max-height", "10000pt")
 	dimension.Parent = root
-	m["Dimension"] = dimension
+	m[PG_Dimension] = dimension
 
-	display := NewPropertyGroup("Display")
+	display := NewPropertyGroup(PG_Display)
 	display.Set("display", "block")
-	m["Display"] = display
+	m[PG_Display] = display
 
 	region := NewPropertyGroup(PG_Region)
-	display.Set("flow-from", "")
-	display.Set("flow-into", "")
+	region.Set("flow-from", "")
+	region.Set("flow-into", "")
 	m[PG_Region] = region
 
 	/*

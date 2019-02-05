@@ -1,19 +1,25 @@
 package dom_test
 
 import (
+	"io/ioutil"
 	"strings"
 	"testing"
 
 	"github.com/aymerick/douceur/parser"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/dom/cssom"
 	"github.com/npillmayer/gotype/engine/dom/cssom/douceuradapter"
+	"github.com/npillmayer/gotype/engine/dom/domdbg"
 	"github.com/npillmayer/gotype/engine/dom/styledtree"
-	"github.com/npillmayer/gotype/engine/dom/styledtree/builder"
 	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
 )
+
+func T() tracing.Trace {
+	return tracing.EngineTracer
+}
 
 func Test0(t *testing.T) {
 	tracing.EngineTracer = gologadapter.New()
@@ -33,11 +39,11 @@ p {
     margin-bottom: 10pt;
 }
 #world {
-    margin-top: 20pt;
+    padding-top: 20pt;
 }
 `
 
-func prepareStyledTree(t *testing.T) *styledtree.StyNode {
+func prepareStyledTree(t *testing.T) *tree.Node {
 	h, errhtml := html.Parse(strings.NewReader(myhtml))
 	c, errcss := parser.Parse(mycss)
 	if errhtml != nil || errcss != nil {
@@ -45,33 +51,43 @@ func prepareStyledTree(t *testing.T) *styledtree.StyNode {
 	}
 	s := cssom.NewCSSOM(nil)
 	s.AddStylesForScope(nil, douceuradapter.Wrap(c), cssom.Author)
-	doc, err := s.Style(h, builder.New())
+	doc, err := s.Style(h, styledtree.Creator())
 	if err != nil {
 		t.Errorf("Cannot style test document: %s", err.Error())
 	}
-	return doc.(*styledtree.StyNode)
+	return doc
 }
 
 func TestDom1(t *testing.T) {
 	tracing.EngineTracer.Debugf("-------------------------------------------")
 	sn := prepareStyledTree(t)
-	PrintTree(&sn.Node, t, domFmt)
+	PrintTree(sn, t, domFmt)
 	tracing.EngineTracer.Debugf("-------------------------------------------")
+}
+
+func TestDom2(t *testing.T) {
+	tracing.EngineTracer.Debugf("-------------------------------------------")
+	sn := prepareStyledTree(t)
+	tracing.EngineTracer.Debugf("--- Styling done --------------------------")
+	doc := dom.NewRONode(sn, styledtree.Creator().ToStyler)
+	gvz, _ := ioutil.TempFile(".", "graphviz-*.dot")
+	defer gvz.Close()
+	domdbg.ToGraphViz(doc, gvz, nil)
 }
 
 // --- Helpers ----------------------------------------------------------
 
-func domFmt(dn RODomNode) string {
+func domFmt(dn dom.RODomNode) string {
 	return dn.String()
 }
 
-func PrintTree(n *tree.Node, t *testing.T, fmtnode func(RODomNode) string) {
+func PrintTree(n *tree.Node, t *testing.T, fmtnode func(dom.RODomNode) string) {
 	indent := 0
-	dn := NewRONode(n, styledtree.Creator().ToStyler)
+	dn := dom.NewRONode(n, styledtree.Creator().ToStyler)
 	printNode(dn, indent, t, fmtnode)
 }
 
-func printNode(dn RODomNode, w int, t *testing.T, fmtnode func(RODomNode) string) {
+func printNode(dn dom.RODomNode, w int, t *testing.T, fmtnode func(dom.RODomNode) string) {
 	if dn.IsText() {
 		t.Logf("%s%s", indent(w), fmtnode(dn))
 	} else {

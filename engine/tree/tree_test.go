@@ -12,6 +12,7 @@ import (
 
 func Test0(t *testing.T) {
 	tracing.EngineTracer = gologadapter.New()
+	tracing.EngineTracer.SetTraceLevel(tracing.LevelDebug)
 }
 
 func TestEmptyWalker(t *testing.T) {
@@ -141,6 +142,33 @@ func ExampleWalker_Promise() {
 	// Output:
 	// matching descendent found: (Node 10)
 	// matching descendent found: (Node 10)
+}
+
+func TestTopDown1(t *testing.T) {
+	n := checkRuntime(t, -1)
+	// Build a tree:
+	//                 (root:1)
+	//          (n2:2)----+----(n4:10)
+	//  (n3:10)----+
+	//
+	root, n2, n3, n4 := NewNode(1), NewNode(2), NewNode(10), NewNode(10)
+	root.AddChild(n2).AddChild(n4)
+	n2.AddChild(n3)
+	i := 0
+	myaction := func(n *Node, parent *Node, position int) (*Node, error) {
+		T().Debugf("input node is %v", n)
+		i++
+		return n, nil
+	}
+	future := NewWalker(root).TopDown(myaction).Promise()
+	_, err := future() // will block until walking is finished
+	if err != nil {
+		t.Error(err)
+	}
+	if i != 4 {
+		t.Errorf("Expected action to be called 4 times, was %d", i)
+	}
+	checkRuntime(t, n)
 }
 
 func TestAttribute1(t *testing.T) {
