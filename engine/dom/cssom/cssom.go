@@ -114,7 +114,7 @@ func (cssom CSSOM) AddStylesForScope(scope *html.Node, css StyleSheet, source Pr
 // Optimize some day (see
 // https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/).
 type rulesTreeType struct {
-	stylesheets *sync.Map                    // of type []stylesheetType
+	stylesheets *sync.Map                    // of type html.Node -> []stylesheetType
 	selectors   map[string]cascadia.Selector // cache of compiled selectors
 	source      PropertySource               // where do these rules come from?
 }
@@ -159,6 +159,7 @@ func (rt rulesTreeType) StoreStylesheetForHtmlNode(h *html.Node, sheet StyleShee
 		T().Debugf("Adding first style sheet for HTML node %v", h)
 		rt.stylesheets.Store(h, []stylesheetType{stylesheetType{sheet, source}})
 	} else {
+		T().Debugf("Adding another style sheet for HTML node %v", h)
 		sheets = append(sheets, stylesheetType{sheet, source})
 		rt.stylesheets.Store(h, sheets)
 	}
@@ -175,7 +176,7 @@ func (rt *rulesTreeType) Empty() bool {
 		csscnt++
 		return true
 	})
-	T().Debugf("Counting style sheet entries in rules tree: %d", csscnt)
+	T().Debugf("Style sheet entries in rules tree for %d scopes", csscnt)
 	return csscnt == 0
 }
 
@@ -276,7 +277,10 @@ func (rt *rulesTreeType) FilterMatchesFor(h *html.Node) *matchesList {
 	matchingRules := make([]Rule, 0, 3)
 	sheets := rt.StylesheetsForHtmlNode(rootElement)
 	for _, s := range sheets {
-		for _, rule := range s.stylesheet.Rules() {
+		rules := s.stylesheet.Rules()
+		T().Debugf("Stylesheet has %d rules", len(rules))
+		for _, rule := range rules {
+			T().Debugf("Now try to match for HTML = %v", h.Data)
 			if rt.matchRuleForHtmlNode(h, rule) {
 				matchingRules = append(matchingRules, rule)
 			}
@@ -330,12 +334,8 @@ func (matches *matchesList) SortProperties(splitters []CompoundPropertiesSplitte
 		for _, propertyKey := range rule.Properties() {
 			value := style.Property(rule.Value(propertyKey))
 			props, err := splitCompoundProperty(splitters, propertyKey, value)
-			if err != nil {
-				sp := propertyPlusSpecifityType{Author, rule, propertyKey, value, rule.IsImportant(propertyKey), 0}
-				sp.calcSpecifity(rno)
-				proptable = append(proptable, sp)
-			} else {
-				T().Debugf("%s is a compound style", propertyKey)
+			if err == nil {
+				//T().Debugf("%s is a compound style", propertyKey)
 				for _, kv := range props {
 					key := kv.Key
 					val := kv.Value
@@ -343,6 +343,10 @@ func (matches *matchesList) SortProperties(splitters []CompoundPropertiesSplitte
 					sp.calcSpecifity(rno)
 					proptable = append(proptable, sp)
 				}
+			} else {
+				sp := propertyPlusSpecifityType{Author, rule, propertyKey, value, rule.IsImportant(propertyKey), 0}
+				sp.calcSpecifity(rno)
+				proptable = append(proptable, sp)
 			}
 		}
 	}
@@ -613,8 +617,8 @@ func splitCompoundProperty(splitters []CompoundPropertiesSplitter,
 	key string, value style.Property) ([]style.KeyValue, error) {
 	for _, splitter := range splitters {
 		kv, err := splitter(key, value)
-		if err != nil {
-			return kv, err
+		if err == nil {
+			return kv, nil
 		}
 	}
 	return nil, errNoSuchCompoundProperty

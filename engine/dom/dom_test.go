@@ -23,7 +23,7 @@ func T() tracing.Trace {
 
 func Test0(t *testing.T) {
 	tracing.EngineTracer = gologadapter.New()
-	tracing.EngineTracer.SetTraceLevel(tracing.LevelDebug)
+	//tracing.EngineTracer.SetTraceLevel(tracing.LevelDebug)
 }
 
 var myhtml = `
@@ -49,11 +49,16 @@ p {
 
 func prepareStyledTree(t *testing.T) *tree.Node {
 	h, errhtml := html.Parse(strings.NewReader(myhtml))
+	styles := douceuradapter.ExtractStyleElements(h)
+	t.Logf("Extracted %d <style> elements", len(styles))
 	c, errcss := parser.Parse(mycss)
 	if errhtml != nil || errcss != nil {
 		T().Errorf("Cannot create test document")
 	}
 	s := cssom.NewCSSOM(nil)
+	for _, sty := range styles {
+		s.AddStylesForScope(nil, sty, cssom.Script)
+	}
 	s.AddStylesForScope(nil, douceuradapter.Wrap(c), cssom.Author)
 	doc, err := s.Style(h, styledtree.Creator())
 	if err != nil {
@@ -70,6 +75,7 @@ func TestDom1(t *testing.T) {
 }
 
 func TestDom2(t *testing.T) {
+	tracing.EngineTracer.SetTraceLevel(tracing.LevelDebug)
 	tracing.EngineTracer.Debugf("===========================================")
 	sn := prepareStyledTree(t)
 	tracing.EngineTracer.Debugf("--- Styling done --------------------------")
