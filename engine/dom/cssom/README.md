@@ -16,14 +16,31 @@ A good explanation of styling may be found in
    https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/
 
 We will produce a "styled tree", which associates HTML nodes with CSS
-styles:
+styles. Given the HTML input
+
+    <html><head></head><body>
+      <p>The quick brown fox jumps over the lazy dog.</p>
+      <p id="world">Hello <b>World</b>!</p>
+      <p>This is a test.</p>
+    </body>
+
+and a style sheet like this:
+
+    p {
+    	margin-bottom: 10pt;
+    }
+    #world {
+    	padding-top: 20pt;
+    }
+
+a styling engine wil produce a tree like this:
 
 ![styling](https://user-images.githubusercontent.com/4531688/52282401-a4ccdf80-2960-11e9-8ede-0ceee394b6ab.png)
 
 Browsers are large and complex pieces of code, a fact that implies that
 we should seek out where to reduce complexity.
 
-# Caveats
+## Caveats
 
 CSSOM is the "CSS Object Model", similar to the DOM for HTML.
 There is not very much open source Go code around for supporting us
@@ -39,7 +56,7 @@ CSS handling is de-coupled by introducing appropriate interfaces
 StyleSheet and Rule. Concrete implementations may be found in sub-packages
 of package style.
 
-# Status
+## Status
 
 This is a very first draft. It is unstable and the API will change without
 notice. Please be patient.
