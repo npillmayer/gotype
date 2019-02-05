@@ -86,10 +86,15 @@ func NewCSSOM(additionalProperties []style.KeyValue) CSSOM {
 // styles are merged. css may be nil. If scope is nil then scope is the
 // root (i.e., top-level content element) of a future document.
 //
-// The stylse sheet may not be nil.
+// The stylsheet may not be nil.
 // source hints to where the stylesheet comes from.
 // Its value will affect the calculation of specifity for rules of this
 // stylesheet.
+//
+// Inline-styles will be handled on the fly, generating "mini-stylesheets"
+// while walking the DOM. For `<style>`-elements, clients have to extract
+// the styles in advance and wrap them into stylesheets.
+//
 func (cssom CSSOM) AddStylesForScope(scope *html.Node, css StyleSheet, source PropertySource) error {
 	if scope != nil && scope.Type != html.ElementNode {
 		return errors.New("Can style element nodes only")
