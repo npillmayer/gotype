@@ -38,8 +38,11 @@ package douceuradapter
 
 import (
 	"github.com/aymerick/douceur/css"
+	"github.com/aymerick/douceur/parser"
 	"github.com/npillmayer/gotype/engine/dom/cssom"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 )
 
 // CssStyle is an adapter for interface cssom.StyleSheet.
@@ -128,3 +131,51 @@ func (r Rule) IsImportant(key string) bool {
 }
 
 var _ cssom.Rule = &Rule{}
+
+// ExtractStyleElements visits <head> and <body> elements in an HTML parse
+// tree and searches for embedded <style>s. It returns the content of
+// style-elements as style sheets.
+func ExtractStyleElements(htmldoc *html.Node) []*CssStyles {
+	head := findElement(atom.Head, htmldoc)
+	body := findElement(atom.Body, htmldoc)
+	css := extractStyles(head)
+	css2 := extractStyles(body)
+	for _, c := range css2 {
+		css = append(css, c)
+	}
+	return css
+}
+
+func extractStyles(h *html.Node) []*CssStyles {
+	var css []*CssStyles
+	ch := h.FirstChild
+	for ch != nil {
+		if ch.DataAtom == atom.Style {
+			c, err := parser.Parse(ch.FirstChild.Data)
+			if err != nil {
+				break
+			}
+			css = append(css, Wrap(c))
+		}
+		ch = ch.NextSibling
+	}
+	return css
+}
+
+func findElement(a atom.Atom, h *html.Node) *html.Node {
+	if h == nil {
+		return nil
+	}
+	if h.DataAtom == a {
+		return h
+	}
+	ch := h.FirstChild
+	for ch != nil {
+		r := findElement(a, ch)
+		if r != nil && r.DataAtom == a {
+			return r
+		}
+		ch = ch.NextSibling
+	}
+	return nil
+}

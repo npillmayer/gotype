@@ -545,26 +545,6 @@ func createStyledChildren(parent *tree.Node, rulesTree *rulesTreeType,
 		for ch != nil {
 			if ch.DataAtom == atom.Style { // <style> element
 				T().Infof("<style> nodes have to be extracted in advance")
-				// TODO: How to handle <style> elements?
-				// Must be parsed before other elements => stop the world
-				// until <body> is visited?
-				//
-				// https://developer.mozilla.org/en-US/docs/Web/HTML/Element/style:
-				//
-				// The HTML <style> element contains style information for a document,
-				// or part of a document. It contains CSS, which is applied
-				// to the contents of the document containing the <style> element.
-				//
-				// The <style> element can be included inside the <head> or <body>
-				// of the document, and the styles will still be applied,
-				// however it is recommended that you include your styles in the <head>
-				// for organizational purposes — it is a lot better to separate your
-				// content from your presentation as much as possible.
-				//
-				// If you include multiple <style> and <link> elements in your document,
-				// they will be applied to the DOM in the order they are included in
-				// the document — make sure you include them in the correct order,
-				// to avoid unexpected cascade issues.
 			} else if isStylable(ch.DataAtom) {
 				sn := creator.StyleForHtmlNode(ch)
 				parent.AddChild(sn) // sn will be sent to next pipeline stage
