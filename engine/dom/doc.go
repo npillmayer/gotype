@@ -17,6 +17,20 @@ Excerpt: "In this paper, I argue that HTML5 offers unique advantages to authors 
 For an in-depth description of HTMLbook please refer to
 https://oreillymedia.github.io/HTMLBook/.
 
+Tree Implementation
+
+Styling and layout of HTML/CSS involves a lot of operations on different trees.
+We implement the various trees on top of a general purpose tree type
+(package engine/tree), which offers concurrent operations to manipluate
+tree nodes.
+
+In a fully object oriented programming language we would subclass this
+tree type for every type of tree in use (styled tree, layout tree,
+render tree), but in Go we resort to composition, thus including a
+generic tree node in every node (sub-)type. The downside of this approach
+is that we will have to provide an adapter for every node sub-type
+to return the sub-type from the generic type.
+
 BSD License
 
 Copyright (c) 2017–18, Norbert Pillmayer

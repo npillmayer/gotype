@@ -466,8 +466,8 @@ type Action func(n *Node, parent *Node, position int) (*Node, error)
 // The traversal guarantees that parents are always processed before
 // their children.
 //
-// If the action function returns an error or does not return a node,
-// descending this branch is aborted.
+// If the action function returns an error for a node,
+// descending the branch below this node is aborted.
 //
 // If w is nil, TopDown will return nil.
 func (w *Walker) TopDown(action Action) *Walker {

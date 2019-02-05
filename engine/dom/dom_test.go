@@ -27,10 +27,14 @@ func Test0(t *testing.T) {
 }
 
 var myhtml = `
-<html><head></head><body>
+<html><head>
+<style>
+  body { border-color: red; }
+</style>
+</head><body>
   <p>The quick brown fox jumps over the lazy dog.</p>
   <p id="world">Hello <b>World</b>!</p>
-  <p>This is a test.</p>
+  <p style="padding-left: 5px;">This is a test.</p>
 </body>
 `
 

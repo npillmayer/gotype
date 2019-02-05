@@ -58,6 +58,7 @@ type RODomNode interface {
 }
 
 // A DomNodeChildrenIterator iterates over the children nodes of a DOM node.
+// Clients should call it until it returns nil.
 type DomNodeChildrenIterator func() RODomNode
 
 type domnode struct {

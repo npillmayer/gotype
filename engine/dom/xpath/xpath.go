@@ -1,13 +1,6 @@
-package xpath
+/*
+Package xpath provides tree walking for the DOM with XPath syntax.
 
-import (
-	"errors"
-
-	"github.com/antchfx/xpath"
-	"github.com/npillmayer/gotype/engine/tree"
-)
-
-/* -----------------------------------------------------------------
 BSD License
 
 Copyright (c) 2017–18, Norbert Pillmayer
@@ -40,9 +33,16 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
------------------------------------------------------------------ */
 
-// Provide tree walking for the styled document with XPath syntax.
+*/
+package xpath
+
+import (
+	"errors"
+
+	"github.com/antchfx/xpath"
+	"github.com/npillmayer/gotype/engine/tree"
+)
 
 var errInvalidXPathExpr error = errors.New("Invalid XPath expression")
 var errNavigator error = errors.New("Invalid XPath tree navigator")

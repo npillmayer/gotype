@@ -98,22 +98,6 @@ func (cssom CSSOM) AddStylesForScope(scope *html.Node, css StyleSheet, source Pr
 		return errors.New("Style sheet is nil")
 	}
 	cssom.rulesTree.StoreStylesheetForHtmlNode(scope, css, source)
-	// sheets := cssom.rulesTree.StylesheetsForHtmlNode(scope)
-	// rules, exists := cssom.rules.Load(scope)
-	// rtree := rules.(rulesTreeType)
-	// if exists && css != nil {
-	// 	rtree.stylesheet.AppendRules(css)
-	// } else {
-	// 	if scope == nil {
-	// 		scope = rootElement
-	// 	} else {
-	// 		if scope.Type != html.ElementNode {
-	// 			return errors.New("Can style element nodes only")
-	// 		}
-	// 	}
-	// 	//cssom.rules[scope] = rulesTree{css, nil, source}
-	// 	cssom.rules.Store(scope, rulesTreeType{css, nil, source})
-	// }
 	return nil
 }
 
@@ -455,26 +439,6 @@ func (matches *matchesList) createStyleGroups(parent *tree.Node,
 
 // --- Styled Node Tree -------------------------------------------------
 
-// StyledNode is the node type for the styled tree to build. The CSSOM
-// styler builds a tree of styled nodes, more or less corresponding to the
-// stylable DOM nodes. We de-couple the Styler from the type of the resulting
-// styled nodes by using a builder (see StyledTreeBuilder) and an interface type.
-// type StyledNode interface {
-// 	ComputedStyles() *style.PropertyMap   // get the computed styles of this styled node
-// 	SetComputedStyles(*style.PropertyMap) // set the computed styles of this styled node
-// }
-
-// StyledTreeBuilder is a builder to create tree of conrete implementations
-// of interface StyleNode (see type StyledNode).
-//
-// ATTENTION: Tree construction may be performed concurrently, so all methods
-// (especially LinkNodeToParent) must be thread-safe!
-// type StyledTreeBuilder interface {
-// 	MakeNodeFor(*html.Node) StyledNode                 // create a new styled node
-// 	LinkNodeToParent(sn StyledNode, parent StyledNode) // attach a node to the tree
-// 	WalkUpwards(StyledNode) StyledNode                 // walk to parent of node
-// }
-
 //func setupStyledNodeTree(domRoot *html.Node, defaults *style.PropertyMap, builder StyledTreeBuilder) StyledNode {
 func setupStyledNodeTree(domRoot *html.Node, defaults *style.PropertyMap,
 	creator style.Creator) *tree.Node {
@@ -557,12 +521,6 @@ func (cssom CSSOM) Style(dom *html.Node, creator style.Creator) (*tree.Node, err
 		T().Errorf("Error while creating style properties: %v", err)
 		return nil, err
 	}
-	// runner := newStylingRunner(creator, cssom.compoundS()plitters)
-	// err := cssom.attachStylesheets(dom, runner)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// runner.doStyle(runner.startNode, styledRootNode)
 	return styledRootNode, nil
 }
 
@@ -577,6 +535,7 @@ func createStyledChildren(parent *tree.Node, rulesTree *rulesTreeType,
 	if h.Type == html.ElementNode || h.Type == html.DocumentNode {
 		ch := h.FirstChild
 		for ch != nil {
+			T().Debugf("ch.DataAtom = %v  ==================", ch.DataAtom)
 			if ch.DataAtom == atom.Style { // <style> element
 				T().Debugf("TODO: <style> node has Data = %v", h.Data)
 				if ch.FirstChild.Type == html.TextNode {
@@ -587,8 +546,16 @@ func createStyledChildren(parent *tree.Node, rulesTree *rulesTreeType,
 				sn := creator.StyleForHtmlNode(ch)
 				parent.AddChild(sn) // sn will be sent to next pipeline stage
 				if styleAttr := getStyleAttribute(ch); styleAttr != nil {
-					//rulesMap.Store(h, styleAttr) // attach local style attributes
-					rulesTree.StoreStylesheetForHtmlNode(h, styleAttr, Attribute)
+					// attach local style attributes
+					rulesTree.StoreStylesheetForHtmlNode(ch, styleAttr, Attribute)
+				}
+			} else if ch.DataAtom == atom.Head {
+				// search for <style> element inside <head>
+				style := findStyleElements(ch)
+				if len(style) > 0 {
+					for _, s := range style {
+						rulesTree.StoreStylesheetForHtmlNode(nil, s, Script)
+					}
 				}
 			}
 			ch = ch.NextSibling
@@ -617,6 +584,18 @@ func isStylable(a atom.Atom) bool {
 		return true
 	}
 	return false
+}
+
+func findStyleElements(n *html.Node) []StyleSheet {
+	ch := n.FirstChild
+	for ch != nil {
+		if ch.DataAtom == atom.Style {
+			// TODO create a style sheet from <style> element
+			// how to do this without a concrete CSS parser implementation?
+		}
+		ch = ch.NextSibling
+	}
+	return nil
 }
 
 func createStylesForNode(node *tree.Node, rulesTree *rulesTreeType, creator style.Creator,
@@ -896,7 +875,7 @@ func nodePath(node *html.Node) string {
 	return s
 }
 
-// --- Local pseudo rules -----------------------------------------------
+// --- Local pseudo rules for style-attributes --------------------------
 
 func getStyleAttribute(h *html.Node) *localPseudoStylesheetType {
 	if h != nil && h.Type == html.ElementNode {
@@ -909,21 +888,26 @@ func getStyleAttribute(h *html.Node) *localPseudoStylesheetType {
 	return nil
 }
 
+type localPseudoStylesheetType struct {
+	rule localPseudoRuleType
+}
+
 type localPseudoRuleType []style.KeyValue
 
 func newLocalPseudoRule(styleAttr string) localPseudoRuleType {
 	styles := strings.Split(styleAttr, ";")
-	//kv := make([]style.KeyValue, 0, 3)
 	kv := make(localPseudoRuleType, 0, 3)
 	for _, st := range styles {
 		st = strings.TrimSpace(st)
-		s := strings.Split(st, ":")
-		if len(s) < 2 {
-			T().Errorf("Skipping ill-formed style rule: %s", st)
-		} else {
-			k := strings.TrimSpace(s[0])
-			v := strings.TrimSpace(s[1])
-			kv = append(kv, style.KeyValue{k, style.Property(v)})
+		if len(st) > 0 {
+			s := strings.Split(st, ":")
+			if len(s) < 2 {
+				T().Errorf("Skipping ill-formed style rule: %s", st)
+			} else {
+				k := strings.TrimSpace(s[0])
+				v := strings.TrimSpace(s[1])
+				kv = append(kv, style.KeyValue{k, style.Property(v)})
+			}
 		}
 	}
 	return kv
@@ -951,10 +935,6 @@ func (pseudorule localPseudoRuleType) Value(key string) style.Property {
 
 func (pseudorule localPseudoRuleType) IsImportant(string) bool {
 	return false
-}
-
-type localPseudoStylesheetType struct {
-	rule localPseudoRuleType
 }
 
 func (pseudosheet *localPseudoStylesheetType) AppendRules(s StyleSheet) {

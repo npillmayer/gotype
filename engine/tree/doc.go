@@ -28,6 +28,7 @@ Navigation functions:
    Parent()                     // find parent for all selected nodes
    AncestorWith(predicate)      // find ancestor with a given predicate
    DescendentsWith(predicate)   // find descendets with a given predicate
+   TopDown(action)              // traverse all nodes top down (breadth first)
 
 Filter functions:
 
