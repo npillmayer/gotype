@@ -535,27 +535,14 @@ func createStyledChildren(parent *tree.Node, rulesTree *rulesTreeType,
 	if h.Type == html.ElementNode || h.Type == html.DocumentNode {
 		ch := h.FirstChild
 		for ch != nil {
-			T().Debugf("ch.DataAtom = %v  ==================", ch.DataAtom)
 			if ch.DataAtom == atom.Style { // <style> element
-				T().Debugf("TODO: <style> node has Data = %v", h.Data)
-				if ch.FirstChild.Type == html.TextNode {
-					T().Debugf("first child is text: %v", ch.FirstChild.Data)
-				}
-				// TODO attach styles from <style>
+				T().Infof("<style> nodes have to be extracted in advance")
 			} else if isStylable(ch.DataAtom) {
 				sn := creator.StyleForHtmlNode(ch)
 				parent.AddChild(sn) // sn will be sent to next pipeline stage
 				if styleAttr := getStyleAttribute(ch); styleAttr != nil {
 					// attach local style attributes
 					rulesTree.StoreStylesheetForHtmlNode(ch, styleAttr, Attribute)
-				}
-			} else if ch.DataAtom == atom.Head {
-				// search for <style> element inside <head>
-				style := findStyleElements(ch)
-				if len(style) > 0 {
-					for _, s := range style {
-						rulesTree.StoreStylesheetForHtmlNode(nil, s, Script)
-					}
 				}
 			}
 			ch = ch.NextSibling
@@ -584,18 +571,6 @@ func isStylable(a atom.Atom) bool {
 		return true
 	}
 	return false
-}
-
-func findStyleElements(n *html.Node) []StyleSheet {
-	ch := n.FirstChild
-	for ch != nil {
-		if ch.DataAtom == atom.Style {
-			// TODO create a style sheet from <style> element
-			// how to do this without a concrete CSS parser implementation?
-		}
-		ch = ch.NextSibling
-	}
-	return nil
 }
 
 func createStylesForNode(node *tree.Node, rulesTree *rulesTreeType, creator style.Creator,

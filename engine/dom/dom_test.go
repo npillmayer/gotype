@@ -63,14 +63,14 @@ func prepareStyledTree(t *testing.T) *tree.Node {
 }
 
 func TestDom1(t *testing.T) {
-	tracing.EngineTracer.Debugf("-------------------------------------------")
+	tracing.EngineTracer.Debugf("===========================================")
 	sn := prepareStyledTree(t)
 	PrintTree(sn, t, domFmt)
 	tracing.EngineTracer.Debugf("-------------------------------------------")
 }
 
 func TestDom2(t *testing.T) {
-	tracing.EngineTracer.Debugf("-------------------------------------------")
+	tracing.EngineTracer.Debugf("===========================================")
 	sn := prepareStyledTree(t)
 	tracing.EngineTracer.Debugf("--- Styling done --------------------------")
 	doc := dom.NewRONode(sn, styledtree.Creator().ToStyler)
