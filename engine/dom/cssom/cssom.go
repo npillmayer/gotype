@@ -511,6 +511,14 @@ func (cssom CSSOM) Style(dom *html.Node, creator style.Creator) (*tree.Node, err
 		T().Errorf("Error while creating styled tree: %v", err)
 		return nil, err
 	}
+	// TODO: Possibly do not sync after creating the nodes, but rather
+	// continue with styling as a walker.Filter(...).
+	// It then is possible for a child to overtake its parent, but this
+	// is probably acceptable: In the worst case a property group will
+	// not point to a possible group of its parent, but rather to an
+	// ancestor (and the parent may point to the same ancestor). This is
+	// a loss of space efficiency, but we may gain performance by not
+	// overlapping the operations.
 	T().Debugf("--- Now styling newly created nodes --------")
 	walker = tree.NewWalker(styledRootNode)
 	createStyles := func(node *tree.Node, parent *tree.Node, pos int) (*tree.Node, error) {
