@@ -42,13 +42,13 @@ CSSOM is the "CSS Object Model", similar to the DOM for HTML.
 
 ## Caveats
 
-Browsers are large and complex pieces of code, a fact that implies that
+Browsers are large and complex pieces of software, a fact that implies that
 we should seek out where to reduce complexity.
 There is not very much open source Go code around for supporting us
 in implementing a styling engine, except the great work of
 https://godoc.org/github.com/andybalholm/cascadia.
 Therefore we will have to compromise
-on many feature in order to complete this in a realistic time frame.
+on many features in order to complete this in a realistic time frame.
 For a reminder of why that is, refer to
 https://www.youtube.com/watch?v=S68fcV09nGQ .
 
