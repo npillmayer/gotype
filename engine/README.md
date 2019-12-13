@@ -9,8 +9,11 @@ we should seek out where to reduce complexity.
 
 A good explanation of styling may be found in a superb
 [blog entry](https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/)
-by Lin Clark.
+by Lin Clark
 about the Firefox styling engine.
+I also very much enjoyed reading articles by 
+ Mikito Takada:
+"[Learn CSS Layout the pedantic way](https://www.printfriendly.com/p/g/cnVHBX)."
  
 There is not very much open source Go code around for supporting us
 in implementing a styling and layout engine, except the great work of
