@@ -12,7 +12,6 @@ import (
 	"github.com/npillmayer/gotype/engine/dom/cssom/douceuradapter"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/dom/styledtree"
-	"github.com/npillmayer/gotype/engine/dom/styledtree/builder"
 	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
 )

@@ -21,7 +21,7 @@ import (
 // Regions:
 // http://cna.mamk.fi/Public/FJAK/MOAC_MTA_HTML5_App_Dev/c06.pdf
 
-// We trace to the engine tracer.
+// T traces to the engine tracer.
 func T() tracing.Trace {
 	return tracing.EngineTracer
 }

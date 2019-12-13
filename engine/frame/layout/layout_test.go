@@ -49,7 +49,7 @@ func TestLayout1(t *testing.T) {
 
 // ----------------------------------------------------------------------
 
-func makeHtmlNode(e string) *html.Node {
+func makeHTMLNode(e string) *html.Node {
 	n := &html.Node{}
 	n.Type = html.ElementNode
 	n.Data = e

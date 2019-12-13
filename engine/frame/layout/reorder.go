@@ -27,7 +27,8 @@ func (l *Layouter) buildBoxTree() (*Container, error) {
 	styleToBox := newAssoc()
 	createBoxForEach := prepareBoxCreator(l.styleCreator.ToStyler, styleToBox)
 	reorder := prepareReorderer() // TODO
-	future := styles.TopDown(createBoxForEach).Filter(reorder).Promise()
+	future := styles.TopDown(createBoxForEach).Promise()
+	//future := styles.TopDown(createBoxForEach).Filter(reorder).Promise()
 	_, err := future()
 	if err == nil {
 		return nil, err
@@ -42,7 +43,7 @@ func (l *Layouter) buildBoxTree() (*Container, error) {
 }
 
 func prepareBoxCreator(toStyler style.StyleInterf, styleToBox *styleToBoxAssoc) tree.Action {
-	createBoxForEach := func(n *tree.Node) (*tree.Node, error) {
+	createBoxForEach := func(n *tree.Node, parent *tree.Node, i int) (*tree.Node, error) {
 		//createBoxForEach := tree.Action {
 		sn := stylednode{
 			treenode: n,

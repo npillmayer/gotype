@@ -201,8 +201,8 @@ const domNodeTmpl = `{{ if .N.IsText }}
 {{ end }}
 `
 
-const styleGroupTmpl = `{{ printf "pg%p" . }} [ style="filled" penwidth=1 fillcolor="white" shape="Mrecord"
-    label=<<table border="0" cellborder="0" cellpadding="2" bgcolor="white">
+const styleGroupTmpl = `{{ printf "pg%p" . }} [ style="filled" penwidth=1 fillcolor="white" shape="Mrecord" fontsize=12
+    label=<<table border="0" cellborder="0" cellpadding="2" cellspacing="0" bgcolor="white">
       <tr><td bgcolor="azure4" align="center" colspan="2"><font color="white">{{ .Name }}</font></td></tr>
       {{ range .Properties }}
       <tr><td align="right">{{ .Key }}:</td><td>{{ .Value }}</td></tr>
