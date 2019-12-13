@@ -1,10 +1,8 @@
 package layout
 
 import (
-	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/tree"
-	"golang.org/x/net/html"
 )
 
 // Helper struct to pack a node of a styled tree.
@@ -26,11 +24,11 @@ func (l *Layouter) buildBoxTree() (*Container, error) {
 	T().Debugf("Creating box tree")
 	styleToBox := newAssoc()
 	createBoxForEach := prepareBoxCreator(l.styleCreator.ToStyler, styleToBox)
-	reorder := prepareReorderer() // TODO
+	//reorder := prepareReorderer() // TODO
 	future := styles.TopDown(createBoxForEach).Promise()
 	//future := styles.TopDown(createBoxForEach).Filter(reorder).Promise()
 	_, err := future()
-	if err == nil {
+	if err != nil {
 		return nil, err
 	}
 	var ok bool
@@ -43,15 +41,14 @@ func (l *Layouter) buildBoxTree() (*Container, error) {
 }
 
 func prepareBoxCreator(toStyler style.StyleInterf, styleToBox *styleToBoxAssoc) tree.Action {
-	createBoxForEach := func(n *tree.Node, parent *tree.Node, i int) (*tree.Node, error) {
-		//createBoxForEach := tree.Action {
+	action := func(n *tree.Node, parent *tree.Node, i int) (*tree.Node, error) {
 		sn := stylednode{
 			treenode: n,
 			toStyler: toStyler,
 		}
 		return makeBoxNode(sn, styleToBox)
 	}
-	return createBoxForEach
+	return action
 }
 
 func makeBoxNode(sn stylednode, styleToBox *styleToBoxAssoc) (*tree.Node, error) {
@@ -59,7 +56,7 @@ func makeBoxNode(sn stylednode, styleToBox *styleToBoxAssoc) (*tree.Node, error)
 	if box == nil { // legit, e.g. for "display:none"
 		return nil, nil // will not descend to children of sn
 	}
-	styleToBox.Put(sn.treenode, box)
+	styleToBox.Put(sn.treenode, box) // associate the styled tree not to this box
 	if parent := sn.treenode.Parent(); parent != nil {
 		if parentbox, ok := styleToBox.Get(sn.treenode); ok {
 			parentbox.Add(box)
@@ -168,76 +165,3 @@ func makeBox(sn *tree.Node, ctx *nodeContext) (*tree.Node, error) {
 	return &c.Node, err
 }
 */
-
-// ----------------------------------------------------------------------
-
-func boxForNode(sn *tree.Node, toStyler style.StyleInterf) *Container {
-	disp := GetFormattingContextForStyledNode(sn, toStyler)
-	if disp == NONE {
-		return nil
-	}
-	var c *Container
-	if disp == VBOX {
-		c = newVBox(sn, toStyler)
-	} else {
-		c = newHBox(sn, toStyler)
-	}
-	c.mode = getDisplayPropertyForStyledNode(sn, toStyler)
-	return c
-}
-
-// --- Default Display Properties ---------------------------------------
-
-// GetFormattingContextForStyledNode gets the formatting context for a
-// container resulting from a
-// styled node. The context denotes the orientation in which a box's content
-// is layed out. It may be either HBOX, VBOX or NONE.
-func GetFormattingContextForStyledNode(sn *tree.Node, toStyler style.StyleInterf) uint8 {
-	if sn == nil {
-		return NONE
-	}
-	styler := toStyler(sn)
-	pmap := styler.ComputedStyles()
-	if val, _ := style.GetLocalProperty(pmap, "display"); val == "none" {
-		return NONE
-	}
-	htmlnode := styler.HtmlNode()
-	if htmlnode.Type != html.ElementNode {
-		T().Debugf("Have styled node for non-element ?!?")
-		return HBOX
-	}
-	switch htmlnode.Data {
-	case "body", "div", "ul", "ol", "section":
-		return VBOX
-	case "p", "span", "it", "h1", "h2", "h3", "h4", "h5", "h6",
-		"h7", "b", "i", "strong":
-		return HBOX
-	}
-	tracing.EngineTracer.Infof("unknown HTML element %s will stack children vertically",
-		htmlnode.Data)
-	return VBOX
-}
-
-func getDisplayPropertyForStyledNode(sn *tree.Node, toStyler style.StyleInterf) uint8 {
-	if sn == nil {
-		return NONE
-	}
-	styler := toStyler(sn)
-	pmap := styler.ComputedStyles()
-	dispProp, isSet := style.GetLocalProperty(pmap, "display")
-	if !isSet {
-		if styler.HtmlNode().Type != html.ElementNode {
-			T().Debugf("Have styled node for non-element ?!?")
-			return HMODE
-		}
-	}
-	dispProp = style.DisplayPropertyForHtmlNode(styler.HtmlNode())
-	if dispProp == "none" {
-		return NONE
-	} else if dispProp == "block" {
-		return VMODE
-	} else if dispProp == "inline" {
-		return HMODE
-	}
-	return NONE
-}
