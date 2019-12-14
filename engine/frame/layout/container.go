@@ -2,6 +2,7 @@ package layout
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
@@ -15,6 +16,7 @@ const (
 	NoMode uint8 = iota
 	BlockMode
 	InlineMode
+	DisplayNone
 )
 
 // Container is a (CSS-)styled box which may contain other boxes and/or
@@ -23,7 +25,7 @@ type Container struct {
 	tree.Node
 	Box                box.StyledBox
 	contextOrientation uint8      // context of children (block or inline)
-	levelMode          uint8      // container lives in this mode (block or inline)
+	displayLevel       uint8      // container lives in this mode (block or inline)
 	styleNode          *tree.Node // the DOM node this Container refers to
 	styleInterf        style.StyleInterf
 }
@@ -32,7 +34,7 @@ type Container struct {
 func newContainer(orientation uint8, level uint8) *Container {
 	c := &Container{
 		contextOrientation: orientation,
-		levelMode:          level,
+		displayLevel:       level,
 	}
 	c.Payload = c // always points to itself
 	return c
@@ -76,9 +78,9 @@ func (c *Container) String() string {
 	if c.styleNode != nil {
 		n = c.styleInterf(c.styleNode).HtmlNode().Data
 	}
-	b := "hbox"
+	b := "inline-box"
 	if c.contextOrientation == BlockMode {
-		b = "vbox"
+		b = "block-box"
 	}
 	return fmt.Sprintf("\\%s<%s>", b, n)
 }
@@ -93,8 +95,8 @@ func (c *Container) Add(child *Container) *Container {
 	if child == nil {
 		return c
 	}
-	if requiresAnonBox(c.contextOrientation, child.levelMode) {
-		anon := newContainer(child.levelMode, c.contextOrientation)
+	if requiresAnonBox(c.contextOrientation, child.displayLevel) {
+		anon := newContainer(child.displayLevel, c.contextOrientation)
 		anon.AddChild(&child.Node)
 		c.AddChild(&anon.Node)
 		return c
@@ -110,7 +112,7 @@ func requiresAnonBox(context uint8, level uint8) bool {
 
 func wrapInAnonymousBox(c *Container) *Container {
 	mode := BlockMode
-	if c.levelMode == BlockMode {
+	if c.displayLevel == BlockMode {
 		mode = InlineMode
 	}
 	anon := newContainer(mode, c.contextOrientation)
@@ -131,7 +133,7 @@ func boxForNode(sn *tree.Node, toStyler style.StyleInterf) *Container {
 	} else {
 		c = newInlineBox(sn, toStyler)
 	}
-	c.levelMode = getLevelModeForStyledNode(sn, toStyler)
+	c.displayLevel, _ = getDisplayLevelForStyledNode(sn, toStyler)
 	return c
 }
 
@@ -140,7 +142,7 @@ func boxForNode(sn *tree.Node, toStyler style.StyleInterf) *Container {
 // GetFormattingContextForStyledNode gets the formatting context for a
 // container resulting from a
 // styled node. The context denotes the orientation in which a box's content
-// is layed out. It may be either HBOX, VBOX or NONE.
+// is layed out. It may be either InlineMode, BlockMode or NoMode.
 func GetFormattingContextForStyledNode(sn *tree.Node, toStyler style.StyleInterf) uint8 {
 	if sn == nil {
 		return NoMode
@@ -152,14 +154,16 @@ func GetFormattingContextForStyledNode(sn *tree.Node, toStyler style.StyleInterf
 	}
 	htmlnode := styler.HtmlNode()
 	if htmlnode.Type != html.ElementNode {
-		T().Debugf("Have styled node for non-element ?!?")
+		T().Errorf("Have styled node for non-element ?!?")
 		return InlineMode
 	}
 	switch htmlnode.Data {
 	case "body", "div", "ul", "ol", "section":
 		return BlockMode
-	case "p", "span", "it", "h1", "h2", "h3", "h4", "h5", "h6",
-		"h7", "b", "i", "strong":
+	//case "p", "span", "it", "h1", "h2", "h3", "h4", "h5", "h6",
+	//	"h7", "b", "i", "strong":
+	//	return InlineMode
+	default:
 		return InlineMode
 	}
 	tracing.EngineTracer.Infof("unknown HTML element %s will stack children vertically",
@@ -167,26 +171,26 @@ func GetFormattingContextForStyledNode(sn *tree.Node, toStyler style.StyleInterf
 	return BlockMode
 }
 
-func getLevelModeForStyledNode(sn *tree.Node, toStyler style.StyleInterf) uint8 {
+func getDisplayLevelForStyledNode(sn *tree.Node, toStyler style.StyleInterf) (uint8, string) {
 	if sn == nil {
-		return NoMode
+		return NoMode, ""
 	}
 	styler := toStyler(sn)
 	pmap := styler.ComputedStyles()
 	dispProp, isSet := style.GetLocalProperty(pmap, "display")
 	if !isSet {
 		if styler.HtmlNode().Type != html.ElementNode {
-			T().Debugf("Have styled node for non-element ?!?")
-			return InlineMode
+			T().Errorf("Have styled node for non-element ?!?")
+			return InlineMode, ""
 		}
 	}
 	dispProp = style.DisplayPropertyForHtmlNode(styler.HtmlNode())
-	if dispProp == "none" {
-		return NoMode
-	} else if dispProp == "block" {
-		return BlockMode
-	} else if dispProp == "inline" {
-		return InlineMode
+	if strings.HasPrefix(dispProp.String(), "none") {
+		return DisplayNone, dispProp.String()
+	} else if strings.HasPrefix(dispProp.String(), "block") {
+		return BlockMode, dispProp.String()
+	} else if strings.HasPrefix(dispProp.String(), "inline") {
+		return InlineMode, dispProp.String() // inline or inline-block
 	}
-	return NoMode
+	return NoMode, ""
 }
