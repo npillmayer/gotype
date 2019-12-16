@@ -39,7 +39,7 @@ func newContainer(orientation uint8, displayLevel uint8) *Container {
 	return c
 }
 
-// isPrincipal is a predicate wether this is a principal box.
+// isPrincipal is a predicate if this is a principal box.
 //
 // Some HTML elements create a mini-hierachy of boxes for rendering. The outermost box
 // is called the principal box. It will always refer to the styled node.
@@ -79,6 +79,9 @@ func Node(n *tree.Node) *Container {
 }
 
 func (c *Container) String() string {
+	if c == nil {
+		return "<empty>"
+	}
 	n := "_"
 	if c.styleNode != nil {
 		n = c.styleInterf(c.styleNode).HtmlNode().Data
@@ -115,11 +118,14 @@ func getDisplayLevelForStyledNode(sn *tree.Node, toStyler style.StyleInterf) (ui
 		return NoMode, ""
 	}
 	styler := toStyler(sn)
+	T().Infof("display(%s/%s) = ?", styler.HtmlNode().Data, nodeTypeString(styler.HtmlNode().Type))
 	pmap := styler.ComputedStyles()
 	dispProp, isSet := style.GetLocalProperty(pmap, "display")
 	if !isSet {
-		if styler.HtmlNode().Type != html.ElementNode {
+		if styler.HtmlNode().Type != html.ElementNode &&
+			styler.HtmlNode().Type != html.DocumentNode {
 			T().Errorf("Have styled node for non-element ?!?")
+			T().Errorf("type of node = %s", nodeTypeString(styler.HtmlNode().Type))
 			return InlineMode, ""
 		}
 	}
@@ -132,4 +138,22 @@ func getDisplayLevelForStyledNode(sn *tree.Node, toStyler style.StyleInterf) (ui
 		return InlineMode, dispProp.String() // inline or inline-block
 	}
 	return NoMode, ""
+}
+
+func nodeTypeString(nt html.NodeType) string {
+	switch nt {
+	case html.ErrorNode:
+		return "error-node"
+	case html.TextNode:
+		return "text-node"
+	case html.CommentNode:
+		return "comment-node"
+	case html.DocumentNode:
+		return "doc-node"
+	case html.ElementNode:
+		return "element-node"
+	case html.DoctypeNode:
+		return "doctype-node"
+	}
+	return "?-node"
 }

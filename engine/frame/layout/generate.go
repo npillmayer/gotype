@@ -28,20 +28,24 @@ func (l *Layouter) buildBoxTree() (*Container, error) {
 	}
 	styles := tree.NewWalker(l.styleroot)
 	T().Debugf("Creating box tree")
-	styleToBox := newAssoc()
-	createBoxForEach := prepareBoxCreator(l.styleCreator.ToStyler, styleToBox)
-	//reorder := prepareReorderer() // TODO
-	future := styles.TopDown(createBoxForEach).Promise()
-	//future := styles.TopDown(createBoxForEach).Filter(reorder).Promise()
-	_, err := future()
+	styler := l.styleCreator.ToStyler
+	sn := styler(l.styleroot)
+	T().Infof("ROOT node of style tree is %s", nodeTypeString(sn.HtmlNode().Type))
+	style2BoxDict := newAssoc()
+	createBoxForEach := prepareBoxCreator(l.styleCreator.ToStyler, style2BoxDict)
+	future := styles.TopDown(createBoxForEach).Promise() // start asynchronous traversal
+	_, err := future()                                   // wait for top-down traversal to finish
 	if err != nil {
 		return nil, err
 	}
 	var ok bool
-	l.boxroot, ok = styleToBox.Get(l.styleroot)
+	l.boxroot, ok = style2BoxDict.Get(l.styleroot)
 	if !ok {
 		T().Errorf("No box created for root style node")
 		l.boxroot = nil
+	}
+	if l.boxroot != nil {
+		T().Infof("ROOT BOX done!!")
 	}
 	return l.boxroot, nil
 }
@@ -58,11 +62,13 @@ func prepareBoxCreator(toStyler style.StyleInterf, styleToBox *styleToBoxAssoc) 
 }
 
 func makeBoxNode(sn stylednode, styleToBox *styleToBoxAssoc) (*tree.Node, error) {
+	T().Infof("making box for %s", nodeTypeString(sn.toStyler(sn.treenode).HtmlNode().Type))
 	box := boxForNode(sn.treenode, sn.toStyler)
 	if box == nil { // legit, e.g. for "display:none"
 		return nil, nil // will not descend to children of sn
 	}
-	styleToBox.Put(sn.treenode, box) // associate the styled tree not to this box
+	T().Infof("assoc of %s", nodeTypeString(sn.toStyler(sn.treenode).HtmlNode().Type))
+	styleToBox.Put(sn.treenode, box) // associate the styled tree node to this box
 	if parent := sn.treenode.Parent(); parent != nil {
 		if parentbox, ok := styleToBox.Get(sn.treenode); ok {
 			parentbox.Add(box)
@@ -137,20 +143,27 @@ func GetFormattingContextForStyledNode(sn *tree.Node, toStyler style.StyleInterf
 		return DisplayNone
 	}
 	htmlnode := styler.HtmlNode()
-	if htmlnode.Type != html.ElementNode {
-		T().Errorf("Have styled node for non-element ?!?")
-		return InlineMode
-	}
-	switch htmlnode.Data {
-	case "body", "div", "ul", "ol", "section":
+	switch htmlnode.Type {
+	case html.ElementNode:
+		switch htmlnode.Data {
+		case "html", "body", "div", "ul", "ol", "section":
+			return BlockMode
+		//case "p", "span", "it", "h1", "h2", "h3", "h4", "h5", "h6",
+		//	"h7", "b", "i", "strong":
+		//	return InlineMode
+		default:
+			return InlineMode
+		}
+	case html.DocumentNode:
 		return BlockMode
-	//case "p", "span", "it", "h1", "h2", "h3", "h4", "h5", "h6",
-	//	"h7", "b", "i", "strong":
-	//	return InlineMode
-	default:
+	case html.TextNode:
 		return InlineMode
+	default:
+		T().Errorf("Have styled node for non-element ?!?")
+		T().Errorf("type of node = %s", nodeTypeString(htmlnode.Type))
+		T().Errorf("data of node = %s", htmlnode.Data)
+		tracing.EngineTracer.Infof("unknown HTML element %s will stack children vertically",
+			htmlnode.Data)
+		return BlockMode
 	}
-	tracing.EngineTracer.Infof("unknown HTML element %s will stack children vertically",
-		htmlnode.Data)
-	return BlockMode
 }

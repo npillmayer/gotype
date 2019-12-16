@@ -46,13 +46,16 @@ func NewLayouter(styles *tree.Node, creator style.Creator) *Layouter {
 // of a styled tree.
 func (l *Layouter) Layout(viewport *dimen.Rect) *Container {
 	// First create the tree without calculating the dimensions
+	boxtree, err := l.buildBoxTree()
+	if err != nil {
+		T().Errorf("Error building box tree")
+	}
 	/* TODO
-	layoutTree := buildLayoutTree(styledTree)
-	*/
+	 */
 	// Next calculate position and dimensions for every box
 	/* TODO
 	layoutBoxes(layoutTree, viewport)
 	*/
 	//renderTree := layoutBoxes(layoutTree, viewport)
-	return nil
+	return boxtree
 }
