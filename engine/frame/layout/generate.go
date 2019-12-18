@@ -5,6 +5,8 @@ package layout
 // - which context the element should span for its children
 
 import (
+	"fmt"
+
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/tree"
@@ -70,8 +72,19 @@ func makeBoxNode(sn stylednode, styleToBox *styleToBoxAssoc) (*tree.Node, error)
 	T().Infof("assoc of %s", nodeTypeString(sn.toStyler(sn.treenode).HtmlNode().Type))
 	styleToBox.Put(sn.treenode, box) // associate the styled tree node to this box
 	if parent := sn.treenode.Parent(); parent != nil {
-		if parentbox, ok := styleToBox.Get(sn.treenode); ok {
-			parentbox.Add(box)
+		fmt.Printf("parent is %s\n", parent)
+		p, found := styleToBox.Get(parent)
+		if found {
+			fmt.Println("------------------>")
+			fmt.Printf("adding new node to parent %s\n", p)
+			if parentbox, ok := styleToBox.Get(parent); ok {
+				parentbox.Add(box)
+			}
+			fmt.Printf("parent now has %d children\n", p.ChildCount())
+			ch, _ := p.Child(0)
+			c := Node(ch)
+			fmt.Printf("1st child is %s\n", c)
+			fmt.Println("------------------<")
 		}
 	}
 	return &box.Node, nil
@@ -104,23 +117,23 @@ func boxForNode(sn *tree.Node, toStyler style.StyleInterf) *Container {
 	}
 	var c *Container
 	if context == BlockMode {
-		c = newBlockBox(sn, toStyler)
+		c = newBlockBox(sn)
 	} else {
-		c = newInlineBox(sn, toStyler)
+		c = newInlineBox(sn)
 	}
 	c.displayLevel, _ = getDisplayLevelForStyledNode(sn, toStyler)
-	possiblyCreateMiniHierarchy(c)
+	possiblyCreateMiniHierarchy(c, toStyler)
 	return c
 }
 
-func possiblyCreateMiniHierarchy(c *Container) {
-	htmlnode := c.styleInterf(c.styleNode).HtmlNode()
+func possiblyCreateMiniHierarchy(c *Container, toStyler style.StyleInterf) {
+	htmlnode := toStyler(c.StyleNode).HtmlNode()
 	//propertyMap := styler.ComputedStyles()
 	switch htmlnode.Data {
 	case "li":
-		markertype, _ := style.GetCascadedProperty(c.styleNode, "list-style-type", c.styleInterf)
+		markertype, _ := style.GetCascadedProperty(c.StyleNode, "list-style-type", toStyler)
 		if markertype != "none" {
-			markerbox := newInlineBox(nil, nil)
+			markerbox := newInlineBox(nil)
 			// TODO: fill box with correct marker symbol
 			c.Add(markerbox)
 		}

@@ -21,12 +21,11 @@ const (
 // Container is a (CSS-)styled box which may contain other boxes and/or
 // containers.
 type Container struct {
-	tree.Node                            // a container is a node within the layout tree
-	Box                box.StyledBox     // styled box wich is layed out
-	contextOrientation uint8             // context of children (block or inline)
-	displayLevel       uint8             // container lives in this mode (block or inline)
-	styleNode          *tree.Node        // the DOM node this Container refers to
-	styleInterf        style.StyleInterf // adapter to styled tree type
+	tree.Node                        // a container is a node within the layout tree
+	Box                box.StyledBox // styled box wich is layed out
+	contextOrientation uint8         // context of children (block or inline)
+	displayLevel       uint8         // container lives in this mode (block or inline)
+	StyleNode          *tree.Node    // the DOM node this Container refers to
 }
 
 // newContainer creates either a block-level container or an inline-level container
@@ -39,30 +38,32 @@ func newContainer(orientation uint8, displayLevel uint8) *Container {
 	return c
 }
 
-// isPrincipal is a predicate if this is a principal box.
+// IsPrincipal is a predicate if this is a principal box.
 //
 // Some HTML elements create a mini-hierachy of boxes for rendering. The outermost box
 // is called the principal box. It will always refer to the styled node.
 // An example would be an "li"-element: it will create two sub-boxes, one for the
 // list item marker and one for the item's text/content. Another example are anonymous
 // boxes, which will be generated for reconciling context/level-discrepancies.
-func (c *Container) isPrincipal() bool {
-	return (c.styleNode != nil)
+func (c *Container) IsPrincipal() bool {
+	return (c.StyleNode != nil)
+}
+
+func (c *Container) IsBlock() bool {
+	return c.contextOrientation == BlockMode
 }
 
 // newVBox creates a block-level container with block context.
-func newBlockBox(sn *tree.Node, styleInterf style.StyleInterf) *Container {
+func newBlockBox(sn *tree.Node) *Container {
 	c := newContainer(BlockMode, BlockMode)
-	c.styleNode = sn
-	c.styleInterf = styleInterf
+	c.StyleNode = sn
 	return c
 }
 
 // newHBox creates an inline-level container with inline context.
-func newInlineBox(sn *tree.Node, styleInterf style.StyleInterf) *Container {
+func newInlineBox(sn *tree.Node) *Container {
 	c := newContainer(InlineMode, InlineMode)
-	c.styleNode = sn
-	c.styleInterf = styleInterf
+	c.StyleNode = sn
 	return c
 }
 
@@ -83,9 +84,6 @@ func (c *Container) String() string {
 		return "<empty>"
 	}
 	n := "_"
-	if c.styleNode != nil {
-		n = c.styleInterf(c.styleNode).HtmlNode().Data
-	}
 	b := "inline-box"
 	if c.contextOrientation == BlockMode {
 		b = "block-box"

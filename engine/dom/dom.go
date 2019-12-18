@@ -13,6 +13,9 @@ import (
 //
 // Material:
 //
+// DOM:
+// https://www.data2type.de/xml-xslt-xslfo/xml/xml-in-a-nutshell/document-object-model/interface-node/
+//
 // github.com/andrewstuart/goq
 // Package goq was built to allow users to declaratively unmarshal HTML into go
 // structs using struct tags composed of css selectors.
@@ -141,7 +144,7 @@ func (dn domnode) ChildrenIterator() DomNodeChildrenIterator {
 			return newTextNode(iteratable, old) // return artificial DOM node
 		}
 		hnode = hnode.NextSibling
-		return nil // ignore other types of nodes
+		return nil // ignore other types of nodes // TODO bug
 	}
 }
 

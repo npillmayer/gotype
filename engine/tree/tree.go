@@ -425,7 +425,7 @@ func setAttribute(node *Node, isBuffered bool, udata userdata, push func(*Node),
 	return nil
 }
 
-// Filter calls a client provided function on each node of the selection.
+// Filter calls a client-provided function on each node of the selection.
 // The user function should return the input node if it is accepted and
 // nil otherwise.
 //
@@ -480,7 +480,7 @@ func (w *Walker) TopDown(action Action) *Walker {
 		err := w.appendFilterForTask(topDown, action, 5) // need a helper queue
 		if err != nil {
 			T().Errorf(err.Error())
-			panic(err)
+			panic(err) // TODO for debugging purposes until more mature
 		}
 	}
 	return w

@@ -18,5 +18,8 @@ func (m *styleToBoxAssoc) Put(sn *tree.Node, c *Container) {
 
 func (m *styleToBoxAssoc) Get(sn *tree.Node) (*Container, bool) {
 	c, ok := (*sync.Map)(m).Load(sn)
+	if !ok {
+		return nil, false
+	}
 	return c.(*Container), ok
 }

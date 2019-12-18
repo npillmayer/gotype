@@ -9,7 +9,6 @@ import (
 
 	"github.com/andybalholm/cascadia"
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
@@ -58,7 +57,7 @@ func T() tracing.Trace {
 
 // CSSOM is the "CSS Object Model", similar to the DOM for HTML.
 // Our CSSOM consists of a set of stylesheets, each relevant for a sub-tree
-// of the DOM. This sub-tree is called the "scope" of the stylesheet.
+// of the HTML parse tree. This sub-tree is called the "scope" of the stylesheet.
 // Sub-trees are identified through the top node.
 //
 // Stylesheets are wrapped into an internal rules tree.
@@ -92,7 +91,7 @@ func NewCSSOM(additionalProperties []style.KeyValue) CSSOM {
 // stylesheet.
 //
 // Inline-styles will be handled on the fly, generating "mini-stylesheets"
-// while walking the DOM. For `<style>`-elements, clients have to extract
+// while walking the HTML parse tree. For `<style>`-elements, clients have to extract
 // the styles in advance and wrap them into stylesheets.
 //
 func (cssom CSSOM) AddStylesForScope(scope *html.Node, css StyleSheet, source PropertySource) error {
@@ -302,22 +301,21 @@ func (rt *rulesTreeType) matchRuleForHtmlNode(h *html.Node, rule Rule) bool {
 	if selectorString == "" { // style-attribute local for this HTML node
 		//matchingRules = append(matchingRules, rule)
 		return true
-	} else { // try to match selector for this rule against HTML node
-		var sel cascadia.Selector
-		found := false
-		if sel, found = rt.selectors[selectorString]; !found {
-			var err error
-			sel, err = cascadia.Compile(selectorString)
-			if err != nil {
-				T().Errorf("CSS selector seems not to work: %s", selectorString)
-				return false
-			}
-			rt.selectors[selectorString] = sel
+	} // else try to match selector for this rule against HTML node
+	var sel cascadia.Selector
+	found := false
+	if sel, found = rt.selectors[selectorString]; !found {
+		var err error
+		sel, err = cascadia.Compile(selectorString)
+		if err != nil {
+			T().Errorf("CSS selector seems not to work: %s", selectorString)
+			return false
 		}
-		if sel.Match(h) {
-			//list.matchingRules = append(list.matchingRules, rule)
-			return true
-		}
+		rt.selectors[selectorString] = sel
+	}
+	if sel.Match(h) {
+		//list.matchingRules = append(list.matchingRules, rule)
+		return true
 	}
 	return false
 }
@@ -370,7 +368,7 @@ type propertyPlusSpecifityType struct {
 	spec          uint32         // specifity value to calculate; higher is more
 }
 
-// CalcSpecifity calculates an appromiation to the true W3C specifity.
+// CalcSpecifity calculates an approximation to the true W3C specifity.
 // https://www.smashingmagazine.com/2007/07/css-specificity-things-you-should-know/
 //
 // no is a sequence number for rules, ensuring that later rules override
@@ -448,7 +446,8 @@ func (matches *matchesList) createStyleGroups(parent *tree.Node,
 
 // --- Styled Node Tree -------------------------------------------------
 
-//func setupStyledNodeTree(domRoot *html.Node, defaults *style.PropertyMap, builder StyledTreeBuilder) StyledNode {
+// setupStyledNodeTree sets up the root nodes of the style tree.
+// It creates a "root" node and a node for the HTML-document-node as its child.
 func setupStyledNodeTree(domRoot *html.Node, defaults *style.PropertyMap,
 	creator style.Creator) *tree.Node {
 	//
@@ -491,14 +490,14 @@ func findAncestorWithPropertyGroup(sn *tree.Node, group string,
 	return last, pg
 }
 
-// Style() gets things rolling. It styles a DOM, referred to by the root
+// Style gets things rolling. It styles an HTML parse tree, referred to by the root
 // node, and returns a tree of styled nodes.
 // For an explanation what's going on here, refer to
 // https://hacks.mozilla.org/2017/08/inside-a-super-fast-css-engine-quantum-css-aka-stylo/
 // and
 // https://limpet.net/mbrubeck/2014/08/23/toy-layout-engine-4-style.html
 //
-// If either dom or factory are nil, no tree is returned (but an error).
+// If either dom or creator are nil, no tree is returned (but an error).
 func (cssom CSSOM) Style(dom *html.Node, creator style.Creator) (*tree.Node, error) {
 	if dom == nil {
 		return nil, errors.New("Nothing to style: empty document")
@@ -526,7 +525,7 @@ func (cssom CSSOM) Style(dom *html.Node, creator style.Creator) (*tree.Node, err
 	// is probably acceptable: In the worst case a property group will
 	// not point to a possible group of its parent, but rather to an
 	// ancestor (and the parent may point to the same ancestor). This is
-	// a loss of space efficiency, but we may gain performance by not
+	// a loss of space efficiency, but we may gain performance by
 	// overlapping the operations.
 	T().Debugf("--- Now styling newly created nodes --------")
 	walker = tree.NewWalker(styledRootNode)
@@ -546,7 +545,8 @@ func (cssom CSSOM) Style(dom *html.Node, creator style.Creator) (*tree.Node, err
 func createStyledChildren(parent *tree.Node, rulesTree *rulesTreeType,
 	creator style.Creator) (*tree.Node, error) {
 	//
-	domnode := dom.NewRONode(parent, creator.ToStyler) // interface RODomNode
+	domnode := creator.ToStyler(parent)
+	//domnode := dom.NewRONode(parent, creator.ToStyler) // interface RODomNode
 	T().Debugf("Input node = %v, creating styled children", domnode)
 	h := domnode.HtmlNode()
 	if h.Type == html.ElementNode || h.Type == html.DocumentNode {
@@ -554,7 +554,8 @@ func createStyledChildren(parent *tree.Node, rulesTree *rulesTreeType,
 		for ch != nil {
 			if ch.DataAtom == atom.Style { // <style> element
 				T().Infof("<style> nodes have to be extracted in advance")
-			} else if isStylable(ch.DataAtom) {
+			} else if isInDom(ch.Type, ch.DataAtom) {
+				//} else if isStylable(ch.DataAtom) {
 				sn := creator.StyleForHtmlNode(ch)
 				parent.AddChild(sn) // sn will be sent to next pipeline stage
 				if styleAttr := getStyleAttribute(ch); styleAttr != nil {
@@ -569,6 +570,16 @@ func createStyledChildren(parent *tree.Node, rulesTree *rulesTreeType,
 		return nil, nil
 	}
 	return parent, nil
+}
+
+func isInDom(nt html.NodeType, a atom.Atom) bool {
+	if nt == html.ElementNode || nt == html.DocumentNode {
+		return true
+	}
+	if nt == html.TextNode {
+		return true
+	}
+	return false
 }
 
 func isStylable(a atom.Atom) bool {
@@ -594,21 +605,27 @@ func createStylesForNode(node *tree.Node, rulesTree *rulesTreeType, creator styl
 	splitters []CompoundPropertiesSplitter) (*tree.Node, error) {
 	//
 	styler := creator.ToStyler(node)
-	matchlist := rulesTree.FilterMatchesFor(styler.HtmlNode())
-	if matchlist != nil && len(matchlist.matchingRules) != 0 {
-		matchlist.SortProperties(splitters)
-		pmap := matchlist.createStyleGroups(node.Parent(), creator)
-		T().Debugf("Setting styles for node %v =\n%s", node, pmap)
-		creator.SetComputedStyles(node, pmap)
-	} else {
-		T().Debugf("Node %v matched no style rules", node)
+	h := styler.HtmlNode()
+	if h.Type == html.DocumentNode || h.Type == html.ElementNode {
+		if isStylable(h.DataAtom) {
+			matchlist := rulesTree.FilterMatchesFor(styler.HtmlNode())
+			if matchlist != nil && len(matchlist.matchingRules) != 0 {
+				matchlist.SortProperties(splitters)
+				pmap := matchlist.createStyleGroups(node.Parent(), creator)
+				T().Debugf("Setting styles for node %v =\n%s", node, pmap)
+				creator.SetComputedStyles(node, pmap)
+			} else {
+				T().Debugf("Node %v matched no style rules", node)
+			}
+		}
+		return node, nil
 	}
-	return node, nil
+	return nil, nil
 }
 
 // --- Helpers ----------------------------------------------------------
 
-var errNoSuchCompoundProperty error = errors.New("No such compound property")
+var errNoSuchCompoundProperty = errors.New("No such compound property")
 
 // Try to split up a property (which may or may not be a compound
 // property) using a set of splitter functions.

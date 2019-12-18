@@ -1,7 +1,6 @@
 package dom_test
 
 import (
-	"io/ioutil"
 	"strings"
 	"testing"
 
@@ -11,7 +10,6 @@ import (
 	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/dom/cssom"
 	"github.com/npillmayer/gotype/engine/dom/cssom/douceuradapter"
-	"github.com/npillmayer/gotype/engine/dom/domdbg"
 	"github.com/npillmayer/gotype/engine/dom/styledtree"
 	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
@@ -67,6 +65,7 @@ func prepareStyledTree(t *testing.T) *tree.Node {
 	return doc
 }
 
+/*
 func TestDom1(t *testing.T) {
 	tracing.EngineTracer.Debugf("===========================================")
 	sn := prepareStyledTree(t)
@@ -83,6 +82,19 @@ func TestDom2(t *testing.T) {
 	gvz, _ := ioutil.TempFile(".", "graphviz-*.dot")
 	defer gvz.Close()
 	domdbg.ToGraphViz(doc, gvz, nil)
+}
+*/
+
+func TestW3CDom1(t *testing.T) {
+	tracing.EngineTracer = gologadapter.New()
+	h, err := html.Parse(strings.NewReader(myhtml))
+	if err != nil {
+		T().Errorf("Cannot create test document")
+	}
+	dom.FromHTMLParseTree(h)
+	//gvz, _ := ioutil.TempFile(".", "w3c-*.dot")
+	//defer gvz.Close()
+	//domdbg.ToGraphViz(wdom, gvz, nil)
 }
 
 // --- Helpers ----------------------------------------------------------

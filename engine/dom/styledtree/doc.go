@@ -5,7 +5,7 @@ Overview
 
 This is an implementation of style.TreeNode and of cssom.StyledNode.
 Using a builder type, cssom.Style() will create a styled tree from an
-HTML DOM and a CSSOM. The resulting styled tree exposes interface
+HTML parse tree and a CSSOM. The resulting styled tree exposes interface
 style.TreeNode for every node and may be manipulated via an API.
 
 This is the default implementation used by the engine. However, for

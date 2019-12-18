@@ -63,7 +63,7 @@ type StyNode struct {
 	computedStyles *style.PropertyMap
 }
 
-// NewNodeForHtmlNode creates a new styled node linked to an HTML DOM node.
+// NewNodeForHtmlNode creates a new styled node linked to an HTML node.
 func NewNodeForHtmlNode(html *html.Node) *tree.Node {
 	sn := &StyNode{}
 	sn.Payload = sn // Payload will always reference the node itself

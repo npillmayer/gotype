@@ -37,8 +37,6 @@ in implementing a styling engine, except the great work of
 https://godoc.org/github.com/andybalholm/cascadia.
 Therefore we will have to compromise
 on many feature in order to complete this in a realistic time frame.
-For a reminder of why that is, refer to
-https://www.youtube.com/watch?v=S68fcV09nGQ .
 
 This package relies on just one non-standard external library: cascadia.
 CSS handling is de-coupled by introducing appropriate interfaces
