@@ -8,14 +8,16 @@ import (
 	"golang.org/x/net/html"
 )
 
-type DOMNode interface {
+// Node represents W3C type Node
+type Node interface {
 	hasAttributes() bool
 	hasChildNodes() bool
 }
 
-type DOMNodeList interface {
+// NodeList represents W3C type NodeList
+type NodeList interface {
 	Length() int
-	Item(int) DOMNode
+	Item(int) Node
 }
 
 // --------------------------------------------------------------------------------
@@ -25,7 +27,7 @@ type w3cNode struct {
 }
 
 // NodeAsTreeNode returns the underlying tree.Node from a DOM node.
-func NodeAsTreeNode(domnode DOMNode) *tree.Node {
+func NodeAsTreeNode(domnode Node) *tree.Node {
 	w, ok := domnode.(*w3cNode)
 	if !ok {
 		T().Errorf("DOM node has not been created from w3cdom.go")
@@ -44,12 +46,8 @@ func (w *w3cNode) hasChildNodes() bool {
 
 // --------------------------------------------------------------------------------
 
-// W3CDOM is a data structure for a W3C Document Object Model.
-type W3CDOM struct {
-	styledTree *styledtree.StyNode
-}
-
-func FromHTMLParseTree(h *html.Node) *W3CDOM {
+// FromHTMLParseTree returns a
+func FromHTMLParseTree(h *html.Node) Node {
 	//h, errhtml := html.Parse(strings.NewReader(myhtml))
 	styles := douceuradapter.ExtractStyleElements(h)
 	T().Debugf("Extracted %d <style> elements", len(styles))
@@ -66,7 +64,6 @@ func FromHTMLParseTree(h *html.Node) *W3CDOM {
 	if err != nil {
 		T().Errorf("Cannot style test document: %s", err.Error())
 	}
-	dom := &W3CDOM{}
-	dom.styledTree = styledtree.Node(stytree)
+	dom := &w3cNode{*styledtree.Node(stytree)}
 	return dom
 }

@@ -79,7 +79,7 @@ func Node(n *tree.Node) *StyNode {
 	return n.Payload.(*StyNode)
 }
 
-//
+// Creator returns a style-creator for use in CSSOM
 func Creator() style.Creator {
 	return creator{}
 }

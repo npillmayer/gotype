@@ -3,7 +3,6 @@ package dom
 import (
 	"strings"
 
-	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
@@ -42,11 +41,6 @@ import (
 //
 // ----------------------------------------------------------------------
 
-// We are tracing to the EngineTracer
-func T() tracing.Trace {
-	return tracing.EngineTracer
-}
-
 // RODomNode is an interface type which represents nodes of a DOM tree
 // in read-only mode, i.e. the node may not be modified by the client.
 type RODomNode interface {
@@ -60,7 +54,7 @@ type RODomNode interface {
 	//TreeNode() *tree.Node
 }
 
-// A DomNodeChildrenIterator iterates over the children nodes of a DOM node.
+// DomNodeChildrenIterator iterates over the children nodes of a DOM node.
 // Clients should call it until it returns nil.
 type DomNodeChildrenIterator func() RODomNode
 
