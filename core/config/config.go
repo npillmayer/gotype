@@ -61,7 +61,7 @@ import (
 
 // IsInteractive is a predicate:
 // Are we running in interactive mode?
-var IsInteractive bool = true
+var IsInteractive = true
 
 // Configuration is an interface to be implemented by every configuration
 // adapter.
