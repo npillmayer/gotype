@@ -5,4 +5,5 @@
 *.svg
 *.dot
 *.pdf
+*.code-workspace
 generator
