@@ -27,7 +27,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -41,9 +41,7 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-*/
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 package tracing
 
 import (
@@ -54,9 +52,11 @@ import (
 	"github.com/davecgh/go-spew/spew"
 )
 
+// TraceLevel is a type for leveled tracing.
 // All concrete Tracer implementations will support trace-levels.
 type TraceLevel uint8
 
+// We support three trace levels.
 const (
 	LevelError TraceLevel = iota
 	LevelInfo
@@ -77,7 +77,7 @@ func (tl TraceLevel) String() string {
 
 // TraceLevelFromString will find a trace level from a string.
 // It will recognize "Debug", "Info" and "Error". Default is
-// LevelError.
+// LevelDebug.
 func TraceLevelFromString(sl string) TraceLevel {
 	switch sl {
 	case "Debug":
@@ -111,6 +111,7 @@ type Trace interface {
 	SetOutput(io.Writer) // route tracing output to a writer
 }
 
+// Tracefile is the gloabl file where tracing goes to.
 // If tracing goes to a file (globally), variable Tracefile should
 // point to it. It need not be set if tracing goes to console.
 var Tracefile *os.File
@@ -126,19 +127,36 @@ var Tracefile *os.File
 // This approach poses a little burden on (selective) clients, but is
 // useful for de-coupling the various packages and modules from the
 // tracing/logging mechanism.
+//
+// All tracers are set up to be no-ops, initially.
 var (
-	EquationsTracer   Trace
-	InterpreterTracer Trace
-	SyntaxTracer      Trace
-	CommandTracer     Trace
-	GraphicsTracer    Trace
-	ScriptingTracer   Trace
-	CoreTracer        Trace
-	EngineTracer      Trace
+	EquationsTracer   Trace = NoOpTrace
+	InterpreterTracer Trace = NoOpTrace
+	SyntaxTracer      Trace = NoOpTrace
+	CommandTracer     Trace = NoOpTrace
+	GraphicsTracer    Trace = NoOpTrace
+	ScriptingTracer   Trace = NoOpTrace
+	CoreTracer        Trace = NoOpTrace
+	EngineTracer      Trace = NoOpTrace
 )
 
-// Adapter is a factory function to create an virgin Trace instance.
+// Adapter is a factory function to create a virgin Trace instance.
 type Adapter func() Trace
+
+// NoOpTrace is a void Trace. Initially, all tracers will be set up to be no-ops.
+// Clients will have to configure concrete tracing backends, usually by calling
+// application configuration with a tracing adapter.
+var NoOpTrace Trace = nooptrace{}
+
+type nooptrace struct{}
+
+func (nt nooptrace) Debugf(string, ...interface{}) {}
+func (nt nooptrace) Infof(string, ...interface{})  {}
+func (nt nooptrace) Errorf(string, ...interface{}) {}
+func (nt nooptrace) SetTraceLevel(TraceLevel)      {}
+func (nt nooptrace) GetTraceLevel() TraceLevel     { return LevelError }
+func (nt nooptrace) SetOutput(io.Writer)           {}
+func (nt nooptrace) P(string, interface{}) Trace   { return nt }
 
 // CreateTracers creates all global tracers, given a function to
 // create a concrete Trace instance.
@@ -159,7 +177,7 @@ func CreateTracers(newTrace Adapter) (err error) {
 	return
 }
 
-// MuteTracing sets all global tracers to LevelError.
+// Mute sets all global tracers to LevelError.
 func Mute() {
 	InterpreterTracer.SetTraceLevel(LevelError)
 	CommandTracer.SetTraceLevel(LevelError)
@@ -169,11 +187,6 @@ func Mute() {
 	ScriptingTracer.SetTraceLevel(LevelError)
 	CoreTracer.SetTraceLevel(LevelError)
 	EngineTracer.SetTraceLevel(LevelError)
-}
-
-// Helper type for dumping of objects.  Created by calls to With().
-type dumper struct {
-	tracer *Trace
 }
 
 // With prepares to dump a data structure to a Trace.
@@ -187,6 +200,11 @@ type dumper struct {
 // Dump() is in level Debug.
 func With(t Trace) dumper {
 	return dumper{&t}
+}
+
+// Helper type for dumping of objects.  Created by calls to With().
+type dumper struct {
+	tracer *Trace
 }
 
 // Dump dumps an object using a tracer, in level Debug.
