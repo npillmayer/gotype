@@ -35,7 +35,8 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software :w
+nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -49,9 +50,7 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-*/
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 package config
 
 import (
@@ -61,10 +60,9 @@ import (
 	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 )
 
+// IsInteractive is a predicate:
 // Are we running in interactive mode?
 var IsInteractive bool = true
-
-var globalConf Configuration
 
 // Configuration is an interface to be implemented by every configuration
 // adapter.
@@ -75,6 +73,17 @@ type Configuration interface {
 	GetInt(key string) int
 	GetBool(key string) bool
 }
+
+// The global configuration is initially set up to be a no-op.
+var globalConf Configuration = noconfig{}
+
+type noconfig struct{}
+
+func (nc noconfig) Init()                       {}
+func (nc noconfig) IsSet(key string) bool       { return false }
+func (nc noconfig) GetString(key string) string { return "" }
+func (nc noconfig) GetInt(key string) int       { return 0 }
+func (nc noconfig) GetBool(key string) bool     { return false }
 
 // Initialize is the top level function for setting up the
 // application configuration.
@@ -113,7 +122,9 @@ func AddTraceAdapter(key string, adapter tracing.Adapter) {
 }
 
 // Get the concrete tracing implementation adapter from the appcation
-// configuration.
+// configuration. The configuration key name is "tracing".
+//
+// The value must be one of the known tracing adapter keys.
 // Default is an adapter for the Go standard log package.
 func getAdapterFromConfiguration() tracing.Adapter {
 	adapterPackage := GetString("tracing")
@@ -182,12 +193,12 @@ func GetString(key string) string {
 	return globalConf.GetString(key)
 }
 
-// GetString returns a global configuration property as an integer.
+// GetInt returns a global configuration property as an integer.
 func GetInt(key string) int {
 	return globalConf.GetInt(key)
 }
 
-// GetString returns a global configuration property as a boolean value.
+// GetBool returns a global configuration property as a boolean value.
 func GetBool(key string) bool {
 	return globalConf.GetBool(key)
 }
