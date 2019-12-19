@@ -1,12 +1,13 @@
 /*
-Package gologadapter implements tracing with the default Go logger.
+Package gotestingadapter implements tracing with the Go testing  logger.
 
 Tracing/logging is a cross cutting concern. Relying on a specific package
 for such a low-level task will create too tight a coupling—more abstract
 classes/packages are infected with log classes/packages.
 
 Sub-packages of tracing implement concrete tracers. Package
-gologadapter uses the default Go logging mechanism.
+gotestingadapter uses the Go testing logging mechanism, i.e. "t.logf(...)",
+with t of type *testing.T.
 
 BSD License
 
@@ -40,31 +41,32 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
-package gologadapter
+package gotestingadapter
 
 import (
 	"fmt"
 	"io"
-	"log"
-	"os"
+	"testing"
 
 	"github.com/npillmayer/gotype/core/config/tracing"
 )
 
 // Tracer is our adapter implementation which implements interface
-// tracing.Trace, using a Go standard logger.
+// tracing.Trace, using a Go testing logger.
 type Tracer struct {
-	log   *log.Logger
+	t     *testing.T
 	p     string
 	level tracing.TraceLevel
 }
 
 var logLevelPrefix = []string{"ERROR ", "INFO  ", "DEBUG "}
 
-// New creates a new Tracer instance based on a Go logger.
+//var allTracers =
+
+// New creates a new Tracer instance based on a testing logger.
 func New() tracing.Trace {
 	return &Tracer{
-		log:   log.New(os.Stderr, logLevelPrefix[0], log.Ltime),
+		t:     nil,
 		p:     "",
 		level: tracing.LevelError,
 	}
@@ -76,60 +78,66 @@ func GetAdapter() tracing.Adapter {
 	return New
 }
 
+//func SetTesting(t *testing.T) {
+//}
+
 // P is part of interface Trace
-func (t *Tracer) P(key string, val interface{}) tracing.Trace {
-	t.p = fmt.Sprintf("[%s=%v] ", key, val)
-	return t
+func (tr *Tracer) P(key string, val interface{}) tracing.Trace {
+	tr.p = fmt.Sprintf("[%s=%v] ", key, val)
+	return tr
 }
 
-// Interface Trace
-func (t *Tracer) output(l tracing.TraceLevel, s string, args ...interface{}) {
-	t.log.SetPrefix(logLevelPrefix[int(l)])
-	if t.p != "" {
-		t.log.Println(fmt.Sprintf(t.p+s, args...))
-		t.p = ""
-	} else {
-		t.log.Printf(s, args...)
+func (tr *Tracer) output(l tracing.TraceLevel, s string, args ...interface{}) {
+	if tr.t != nil {
+		prefix := fmt.Sprintf("%s%s", logLevelPrefix[int(l)], tr.p)
+		tr.t.Logf(prefix+s, args...)
+		/*
+			t.log.SetPrefix(logLevelPrefix[int(l)])
+			if t.p != "" {
+				t.log.Println(fmt.Sprintf(t.p+s, args...))
+				t.p = ""
+			} else {
+				t.log.Printf(s, args...)
+			}
+		*/
+		tr.p = ""
 	}
 }
 
 // Debugf is part of interface Trace
-func (t *Tracer) Debugf(s string, args ...interface{}) {
-	if t.level < tracing.LevelDebug {
+func (tr *Tracer) Debugf(s string, args ...interface{}) {
+	if tr.level < tracing.LevelDebug {
 		return
 	}
-	t.output(tracing.LevelDebug, s, args...)
+	tr.output(tracing.LevelDebug, s, args...)
 }
 
 // Infof is part of interface Trace
-func (t *Tracer) Infof(s string, args ...interface{}) {
-	if t.level < tracing.LevelInfo {
+func (tr *Tracer) Infof(s string, args ...interface{}) {
+	if tr.level < tracing.LevelInfo {
 		return
 	}
-	t.output(tracing.LevelInfo, s, args...)
+	tr.output(tracing.LevelInfo, s, args...)
 }
 
 // Errorf is part of interface Trace
-func (t *Tracer) Errorf(s string, args ...interface{}) {
-	if t.level < tracing.LevelError {
+func (tr *Tracer) Errorf(s string, args ...interface{}) {
+	if tr.level < tracing.LevelError {
 		return
 	}
-	t.output(tracing.LevelError, s, args...)
+	tr.output(tracing.LevelError, s, args...)
 }
 
 // SetTraceLevel is part of interface Trace
-func (t *Tracer) SetTraceLevel(l tracing.TraceLevel) {
-	t.p = ""
-	t.level = l
-	t.log.SetPrefix(logLevelPrefix[int(l)])
+func (tr *Tracer) SetTraceLevel(l tracing.TraceLevel) {
+	tr.p = ""
+	tr.level = l
 }
 
 // GetTraceLevel is part of interface Trace
-func (t *Tracer) GetTraceLevel() tracing.TraceLevel {
-	return t.level
+func (tr *Tracer) GetTraceLevel() tracing.TraceLevel {
+	return tr.level
 }
 
-// SetOutput is part of interface Trace
-func (t *Tracer) SetOutput(writer io.Writer) {
-	t.log.SetOutput(writer)
-}
+// SetOutput is part of interface Trace. This implementation ignores it.
+func (tr *Tracer) SetOutput(writer io.Writer) {}
