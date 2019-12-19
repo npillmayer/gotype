@@ -12,7 +12,7 @@ logging output, to be used with any concrete tracing/logging class.
 
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -118,26 +118,19 @@ var Tracefile *os.File
 
 // This is the set of standard module tracers for our application.
 //
-// ATTENTION: These tracers will not be automatically initialized
-// without an application context. If clients use single modules of
-// gotype without creating the full application context, they will have
-// to create these tracers themselves. Clients may call CreateTracers(...)
-// to do so.
-//
+// All tracers are set up to be no-ops, initially.
 // This approach poses a little burden on (selective) clients, but is
 // useful for de-coupling the various packages and modules from the
 // tracing/logging mechanism.
-//
-// All tracers are set up to be no-ops, initially.
 var (
-	EquationsTracer   Trace = NoOpTrace
-	InterpreterTracer Trace = NoOpTrace
-	SyntaxTracer      Trace = NoOpTrace
-	CommandTracer     Trace = NoOpTrace
-	GraphicsTracer    Trace = NoOpTrace
-	ScriptingTracer   Trace = NoOpTrace
-	CoreTracer        Trace = NoOpTrace
-	EngineTracer      Trace = NoOpTrace
+	EquationsTracer   = NoOpTrace
+	InterpreterTracer = NoOpTrace
+	SyntaxTracer      = NoOpTrace
+	CommandTracer     = NoOpTrace
+	GraphicsTracer    = NoOpTrace
+	ScriptingTracer   = NoOpTrace
+	CoreTracer        = NoOpTrace
+	EngineTracer      = NoOpTrace
 )
 
 // Adapter is a factory function to create a virgin Trace instance.

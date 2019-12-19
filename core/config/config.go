@@ -20,7 +20,7 @@ of adapters for Go log and for logrus).
 
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -35,8 +35,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of this software :w
-nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -145,8 +144,9 @@ func ConfigureTracing(inputfilename string) {
 			file, err := os.Create("__gotype.log")
 			if err != nil {
 				tracing.CommandTracer.Errorf("cannot open tracefile, tracing to stderr")
+			} else {
+				tracing.Tracefile = file
 			}
-			tracing.Tracefile = file
 		}
 		if tracing.Tracefile != nil {
 			tracing.CommandTracer.SetOutput(tracing.Tracefile)
@@ -159,7 +159,6 @@ func ConfigureTracing(inputfilename string) {
 			tracing.EngineTracer.SetOutput(tracing.Tracefile)
 		}
 	}
-
 	tracing.InterpreterTracer.P("level", tracing.InterpreterTracer.GetTraceLevel()).Infof("Interpreter-Trace is alive")
 	tracing.CommandTracer.P("level", tracing.CommandTracer.GetTraceLevel()).Infof("Command-Trace is alive")
 	tracing.EquationsTracer.P("level", tracing.EquationsTracer.GetTraceLevel()).Infof("Equations-Trace is alive")

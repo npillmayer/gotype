@@ -9,9 +9,21 @@ Sub-packages of tracing implement concrete tracers. Package
 gotestingadapter uses the Go testing logging mechanism, i.e. "t.logf(...)",
 with t of type *testing.T.
 
+As we are logging to global tracers there is no way of configuring them
+specifically from single tests. That's not a good thing, as in general
+tests may be executed concurrently or in parallel. This would confuse the
+tracing.
+
+Attention
+
+Clients must not use the testingtracer in concurrent mode.
+Please set
+
+	go test -p 1
+
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -26,7 +38,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -66,7 +78,6 @@ var logLevelPrefix = []string{"ERROR ", "INFO  ", "DEBUG "}
 // New creates a new Tracer instance based on a testing logger.
 func New() tracing.Trace {
 	return &Tracer{
-		t:     nil,
 		p:     "",
 		level: tracing.LevelError,
 	}
@@ -78,8 +89,33 @@ func GetAdapter() tracing.Adapter {
 	return New
 }
 
-//func SetTesting(t *testing.T) {
-//}
+// As we are logging to global tracers there is no way of configuring them
+// specifically from single tests. That's not a good thing, as in general
+// tests may be executed concurrently or in parallel. This would confuse the
+// tracing.
+// Users have to be aware that the testingtracer may not be used concurrently.
+var globalTestingT *testing.T
+
+// RedirectTracing will be called by clients at the start of a test. This will
+// redirect all (global) tracers to use t.logf(...).
+//
+// It returns a teardown function which should be called at the end of a test.
+// The usual pattern will look like this:
+//
+//     func TestSomething(t *testing.T) {
+//          teardown := gotestingadapter.RedirectTracing(t)
+//          defer teardown()
+//          ...
+//      }
+//
+func RedirectTracing(t *testing.T) func() {
+	globalTestingT = t
+	return teardownTestingT
+}
+
+func teardownTestingT() {
+	globalTestingT = nil
+}
 
 // P is part of interface Trace
 func (tr *Tracer) P(key string, val interface{}) tracing.Trace {
@@ -88,18 +124,9 @@ func (tr *Tracer) P(key string, val interface{}) tracing.Trace {
 }
 
 func (tr *Tracer) output(l tracing.TraceLevel, s string, args ...interface{}) {
-	if tr.t != nil {
+	if globalTestingT != nil {
 		prefix := fmt.Sprintf("%s%s", logLevelPrefix[int(l)], tr.p)
-		tr.t.Logf(prefix+s, args...)
-		/*
-			t.log.SetPrefix(logLevelPrefix[int(l)])
-			if t.p != "" {
-				t.log.Println(fmt.Sprintf(t.p+s, args...))
-				t.p = ""
-			} else {
-				t.log.Printf(s, args...)
-			}
-		*/
+		globalTestingT.Logf(prefix+s, args...)
 		tr.p = ""
 	}
 }
