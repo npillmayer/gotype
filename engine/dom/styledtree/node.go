@@ -56,7 +56,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-// StyledNodes are the building blocks of the styled tree.
+// StyNode is a style node, the building block of the styled tree.
 type StyNode struct {
 	tree.Node      // we build on top of general purpose tree
 	htmlNode       *html.Node
@@ -76,7 +76,11 @@ func Node(n *tree.Node) *StyNode {
 	if n == nil {
 		return nil
 	}
-	return n.Payload.(*StyNode)
+	sn, ok := n.Payload.(*StyNode)
+	if ok {
+		return sn
+	}
+	return nil
 }
 
 // Creator returns a style-creator for use in CSSOM

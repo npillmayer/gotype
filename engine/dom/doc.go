@@ -65,9 +65,12 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 package dom
 
-import "github.com/npillmayer/gotype/core/config/tracing"
+import (
+	"github.com/npillmayer/gotype/core/config/gtrace"
+	"github.com/npillmayer/gotype/core/config/tracing"
+)
 
 // T will return a tracer. We are tracing to the EngineTracer
 func T() tracing.Trace {
-	return tracing.EngineTracer
+	return gtrace.EngineTracer
 }

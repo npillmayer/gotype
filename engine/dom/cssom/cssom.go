@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/andybalholm/cascadia"
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/tree"
@@ -50,9 +51,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ----------------------------------------------------------------- */
 
-// We trace to EngineTracer.
+// T returns a global tracer. We trace to EngineTracer.
 func T() tracing.Trace {
-	return tracing.EngineTracer
+	return gtrace.EngineTracer
 }
 
 // CSSOM is the "CSS Object Model", similar to the DOM for HTML.
@@ -219,7 +220,7 @@ const (
 // rootElement is a symbolic node to denote the body element of a future
 // HTML document. AddStylesFor(...) with nil as a scope will replace it
 // with this marker for scoping the complete document body.
-var rootElement *html.Node = &html.Node{Data: "root"}
+var rootElement = &html.Node{Data: "root"}
 
 // Internal helper for applying rules to an HTML node.
 // In a first step it holds all the rules matching for an HTML node.

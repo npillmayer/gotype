@@ -107,6 +107,20 @@ func (node *Node) Children() []*Node {
 	return node.children.asSlice()
 }
 
+// IndexOfChild returns the index of a child within the list of children
+// of its parent.
+func (node *Node) IndexOfChild(ch *Node) int {
+	if node.ChildCount() > 0 {
+		children := node.Children()
+		for i := 0; i < len(children); i++ {
+			if ch == children[i] {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
 // --- Slices of concurrency-safe sets of children ----------------------
 
 type childrenSlice struct {
