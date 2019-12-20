@@ -11,7 +11,7 @@ with t of type *testing.T.
 
 As we are logging to global tracers there is no way of configuring them
 specifically from single tests. That's not a good thing, as in general
-tests may be executed concurrently or in parallel. This would confuse the
+tests may be executed concurrently/in parallel. This would confuse the
 tracing.
 
 Attention
@@ -20,6 +20,7 @@ Clients must not use the testingtracer in concurrent mode.
 Please set
 
 	go test -p 1
+
 
 BSD License
 

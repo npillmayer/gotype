@@ -45,7 +45,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 package tracing
 
 import (
-	"errors"
 	"io"
 	"os"
 
@@ -116,71 +115,8 @@ type Trace interface {
 // point to it. It need not be set if tracing goes to console.
 var Tracefile *os.File
 
-// This is the set of standard module tracers for our application.
-//
-// All tracers are set up to be no-ops, initially.
-// This approach poses a little burden on (selective) clients, but is
-// useful for de-coupling the various packages and modules from the
-// tracing/logging mechanism.
-var (
-	EquationsTracer   = NoOpTrace
-	InterpreterTracer = NoOpTrace
-	SyntaxTracer      = NoOpTrace
-	CommandTracer     = NoOpTrace
-	GraphicsTracer    = NoOpTrace
-	ScriptingTracer   = NoOpTrace
-	CoreTracer        = NoOpTrace
-	EngineTracer      = NoOpTrace
-)
-
 // Adapter is a factory function to create a virgin Trace instance.
 type Adapter func() Trace
-
-// NoOpTrace is a void Trace. Initially, all tracers will be set up to be no-ops.
-// Clients will have to configure concrete tracing backends, usually by calling
-// application configuration with a tracing adapter.
-var NoOpTrace Trace = nooptrace{}
-
-type nooptrace struct{}
-
-func (nt nooptrace) Debugf(string, ...interface{}) {}
-func (nt nooptrace) Infof(string, ...interface{})  {}
-func (nt nooptrace) Errorf(string, ...interface{}) {}
-func (nt nooptrace) SetTraceLevel(TraceLevel)      {}
-func (nt nooptrace) GetTraceLevel() TraceLevel     { return LevelError }
-func (nt nooptrace) SetOutput(io.Writer)           {}
-func (nt nooptrace) P(string, interface{}) Trace   { return nt }
-
-// CreateTracers creates all global tracers, given a function to
-// create a concrete Trace instance.
-func CreateTracers(newTrace Adapter) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = errors.New("unable to create global tracers")
-		}
-	}()
-	EquationsTracer = newTrace()
-	InterpreterTracer = newTrace()
-	SyntaxTracer = newTrace()
-	CommandTracer = newTrace()
-	GraphicsTracer = newTrace()
-	ScriptingTracer = newTrace()
-	CoreTracer = newTrace()
-	EngineTracer = newTrace()
-	return
-}
-
-// Mute sets all global tracers to LevelError.
-func Mute() {
-	InterpreterTracer.SetTraceLevel(LevelError)
-	CommandTracer.SetTraceLevel(LevelError)
-	EquationsTracer.SetTraceLevel(LevelError)
-	SyntaxTracer.SetTraceLevel(LevelError)
-	GraphicsTracer.SetTraceLevel(LevelError)
-	ScriptingTracer.SetTraceLevel(LevelError)
-	CoreTracer.SetTraceLevel(LevelError)
-	EngineTracer.SetTraceLevel(LevelError)
-}
 
 // With prepares to dump a data structure to a Trace.
 // t may not be nil.

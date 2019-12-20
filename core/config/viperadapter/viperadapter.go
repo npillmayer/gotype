@@ -58,12 +58,12 @@ func New() *VConf {
 }
 
 func (c *VConf) Init() {
-	InitDefaults()
-	InitConfigPath()
+	c.InitDefaults()
+	c.InitConfigPath()
 }
 
 // InitDefaults is usually called by Init().
-func InitDefaults() {
+func (c *VConf) InitDefaults() {
 	/*
 		viper.SetDefault("ContentDir", "content")
 		viper.SetDefault("LayoutDir", "layouts")
@@ -85,15 +85,20 @@ func InitDefaults() {
 }
 
 // InitConfigPath is usually called by Init().
-func InitConfigPath() {
+func (c *VConf) InitConfigPath() {
 	viper.SetConfigName("gotype")        // name of config file (without extension)
 	viper.AddConfigPath(".")             // optionally look for config in the working directory
 	viper.AddConfigPath("$GOPATH/etc/")  // path to look for the config file in
 	viper.AddConfigPath("$HOME/.gotype") // call multiple times to add many search paths
 	err := viper.ReadInConfig()          // Find and read the config file
 	if err != nil {                      // Handle errors reading the config file
-		panic(fmt.Errorf("Fatal error config file: %s \n", err))
+		panic(fmt.Errorf("Fatal error config file: %s", err))
 	}
+}
+
+// Set overrides any configuration values set from the environment.
+func (c *VConf) Set(key string, value interface{}) {
+	viper.Set(key, value)
 }
 
 // IsSet is a predicate wether a configuration flag is set to true.
@@ -111,6 +116,10 @@ func (c *VConf) GetInt(key string) int {
 
 func (c *VConf) GetBool(key string) bool {
 	return viper.GetBool(key)
+}
+
+func (c *VConf) IsInteractive() bool {
+	return viper.GetBool("tracingonline")
 }
 
 var _ config.Configuration = &VConf{}

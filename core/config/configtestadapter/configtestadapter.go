@@ -1,8 +1,10 @@
 /*
 Package configtestadapter is for application configuration during tests.
 
-All configuration is started explicitely with a call to
-config.Initialize(testadapter.New()).
+Clients will start configuration explicitely with a call to
+
+	config.Initialize(testadapter.New())
+
 There is no init() call to set up configuration a priori. The reason
 is to avoid coupling to a specific configuration framework, but rather
 relay this decision to the client.
@@ -49,22 +51,26 @@ import (
 	"github.com/npillmayer/gotype/core/config"
 )
 
+// Conf represents a lightweight configuration suited for testing.
 type Conf struct {
-	conf map[string]string
+	values map[string]string
 }
 
+// New creates a new configuration suited for testing.
 func New() *Conf {
-	return &Conf{conf: make(map[string]string)}
+	return &Conf{values: make(map[string]string)}
 }
 
-func (c *Conf) Init() {
-	InitDefaults(c.conf)
+// Initialize initializes a configuration, populating it with defaullt values.
+func (c *Conf) Initialize() {
+	c.InitDefaults()
 }
 
 // InitDefaults is usually called by Init().
-func InitDefaults(m map[string]string) {
-	m["tracing"] = "go"
-	m["tracingonline"] = "true"
+func (c *Conf) InitDefaults() {
+	m := c.values
+	m["tracing"] = "test"
+	m["tracingonline"] = "false"
 	m["tracingequations"] = "Error"
 	m["tracingsyntax"] = "Error"
 	m["tracingcommands"] = "Error"
@@ -79,25 +85,28 @@ func InitDefaults(m map[string]string) {
 	m["tracingchoices"] = "true"
 }
 
+// Set is part of the interface Configuration
 func (c *Conf) Set(key string, value string) (oldval string) {
-	oldval = c.conf[key]
-	c.conf[key] = value
+	oldval = c.values[key]
+	c.values[key] = value
 	return
 }
 
 // IsSet is a predicate wether a configuration flag is set to true.
 func (c *Conf) IsSet(key string) bool {
-	_, found := c.conf[key]
+	_, found := c.values[key]
 	return found
 }
 
+// GetString is part of the interface Configuration
 func (c *Conf) GetString(key string) string {
-	v := c.conf[key]
+	v := c.values[key]
 	return v
 }
 
+// GetInt is part of the interface Configuration
 func (c *Conf) GetInt(key string) int {
-	v, found := c.conf[key]
+	v, found := c.values[key]
 	if !found {
 		return 0
 	}
@@ -105,12 +114,16 @@ func (c *Conf) GetInt(key string) int {
 	return n
 }
 
+// GetBool is part of the interface Configuration
 func (c *Conf) GetBool(key string) bool {
-	v, found := c.conf[key]
+	v, found := c.values[key]
 	if !found {
 		return false
 	}
 	return strings.EqualFold(v, "true")
 }
+
+// IsInteractive is part of the interface Configuration
+func (c *Conf) IsInteractive() bool { return false }
 
 var _ config.Configuration = &Conf{}

@@ -1,5 +1,6 @@
 /*
-Package testconfig provides configuration and tracing suitable for tests.
+Package appconfig provides configuration and tracing suitable for
+full fledged applications.
 
 BSD License
 
@@ -33,31 +34,48 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
-package testconfig
+package appconfig
 
 import (
-	"testing"
+	"fmt"
 
 	"github.com/npillmayer/gotype/core/config"
-	"github.com/npillmayer/gotype/core/config/configtestadapter"
 	"github.com/npillmayer/gotype/core/config/gconf"
-	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
+	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/config/tracing/logrusadapter"
+	"github.com/npillmayer/gotype/core/config/viperadapter"
 )
 
-// QuickConfig sets up a configuration suitable for test cases, including tracing.
-// It returns a teardown function which should be called at the end of a test.
-// The usual pattern will look like this:
-//
-//     func TestSomething(t *testing.T) {
-//          teardown := testconfig.QuickConfig(t)
-//          defer teardown()
-//          ...
-//      }
-//
-func QuickConfig(t *testing.T) func() {
-	config.AddTraceAdapter("test", gotestingadapter.GetAdapter())
-	c := configtestadapter.New()
-	c.Set("tracing", "test")
-	gconf.Initialize(c)
-	return gotestingadapter.RedirectTracing(t)
+// QuickConfig sets up a configuration suitable for applications.
+// It will install a configuration adapter for "github.com/spf13/viper".
+// If tracing is not selected from viper (which may have its own default for tracing),
+// it defaults to "github.com/Sirupsen/logrus".
+func QuickConfig() {
+	conf := viperadapter.New()
+	if !conf.IsSet("tracing") {
+		conf.Set("tracing", "logrus")
+		adapter := config.GetAdapterFromConfiguration(conf)
+		if adapter == nil {
+			config.AddTraceAdapter("logrus", logrusadapter.GetAdapter())
+		}
+	}
+	gconf.Initialize(conf)
+}
+
+// WithTracing lets clients select a tracing engine other than the
+// default tracing. It will override any tracing selected from the application
+// configuration.
+func WithTracing(tracekey string, traceadapter tracing.Adapter) (err error) {
+	conf := viperadapter.New()
+	conf.Set("tracing", tracekey)
+	if traceadapter == nil {
+		adapter := config.GetAdapterFromConfiguration(conf)
+		if adapter == nil {
+			err = fmt.Errorf("unable to find tracer for key='%s'", tracekey)
+		}
+	} else {
+		config.AddTraceAdapter(tracekey, traceadapter)
+	}
+	gconf.Initialize(conf)
+	return
 }

@@ -27,13 +27,13 @@ type w3cNode struct {
 }
 
 // NodeAsTreeNode returns the underlying tree.Node from a DOM node.
-func NodeAsTreeNode(domnode Node) *tree.Node {
+func NodeAsTreeNode(domnode Node) (*tree.Node, bool) {
 	w, ok := domnode.(*w3cNode)
 	if !ok {
 		T().Errorf("DOM node has not been created from w3cdom.go")
-		return nil
+		return nil, false
 	}
-	return &w.Node
+	return &w.Node, true
 }
 
 func (w *w3cNode) hasAttributes() bool {
