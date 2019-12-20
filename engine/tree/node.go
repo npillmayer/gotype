@@ -83,23 +83,28 @@ func (node *Node) SetChildAt(i int, ch *Node) *Node {
 	return node
 }
 
-// ParentNode returns the parent node or nil (for the root of the tree).
-func (node Node) Parent() *Node {
+// Parent returns the parent node or nil (for the root of the tree).
+func (node *Node) Parent() *Node {
 	return node.parent
 }
 
 // ChildCount returns the number of children-nodes for a node
 // (concurrency-safe).
-func (node Node) ChildCount() int {
+func (node *Node) ChildCount() int {
 	return node.children.length()
 }
 
 // Child is a concurrency-safe way to get a children-node of a node.
-func (node Node) Child(n int) (*Node, bool) {
+func (node *Node) Child(n int) (*Node, bool) {
 	if node.children.length() <= n {
 		return nil, false
 	}
 	return node.children.child(n), true
+}
+
+// Children returns a slice with all children of a node.
+func (node *Node) Children() []*Node {
+	return node.children.asSlice()
 }
 
 // --- Slices of concurrency-safe sets of children ----------------------
@@ -154,4 +159,14 @@ func (chs *childrenSlice) child(n int) *Node {
 	chs.RLock()
 	defer chs.RUnlock()
 	return chs.slice[n]
+}
+
+func (chs *childrenSlice) asSlice() []*Node {
+	chs.RLock()
+	defer chs.RUnlock()
+	children := make([]*Node, chs.length())
+	for i := chs.length() - 1; i >= 0; i-- {
+		children[i] = chs.slice[i]
+	}
+	return children
 }

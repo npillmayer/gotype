@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 )
 
 func Test0(t *testing.T) {
-	tracing.EngineTracer = gologadapter.New()
-	tracing.EngineTracer.SetTraceLevel(tracing.LevelDebug)
+	gtrace.EngineTracer = gologadapter.New()
+	gtrace.EngineTracer.SetTraceLevel(tracing.LevelDebug)
 }
 
 func TestEmptyWalker(t *testing.T) {

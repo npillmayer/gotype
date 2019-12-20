@@ -8,26 +8,30 @@ import (
 	"golang.org/x/net/html"
 )
 
-// Node represents W3C type Node
+// Node represents W3C-type Node
 type Node interface {
-	hasAttributes() bool
-	hasChildNodes() bool
+	HasAttributes() bool
+	HasChildNodes() bool
+	ChildNodes() NodeList
+	FirstChild() Node
 }
 
-// NodeList represents W3C type NodeList
+// NodeList represents W3C-type NodeList
 type NodeList interface {
 	Length() int
 	Item(int) Node
 }
 
-// --------------------------------------------------------------------------------
+// --- Node -----------------------------------------------------------------------
 
 type w3cNode struct {
 	styledtree.StyNode
 }
 
+var _ Node = &w3cNode{}
+
 // NodeAsTreeNode returns the underlying tree.Node from a DOM node.
-func NodeAsTreeNode(domnode Node) (*tree.Node, bool) {
+func NodeAsTreeNode(w3cNode *Node) (*tree.Node, bool) {
 	w, ok := domnode.(*w3cNode)
 	if !ok {
 		T().Errorf("DOM node has not been created from w3cdom.go")
@@ -36,19 +40,61 @@ func NodeAsTreeNode(domnode Node) (*tree.Node, bool) {
 	return &w.Node, true
 }
 
-func (w *w3cNode) hasAttributes() bool {
+func (w *w3cNode) HasAttributes() bool {
 	return false
 }
 
-func (w *w3cNode) hasChildNodes() bool {
+func (w *w3cNode) HasChildNodes() bool {
+	tn, ok := NodeAsTreeNode(w)
+	if ok {
+		return tn.ChildCount > 0
+	}
 	return false
+}
+
+func (w *w3cNode) ChildNodes() NodeList {
+	tn, ok := NodeAsTreeNode(w)
+	if ok {
+		children := tn.Children()
+		childnodes := make([]styledtree.StyNode, children.length())
+		for i := children.length() - 1; i >= 0; i-- {
+			childnodes[i] = &w3cNode{styledtree.Node(children[i])}
+		}
+		return &w3cNodeList{childnodes}
+	}
+	return nil
+}
+
+func (w *w3cNode) FirstChild() Node {
+	tn, ok := NodeAsTreeNode(w)
+	if ok && tn.ChildCount>0 {
+		ch, ok := tn.Child(0) {
+			return &w3cNode{styledtree.Node(ch)}
+		}
+	}
+	return nil
+}
+
+// --- NodeList -------------------------------------------------------------------
+
+type w3cNodeList struct {
+	nodes []w3cNode
+}
+
+var _ NodeList = &w3cNodeList{}
+
+func (wl *w3cNodeList) Length() int {
+	return wl.nodes.length()
+}
+
+func (wl *w3cNodeList) Item(int i) Node {
+	return wl.nodes[i]
 }
 
 // --------------------------------------------------------------------------------
 
-// FromHTMLParseTree returns a
+// FromHTMLParseTree returns a DOM from parsed HTML.
 func FromHTMLParseTree(h *html.Node) Node {
-	//h, errhtml := html.Parse(strings.NewReader(myhtml))
 	styles := douceuradapter.ExtractStyleElements(h)
 	T().Debugf("Extracted %d <style> elements", len(styles))
 	//c, errcss := parser.Parse(mycss)

@@ -39,24 +39,25 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 )
 
-// We're tracing to the EngineTracer
+// T returns a global tracer. We're tracing to the EngineTracer
 func T() tracing.Trace {
-	return tracing.EngineTracer
+	return gtrace.EngineTracer
 }
 
-// Error to be emitted if a pipeline filter step is defunct.
-var ErrInvalidFilter error = errors.New("Filter stage is invalid")
+// ErrInvalidFilter is thrown if a pipeline filter step is defunct.
+var ErrInvalidFilter = errors.New("Filter stage is invalid")
 
-// Error to be emitted if a Walker is called with an empty tree. Refer to
+// ErrEmptyTree is thrown if a Walker is called with an empty tree. Refer to
 // the documentation of NewWalker() for details about this scenario.
-var ErrEmptyTree error = errors.New("Cannot walk empty tree")
+var ErrEmptyTree = errors.New("Cannot walk empty tree")
 
-// Error to emit if a client already called Promise(), but tried to
+// ErrNoMoreFiltersAccepted is thrown if a client already called Promise(), but tried to
 // re-use a walker with another filter.
-var ErrNoMoreFiltersAccepted error = errors.New("In promise mode; will not accept new filters; use a new walker")
+var ErrNoMoreFiltersAccepted = errors.New("In promise mode; will not accept new filters; use a new walker")
 
 // Walker holds information for operating on trees: finding nodes and
 // doing work on them. Clients usually create a Walker for a (sub-)tree
@@ -139,6 +140,7 @@ func (w *Walker) startProcessing() {
 	}
 }
 
+// Promise is a future synchronisation point.
 // Walkers may decide to perform certain tasks asynchronously.
 // Clients will not receive the resulting node list immediately, but
 // rather get handed a Promise.
@@ -153,23 +155,22 @@ func (w *Walker) Promise() func() ([]*Node, error) {
 		return func() ([]*Node, error) {
 			return nil, ErrEmptyTree
 		}
-	} else {
-		// drain the result channel and the error channel
-		w.promising = true // will block calls to establish new filters
-		errch := w.pipe.errors
-		results := w.pipe.results
-		counter := &w.pipe.queuecount
-		signal := make(chan struct{}, 1)
-		var selection []*Node
-		var lasterror error
-		go func() {
-			defer close(signal)
-			selection, lasterror = waitForCompletion(results, errch, counter)
-		}()
-		return func() ([]*Node, error) {
-			<-signal
-			return selection, lasterror
-		}
+	}
+	// drain the result channel and the error channel
+	w.promising = true // will block calls to establish new filters
+	errch := w.pipe.errors
+	results := w.pipe.results
+	counter := &w.pipe.queuecount
+	signal := make(chan struct{}, 1)
+	var selection []*Node
+	var lasterror error
+	go func() {
+		defer close(signal)
+		selection, lasterror = waitForCompletion(results, errch, counter)
+	}()
+	return func() ([]*Node, error) {
+		<-signal
+		return selection, lasterror
 	}
 }
 
@@ -243,7 +244,7 @@ func parent(node *Node, isBuffered bool, udata userdata, push func(*Node),
 	return nil
 }
 
-// AncesterWith finds an ancestor matching the given predicate.
+// AncestorWith finds an ancestor matching the given predicate.
 // The search does not include the start node.
 //
 // If w is nil, AncestorWith will return nil.

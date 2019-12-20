@@ -3,7 +3,7 @@ package tree
 /*
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -18,7 +18,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -342,7 +342,7 @@ func waitForCompletion(results <-chan *Node, errch <-chan error, counter *sync.W
 		m[node] = struct{}{}
 		counter.Done() // we removed a value => count down
 	}
-	for node, _ := range m {
+	for node := range m {
 		selection = append(selection, node) // collect unique return values
 	}
 	// Get last error from error channel

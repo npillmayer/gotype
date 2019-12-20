@@ -1,7 +1,7 @@
 package style
 
 import (
-	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"golang.org/x/net/html"
 )
 
@@ -43,7 +43,7 @@ func DisplayPropertyForHtmlNode(node *html.Node) Property {
 	case "i", "b", "span", "strong":
 		return "inline"
 	}
-	tracing.EngineTracer.Infof("unknown HTML element %s/%d will be set to display: block",
+	gtrace.EngineTracer.Infof("unknown HTML element %s/%d will be set to display: block",
 		node.Data, node.Type)
 	return "block"
 }

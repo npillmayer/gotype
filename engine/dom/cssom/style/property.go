@@ -40,13 +40,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/engine/tree"
 )
 
-// We trace to the EngineTracer
+// T returns a global tracer. We trace to the EngineTracer
 func T() tracing.Trace {
-	return tracing.EngineTracer
+	return gtrace.EngineTracer
 }
 
 // Property is a raw value for a CSS property. For example, with
@@ -278,15 +279,15 @@ var groupNameFromPropertyKey = map[string]string{
 	"border-top-right-radius":    "Border",
 	"border-bottom-left-radius":  "Border",
 	"border-bottom-right-radius": "Border",
-	"width":                      "Dimension", // Dimension
-	"height":                     "Dimension",
-	"min-width":                  "Dimension",
-	"min-height":                 "Dimension",
-	"max-width":                  "Dimension",
-	"max-height":                 "Dimension",
-	"display":                    PG_Display, // Display
-	"flow-into":                  PG_Region,
-	"flow-from":                  PG_Region,
+	"width":      "Dimension", // Dimension
+	"height":     "Dimension",
+	"min-width":  "Dimension",
+	"min-height": "Dimension",
+	"max-width":  "Dimension",
+	"max-height": "Dimension",
+	"display":    PG_Display, // Display
+	"flow-into":  PG_Region,
+	"flow-from":  PG_Region,
 }
 
 // SplitCompountProperty splits up a shortcut property into its individual
