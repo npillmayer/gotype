@@ -55,7 +55,6 @@ import (
 // tracing.Trace, using a Go standard logger.
 type Tracer struct {
 	log   *log.Logger
-	p     string
 	level tracing.TraceLevel
 }
 
@@ -65,7 +64,6 @@ var logLevelPrefix = []string{"ERROR ", "INFO  ", "DEBUG "}
 func New() tracing.Trace {
 	return &Tracer{
 		log:   log.New(os.Stderr, logLevelPrefix[0], log.Ltime),
-		p:     "",
 		level: tracing.LevelError,
 	}
 }
@@ -76,21 +74,13 @@ func GetAdapter() tracing.Adapter {
 	return New
 }
 
+// ----------------------------------------------------------------------------
+
 // P is part of interface Trace
 func (t *Tracer) P(key string, val interface{}) tracing.Trace {
-	t.p = fmt.Sprintf("[%s=%v] ", key, val)
-	return t
-}
-
-// Interface Trace
-func (t *Tracer) output(l tracing.TraceLevel, s string, args ...interface{}) {
-	t.log.SetPrefix(logLevelPrefix[int(l)])
-	if t.p != "" {
-		t.log.Println(fmt.Sprintf(t.p+s, args...))
-		t.p = ""
-	} else {
-		t.log.Printf(s, args...)
-	}
+	l := &logentry{tracer: t}
+	l.p = fmt.Sprintf("[%s=%v] ", key, val)
+	return l
 }
 
 // Debugf is part of interface Trace
@@ -98,7 +88,7 @@ func (t *Tracer) Debugf(s string, args ...interface{}) {
 	if t.level < tracing.LevelDebug {
 		return
 	}
-	t.output(tracing.LevelDebug, s, args...)
+	t.output(tracing.LevelDebug, "", s, args...)
 }
 
 // Infof is part of interface Trace
@@ -106,7 +96,7 @@ func (t *Tracer) Infof(s string, args ...interface{}) {
 	if t.level < tracing.LevelInfo {
 		return
 	}
-	t.output(tracing.LevelInfo, s, args...)
+	t.output(tracing.LevelInfo, "", s, args...)
 }
 
 // Errorf is part of interface Trace
@@ -114,12 +104,11 @@ func (t *Tracer) Errorf(s string, args ...interface{}) {
 	if t.level < tracing.LevelError {
 		return
 	}
-	t.output(tracing.LevelError, s, args...)
+	t.output(tracing.LevelError, "", s, args...)
 }
 
 // SetTraceLevel is part of interface Trace
 func (t *Tracer) SetTraceLevel(l tracing.TraceLevel) {
-	t.p = ""
 	t.level = l
 	t.log.SetPrefix(logLevelPrefix[int(l)])
 }
@@ -133,3 +122,51 @@ func (t *Tracer) GetTraceLevel() tracing.TraceLevel {
 func (t *Tracer) SetOutput(writer io.Writer) {
 	t.log.SetOutput(writer)
 }
+
+func (t *Tracer) output(l tracing.TraceLevel, p string, s string, args ...interface{}) {
+	t.log.SetPrefix(logLevelPrefix[int(l)])
+	if p == "" { // if no prefix present
+		t.log.Printf(s, args...)
+	} else {
+		t.log.Println(fmt.Sprintf(p+s, args...))
+	}
+}
+
+// ----------------------------------------------------------------------------
+
+// logentry is a helper for prefixed tracing
+type logentry struct { // will have to implement tracing.Trace
+	tracer *Tracer // tracer where this logentry will go
+	p      string  // prefix
+}
+
+func (l *logentry) Debugf(s string, args ...interface{}) {
+	if l.tracer.level < tracing.LevelDebug {
+		return
+	}
+	l.tracer.output(tracing.LevelDebug, "", s, args...)
+}
+
+func (l *logentry) Infof(s string, args ...interface{}) {
+	if l.tracer.level < tracing.LevelInfo {
+		return
+	}
+	l.tracer.output(tracing.LevelDebug, "", s, args...)
+}
+
+func (l *logentry) Errorf(s string, args ...interface{}) {
+	if l.tracer.level < tracing.LevelError {
+		return
+	}
+	l.tracer.output(tracing.LevelDebug, l.p, s, args...)
+}
+
+func (l *logentry) P(key string, val interface{}) tracing.Trace {
+	p := fmt.Sprintf("[%s=%v] ", key, val)
+	l.p = l.p + p
+	return l
+}
+
+func (l *logentry) SetTraceLevel(tracing.TraceLevel)  {}
+func (l *logentry) GetTraceLevel() tracing.TraceLevel { return l.tracer.GetTraceLevel() }
+func (l *logentry) SetOutput(writer io.Writer)        {}
