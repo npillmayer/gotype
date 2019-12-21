@@ -3,7 +3,7 @@ package tree
 /*
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -90,8 +90,8 @@ type Walker struct {
 	sync.Mutex
 	initial          *Node     // initial node of (sub-)tree
 	pipe             *pipeline // pipeline of filters to perform work on tree nodes.
+	promising        bool      // client has called Promise()
 	attributeHandler AttributeHandler
-	promising        bool // client has called Promis()
 }
 
 // NewWalker creates a Walker for the initial node of a (sub-)tree.
