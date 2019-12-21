@@ -15,6 +15,8 @@ import (
 
 // --- Node -----------------------------------------------------------------------
 
+// A W3CNode is common type from which various types of DOM API objects inherit.
+// This allows these types to be treated similarly.
 type W3CNode struct {
 	stylednode *styledtree.StyNode
 }
@@ -72,6 +74,15 @@ func (w *W3CNode) NodeType() html.NodeType {
 	return w.stylednode.HtmlNode().Type
 }
 
+// NodeName read-only property returns the name of the current Node as a string.
+//
+//      Node         NodeName value
+//      ------------+----------------------------
+//      Attr         The value of Attr.name
+//      Document     "#document"
+//      Element      The value of Element.TagName
+//      Text         "#text"
+//
 func (w *W3CNode) NodeName() string {
 	if w == nil {
 		return ""
@@ -88,6 +99,8 @@ func (w *W3CNode) NodeName() string {
 	return "<node>"
 }
 
+// NodeValue returns textual content for text/CData-Nodes, and an empty string for any other
+// Node type.
 func (w *W3CNode) NodeValue() string {
 	if w == nil {
 		return ""
@@ -99,6 +112,8 @@ func (w *W3CNode) NodeValue() string {
 	return ""
 }
 
+// HasAttributes returns a boolean indicating whether the current element has any
+// attributes or not.
 func (w *W3CNode) HasAttributes() bool {
 	if w == nil {
 		return false
@@ -110,6 +125,7 @@ func (w *W3CNode) HasAttributes() bool {
 	return false
 }
 
+// ParentNode read-only property returns the parent of the specified node in the DOM tree.
 func (w *W3CNode) ParentNode() w3cdom.Node {
 	if w == nil {
 		return nil
@@ -124,6 +140,8 @@ func (w *W3CNode) ParentNode() w3cdom.Node {
 	return nil
 }
 
+// HasChildNodes method returns a boolean value indicating whether the given Node
+// has child nodes or not.
 func (w *W3CNode) HasChildNodes() bool {
 	if w == nil {
 		return false
@@ -135,6 +153,8 @@ func (w *W3CNode) HasChildNodes() bool {
 	return false
 }
 
+// ChildNodes read-only property returns a live NodeList of child nodes of
+// the given element.
 func (w *W3CNode) ChildNodes() w3cdom.NodeList {
 	if w == nil {
 		return nil
@@ -151,6 +171,8 @@ func (w *W3CNode) ChildNodes() w3cdom.NodeList {
 	return nil
 }
 
+// Children is a read-only property that returns a node list which contains all of
+// the child *elements* of the node upon which it was called
 func (w *W3CNode) Children() w3cdom.NodeList {
 	if w == nil {
 		return nil
@@ -172,6 +194,8 @@ func (w *W3CNode) Children() w3cdom.NodeList {
 	return nil
 }
 
+// FirstChild read-only property returns the node's first child in the tree,
+// or nil if the node has no children.
 func (w *W3CNode) FirstChild() w3cdom.Node {
 	if w == nil {
 		return nil
@@ -186,6 +210,9 @@ func (w *W3CNode) FirstChild() w3cdom.Node {
 	return nil
 }
 
+// NextSibling read-only property returns the node immediately following the
+// specified one in their parent's childNodes,
+// or returns nil if the specified node is the last child in the parent element.
 func (w *W3CNode) NextSibling() w3cdom.Node {
 	if w == nil {
 		return nil
@@ -204,6 +231,8 @@ func (w *W3CNode) NextSibling() w3cdom.Node {
 	return nil
 }
 
+// Attributes property returns a collection of all attribute nodes registered
+// to the specified node. It is a NamedNodeMap, not an array.
 func (w *W3CNode) Attributes() w3cdom.NamedNodeMap {
 	if w == nil {
 		return emptyNodeMap
@@ -217,6 +246,14 @@ func (w *W3CNode) Attributes() w3cdom.NamedNodeMap {
 	return emptyNodeMap
 }
 
+// TextContent property of the Node interface represents the text content of
+// the node and its descendants.
+func (w *W3CNode) TextContent() string {
+	// TODO
+	return ""
+}
+
+// ComputedStyles returns a map of style properties for a given (stylable) Node.
 func (w *W3CNode) ComputedStyles() *style.PropertyMap {
 	if w == nil {
 		return nil
@@ -226,20 +263,24 @@ func (w *W3CNode) ComputedStyles() *style.PropertyMap {
 
 // --- Attributes -----------------------------------------------------------------
 
+// A W3CAttr represents a single attribute of an element Node.
 type W3CAttr struct {
 	attr *html.Attribute
 }
 
 var _ w3cdom.Attr = &W3CAttr{}
 
+// Namespace returns the namespace prefix of an attribute.
 func (a *W3CAttr) Namespace() string {
 	return a.attr.Namespace
 }
 
+// Key is the name of an attribute.
 func (a *W3CAttr) Key() string {
 	return a.attr.Key
 }
 
+// Value is the string value of an attribute.
 func (a *W3CAttr) Value() string {
 	return a.attr.Val
 }
@@ -272,6 +313,7 @@ func (a *W3CAttr) ChildNodes() w3cdom.NodeList        { return nil }
 func (a *W3CAttr) Children() w3cdom.NodeList          { return nil }
 func (a *W3CAttr) FirstChild() w3cdom.Node            { return nil }
 func (a *W3CAttr) Attributes() w3cdom.NamedNodeMap    { return nil }
+func (a *W3CAttr) TextContent() string                { return "" }
 func (a *W3CAttr) ComputedStyles() *style.PropertyMap { return nil }
 
 // --- NamedNodeMap ---------------------------------------------------------------

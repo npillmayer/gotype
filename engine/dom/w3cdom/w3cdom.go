@@ -57,6 +57,7 @@ type Node interface {
 	Children() NodeList       // get a list of element child-nodes
 	FirstChild() Node         // get the first children-node
 	Attributes() NamedNodeMap // get all attributes of a node
+	TextContent() string      // get text from node and all descendents
 	ComputedStyles() *style.PropertyMap
 }
 
