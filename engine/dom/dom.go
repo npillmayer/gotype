@@ -291,6 +291,7 @@ var _ w3cdom.Node = &W3CAttr{} // Attributes are W3C DOM nodes as well
 // standard-package html.
 const AttrNode = html.NodeType(77)
 
+// NodeName for an attribute is the attribute key
 func (a *W3CAttr) NodeName() string {
 	if a == nil {
 		return ""
@@ -298,6 +299,7 @@ func (a *W3CAttr) NodeName() string {
 	return a.attr.Key
 }
 
+// NodeValue for an attribute is the attribute value
 func (a *W3CAttr) NodeValue() string {
 	if a == nil {
 		return ""
@@ -305,19 +307,39 @@ func (a *W3CAttr) NodeValue() string {
 	return a.attr.Val
 }
 
-func (a *W3CAttr) NodeType() html.NodeType            { return AttrNode }
-func (a *W3CAttr) HasAttributes() bool                { return false }
-func (a *W3CAttr) HasChildNodes() bool                { return false }
-func (a *W3CAttr) ParentNode() w3cdom.Node            { return nil }
-func (a *W3CAttr) ChildNodes() w3cdom.NodeList        { return nil }
-func (a *W3CAttr) Children() w3cdom.NodeList          { return nil }
-func (a *W3CAttr) FirstChild() w3cdom.Node            { return nil }
-func (a *W3CAttr) Attributes() w3cdom.NamedNodeMap    { return nil }
-func (a *W3CAttr) TextContent() string                { return "" }
+// NodeType returns type AttrNode
+func (a *W3CAttr) NodeType() html.NodeType { return AttrNode }
+
+// HasAttributes returns false
+func (a *W3CAttr) HasAttributes() bool { return false }
+
+// HasChildNodes returns false
+func (a *W3CAttr) HasChildNodes() bool { return false }
+
+// ParentNode returns nil
+func (a *W3CAttr) ParentNode() w3cdom.Node { return nil }
+
+// ChildNodes returns nil
+func (a *W3CAttr) ChildNodes() w3cdom.NodeList { return nil }
+
+// Children returns nil
+func (a *W3CAttr) Children() w3cdom.NodeList { return nil }
+
+// FirstChild returns nil
+func (a *W3CAttr) FirstChild() w3cdom.Node { return nil }
+
+// Attributes returns nil
+func (a *W3CAttr) Attributes() w3cdom.NamedNodeMap { return nil }
+
+// TextContent returns an empty string
+func (a *W3CAttr) TextContent() string { return "" }
+
+// ComputedStyles returns nil
 func (a *W3CAttr) ComputedStyles() *style.PropertyMap { return nil }
 
 // --- NamedNodeMap ---------------------------------------------------------------
 
+// A W3CMap represents a key-value map
 type W3CMap struct {
 	forNode *styledtree.StyNode
 }
@@ -333,6 +355,7 @@ func nodeMapFor(sn *styledtree.StyNode) w3cdom.NamedNodeMap {
 	return nil
 }
 
+// Length returns the number of entries in a key-value map
 func (wm *W3CMap) Length() int {
 	if wm == nil {
 		return 0
@@ -340,6 +363,7 @@ func (wm *W3CMap) Length() int {
 	return len(wm.forNode.HtmlNode().Attr)
 }
 
+// Item returns the i.th item in a key-value map
 func (wm *W3CMap) Item(i int) w3cdom.Attr {
 	if wm == nil {
 		return nil
@@ -351,6 +375,7 @@ func (wm *W3CMap) Item(i int) w3cdom.Attr {
 	return &W3CAttr{&attrs[i]}
 }
 
+// GetNamedItem returns the attribute with key key.
 func (wm *W3CMap) GetNamedItem(key string) w3cdom.Attr {
 	if wm == nil {
 		return nil
@@ -366,12 +391,14 @@ func (wm *W3CMap) GetNamedItem(key string) w3cdom.Attr {
 
 // --- NodeList -------------------------------------------------------------------
 
+// A W3CNodeList is a type for a list of nodes
 type W3CNodeList struct {
 	nodes []*W3CNode
 }
 
 var _ w3cdom.NodeList = &W3CNodeList{}
 
+// Length returns the number of Nodes in a list
 func (wl *W3CNodeList) Length() int {
 	if wl == nil {
 		return 0
@@ -379,6 +406,7 @@ func (wl *W3CNodeList) Length() int {
 	return len(wl.nodes)
 }
 
+// Item returns the i.th Node
 func (wl *W3CNodeList) Item(i int) w3cdom.Node {
 	if wl == nil {
 		return nil
