@@ -1,0 +1,12 @@
+https://www.printfriendly.com/p/g/cnVHBX
+
+https://developer.mozilla.org/en-US/docs/Web/CSS/Visual_formatting_model
+
+https://www.html5rocks.com/en/tutorials/internals/howbrowserswork/#Rendering_engines
+
+https://www.data2type.de/xml-xslt-xslfo/xml/xml-in-a-nutshell/document-object-model/interface-node/
+
+http://source.netsurf-browser.org/libnslayout.git/tree/docs/architecture.md
+
+https://www.w3schools.com/jsref/met_document_getelementsbytagname.asp
+
