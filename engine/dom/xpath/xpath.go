@@ -3,7 +3,7 @@ Package xpath provides tree walking for the DOM with XPath syntax.
 
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -18,7 +18,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -32,9 +32,7 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-*/
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 package xpath
 
 import (
@@ -44,8 +42,8 @@ import (
 	"github.com/npillmayer/gotype/engine/tree"
 )
 
-var errInvalidXPathExpr error = errors.New("Invalid XPath expression")
-var errNavigator error = errors.New("Invalid XPath tree navigator")
+var errInvalidXPathExpr = errors.New("Invalid XPath expression")
+var errNavigator = errors.New("Invalid XPath tree navigator")
 
 // XPath is used to select nodes of a styled tree by XPath expressions.
 type XPath struct {
@@ -53,7 +51,7 @@ type XPath struct {
 	extractor NodeExtractorFunc
 }
 
-// NodeExtracotorFunc is a supporting function to get the current node
+// NodeExtractorFunc is a supporting function to get the current node
 // from an xpath.NodeNavigator.
 type NodeExtractorFunc func(xpath.NodeNavigator) (*tree.Node, error)
 

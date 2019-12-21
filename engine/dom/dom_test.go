@@ -4,24 +4,22 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aymerick/douceur/parser"
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/engine/dom"
-	"github.com/npillmayer/gotype/engine/dom/cssom"
-	"github.com/npillmayer/gotype/engine/dom/cssom/douceuradapter"
 	"github.com/npillmayer/gotype/engine/dom/styledtree"
 	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
 )
 
 func T() tracing.Trace {
-	return tracing.EngineTracer
+	return gtrace.EngineTracer
 }
 
 func Test0(t *testing.T) {
-	tracing.EngineTracer = gologadapter.New()
-	//tracing.EngineTracer.SetTraceLevel(tracing.LevelDebug)
+	gtrace.EngineTracer = gotestingadapter.New()
+	//gtrace.EngineTracer.SetTraceLevel(tracing.LevelDebug)
 }
 
 var myhtml = `
@@ -37,14 +35,27 @@ var myhtml = `
 `
 
 var mycss = `
-p {
-    margin-bottom: 10pt;
-}
-#world {
-    padding-top: 20pt;
-}
+p { margin-bottom: 10pt; }
+#world { padding-top: 20pt; }
 `
 
+func TestW3CDom1(t *testing.T) {
+	gtrace.EngineTracer = gotestingadapter.New()
+	h, err := html.Parse(strings.NewReader(myhtml))
+	if err != nil {
+		t.Errorf("Cannot create test document")
+	}
+	root := dom.FromHTMLParseTree(h)
+	//gvz, _ := ioutil.TempFile(".", "w3c-*.dot")
+	//defer gvz.Close()
+	//domdbg.ToGraphViz(wdom, gvz, nil)
+	if root.NodeName() != "#document" {
+		t.Errorf("name of root element expected to be '#document")
+	}
+	t.Logf("root node is %s", root.NodeName())
+}
+
+/*
 func prepareStyledTree(t *testing.T) *tree.Node {
 	h, errhtml := html.Parse(strings.NewReader(myhtml))
 	styles := douceuradapter.ExtractStyleElements(h)
@@ -65,7 +76,6 @@ func prepareStyledTree(t *testing.T) *tree.Node {
 	return doc
 }
 
-/*
 func TestDom1(t *testing.T) {
 	tracing.EngineTracer.Debugf("===========================================")
 	sn := prepareStyledTree(t)
@@ -84,18 +94,6 @@ func TestDom2(t *testing.T) {
 	domdbg.ToGraphViz(doc, gvz, nil)
 }
 */
-
-func TestW3CDom1(t *testing.T) {
-	tracing.EngineTracer = gologadapter.New()
-	h, err := html.Parse(strings.NewReader(myhtml))
-	if err != nil {
-		T().Errorf("Cannot create test document")
-	}
-	dom.FromHTMLParseTree(h)
-	//gvz, _ := ioutil.TempFile(".", "w3c-*.dot")
-	//defer gvz.Close()
-	//domdbg.ToGraphViz(wdom, gvz, nil)
-}
 
 // --- Helpers ----------------------------------------------------------
 
