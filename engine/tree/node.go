@@ -179,8 +179,8 @@ func (chs *childrenSlice) asSlice() []*Node {
 	chs.RLock()
 	defer chs.RUnlock()
 	children := make([]*Node, chs.length())
-	for i := chs.length() - 1; i >= 0; i-- {
-		children[i] = chs.slice[i]
+	for i, ch := range chs.slice {
+		children[i] = ch
 	}
 	return children
 }
