@@ -3,7 +3,7 @@ Package domdbg implements helpers to debug a DOM tree.
 
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -32,8 +32,7 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 package domdbg
 
 import (
@@ -41,8 +40,8 @@ import (
 	"io"
 	"text/template"
 
-	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
+	"github.com/npillmayer/gotype/engine/dom/w3cdom"
 	"golang.org/x/net/html"
 )
 
@@ -75,7 +74,7 @@ var defaultGroups = []string{
 //     - Padding
 //     - Border
 //     - Display
-func ToGraphViz(doc dom.RODomNode, w io.Writer, styleGroups []string) {
+func ToGraphViz(doc w3cdom.Node, w io.Writer, styleGroups []string) {
 	tmpl, err := template.New("dom").Parse(graphHeadTmpl)
 	if err != nil {
 		panic(err)
@@ -100,22 +99,22 @@ func ToGraphViz(doc dom.RODomNode, w io.Writer, styleGroups []string) {
 }
 
 type node struct {
-	N    dom.RODomNode
+	N    w3cdom.Node
 	Name string
 }
 
-func nodes(n dom.RODomNode, w io.Writer, dict map[*html.Node]string, gparams *graphParamsType) {
+func nodes(n w3cdom.Node, w io.Writer, dict map[*html.Node]string, gparams *graphParamsType) {
 	domNode(n, w, dict, gparams)
-	children := n.ChildrenIterator()
-	ch := children()
+	children := n.ChildNodes()
+	ch := n.FirstChild()
 	for ch != nil {
 		nodes(ch, w, dict, gparams)
 		domEdge(n, ch, w, dict, gparams)
-		ch = children()
+		ch = ch.NextSibling()
 	}
 }
 
-func domNode(n dom.RODomNode, w io.Writer, dict map[*html.Node]string, gparams *graphParamsType) {
+func domNode(n w3cdom.Node, w io.Writer, dict map[*html.Node]string, gparams *graphParamsType) {
 	name := dict[n.HtmlNode()]
 	if name == "" {
 		l := len(dict) + 1
@@ -128,7 +127,7 @@ func domNode(n dom.RODomNode, w io.Writer, dict map[*html.Node]string, gparams *
 	domStyles(n, w, dict, gparams)
 }
 
-func domStyles(n dom.RODomNode, w io.Writer, dict map[*html.Node]string, gparams *graphParamsType) {
+func domStyles(n w3cdom.Node, w io.Writer, dict map[*html.Node]string, gparams *graphParamsType) {
 	pmap := n.ComputedStyles()
 	var prev *style.PropertyGroup
 	for _, s := range gparams.StyleGroups {
@@ -151,7 +150,7 @@ type edge struct {
 	N1, N2 node
 }
 
-func domEdge(n1 dom.RODomNode, n2 dom.RODomNode, w io.Writer, dict map[*html.Node]string,
+func domEdge(n1 w3cdom.Node, n2 w3cdom.Node, w io.Writer, dict map[*html.Node]string,
 	gparams *graphParamsType) {
 	//
 	//fmt.Printf("dict has %d entries\n", len(dict))
@@ -168,7 +167,7 @@ type pgedge struct {
 	PropGroup *style.PropertyGroup
 }
 
-func pgEdge(n dom.RODomNode, pg *style.PropertyGroup, w io.Writer, dict map[*html.Node]string,
+func pgEdge(n w3cdom.Node, pg *style.PropertyGroup, w io.Writer, dict map[*html.Node]string,
 	gparams *graphParamsType) {
 	//
 	name := dict[n.HtmlNode()]

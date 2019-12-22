@@ -250,6 +250,7 @@ func (w *W3CNode) Attributes() w3cdom.NamedNodeMap {
 // the node and its descendants.
 func (w *W3CNode) TextContent() string {
 	// TODO
+	// https://db.in.tum.de/~leis/papers/ART.pdf
 	return ""
 }
 
@@ -327,6 +328,9 @@ func (a *W3CAttr) Children() w3cdom.NodeList { return nil }
 
 // FirstChild returns nil
 func (a *W3CAttr) FirstChild() w3cdom.Node { return nil }
+
+// NextSibling returns nil
+func (a *W3CAttr) NextSibling() w3cdom.Node { return nil }
 
 // Attributes returns nil
 func (a *W3CAttr) Attributes() w3cdom.NamedNodeMap { return nil }
