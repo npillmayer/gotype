@@ -456,3 +456,11 @@ func FromHTMLParseTree(h *html.Node) w3cdom.Node {
 	}
 	return domify(stytree)
 }
+
+// Walk creates a tree walker set up to traverse the DOM.
+func (w *W3CNode) Walk() *tree.Walker {
+	if w == nil {
+		return nil
+	}
+	return tree.NewWalker(&w.stylednode.Node)
+}

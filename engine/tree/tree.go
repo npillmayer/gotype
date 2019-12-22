@@ -38,15 +38,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import (
 	"errors"
 	"sync"
-
-	"github.com/npillmayer/gotype/core/config/gtrace"
-	"github.com/npillmayer/gotype/core/config/tracing"
 )
-
-// T returns a global tracer. We're tracing to the EngineTracer
-func T() tracing.Trace {
-	return gtrace.EngineTracer
-}
 
 // ErrInvalidFilter is thrown if a pipeline filter step is defunct.
 var ErrInvalidFilter = errors.New("Filter stage is invalid")
@@ -515,6 +507,71 @@ func topDown(node *Node, isBuffered bool, udata userdata, push func(*Node),
 		revisitChildrenOf(node, pushBuf) // hand over node as parent
 	} else {
 		pushBuf(node, nil) // simply move incoming nodes over to buffer queue
+	}
+	return nil
+}
+
+// TODO
+func (w *Walker) BottomUp(action Action) *Walker {
+	if w == nil {
+		return nil
+	}
+	if action == nil {
+		w.pipe.errors <- ErrInvalidFilter
+	} else {
+		err := w.appendFilterForTask(bottomUp, action, 5) // need a helper queue
+		if err != nil {
+			T().Errorf(err.Error())
+			panic(err) // TODO for debugging purposes until more mature
+		}
+	}
+	return w
+}
+
+// TODO find a way of operating on parent nodes just once, as soon as the las
+// child has finished action(...)
+// ad-hoc container
+// type parentAndPosition struct {
+// 	parent   *Node
+// 	position int
+// }
+
+func bottomUp(node *Node, isBuffered bool, udata userdata, push func(*Node),
+	pushBuf func(*Node, interface{})) error {
+	//
+	if isBuffered {
+		action := udata.filterdata.(Action)
+		var parent *Node
+		var position int
+		if udata.nodedata != nil {
+			parent = udata.nodedata.(parentAndPosition).parent
+			position = udata.nodedata.(parentAndPosition).position
+		}
+		result, err := action(node, parent, position)
+		T().Debugf("Action for node %s returned: %v, err=%v", node, result, err)
+		if err != nil {
+			return err // do not descend further
+		}
+		if result != nil {
+			push(result) // result -> next pipeline stage
+		}
+		revisitChildrenOf(node, pushBuf) // hand over node as parent
+	} else {
+		// TODO: put this into *buffered* branch
+		action := udata.filterdata.(Action)
+		position := 0
+		parent := node.Parent()
+		if parent != nil {
+			position = parent.IndexOfChild(node)
+		}
+		result, err := action(node, parent, position)
+		if err == nil && result != nil {
+			push(result) // result -> next pipeline stage
+		}
+		if parent != nil {
+
+		}
+		pushBuf(parent, udata)
 	}
 	return nil
 }

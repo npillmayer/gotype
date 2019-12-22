@@ -3,7 +3,7 @@ package tree
 /*
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -18,7 +18,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -42,12 +42,13 @@ import (
 
 // Node is the base type our tree is built of.
 type Node struct {
-	parent   *Node
-	children childrenSlice
-	Payload  interface{}
+	parent   *Node         // parent node of this node
+	children childrenSlice // mutex-protected slice of children nodes
+	Payload  interface{}   // nodes may carry a payload of arbitrary type
+	Rank     uint32        // rank is used for preserving sequence
 }
 
-// NewNode creates a new tree node with a payload.
+// NewNode creates a new tree node with a given payload.
 func NewNode(payload interface{}) *Node {
 	return &Node{Payload: payload}
 }
@@ -112,8 +113,8 @@ func (node *Node) Children() []*Node {
 func (node *Node) IndexOfChild(ch *Node) int {
 	if node.ChildCount() > 0 {
 		children := node.Children()
-		for i := 0; i < len(children); i++ {
-			if ch == children[i] {
+		for i, child := range children {
+			if ch == child {
 				return i
 			}
 		}
