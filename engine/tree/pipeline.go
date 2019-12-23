@@ -88,7 +88,7 @@ type filter struct {
 // user data together with nodes in a buffer queue.
 type nodeSupport struct {
 	node     *Node       // buffered node
-	nodedata interface{} // arbitrary user dataarbitrary user data
+	nodedata interface{} // arbitrary user data
 }
 
 // filterenv holds information about the outside world to be referenced by

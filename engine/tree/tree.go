@@ -171,12 +171,20 @@ func (w *Walker) Promise() func() ([]*Node, error) {
 // Predicate is a function type to match against nodes of a tree.
 // Is is used as an argument for various Walker functions to
 // collect a selection of nodes.
-type Predicate func(*Node) (matches bool, err error)
+type Predicate func(*Node) (match *Node, err error)
 
 // Whatever is a predicate to match anything (see type Predicate).
 // It is useful to match the first node in a given direction.
-var Whatever Predicate = func(*Node) (bool, error) {
-	return true, nil
+var Whatever Predicate = func(n *Node) (*Node, error) {
+	return n, nil
+}
+
+// NodeIsLeaf is a predicate to match leafs of a tree.
+var NodeIsLeaf = func(n *Node) (match *Node, err error) {
+	if n.ChildCount() == 0 {
+		return n, nil
+	}
+	return nil, nil
 }
 
 // TraverseAll is a predicate to match nothing (see type Predicate).
@@ -256,22 +264,26 @@ func (w *Walker) AncestorWith(predicate Predicate) *Walker {
 	return w
 }
 
-// ancestorWith searches iteratively for a node matching a predicate.
-// node is at least the parent of the start node.
+// ancestorWith searches iteratively for an ancestor node matching a predicate.
+// node is at least the parent of the start node or nil.
 func ancestorWith(node *Node, isBuffered bool, udata userdata, push func(*Node),
 	pushBuf func(*Node, interface{})) error {
 	//
+	if node == nil {
+		return nil
+	}
 	predicate := udata.filterdata.(Predicate)
 	anc := node.Parent()
 	for anc != nil {
-		matches, err := predicate(anc)
+		matchedNode, err := predicate(anc)
 		if err != nil {
 			return err
 		}
-		if matches {
-			push(anc) // put ancestor on output channel for next pipeline stage
+		if matchedNode != nil {
+			push(matchedNode) // put ancestor on output channel for next pipeline stage
 			return nil
 		}
+		anc = anc.Parent()
 	}
 	return nil // no matching ancestor found, not an error
 }
@@ -301,13 +313,13 @@ func descendentsWith(node *Node, isBuffered bool, udata userdata, push func(*Nod
 	//
 	if isBuffered {
 		predicate := udata.filterdata.(Predicate)
-		matches, err := predicate(node)
-		T().Debugf("Predicate for node %s returned: %v, err=%v", node, matches, err)
+		matchedNode, err := predicate(node)
+		T().Debugf("Predicate for node %s returned: %v, err=%v", node, matchedNode, err)
 		if err != nil {
 			return err // do not descend further
 		}
-		if matches {
-			push(node) // found one, put on output channel for next pipeline stage
+		if matchedNode != nil {
+			push(matchedNode) // found one, put on output channel for next pipeline stage
 		}
 		revisitChildrenOf(node, pushBuf)
 	} else {
@@ -444,7 +456,7 @@ func clientFilter(node *Node, isBuffered bool, udata userdata, push func(*Node),
 	//
 	userfunc := udata.filterdata.(func(*Node) (*Node, error))
 	n, err := userfunc(node)
-	if n != nil {
+	if n != nil && err != nil {
 		push(n) // forward filtered node to next pipeline stage
 	}
 	return err
@@ -488,7 +500,7 @@ type parentAndPosition struct {
 func topDown(node *Node, isBuffered bool, udata userdata, push func(*Node),
 	pushBuf func(*Node, interface{})) error {
 	//
-	if isBuffered {
+	if isBuffered { // node was received from buffer queue
 		action := udata.filterdata.(Action)
 		var parent *Node
 		var position int
@@ -511,7 +523,20 @@ func topDown(node *Node, isBuffered bool, udata userdata, push func(*Node),
 	return nil
 }
 
-// TODO
+type bottomUpFilterData struct {
+	action       Action
+	childrenDict *rankMap
+}
+
+// BottomUp traverses a tree starting at (and including) all the current nodes.
+// Usually clients will select all of the tree's leafs before calling *BottomUp*().
+// The traversal guarantees that parents are not processed before
+// all of their children.
+//
+// If the action function returns an error for a node,
+// the parent is processed regardless.
+//
+// If w is nil, BottomUp will return nil.
 func (w *Walker) BottomUp(action Action) *Walker {
 	if w == nil {
 		return nil
@@ -519,7 +544,11 @@ func (w *Walker) BottomUp(action Action) *Walker {
 	if action == nil {
 		w.pipe.errors <- ErrInvalidFilter
 	} else {
-		err := w.appendFilterForTask(bottomUp, action, 5) // need a helper queue
+		filterdata := &bottomUpFilterData{
+			action:       action,
+			childrenDict: newRankMap(),
+		}
+		err := w.appendFilterForTask(bottomUp, filterdata, 5) // need a helper queue
 		if err != nil {
 			T().Errorf(err.Error())
 			panic(err) // TODO for debugging purposes until more mature
@@ -528,50 +557,33 @@ func (w *Walker) BottomUp(action Action) *Walker {
 	return w
 }
 
-// TODO find a way of operating on parent nodes just once, as soon as the las
-// child has finished action(...)
-// ad-hoc container
-// type parentAndPosition struct {
-// 	parent   *Node
-// 	position int
-// }
-
 func bottomUp(node *Node, isBuffered bool, udata userdata, push func(*Node),
 	pushBuf func(*Node, interface{})) error {
 	//
-	if isBuffered {
-		action := udata.filterdata.(Action)
-		var parent *Node
-		var position int
-		if udata.nodedata != nil {
-			parent = udata.nodedata.(parentAndPosition).parent
-			position = udata.nodedata.(parentAndPosition).position
-		}
-		result, err := action(node, parent, position)
-		T().Debugf("Action for node %s returned: %v, err=%v", node, result, err)
-		if err != nil {
-			return err // do not descend further
-		}
-		if result != nil {
-			push(result) // result -> next pipeline stage
-		}
-		revisitChildrenOf(node, pushBuf) // hand over node as parent
-	} else {
-		// TODO: put this into *buffered* branch
-		action := udata.filterdata.(Action)
+	if node.ChildCount() > 0 { // check if all children have been processed
+		childCounter := udata.filterdata.(*bottomUpFilterData).childrenDict
+		if int(childCounter.Get(node)) < node.ChildCount() {
+			return nil
+		} // else drop this node until last child processed
+	}
+	if isBuffered { // node was received from buffer queue
 		position := 0
 		parent := node.Parent()
 		if parent != nil {
 			position = parent.IndexOfChild(node)
 		}
-		result, err := action(node, parent, position)
-		if err == nil && result != nil {
-			push(result) // result -> next pipeline stage
+		action := udata.filterdata.(*bottomUpFilterData).action
+		resultNode, err := action(node, parent, position)
+		if err == nil && resultNode != nil {
+			push(resultNode) // result node -> next pipeline stage
 		}
-		if parent != nil {
-
+		if parent != nil { // if this is not a root node
+			childCounter := udata.filterdata.(*bottomUpFilterData).childrenDict
+			childCounter.Inc(parent) // signal that one more child is done (ie., this node)
+			pushBuf(parent, udata)   // possibly continue processing with parent
 		}
-		pushBuf(parent, udata)
+	} else {
+		pushBuf(node, udata) // move start nodes over to buffer queue
 	}
 	return nil
 }

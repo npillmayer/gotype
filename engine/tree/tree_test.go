@@ -8,15 +8,17 @@ import (
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 )
 
 func Test0(t *testing.T) {
-	gtrace.EngineTracer = gologadapter.New()
+	gtrace.EngineTracer = gotestingadapter.New()
 	gtrace.EngineTracer.SetTraceLevel(tracing.LevelDebug)
 }
 
 func TestEmptyWalker(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	n := checkRuntime(t, -1)
 	w := NewWalker(nil)
 	future := w.Parent().Promise()
@@ -33,6 +35,8 @@ func TestEmptyWalker(t *testing.T) {
 }
 
 func TestParent(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	n := checkRuntime(t, -1)
 	node1, node2 := NewNode(1), NewNode(2)
 	node1.AddChild(node2) // simple tree: (1)-->(2)
@@ -49,6 +53,8 @@ func TestParent(t *testing.T) {
 }
 
 func TestParentOfRoot(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	n := checkRuntime(t, -1)
 	node1 := NewNode(1)
 	w := NewWalker(node1)
@@ -64,6 +70,8 @@ func TestParentOfRoot(t *testing.T) {
 }
 
 func TestAncestor(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	n := checkRuntime(t, -1)
 	node1, node2 := NewNode(1), NewNode(2)
 	node1.AddChild(node2) // simple tree: (1)-->(2)
@@ -83,6 +91,8 @@ func TestAncestor(t *testing.T) {
 }
 
 func TestDescendents(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	n := checkRuntime(t, -1)
 	node1, node2, node3, node4 := NewNode(1), NewNode(2), NewNode(3), NewNode(4)
 	// build tree:
@@ -94,9 +104,12 @@ func TestDescendents(t *testing.T) {
 	node1.AddChild(node2)
 	node2.AddChild(node3)
 	node1.AddChild(node4)
-	gr3 := func(node *Node) (bool, error) {
+	gr3 := func(node *Node) (*Node, error) {
 		val := node.Payload.(int)
-		return (val >= 3), nil // match nodes (3) and (4)
+		if val >= 3 { // match nodes (3) and (4)
+			return node, nil
+		}
+		return nil, nil
 	}
 	w := NewWalker(node1)
 	future := w.DescendentsWith(gr3).Promise()
@@ -126,9 +139,12 @@ func ExampleWalker_Promise() {
 	root.AddChild(n2).AddChild(n4)
 	n2.AddChild(n3)
 	// Define our ad-hoc predicate
-	greater5 := func(node *Node) (bool, error) {
+	greater5 := func(node *Node) (*Node, error) {
 		val := node.Payload.(int)
-		return (val > 5), nil // match nodes with value > 5
+		if val > 5 { // match nodes with value > 5
+			return node, nil
+		}
+		return nil, nil
 	}
 	// Now navigate the tree (concurrently)
 	future := NewWalker(root).DescendentsWith(greater5).Promise()
@@ -146,6 +162,8 @@ func ExampleWalker_Promise() {
 }
 
 func TestTopDown1(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	n := checkRuntime(t, -1)
 	// Build a tree:
 	//                 (root:1)
@@ -172,7 +190,73 @@ func TestTopDown1(t *testing.T) {
 	checkRuntime(t, n)
 }
 
+func TestBottomUp1(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	n := checkRuntime(t, -1)
+	// Build a tree:
+	//                 (root:3)
+	//          (n2:2)----+----(n4:1)
+	//  (n3:1)----+
+	//
+	root, n2, n3, n4 := NewNode(3), NewNode(2), NewNode(1), NewNode(1)
+	root.AddChild(n2).AddChild(n4)
+	n2.AddChild(n3)
+	i := 0
+	nodevals := make([]int, 4)
+	myaction := func(n *Node, parent *Node, position int) (*Node, error) {
+		T().Debugf("node has value=%v", n.Payload)
+		nodevals[i] = n.Payload.(int)
+		i++
+		return n, nil
+	}
+	future := NewWalker(n3).BottomUp(myaction).Promise()
+	_, err := future() // will block until walking is finished
+	if err != nil {
+		t.Error(err)
+	}
+	if i != 2 { // nodes n4 and root should not be processed
+		t.Logf("result values = %v", nodevals)
+		t.Errorf("Expected action to be called 2 times, was %d", i)
+	}
+	checkRuntime(t, n)
+}
+
+func TestBottomUp2(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	n := checkRuntime(t, -1)
+	// Build a tree:
+	//                 (root:3)
+	//          (n2:2)----+----(n4:1)
+	//  (n3:1)----+
+	//
+	root, n2, n3, n4 := NewNode(3), NewNode(2), NewNode(1), NewNode(1)
+	root.AddChild(n2).AddChild(n4)
+	n2.AddChild(n3)
+	i := 0
+	nodevals := make([]int, 4)
+	myaction := func(n *Node, parent *Node, position int) (*Node, error) {
+		T().Debugf("node has value=%v", n.Payload)
+		nodevals[i] = n.Payload.(int) // this is unreliably
+		i++
+		return n, nil
+	}
+	future := NewWalker(root).DescendentsWith(NodeIsLeaf).BottomUp(myaction).Promise()
+	_, err := future() // will block until walking is finished
+	if err != nil {
+		t.Error(err)
+	}
+	if i != 4 { // all nodes should be processed
+		t.Logf("(unreliable) result values = %v", nodevals)
+		t.Errorf("Expected action to be called 4 times, was %d", i)
+	}
+	checkRuntime(t, n)
+}
+
 func TestAttribute1(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	n := checkRuntime(t, -1)
 	node1 := NewNode(1)
 	w := NewWalker(node1)
@@ -228,12 +312,17 @@ func checkNodes(nodes []*Node, vals ...int) bool {
 // Helper to check for leaked goroutines.
 func checkRuntime(t *testing.T, N int) int {
 	if N < 1 {
-		return runtime.NumGoroutine()
+		n := runtime.NumGoroutine()
+		t.Logf("pre-test %d goroutines are alive", n)
+		return n
 	}
 	time.Sleep(10 * time.Millisecond)
 	n := runtime.NumGoroutine()
 	if n > N {
 		t.Logf("still %d goroutines alive", n)
+		if N != n {
+			t.Fail()
+		}
 	}
 	return n
 }
