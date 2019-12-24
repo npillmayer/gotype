@@ -289,6 +289,30 @@ func (a attr) SetAttribute(payload interface{}, key interface{}, value interface
 	return false
 }
 
+func TestRank(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	n := checkRuntime(t, -1)
+	// Build a tree:
+	//                 (root:3)
+	//          (n2:2)----+----(n4:1)
+	//  (n3:1)----+
+	//
+	root, n2, n3, n4 := NewNode(3), NewNode(2), NewNode(1), NewNode(1)
+	root.AddChild(n2).AddChild(n4)
+	n2.AddChild(n3)
+	future := NewWalker(root).DescendentsWith(NodeIsLeaf).BottomUp(CalcRank).Promise()
+	_, err := future() // will block until walking is finished
+	if err != nil {
+		t.Error(err)
+	}
+	if root.Rank != 4 || n2.Rank != 2 {
+		t.Errorf("Rank of root node should be 4, is %d", root.Rank)
+		t.Errorf("Rank of node n2 should be 2, is %d", n2.Rank)
+	}
+	checkRuntime(t, n)
+}
+
 // ----------------------------------------------------------------------
 
 // Helper to check if result nodes are the expected ones.

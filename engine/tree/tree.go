@@ -587,3 +587,16 @@ func bottomUp(node *Node, isBuffered bool, udata userdata, push func(*Node),
 	}
 	return nil
 }
+
+func CalcRank(n *Node, parent *Node, position int) (*Node, error) {
+	//
+	r := uint32(1)
+	for i := 0; i < n.ChildCount(); i++ {
+		ch, ok := n.Child(i)
+		if ok {
+			r += ch.Rank
+		}
+	}
+	n.Rank = r
+	return n, nil
+}
