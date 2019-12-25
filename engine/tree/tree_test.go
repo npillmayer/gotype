@@ -235,7 +235,7 @@ func TestBottomUp2(t *testing.T) {
 	root.AddChild(n2).AddChild(n4)
 	n2.AddChild(n3)
 	i := 0
-	nodevals := make([]int, 4)
+	nodevals := make([]int, 6)
 	myaction := func(n *Node, parent *Node, position int) (*Node, error) {
 		T().Debugf("node has value=%v", n.Payload)
 		nodevals[i] = n.Payload.(int) // this is unreliably
@@ -310,6 +310,46 @@ func TestRank(t *testing.T) {
 		t.Errorf("Rank of root node should be 4, is %d", root.Rank)
 		t.Errorf("Rank of node n2 should be 2, is %d", n2.Rank)
 	}
+	checkRuntime(t, n)
+}
+
+func TestSerial1(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	n := checkRuntime(t, -1)
+	// Build a tree:
+	//                 (root:6)
+	//          (n2:2)----+----(n4:5)
+	//  (n3:1)----+        (n5:3)-+--(n6:4)
+	//
+	root, n2, n3, n4 := NewNode(6), NewNode(2), NewNode(1), NewNode(5)
+	n5, n6 := NewNode(3), NewNode(4)
+	root.AddChild(n2).AddChild(n4)
+	n2.AddChild(n3)
+	n4.AddChild(n5).AddChild(n6)
+	// calculate rank for each node
+	NewWalker(root).DescendentsWith(NodeIsLeaf).BottomUp(CalcRank).Promise()()
+	if root.Rank != 6 {
+		t.Errorf("Rank of root node should be 6, is %d", root.Rank)
+	}
+	myaction := func(n *Node, parent *Node, position int) (*Node, error) {
+		t.Logf("rank of node(%d) is %d", n.Payload.(int), n.Rank)
+		return n, nil
+	}
+	future := NewWalker(root).TopDown(myaction).Promise()
+	nodes, err := future() // will block until walking is finished
+	if err != nil {
+		t.Error(err)
+	}
+	z := 0
+	for i, n := range nodes {
+		t.Logf("node #%d is (%v) with rank %d", i, n.Payload, n.Rank)
+		z = z<<4 + n.Payload.(int)
+	}
+	if z != 1193046 {
+		t.Errorf("checksum = %d, should be 1193046", z)
+	}
+	t.Fail()
 	checkRuntime(t, n)
 }
 

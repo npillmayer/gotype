@@ -303,9 +303,9 @@ func (w *Walker) DescendentsWith(predicate Predicate) *Walker {
 		w.pipe.errors <- ErrInvalidFilter
 	} else {
 		err := w.appendFilterForTask(descendentsWith, predicate, 5) // need a helper queue
-		if err != nil {
+		if err != nil {                                             // this should never happen here
 			T().Errorf(err.Error())
-			panic(err)
+			panic(err) // for debugging as long as this is unstable
 		}
 	}
 	return w
@@ -318,6 +318,9 @@ func descendentsWith(node *Node, isBuffered bool, udata userdata, push func(*Nod
 		predicate := udata.filterdata.(Predicate)
 		matchedNode, err := predicate(node)
 		serial := udata.serial
+		if serial == 0 {
+			serial = node.Rank
+		}
 		T().Debugf("Predicate for node %s returned: %v, err=%v", node, matchedNode, err)
 		if err != nil {
 			return err // do not descend further
@@ -344,12 +347,12 @@ func revisitChildrenOf(node *Node, serial uint32, pushBuf func(*Node, interface{
 
 // TODO
 func (node *Node) calcChildSerial(myserial uint32, ch *Node, position int) uint32 {
-	r := node.Rank
-	for i := node.ChildCount() - 1; i >= position; i-- {
+	r := myserial - 1
+	for i := node.ChildCount() - 1; i > position; i-- {
 		child, _ := node.Child(i)
-		r = r - child.Rank
+		r -= child.Rank
 	}
-	return myserial - r
+	return r
 }
 
 // AllDescendents traverses all descendents.
@@ -526,6 +529,9 @@ func topDown(node *Node, isBuffered bool, udata userdata, push func(*Node, uint3
 			position = udata.nodelocal.(parentAndPosition).position
 		}
 		serial := udata.serial
+		if serial == 0 {
+			serial = node.Rank
+		}
 		result, err := action(node, parent, position)
 		T().Debugf("Action for node %s returned: %v, err=%v", node, result, err)
 		if err != nil {
@@ -608,6 +614,10 @@ func bottomUp(node *Node, isBuffered bool, udata userdata, push func(*Node, uint
 	return nil
 }
 
+// CalcRank is an action for bottom-up processing. It Calculates the 'rank'-member
+// for each node, meaning: the number of child-nodes + 1.
+// The root node will hold the number of nodes in the entire tree.
+// Leaf nodes will have a rank of 1.
 func CalcRank(n *Node, parent *Node, position int) (*Node, error) {
 	//
 	r := uint32(1)

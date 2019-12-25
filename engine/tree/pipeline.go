@@ -37,6 +37,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import (
 	"runtime"
+	"sort"
 	"sync"
 )
 
@@ -365,14 +366,17 @@ func (pipe *pipeline) pushAsync(node *Node, serial uint32) {
 // not contain duplicate Nodes.
 func waitForCompletion(results <-chan nodePackage, errch <-chan error, counter *sync.WaitGroup) ([]*Node, error) {
 	// Collect all results from the pipeline
-	var selection []*Node
-	m := make(map[*Node]struct{})  // intermediate map to suppress duplicates
+	var selection []*Node          // slice of nodes -> return value
+	var serials []uint32           // slice of serial numbers for ordering
+	m := make(map[*Node]uint32)    // intermediate map to suppress duplicates
 	for nodepkg := range results { // drain results channel
-		m[nodepkg.node] = struct{}{}
-		counter.Done() // we removed a value => count down
+		m[nodepkg.node] = nodepkg.serial // remember last serial for node (may be random)
+		counter.Done()                   // we removed a value => count down
 	}
-	for node := range m {
+	for node, serial := range m {
 		selection = append(selection, node) // collect unique return values
+		serials = append(serials, serial)
+		sort.Sort(resultSlices{selection, serials})
 	}
 	// Get last error from error channel
 	var lasterror error
@@ -382,4 +386,16 @@ func waitForCompletion(results <-chan nodePackage, errch <-chan error, counter *
 		}
 	}
 	return selection, lasterror
+}
+
+type resultSlices struct {
+	nodes   []*Node
+	serials []uint32
+}
+
+func (rs resultSlices) Len() int           { return len(rs.nodes) }
+func (rs resultSlices) Less(i, j int) bool { return rs.serials[i] < rs.serials[j] }
+func (rs resultSlices) Swap(i, j int) {
+	rs.nodes[i], rs.nodes[j] = rs.nodes[j], rs.nodes[i]
+	rs.serials[i], rs.serials[j] = rs.serials[j], rs.serials[i]
 }
