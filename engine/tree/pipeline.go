@@ -373,10 +373,13 @@ func waitForCompletion(results <-chan nodePackage, errch <-chan error, counter *
 		m[nodepkg.node] = nodepkg.serial // remember last serial for node (may be random)
 		counter.Done()                   // we removed a value => count down
 	}
-	for node, serial := range m {
+	for node, serial := range m { // extract unique results into slices
 		selection = append(selection, node) // collect unique return values
 		serials = append(serials, serial)
+		// resultSlices is a helper struct for sorting
+		// it implements the Sort interface
 		sort.Sort(resultSlices{selection, serials})
+		// after this, serials are discarded
 	}
 	// Get last error from error channel
 	var lasterror error
@@ -386,16 +389,4 @@ func waitForCompletion(results <-chan nodePackage, errch <-chan error, counter *
 		}
 	}
 	return selection, lasterror
-}
-
-type resultSlices struct {
-	nodes   []*Node
-	serials []uint32
-}
-
-func (rs resultSlices) Len() int           { return len(rs.nodes) }
-func (rs resultSlices) Less(i, j int) bool { return rs.serials[i] < rs.serials[j] }
-func (rs resultSlices) Swap(i, j int) {
-	rs.nodes[i], rs.nodes[j] = rs.nodes[j], rs.nodes[i]
-	rs.serials[i], rs.serials[j] = rs.serials[j], rs.serials[i]
 }

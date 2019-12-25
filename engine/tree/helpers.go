@@ -72,7 +72,15 @@ func (rmap *rankMap) Clear(n *Node) uint32 {
 
 // --------------------------------------------------------------------------------
 
-// TODO
-// func (npkgs []nodePackage) Len() int {
-// 	return
-// }
+// a helper struct for ordering the resulting nodes and their serials
+type resultSlices struct {
+	nodes   []*Node
+	serials []uint32
+}
+
+func (rs resultSlices) Len() int           { return len(rs.nodes) }
+func (rs resultSlices) Less(i, j int) bool { return rs.serials[i] < rs.serials[j] }
+func (rs resultSlices) Swap(i, j int) {
+	rs.nodes[i], rs.nodes[j] = rs.nodes[j], rs.nodes[i]
+	rs.serials[i], rs.serials[j] = rs.serials[j], rs.serials[i]
+}
