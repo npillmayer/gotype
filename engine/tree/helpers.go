@@ -69,3 +69,10 @@ func (rmap *rankMap) Clear(n *Node) uint32 {
 	delete(rmap.count, n)
 	return rank
 }
+
+// --------------------------------------------------------------------------------
+
+// TODO
+// func (npkgs []nodePackage) Len() int {
+// 	return
+// }

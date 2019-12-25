@@ -18,7 +18,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -123,8 +123,8 @@ func (w *Walker) startProcessing() {
 	doStart := false
 	w.pipe.RLock()
 	if w.pipe.filters == nil { // no processing up to now => start with initial node
-		w.pipe.pushSync(w.initial) // input is buffered, will return immediately
-		doStart = true             // yes, we will have to start the pipeline
+		w.pipe.pushSync(w.initial, 0) // input is buffered, will return immediately
+		doStart = true                // yes, we will have to start the pipeline
 	}
 	w.pipe.RUnlock()
 	if doStart { // ok to be outside mutex as other goroutines will check pipe.empty()
@@ -160,6 +160,7 @@ func (w *Walker) Promise() func() ([]*Node, error) {
 		defer close(signal)
 		selection, lasterror = waitForCompletion(results, errch, counter)
 	}()
+	// TODO : sort results
 	return func() ([]*Node, error) {
 		<-signal
 		return selection, lasterror
@@ -234,12 +235,13 @@ func (w *Walker) Parent() *Walker {
 
 // parent is a very simple filter task to retrieve the parent of a tree node.
 // if the node is the tree root node, parent() will not produce a result.
-func parent(node *Node, isBuffered bool, udata userdata, push func(*Node),
-	pushBuf func(*Node, interface{})) error {
+func parent(node *Node, isBuffered bool, udata userdata, push func(*Node, uint32),
+	pushBuf func(*Node, interface{}, uint32)) error {
 	//
 	p := node.Parent()
+	serial := udata.serial
 	if p != nil {
-		push(p) // forward parent node to next pipeline stage
+		push(p, serial) // forward parent node to next pipeline stage
 	}
 	return nil
 }
@@ -266,21 +268,22 @@ func (w *Walker) AncestorWith(predicate Predicate) *Walker {
 
 // ancestorWith searches iteratively for an ancestor node matching a predicate.
 // node is at least the parent of the start node or nil.
-func ancestorWith(node *Node, isBuffered bool, udata userdata, push func(*Node),
-	pushBuf func(*Node, interface{})) error {
+func ancestorWith(node *Node, isBuffered bool, udata userdata, push func(*Node, uint32),
+	pushBuf func(*Node, interface{}, uint32)) error {
 	//
 	if node == nil {
 		return nil
 	}
 	predicate := udata.filterdata.(Predicate)
 	anc := node.Parent()
+	serial := udata.serial
 	for anc != nil {
 		matchedNode, err := predicate(anc)
 		if err != nil {
 			return err
 		}
 		if matchedNode != nil {
-			push(matchedNode) // put ancestor on output channel for next pipeline stage
+			push(matchedNode, serial) // put ancestor on output channel for next pipeline stage
 			return nil
 		}
 		anc = anc.Parent()
@@ -308,33 +311,45 @@ func (w *Walker) DescendentsWith(predicate Predicate) *Walker {
 	return w
 }
 
-func descendentsWith(node *Node, isBuffered bool, udata userdata, push func(*Node),
-	pushBuf func(*Node, interface{})) error {
+func descendentsWith(node *Node, isBuffered bool, udata userdata, push func(*Node, uint32),
+	pushBuf func(*Node, interface{}, uint32)) error {
 	//
 	if isBuffered {
 		predicate := udata.filterdata.(Predicate)
 		matchedNode, err := predicate(node)
+		serial := udata.serial
 		T().Debugf("Predicate for node %s returned: %v, err=%v", node, matchedNode, err)
 		if err != nil {
 			return err // do not descend further
 		}
 		if matchedNode != nil {
-			push(matchedNode) // found one, put on output channel for next pipeline stage
+			push(matchedNode, serial) // found one, put on output channel for next pipeline stage
 		}
-		revisitChildrenOf(node, pushBuf)
+		revisitChildrenOf(node, serial, pushBuf)
 	} else {
-		revisitChildrenOf(node, pushBuf)
+		serial := udata.serial
+		revisitChildrenOf(node, serial, pushBuf)
 	}
 	return nil
 }
 
-func revisitChildrenOf(node *Node, pushBuf func(*Node, interface{})) {
+func revisitChildrenOf(node *Node, serial uint32, pushBuf func(*Node, interface{}, uint32)) {
 	chcnt := node.ChildCount()
-	for i := 0; i < chcnt; i++ {
-		ch, _ := node.Child(i)
-		pp := parentAndPosition{node, i}
-		pushBuf(ch, pp)
+	for position := 0; position < chcnt; position++ {
+		ch, _ := node.Child(position)
+		pp := parentAndPosition{node, position}
+		pushBuf(ch, pp, node.calcChildSerial(serial, ch, position))
 	}
+}
+
+// TODO
+func (node *Node) calcChildSerial(myserial uint32, ch *Node, position int) uint32 {
+	r := node.Rank
+	for i := node.ChildCount() - 1; i >= position; i-- {
+		child, _ := node.Child(i)
+		r = r - child.Rank
+	}
+	return myserial - r
 }
 
 // AllDescendents traverses all descendents.
@@ -379,14 +394,15 @@ type attrInfo struct {
 // nil is a valid attribute value to compare.
 //
 // If no attribute handler is provided, no tree node will match.
-func attributeIs(node *Node, isBuffered bool, udata userdata, push func(*Node),
-	pushBuf func(*Node, interface{})) error {
+func attributeIs(node *Node, isBuffered bool, udata userdata, push func(*Node, uint32),
+	pushBuf func(*Node, interface{}, uint32)) error {
 	//
 	attr := udata.filterdata.(attrInfo)
+	serial := udata.serial
 	if attr.handler != nil {
 		val := attr.handler.GetAttribute(node.Payload, attr.key)
 		if attr.handler.AttributesEqual(val, attr.value) {
-			push(node) // forward node to next pipeline stage
+			push(node, serial) // forward node to next pipeline stage
 		}
 	}
 	return nil
@@ -451,13 +467,14 @@ func (w *Walker) Filter(f func(*Node) (*Node, error)) *Walker {
 	return w
 }
 
-func clientFilter(node *Node, isBuffered bool, udata userdata, push func(*Node),
-	pushBuf func(*Node, interface{})) error {
+func clientFilter(node *Node, isBuffered bool, udata userdata, push func(*Node, uint32),
+	pushBuf func(*Node, interface{}, uint32)) error {
 	//
 	userfunc := udata.filterdata.(func(*Node) (*Node, error))
+	serial := udata.serial
 	n, err := userfunc(node)
 	if n != nil && err != nil {
-		push(n) // forward filtered node to next pipeline stage
+		push(n, serial) // forward filtered node to next pipeline stage
 	}
 	return err
 }
@@ -497,28 +514,30 @@ type parentAndPosition struct {
 	position int
 }
 
-func topDown(node *Node, isBuffered bool, udata userdata, push func(*Node),
-	pushBuf func(*Node, interface{})) error {
+func topDown(node *Node, isBuffered bool, udata userdata, push func(*Node, uint32),
+	pushBuf func(*Node, interface{}, uint32)) error {
 	//
 	if isBuffered { // node was received from buffer queue
 		action := udata.filterdata.(Action)
 		var parent *Node
 		var position int
-		if udata.nodedata != nil {
-			parent = udata.nodedata.(parentAndPosition).parent
-			position = udata.nodedata.(parentAndPosition).position
+		if udata.nodelocal != nil {
+			parent = udata.nodelocal.(parentAndPosition).parent
+			position = udata.nodelocal.(parentAndPosition).position
 		}
+		serial := udata.serial
 		result, err := action(node, parent, position)
 		T().Debugf("Action for node %s returned: %v, err=%v", node, result, err)
 		if err != nil {
 			return err // do not descend further
 		}
 		if result != nil {
-			push(result) // result -> next pipeline stage
+			push(result, serial) // result -> next pipeline stage
 		}
-		revisitChildrenOf(node, pushBuf) // hand over node as parent
+		revisitChildrenOf(node, serial, pushBuf) // hand over node as parent
 	} else {
-		pushBuf(node, nil) // simply move incoming nodes over to buffer queue
+		serial := udata.serial
+		pushBuf(node, nil, serial) // simply move incoming nodes over to buffer queue
 	}
 	return nil
 }
@@ -557,8 +576,8 @@ func (w *Walker) BottomUp(action Action) *Walker {
 	return w
 }
 
-func bottomUp(node *Node, isBuffered bool, udata userdata, push func(*Node),
-	pushBuf func(*Node, interface{})) error {
+func bottomUp(node *Node, isBuffered bool, udata userdata, push func(*Node, uint32),
+	pushBuf func(*Node, interface{}, uint32)) error {
 	//
 	if node.ChildCount() > 0 { // check if all children have been processed
 		childCounter := udata.filterdata.(*bottomUpFilterData).childrenDict
@@ -566,6 +585,7 @@ func bottomUp(node *Node, isBuffered bool, udata userdata, push func(*Node),
 			return nil
 		} // else drop this node until last child processed
 	}
+	serial := udata.serial
 	if isBuffered { // node was received from buffer queue
 		position := 0
 		parent := node.Parent()
@@ -575,15 +595,15 @@ func bottomUp(node *Node, isBuffered bool, udata userdata, push func(*Node),
 		action := udata.filterdata.(*bottomUpFilterData).action
 		resultNode, err := action(node, parent, position)
 		if err == nil && resultNode != nil {
-			push(resultNode) // result node -> next pipeline stage
+			push(resultNode, serial) // result node -> next pipeline stage
 		}
 		if parent != nil { // if this is not a root node
 			childCounter := udata.filterdata.(*bottomUpFilterData).childrenDict
-			childCounter.Inc(parent) // signal that one more child is done (ie., this node)
-			pushBuf(parent, udata)   // possibly continue processing with parent
+			childCounter.Inc(parent)       // signal that one more child is done (ie., this node)
+			pushBuf(parent, udata, serial) // possibly continue processing with parent
 		}
 	} else {
-		pushBuf(node, udata) // move start nodes over to buffer queue
+		pushBuf(node, udata, serial) // move start nodes over to buffer queue
 	}
 	return nil
 }

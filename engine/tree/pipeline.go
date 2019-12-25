@@ -70,46 +70,66 @@ const (
 const maxBufferLength int = 128
 
 // Workers will be tasked a series of workerTasks.
-type workerTask func(*Node, bool, userdata, func(*Node), func(*Node, interface{})) error
+//
+// node: input tree node
+// isbuffered: is the input node from this stage's buffer queue?
+// udata: user provided additional data
+// emit:  // function to emit result node to next stage
+// buffer: function to queue node in local buffer
+//
+// Does not return anything except a possible error condition.
+type workerTask func(node *Node, isbuffered bool, udata userdata,
+	emit func(*Node, uint32), buffer func(*Node, interface{}, uint32)) error
 
 // filter is part of a pipeline, i.e. a stage of the overall pipeline to
 // process input (Nodes) and produce results (Nodes).
 // filters will perform concurrently.
 type filter struct {
-	next       *filter          // filters are chained
-	results    chan<- *Node     // results of this filter (pipeline stage)
-	queue      chan nodeSupport // helper queue if necessary
-	task       workerTask       // the task this filter performs
-	filterdata interface{}      // additional information needed to perform task
-	env        *filterenv       // connection to outside world
+	next       *filter            // filters are chained
+	results    chan<- nodePackage // results of this filter (pipeline stage)
+	queue      chan nodePackage   // helper queue if necessary
+	task       workerTask         // the task this filter performs
+	filterdata interface{}        // user-provided information needed to perform task
+	env        *filterenv         // connection to outside world
 }
 
-// nodeSupport is a small helper type to let clients store arbitrary
-// user data together with nodes in a buffer queue.
-type nodeSupport struct {
-	node     *Node       // buffered node
-	nodedata interface{} // arbitrary user data
+// nodePackage is the type which is transported in a pipeline.
+// Each pipeline stage emits an instance of this type to the next stage.
+//
+// 'nodelocal' lets clients store arbitrary user data together with the node.
+// It will be set to 'nil' as soon as the nodepackage is transferred to the next stage,
+// i.e., this type is local to a pipeline-stage/filter.
+type nodePackage struct {
+	node      *Node       // tree node
+	nodelocal interface{} // arbitrary user data
+	serial    uint32      // serial number of node for ordering
 }
 
 // filterenv holds information about the outside world to be referenced by
 // a filter. This includes input workload, error destination and a counter
 // for overall work on an pipeline.
 type filterenv struct {
-	input        <-chan *Node    // work to do for this filter, connected to predecessor
-	errors       chan<- error    // where errors are reported to
-	queuecounter *sync.WaitGroup // counter for overall work load
+	input        <-chan nodePackage // work to do for this filter, connected to predecessor
+	errors       chan<- error       // where errors are reported to
+	queuecounter *sync.WaitGroup    // counter for overall work load
 }
 
-// userdata is a container to provide user data for both information global
-// to a filter, as well as information companying a single node.
-// The user data information will be provided to filter actions.
+// userdata is a container managed by the pipeline mechanism. It will contain
+// two types of data availble for filters:
+// information global to a filter (filterdata),
+// and information acompanying a single node (nodelocal & serial).
+// The pipeline mechanism will construct this from the filter environment and from
+// node-local user-managed data, and it will deconstruct it for calls to a 'task()'.
 type userdata struct {
 	filterdata interface{}
-	nodedata   interface{}
+	nodelocal  interface{}
+	serial     uint32
 }
 
 // newFilter creates a new pipeline stage, i.e. a filter fed from an input
-// channel (workload) and putting processed nodes into an output channel (results).
+// channel (workload). the filter is expected to put processed nodes into an
+// output channel (results).
+//
 // Errors are reported to an error channel.
 func newFilter(task workerTask, filterdata interface{}, buflen int) *filter {
 	f := &filter{}
@@ -117,7 +137,7 @@ func newFilter(task workerTask, filterdata interface{}, buflen int) *filter {
 		if buflen > maxBufferLength {
 			buflen = maxBufferLength
 		}
-		f.queue = make(chan nodeSupport, buflen)
+		f.queue = make(chan nodePackage, buflen)
 	}
 	f.task = task
 	f.filterdata = filterdata
@@ -126,10 +146,10 @@ func newFilter(task workerTask, filterdata interface{}, buflen int) *filter {
 
 // This method signature is a bit strange, but for now it does the job.
 // Sets an environment for a filter an gets the results-channel in return.
-func (f *filter) start(env *filterenv) chan *Node {
+func (f *filter) start(env *filterenv) chan nodePackage {
 	f.env = env
-	res := make(chan *Node, 3) // output channel has to be in place before workers start
-	f.results = res            // be careful to set write-only for the filter
+	res := make(chan nodePackage, 3) // output channel has to be in place before workers start
+	f.results = res                  // be careful to set write-only for the filter
 	n := runtime.NumCPU()
 	if n > maxWorkerCount {
 		n = maxWorkerCount
@@ -149,16 +169,20 @@ func (f *filter) start(env *filterenv) chan *Node {
 
 // filterWorker is the default worker function. Each filter is free to start
 // as many of them as seems adequate.
+//
+// Each worker is identified through a worker number 'wno'.
 func filterWorker(f *filter, wno int) {
 	//  defer func() {
-	//	log.Printf("finished worker #%d\n", wno) // TODO eliminate this
+	//	log.Printf("finished worker #%d\n", wno) // for debugging
 	//}()
-	push := func(node *Node) { // worker will use this to hand result to next stage
-		f.pushResult(node)
+	push := func(node *Node, serial uint32) { // worker will use this to hand result to next stage
+		f.pushResult(node, serial)
 	}
 	for inNode := range f.env.input { // get workpackages until drained
-		udata := userdata{f.filterdata, nil}
-		err := f.task(inNode, false, udata, push, nil) // perform task on workpackage
+		node := inNode.node
+		serial := inNode.serial
+		udata := userdata{f.filterdata, nil, serial}
+		err := f.task(node, false, udata, push, nil) // perform task on workpackage
 		if err != nil {
 			f.env.errors <- err // signal error to caller
 		}
@@ -167,26 +191,31 @@ func filterWorker(f *filter, wno int) {
 }
 
 // filterWorkerWithQueue is a worker function which uses a separate support
-// queue, the 'buffer queue'.
+// queue, the 'buffer queue'. This buffer queue may be used to re-schedule nodes
+// until they are completely processed.
 func filterWorkerWithQueue(f *filter, wno int) {
-	push := func(node *Node) { // worker will use this to hand result to next stage
-		f.pushResult(node)
+	push := func(node *Node, serial uint32) { // worker will use this to hand result to next stage
+		f.pushResult(node, serial)
 	}
-	pushBuf := func(sup *Node, udata interface{}) { // worker will use this to queue work internally
-		f.pushBuffer(sup, udata)
+	pushBuf := func(sup *Node, udata interface{}, serial uint32) { // worker will use this to queue work internally
+		f.pushBuffer(sup, udata, serial)
 	}
 	var buffered bool
 	var node *Node
 	var udata userdata
 	for {
 		select { // get upstream workpackages and buffered workpackages until drained
-		case node = <-f.env.input:
+		case inNode := <-f.env.input:
+			node = inNode.node
+			udata.serial = inNode.serial
+			udata.nodelocal = nil
 			udata.filterdata = f.filterdata
 			buffered = false
 		case supdata := <-f.queue:
 			node = supdata.node
 			udata.filterdata = f.filterdata
-			udata.nodedata = supdata.nodedata
+			udata.nodelocal = supdata.nodelocal
+			udata.serial = supdata.serial
 			buffered = true
 		}
 		if node != nil {
@@ -204,20 +233,20 @@ func filterWorkerWithQueue(f *filter, wno int) {
 // pipeline is a chain of filters to perform tasks on Nodes.
 // Filters, i.e., pipeline stages are connected by channels.
 type pipeline struct {
-	sync.RWMutex                // to sychronize access to various fields
-	queuecount   sync.WaitGroup // overall count of work packages
-	errors       chan error     // collector channel for error messages
-	filters      *filter        // chain of filters
-	input        chan *Node     // initial workload
-	results      chan *Node     // where final output of this pipeline goes to
-	running      bool           // is this pipeline processing?
+	sync.RWMutex                  // to sychronize access to various fields
+	queuecount   sync.WaitGroup   // overall count of work packages
+	errors       chan error       // collector channel for error messages
+	filters      *filter          // chain of filters
+	input        chan nodePackage // initial workload
+	results      chan nodePackage // where final output of this pipeline goes to
+	running      bool             // is this pipeline processing?
 }
 
 // newPipeline creates an empty pipeline.
 func newPipeline() *pipeline {
 	pipe := &pipeline{}
 	pipe.errors = make(chan error, 3)
-	pipe.input = make(chan *Node, 10)
+	pipe.input = make(chan nodePackage, 10)
 	pipe.results = pipe.input // short-curcuit, will be filled with filters
 	return pipe
 }
@@ -232,25 +261,25 @@ func (pipe *pipeline) empty() bool {
 // pushResult puts a node on the results channel of a filter stage (non-blocking).
 // It is used by filter workers to communicate a result to the next stage
 // of a pipeline.
-func (f *filter) pushResult(node *Node) {
+func (f *filter) pushResult(node *Node, serial uint32) {
 	f.env.queuecounter.Add(1)
 	written := true
 	select { // try to send it synchronously without blocking
-	case f.results <- node:
+	case f.results <- nodePackage{node, nil, serial}:
 	default:
 		written = false
 	}
 	if !written { // nope, we'll have to go async
-		go func(node *Node) {
-			f.results <- node
-		}(node)
+		go func(node *Node, serial uint32) {
+			f.results <- nodePackage{node, nil, serial}
+		}(node, serial)
 	}
 }
 
 // pushBuffer puts a node on the buffer queue of a filter
 // (non-blocking).
-func (f *filter) pushBuffer(node *Node, udata interface{}) {
-	nodesup := nodeSupport{node, udata}
+func (f *filter) pushBuffer(node *Node, udata interface{}, serial uint32) {
+	nodesup := nodePackage{node, udata, serial}
 	f.env.queuecounter.Add(1) // overall workload increases
 	written := true
 	select { // try to send it synchronously without blocking
@@ -259,7 +288,7 @@ func (f *filter) pushBuffer(node *Node, udata interface{}) {
 		written = false
 	}
 	if !written { // nope, we'll have to go async
-		go func(sup nodeSupport) {
+		go func(sup nodePackage) {
 			f.queue <- sup
 		}(nodesup)
 	}
@@ -317,16 +346,16 @@ func (pipe *pipeline) startProcessing() {
 }
 
 // pushSync synchronously puts a node on the input channel of a pipeline.
-func (pipe *pipeline) pushSync(node *Node) {
+func (pipe *pipeline) pushSync(node *Node, serial uint32) {
 	pipe.queuecount.Add(1)
-	pipe.input <- node // input q is buffered
+	pipe.input <- nodePackage{node, nil, serial} // input q is buffered
 }
 
 // pushAsync asynchronously puts a node on the input channel of a pipeline.
-func (pipe *pipeline) pushAsync(node *Node) {
+func (pipe *pipeline) pushAsync(node *Node, serial uint32) {
 	pipe.queuecount.Add(1)
 	go func(node *Node) {
-		pipe.input <- node
+		pipe.input <- nodePackage{node, nil, serial} // input q is buffered
 	}(node)
 }
 
@@ -334,12 +363,12 @@ func (pipe *pipeline) pushAsync(node *Node) {
 // It will receive the results of the final filter stage of the pipeline
 // and collect them into a slice of Nodes. The slice will be a set, i.e.
 // not contain duplicate Nodes.
-func waitForCompletion(results <-chan *Node, errch <-chan error, counter *sync.WaitGroup) ([]*Node, error) {
+func waitForCompletion(results <-chan nodePackage, errch <-chan error, counter *sync.WaitGroup) ([]*Node, error) {
 	// Collect all results from the pipeline
 	var selection []*Node
-	m := make(map[*Node]struct{}) // intermediate map to suppress duplicates
-	for node := range results {   // drain results channel
-		m[node] = struct{}{}
+	m := make(map[*Node]struct{})  // intermediate map to suppress duplicates
+	for nodepkg := range results { // drain results channel
+		m[nodepkg.node] = struct{}{}
 		counter.Done() // we removed a value => count down
 	}
 	for node := range m {
