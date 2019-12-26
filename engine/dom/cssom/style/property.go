@@ -3,7 +3,7 @@ package style
 /*
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -18,7 +18,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -51,28 +51,32 @@ func T() tracing.Trace {
 }
 
 // Property is a raw value for a CSS property. For example, with
+//
 //     color: black
+//
 // a property value of "black" is set. The main purpose of wrapping
 // the raw string value into type Property is to provide a set of
-// convenient type conversion functions.
+// convenient type conversion functions and other helpers.
 type Property string
 
+// NullStyle is an empty property value.
 const NullStyle Property = ""
 
 func (p Property) String() string {
 	return string(p)
 }
 
-// property = "initial"
+// IsInitial denotes if a property is of inheritence-type "initial"
 func (p Property) IsInitial() bool {
 	return p == "initial"
 }
 
-// property = "inherited"
+// IsInherited denotes if a property is of inheritence-type "inheritet"
 func (p Property) IsInherited() bool {
 	return p == "inherited"
 }
 
+// IsEmpty checks wether a property is empty, i.e. the null-string.
 func (p Property) IsEmpty() bool {
 	return p == ""
 }
@@ -94,12 +98,12 @@ type KeyValue struct {
 // The mapping of property into groups is documented with
 // GroupNameFromPropertyKey[...].
 type PropertyGroup struct {
-	name          string
-	Parent        *PropertyGroup
-	propertiesMap map[string]Property
-	//signature       uint32 // signature of IDs and classes, used for caching
+	name      string
+	Parent    *PropertyGroup
+	propsDict map[string]Property
 }
 
+// NewPropertyGroup creates a new empty property group, given its name.
 func NewPropertyGroup(groupname string) *PropertyGroup {
 	pg := &PropertyGroup{}
 	pg.name = groupname
@@ -115,7 +119,7 @@ func (pg *PropertyGroup) Name() string {
 // Stringer for property groups; used for debugging.
 func (pg *PropertyGroup) String() string {
 	s := "[" + pg.name + "] =\n"
-	for k, v := range pg.propertiesMap {
+	for k, v := range pg.propsDict {
 		s += fmt.Sprintf("  %s = %s\n", k, v)
 	}
 	return s
@@ -124,8 +128,8 @@ func (pg *PropertyGroup) String() string {
 // Properties returns all properties of a group.
 func (pg *PropertyGroup) Properties() []KeyValue {
 	i := 0
-	r := make([]KeyValue, len(pg.propertiesMap))
-	for k, v := range pg.propertiesMap {
+	r := make([]KeyValue, len(pg.propsDict))
+	for k, v := range pg.propsDict {
 		r[i] = KeyValue{k, v}
 		i++
 	}
@@ -134,10 +138,10 @@ func (pg *PropertyGroup) Properties() []KeyValue {
 
 // IsSet is a predicated wether a property is set within this group.
 func (pg *PropertyGroup) IsSet(key string) bool {
-	if pg.propertiesMap == nil {
+	if pg.propsDict == nil {
 		return false
 	}
-	v, ok := pg.propertiesMap[key]
+	v, ok := pg.propsDict[key]
 	return ok && !v.IsEmpty()
 }
 
@@ -145,10 +149,10 @@ func (pg *PropertyGroup) IsSet(key string) bool {
 //
 // Style property values are always converted to lower case.
 func (pg *PropertyGroup) Get(key string) (Property, bool) {
-	if pg.propertiesMap == nil {
+	if pg.propsDict == nil {
 		return NullStyle, false
 	}
-	p, ok := pg.propertiesMap[key]
+	p, ok := pg.propsDict[key]
 	return p, ok
 }
 
@@ -157,23 +161,27 @@ func (pg *PropertyGroup) Get(key string) (Property, bool) {
 // Style property values are always converted to lower case.
 func (pg *PropertyGroup) Set(key string, p Property) {
 	p = Property(strings.ToLower(string(p)))
-	if pg.propertiesMap == nil {
-		pg.propertiesMap = make(map[string]Property)
+	if pg.propsDict == nil {
+		pg.propsDict = make(map[string]Property)
 	}
-	pg.propertiesMap[key] = p
+	pg.propsDict[key] = p
 }
 
-// Add a property's value. Does not overwrite an existing value.
+// Add a property's value. Does not overwrite an existing value, i.e., does nothing
+// if a value is already set.
 func (pg *PropertyGroup) Add(key string, p Property) {
-	if pg.propertiesMap == nil {
-		pg.propertiesMap = make(map[string]Property)
+	if pg.propsDict == nil {
+		pg.propsDict = make(map[string]Property)
 	}
-	_, exists := pg.propertiesMap[key]
+	_, exists := pg.propsDict[key]
 	if !exists {
-		pg.propertiesMap[key] = p
+		pg.propsDict[key] = p
 	}
 }
 
+// ForkOnProperty creates a new PropertyGroup, pre-filled with a given property.
+// If 'cascade' is true, the new PropertyGroup will be
+// linking to the ancesting PropertyGroup containing this property.
 func (pg *PropertyGroup) ForkOnProperty(key string, p Property, cascade bool) (*PropertyGroup, bool) {
 	var ancestor *PropertyGroup
 	if cascade {
@@ -192,6 +200,7 @@ func (pg *PropertyGroup) ForkOnProperty(key string, p Property, cascade bool) (*
 	return npg, true
 }
 
+// Cascade finds the ancesiting PropertyGroup containing the given property-key.
 func (pg *PropertyGroup) Cascade(key string) *PropertyGroup {
 	it := pg
 	for it != nil && !it.IsSet(key) { // stopper is default partial
@@ -199,36 +208,6 @@ func (pg *PropertyGroup) Cascade(key string) *PropertyGroup {
 	}
 	return it
 }
-
-// Signature for being able to cache a fragment.
-// Caching is currently not implemented.
-//
-// Class values have to be sorted.
-//
-// Returns hash and number of ID+class attributes.
-//
-// TODO
-/*
-func HashSignatureAttributes(htmlNode *html.Node) (uint32, uint8) {
-	var hash uint32 = 0
-	var count uint8 = 0
-	signature := ""
-	for _, a := range htmlNode.Attr {
-		if a.Key == "id" {
-			signature += a.Key
-			count += 1
-		}
-	}
-	for _, a := range htmlNode.Attr {
-		if a.Key == "class" {
-			signature += a.Key
-			count += 1
-		}
-	}
-	hash = xxhash.Checksum32([]byte(signature))
-	return hash, count
-}
-*/
 
 // GroupNameFromPropertyKey returns the style property group name for a
 // style property.
@@ -244,26 +223,27 @@ func GroupNameFromPropertyKey(key string) string {
 	return groupname
 }
 
+// Symbolic names for string literals, denoting PropertyGroups.
 const (
-	PG_Margins   = "Margins"
-	PG_Padding   = "Padding"
-	PG_Border    = "Border"
-	PG_Dimension = "Dimension"
-	PG_Display   = "Display"
-	PG_Region    = "Region"
-	PG_X         = "X"
+	PGMargins   = "Margins"
+	PGPadding   = "Padding"
+	PGBorder    = "Border"
+	PGDimension = "Dimension"
+	PGDisplay   = "Display"
+	PGRegion    = "Region"
+	PGX         = "X"
 )
 
 var groupNameFromPropertyKey = map[string]string{
-	"margin-top":                 PG_Margins, // Margins
-	"margin-left":                PG_Margins,
-	"margin-right":               PG_Margins,
-	"margin-bottom":              PG_Margins,
-	"padding-top":                PG_Padding, // Padding
-	"padding-left":               PG_Padding,
-	"padding-right":              PG_Padding,
-	"padding-bottom":             PG_Padding,
-	"border-top-color":           "Border", // Border
+	"margin-top":                 PGMargins, // Margins
+	"margin-left":                PGMargins,
+	"margin-right":               PGMargins,
+	"margin-bottom":              PGMargins,
+	"padding-top":                PGPadding, // Padding
+	"padding-left":               PGPadding,
+	"padding-right":              PGPadding,
+	"padding-bottom":             PGPadding,
+	"border-top-color":           PGBorder, // Border
 	"border-left-color":          "Border",
 	"border-right-color":         "Border",
 	"border-bottom-color":        "Border",
@@ -285,12 +265,32 @@ var groupNameFromPropertyKey = map[string]string{
 	"min-height": "Dimension",
 	"max-width":  "Dimension",
 	"max-height": "Dimension",
-	"display":    PG_Display, // Display
-	"flow-into":  PG_Region,
-	"flow-from":  PG_Region,
+	"display":    PGDisplay, // Display
+	"float":      PGDisplay,
+	"visibility": PGDisplay,
+	"position":   PGDisplay,
+	"flow-into":  PGRegion,
+	"flow-from":  PGRegion,
 }
 
-// SplitCompountProperty splits up a shortcut property into its individual
+// isCascading returns wether the standard behaviour for a propery is to be
+// inherited or not, i.e., a call to retrieve its value will cascade.
+func isCascading(key string) bool {
+	if strings.HasPrefix(key, "list-style") {
+		return true
+	}
+	switch key {
+	case "color", "cursor", "direction", "position", "flow-into", "flow-from":
+		return true
+	case "letter-spacing", "line-height", "quotes", "visibility", "white-space":
+		return true
+	case "word-spacing", "word-break", "word-wrap":
+		return true
+	}
+	return false
+}
+
+// SplitCompoundProperty splits up a shortcut property into its individual
 // components. Returns a slice of key-value pairs representing the
 // individual (fine grained) style properties.
 // Example:
@@ -318,7 +318,7 @@ func SplitCompoundProperty(key string, value Property) ([]KeyValue, error) {
 	case "border-radius":
 		return feazeCompound4("border", "style", fourCorners, fields)
 	}
-	return nil, errors.New(fmt.Sprintf("Not recognized as compound property: %s", key))
+	return nil, fmt.Errorf("Not recognized as compound property: %s", key)
 }
 
 // CSS logic to distribute individual values from compound shortcuts is as
@@ -326,7 +326,7 @@ func SplitCompoundProperty(key string, value Property) ([]KeyValue, error) {
 func feazeCompound4(pre string, suf string, dirs [4]string, fields []string) ([]KeyValue, error) {
 	l := len(fields)
 	if l == 0 || l > 4 {
-		return nil, errors.New(fmt.Sprintf("Expecting 1-3 values for %s-%s", pre, suf))
+		return nil, fmt.Errorf("Expecting 1-3 values for %s-%s", pre, suf)
 	}
 	r := make([]KeyValue, 4, 4)
 	r[0] = KeyValue{p(pre, suf, dirs[0]), Property(fields[0])}
@@ -367,6 +367,8 @@ func p(prefix string, suffix string, tag string) string {
 // --- Property Map -----------------------------------------------------
 
 // PropertyMap holds CSS properties. nil is a legal (empty) property map.
+// A property map is the entity styling a DOM node: a DOM node links to a property map,
+// which contains zero or more property groups. Property maps may share property groups.
 type PropertyMap struct {
 	// As CSS defines a whole lot of properties, we segment them into logical groups.
 	m map[string]*PropertyGroup // into struct to make it opaque for clients
@@ -386,7 +388,7 @@ func (pmap *PropertyMap) String() string {
 	return s
 }
 
-// Size returns the number of style property entries.
+// Size returns the number of property groups.
 func (pmap *PropertyMap) Size() int {
 	if pmap == nil {
 		return 0
@@ -415,6 +417,34 @@ func (pmap *PropertyMap) Property(key string) (Property, bool) {
 	return group.Get(key)
 }
 
+// GetPropertyValue returns the property value for a given key.
+// If the property is inherited, it may cascade.
+func (pmap *PropertyMap) GetPropertyValue(key string, node *tree.Node, styler Interf) Property {
+	p, ok := pmap.Property(key)
+	if ok {
+		if p != "inherit" {
+			return p
+		}
+	}
+	// not found in local dicts => cascade, if allowed
+	if p == "inherit" || isCascading(key) {
+		groupname := GroupNameFromPropertyKey(key)
+		var group *PropertyGroup
+		//func (pg *PropertyGroup) Cascade(key string) *PropertyGroup {
+		for node != nil && group == nil {
+			styler := styler(node)
+			group = styler.ComputedStyles().Group(groupname)
+			node = node.Parent()
+		}
+		if group == nil {
+			return NullStyle
+		}
+		p, _ := group.Cascade(key).Get(key)
+		return p
+	}
+	return NullStyle
+}
+
 // AddAllFromGroup transfers all style properties from a property group
 // to a property map. If overwrite is set, existing style property values
 // will be overwritten, otherwise only new values are set.
@@ -432,7 +462,7 @@ func (pmap *PropertyMap) AddAllFromGroup(group *PropertyGroup, overwrite bool) *
 	if g == nil {
 		pmap.m[group.name] = group
 	} else {
-		for k, v := range group.propertiesMap {
+		for k, v := range group.propsDict {
 			if overwrite {
 				g.Set(k, v)
 			} else {
@@ -445,15 +475,15 @@ func (pmap *PropertyMap) AddAllFromGroup(group *PropertyGroup, overwrite bool) *
 
 // Add adds a property to this property map, e.g.,
 //    pm.Add("funny-margin", "big")
-func (pm *PropertyMap) Add(key string, value Property) {
-	if pm == nil {
+func (pmap *PropertyMap) Add(key string, value Property) {
+	if pmap == nil {
 		return
 	}
 	groupname := GroupNameFromPropertyKey(key)
-	group, found := pm.m[groupname]
+	group, found := pmap.m[groupname]
 	if !found {
 		group = NewPropertyGroup(groupname)
-		pm.m[groupname] = group
+		pmap.m[groupname] = group
 	}
 	group.Set(key, value)
 }
@@ -465,29 +495,29 @@ func InitializeDefaultPropertyValues(additionalProps []KeyValue) *PropertyMap {
 	m := make(map[string]*PropertyGroup, 15)
 	root := NewPropertyGroup("Root")
 
-	x := NewPropertyGroup(PG_X) // special group for extension properties
+	x := NewPropertyGroup(PGX) // special group for extension properties
 	for _, kv := range additionalProps {
 		x.Set(kv.Key, kv.Value)
 	}
-	m[PG_X] = x
+	m[PGX] = x
 
-	margins := NewPropertyGroup(PG_Margins)
+	margins := NewPropertyGroup(PGMargins)
 	margins.Set("margin-top", "0")
 	margins.Set("margin-left", "0")
 	margins.Set("margin-right", "0")
 	margins.Set("margin-bottom", "0")
 	margins.Parent = root
-	m[PG_Margins] = margins
+	m[PGMargins] = margins
 
-	padding := NewPropertyGroup(PG_Padding)
+	padding := NewPropertyGroup(PGPadding)
 	padding.Set("padding-top", "0")
 	padding.Set("padding-left", "0")
 	padding.Set("padding-right", "0")
 	padding.Set("padding-bottom", "0")
 	padding.Parent = root
-	m[PG_Padding] = padding
+	m[PGPadding] = padding
 
-	border := NewPropertyGroup(PG_Border)
+	border := NewPropertyGroup(PGBorder)
 	border.Set("border-top-color", "black")
 	border.Set("border-left-color", "black")
 	border.Set("border-right-color", "black")
@@ -505,9 +535,9 @@ func InitializeDefaultPropertyValues(additionalProps []KeyValue) *PropertyMap {
 	border.Set("border-bottom-left-radius", "0")
 	border.Set("border-bottom-right-radius", "0")
 	border.Parent = root
-	m[PG_Border] = border
+	m[PGBorder] = border
 
-	dimension := NewPropertyGroup(PG_Dimension)
+	dimension := NewPropertyGroup(PGDimension)
 	dimension.Set("width", "10%")
 	dimension.Set("width", "100pt")
 	dimension.Set("min-width", "0")
@@ -515,40 +545,40 @@ func InitializeDefaultPropertyValues(additionalProps []KeyValue) *PropertyMap {
 	dimension.Set("max-width", "10000pt")
 	dimension.Set("max-height", "10000pt")
 	dimension.Parent = root
-	m[PG_Dimension] = dimension
+	m[PGDimension] = dimension
 
-	display := NewPropertyGroup(PG_Display)
-	display.Set("display", "block")
-	m[PG_Display] = display
-
-	region := NewPropertyGroup(PG_Region)
+	region := NewPropertyGroup(PGRegion)
 	region.Set("flow-from", "")
 	region.Set("flow-into", "")
-	m[PG_Region] = region
+	m[PGRegion] = region
+
+	display := NewPropertyGroup(PGDisplay)
+	display.Set("display", "inline")
+	display.Set("float", "none")
+	display.Set("visibility", "visible")
+	display.Set("position", "static")
+	m[PGDisplay] = display
 
 	/*
+	   type DisplayStyle struct {
+	   	Display    uint8 // https://www.tutorialrepublic.com/css-reference/css-display-property.php
+	   	Top        dimen.Dimen
+	   	Left       dimen.Dimen
+	   	Right      dimen.Dimen
+	   	Bottom     dimen.Dimen
+	   	ZIndex     int
+	   	Overflow   uint8
+	   	OverflowX  uint8
+	   	OverflowY  uint8
+	   	Clip       string // geometric shape
+	   }
+
 	   type ColorModel string
 
 	   type Color struct {
 	   	Color   color.Color
 	   	Model   ColorModel
 	   	Opacity uint8
-	   }
-
-	   type DisplayStyle struct {
-	   	Display    uint8 // https://www.tutorialrepublic.com/css-reference/css-display-property.php
-	   	Position   uint8
-	   	Top        dimen.Dimen
-	   	Left       dimen.Dimen
-	   	Right      dimen.Dimen
-	   	Bottom     dimen.Dimen
-	   	Float      uint8
-	   	ZIndex     int
-	   	Overflow   uint8
-	   	OverflowX  uint8
-	   	OverflowY  uint8
-	   	Clip       string // geometric shape
-	   	Visibility bool
 	   }
 
 	   type Background struct {
@@ -650,7 +680,7 @@ func GetCascadedProperty(sn *styledtree.StyNode, key string) (Property, error) {
 // The call to GetCascadedProperty will flag an error if the style property
 // isn't found (which should not happen, as every property should be included
 // in the 'user-agent' default style properties).
-func GetCascadedProperty(n *tree.Node, key string, sty StyleInterf) (Property, error) {
+func GetCascadedProperty(n *tree.Node, key string, sty Interf) (Property, error) {
 	//
 	groupname := GroupNameFromPropertyKey(key)
 	var group *PropertyGroup
@@ -674,7 +704,7 @@ func GetCascadedProperty(n *tree.Node, key string, sty StyleInterf) (Property, e
 // The call to GetProperty will flag an error if the style property isn't found
 // (which should not happen, as every property should be included in the
 // 'user-agent' default style properties).
-func GetProperty(n *tree.Node, key string, sty StyleInterf) (Property, error) {
+func GetProperty(n *tree.Node, key string, sty Interf) (Property, error) {
 	if nonInherited[key] {
 		T().Debugf("Property %s is not inherited", key)
 		styler := sty(n)
@@ -710,3 +740,35 @@ func GetLocalProperty(pmap *PropertyMap, key string) (Property, bool) {
 	}
 	return group.Get(key)
 }
+
+// --------------------------------------------------------------------------
+
+// Signature for being able to cache a fragment.
+// Caching is currently not implemented.
+//
+// Class values have to be sorted.
+//
+// Returns hash and number of ID+class attributes.
+//
+// TODO
+/*
+func HashSignatureAttributes(htmlNode *html.Node) (uint32, uint8) {
+	var hash uint32 = 0
+	var count uint8 = 0
+	signature := ""
+	for _, a := range htmlNode.Attr {
+		if a.Key == "id" {
+			signature += a.Key
+			count += 1
+		}
+	}
+	for _, a := range htmlNode.Attr {
+		if a.Key == "class" {
+			signature += a.Key
+			count += 1
+		}
+	}
+	hash = xxhash.Checksum32([]byte(signature))
+	return hash, count
+}
+*/

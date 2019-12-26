@@ -41,7 +41,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 package w3cdom
 
 import (
-	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"golang.org/x/net/html"
 )
 
@@ -59,7 +58,6 @@ type Node interface {
 	NextSibling() Node            // get the Node's next sibling or nil if last
 	Attributes() NamedNodeMap     // get all attributes of a node
 	TextContent() (string, error) // get text from node and all descendents
-	ComputedStyles() *style.PropertyMap
 }
 
 // NodeList represents W3C-type NodeList

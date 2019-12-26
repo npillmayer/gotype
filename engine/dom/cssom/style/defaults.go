@@ -12,19 +12,19 @@ var nonInherited = map[string]bool{
 	"flow-into": true,
 }
 
-// TODO
+// GetDefaultProperty returns the default property for a given key.
 func GetDefaultProperty(styler Styler, key string) Property {
 	p := NullStyle
 	switch key {
 	case "display":
-		p = DisplayPropertyForHtmlNode(styler.HtmlNode())
+		p = DisplayPropertyForHTMLNode(styler.HtmlNode())
 	}
 	// TODO get from user agent defaults
 	return p
 }
 
-// DisplayPropertyForHtmlNode returns the *display* CSS property for an HTML node.
-func DisplayPropertyForHtmlNode(node *html.Node) Property {
+// DisplayPropertyForHTMLNode returns the *display* CSS property for an HTML node.
+func DisplayPropertyForHTMLNode(node *html.Node) Property {
 	if node == nil {
 		return "none"
 	}

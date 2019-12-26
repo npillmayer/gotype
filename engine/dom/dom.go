@@ -277,11 +277,30 @@ func (w *W3CNode) TextContent() (string, error) {
 }
 
 // ComputedStyles returns a map of style properties for a given (stylable) Node.
-func (w *W3CNode) ComputedStyles() *style.PropertyMap {
+func (w *W3CNode) ComputedStyles() *ComputedStyles {
 	if w == nil {
 		return nil
 	}
-	return w.stylednode.ComputedStyles()
+	return &ComputedStyles{w, w.stylednode.ComputedStyles()}
+}
+
+// ComputedStyles is a proxy type for a node's styles.
+type ComputedStyles struct {
+	domnode  *W3CNode
+	propsMap *style.PropertyMap
+}
+
+func styler(n *tree.Node) style.Styler {
+	return styledtree.Node(n)
+}
+
+// GetPropertyValue returns the property value for a given key.
+func (cstyles *ComputedStyles) GetPropertyValue(key string) style.Property {
+	if cstyles == nil {
+		return style.NullStyle
+	}
+	node := &cstyles.domnode.stylednode.Node
+	return cstyles.propsMap.GetPropertyValue(key, node, styler)
 }
 
 // --- Attributes -----------------------------------------------------------------
@@ -359,9 +378,6 @@ func (a *W3CAttr) Attributes() w3cdom.NamedNodeMap { return nil }
 
 // TextContent returns an empty string
 func (a *W3CAttr) TextContent() (string, error) { return "", nil }
-
-// ComputedStyles returns nil
-func (a *W3CAttr) ComputedStyles() *style.PropertyMap { return nil }
 
 // --- NamedNodeMap ---------------------------------------------------------------
 

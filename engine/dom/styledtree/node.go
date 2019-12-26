@@ -3,7 +3,7 @@ package styledtree
 /*
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -18,7 +18,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -63,6 +63,8 @@ type StyNode struct {
 	computedStyles *style.PropertyMap
 }
 
+var _ style.Styler = &StyNode{}
+
 // NewNodeForHtmlNode creates a new styled node linked to an HTML node.
 func NewNodeForHtmlNode(html *html.Node) *tree.Node {
 	sn := &StyNode{}
@@ -81,6 +83,11 @@ func Node(n *tree.Node) *StyNode {
 		return sn
 	}
 	return nil
+}
+
+// AsStyler returns a styled tree node as 'style.Styler'.
+func (sn *StyNode) AsStyler() style.Styler {
+	return sn
 }
 
 // Creator returns a style-creator for use in CSSOM
