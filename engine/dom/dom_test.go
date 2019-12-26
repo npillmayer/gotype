@@ -10,7 +10,6 @@ import (
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/dom/domdbg"
-	"github.com/npillmayer/gotype/engine/dom/styledtree"
 	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
 )
@@ -122,6 +121,7 @@ func TestDom2(t *testing.T) {
 
 // --- Helpers ----------------------------------------------------------
 
+/*
 func domFmt(dn dom.RODomNode) string {
 	return dn.String()
 }
@@ -155,3 +155,4 @@ func indent(w int) string {
 	}
 	return s
 }
+*/
