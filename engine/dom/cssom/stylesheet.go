@@ -37,6 +37,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ----------------------------------------------------------------- */
 
+// StyleSheet is an interface to abstract away a stylesheet-implementation.
 // In order to de-couple implementations of CSS-stylesheets from the
 // construction of the styled node tree, we introduce an interface
 // for CSS stylesheets. Clients for the styling engine will have to
@@ -56,7 +57,7 @@ type StyleSheet interface {
 	Rules() []Rule          // all the rules of a stylesheet
 }
 
-// Rules belong to a StyleSheet.
+// Rule is the type stylesheets consists of.
 //
 // See interface StyleSheet.
 type Rule interface {
