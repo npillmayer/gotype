@@ -38,10 +38,11 @@ package domdbg
 import (
 	"fmt"
 	"io"
+	"strings"
 	"text/template"
 
+	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
-	"github.com/npillmayer/gotype/engine/dom/w3cdom"
 	"golang.org/x/net/html"
 )
 
@@ -74,13 +75,16 @@ var defaultGroups = []string{
 //     - Padding
 //     - Border
 //     - Display
-func ToGraphViz(doc w3cdom.Node, w io.Writer, styleGroups []string) {
+func ToGraphViz(doc *dom.W3CNode, w io.Writer, styleGroups []string) {
 	tmpl, err := template.New("dom").Parse(graphHeadTmpl)
 	if err != nil {
 		panic(err)
 	}
 	gparams := graphParamsType{Fontname: "Helvetica"}
-	gparams.NodeTmpl = template.Must(template.New("domnode").Parse(domNodeTmpl))
+	gparams.NodeTmpl, _ = template.New("domnode").Funcs(
+		template.FuncMap{
+			"shortstring": shortText,
+		}).Parse(domNodeTmpl)
 	gparams.EdgeTmpl = template.Must(template.New("domedge").Parse(domEdgeTmpl))
 	gparams.StylegroupTmpl = template.Must(template.New("stylegroup").Parse(styleGroupTmpl))
 	gparams.PgedgeTmpl = template.Must(template.New("pgedge").Parse(pgEdgeTmpl))
@@ -99,27 +103,33 @@ func ToGraphViz(doc w3cdom.Node, w io.Writer, styleGroups []string) {
 }
 
 type node struct {
-	N    w3cdom.Node
+	N    *dom.W3CNode
 	Name string
 }
 
-func nodes(n w3cdom.Node, w io.Writer, dict map[*html.Node]string, gparams *graphParamsType) {
+func nodes(n *dom.W3CNode, w io.Writer, dict map[*html.Node]string, gparams *graphParamsType) {
 	domNode(n, w, dict, gparams)
-	children := n.ChildNodes()
-	ch := n.FirstChild()
-	for ch != nil {
-		nodes(ch, w, dict, gparams)
-		domEdge(n, ch, w, dict, gparams)
-		ch = ch.NextSibling()
+	if n.HasChildNodes() {
+		ch := n.FirstChild().(*dom.W3CNode)
+		for ch != nil {
+			nodes(ch, w, dict, gparams)
+			domEdge(n, ch, w, dict, gparams)
+			c := ch.NextSibling()
+			if c != nil {
+				ch = c.(*dom.W3CNode)
+			} else {
+				ch = nil
+			}
+		}
 	}
 }
 
-func domNode(n w3cdom.Node, w io.Writer, dict map[*html.Node]string, gparams *graphParamsType) {
-	name := dict[n.HtmlNode()]
+func domNode(n *dom.W3CNode, w io.Writer, dict map[*html.Node]string, gparams *graphParamsType) {
+	name := dict[n.HTMLNode()]
 	if name == "" {
 		l := len(dict) + 1
 		name = fmt.Sprintf("node%05d", l)
-		dict[n.HtmlNode()] = name
+		dict[n.HTMLNode()] = name
 	}
 	if err := gparams.NodeTmpl.Execute(w, &node{n, name}); err != nil {
 		panic(err)
@@ -127,7 +137,7 @@ func domNode(n w3cdom.Node, w io.Writer, dict map[*html.Node]string, gparams *gr
 	domStyles(n, w, dict, gparams)
 }
 
-func domStyles(n w3cdom.Node, w io.Writer, dict map[*html.Node]string, gparams *graphParamsType) {
+func domStyles(n *dom.W3CNode, w io.Writer, dict map[*html.Node]string, gparams *graphParamsType) {
 	pmap := n.ComputedStyles()
 	var prev *style.PropertyGroup
 	for _, s := range gparams.StyleGroups {
@@ -150,12 +160,12 @@ type edge struct {
 	N1, N2 node
 }
 
-func domEdge(n1 w3cdom.Node, n2 w3cdom.Node, w io.Writer, dict map[*html.Node]string,
+func domEdge(n1 *dom.W3CNode, n2 *dom.W3CNode, w io.Writer, dict map[*html.Node]string,
 	gparams *graphParamsType) {
 	//
 	//fmt.Printf("dict has %d entries\n", len(dict))
-	name1 := dict[n1.HtmlNode()]
-	name2 := dict[n2.HtmlNode()]
+	name1 := dict[n1.HTMLNode()]
+	name2 := dict[n2.HTMLNode()]
 	e := edge{node{n1, name1}, node{n2, name2}}
 	if err := gparams.EdgeTmpl.Execute(w, e); err != nil {
 		panic(err)
@@ -167,10 +177,10 @@ type pgedge struct {
 	PropGroup *style.PropertyGroup
 }
 
-func pgEdge(n w3cdom.Node, pg *style.PropertyGroup, w io.Writer, dict map[*html.Node]string,
+func pgEdge(n *dom.W3CNode, pg *style.PropertyGroup, w io.Writer, dict map[*html.Node]string,
 	gparams *graphParamsType) {
 	//
-	name := dict[n.HtmlNode()]
+	name := dict[n.HTMLNode()]
 	if err := gparams.PgedgeTmpl.Execute(w, pgedge{name, pg}); err != nil {
 		panic(err)
 	}
@@ -184,6 +194,20 @@ func pgpgEdge(pg1 *style.PropertyGroup, pg2 *style.PropertyGroup, w io.Writer,
 	}
 }
 
+func shortText(n *dom.W3CNode) string {
+	h := n.HTMLNode()
+	s := "\"\\\""
+	if len(h.Data) > 10 {
+		s += h.Data[:10] + "...\\\"\""
+	} else {
+		s += h.Data + "\\\"\""
+	}
+	s = strings.Replace(s, "\n", `\\n`, -1)
+	s = strings.Replace(s, "\t", `\\t`, -1)
+	s = strings.Replace(s, " ", "\u2423", -1)
+	return s
+}
+
 // --- Templates --------------------------------------------------------
 
 const graphHeadTmpl = `digraph g {                                                                                                             
@@ -193,15 +217,15 @@ const graphHeadTmpl = `digraph g {
    edge [fontname = "{{ .Fontname }}" fontsize=14] ;
 `
 
-const domNodeTmpl = `{{ if .N.IsText }}
-{{ .Name }}	[ label={{ printf "%q" .N.String }} shape=box style=filled fillcolor=white ] ;
+const domNodeTmpl = `{{ if eq .N.NodeName "#text" }}
+{{ .Name }}	[ label={{ shortstring .N }} shape=box style=filled fillcolor=grey95 fontname="Courier" fontsize=11.0 ] ;
 {{ else }}
-{{ .Name }}	[ label={{ printf "%q" .N.String }} shape=ellipse style=filled fillcolor=white ] ;
+{{ .Name }}	[ label={{ printf "%q" .N.NodeName }} shape=ellipse style=filled fillcolor=lightblue3 ] ;
 {{ end }}
 `
 
-const styleGroupTmpl = `{{ printf "pg%p" . }} [ style="filled" penwidth=1 fillcolor="white" shape="Mrecord" fontsize=12
-    label=<<table border="0" cellborder="0" cellpadding="2" cellspacing="0" bgcolor="white">
+const styleGroupTmpl = `{{ printf "pg%p" . }} [ style="filled" penwidth=1 fillcolor="ivory3" shape="Mrecord" fontsize=12
+    label=<<table border="0" cellborder="0" cellpadding="2" cellspacing="0" bgcolor="ivory3">
       <tr><td bgcolor="azure4" align="center" colspan="2"><font color="white">{{ .Name }}</font></td></tr>
       {{ range .Properties }}
       <tr><td align="right">{{ .Key }}:</td><td>{{ .Value }}</td></tr>

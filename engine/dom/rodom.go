@@ -1,13 +1,5 @@
 package dom
 
-import (
-	"strings"
-
-	"github.com/npillmayer/gotype/engine/dom/cssom/style"
-	"github.com/npillmayer/gotype/engine/tree"
-	"golang.org/x/net/html"
-)
-
 // ----------------------------------------------------------------------
 //
 // Material:
@@ -40,6 +32,8 @@ import (
 // https://www.smashingmagazine.com/2015/01/designing-for-print-with-css/
 //
 // ----------------------------------------------------------------------
+
+/*
 
 // RODomNode is an interface type which represents nodes of a DOM tree
 // in read-only mode, i.e. the node may not be modified by the client.
@@ -208,3 +202,4 @@ func shortText(h *html.Node) string {
 	s = strings.Replace(s, "\n", `\n`, -1)
 	return s
 }
+*/

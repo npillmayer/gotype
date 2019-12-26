@@ -1,6 +1,7 @@
 package dom_test
 
 import (
+	"io/ioutil"
 	"strings"
 	"testing"
 
@@ -8,10 +9,13 @@ import (
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/engine/dom"
+	"github.com/npillmayer/gotype/engine/dom/domdbg"
 	"github.com/npillmayer/gotype/engine/dom/styledtree"
 	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
 )
+
+var graphviz = false
 
 func T() tracing.Trace {
 	return gtrace.EngineTracer
@@ -39,20 +43,41 @@ p { margin-bottom: 10pt; }
 #world { padding-top: 20pt; }
 `
 
-func TestW3CDom1(t *testing.T) {
-	gtrace.EngineTracer = gotestingadapter.New()
+func buildDOM(t *testing.T) *dom.W3CNode {
 	h, err := html.Parse(strings.NewReader(myhtml))
 	if err != nil {
 		t.Errorf("Cannot create test document")
 	}
-	root := dom.FromHTMLParseTree(h)
-	//gvz, _ := ioutil.TempFile(".", "w3c-*.dot")
-	//defer gvz.Close()
-	//domdbg.ToGraphViz(wdom, gvz, nil)
+	return dom.FromHTMLParseTree(h)
+}
+
+func TestW3CDom1(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	root := buildDOM(t)
+	if graphviz {
+		gvz, _ := ioutil.TempFile(".", "w3c-*.dot")
+		defer gvz.Close()
+		domdbg.ToGraphViz(root, gvz, nil)
+	}
 	if root.NodeName() != "#document" {
 		t.Errorf("name of root element expected to be '#document")
 	}
 	t.Logf("root node is %s", root.NodeName())
+}
+
+func TestW3CTextContent1(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	root := buildDOM(t)
+	root.Walk().DescendentsWith(tree.NodeIsLeaf).BottomUp(tree.CalcRank).Promise()()
+	n, _ := dom.NodeAsTreeNode(root)
+	t.Logf("DOM has size=%d", n.Rank)
+	text, err := root.TextContent()
+	t.Logf("text content = '%s\n'", text)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
 }
 
 /*

@@ -24,13 +24,13 @@ type W3CNode struct {
 var _ w3cdom.Node = &W3CNode{}
 
 // NodeFromStyledNode creates a new DOM node from a styled node.
-func NodeFromStyledNode(sn *styledtree.StyNode) w3cdom.Node {
+func NodeFromStyledNode(sn *styledtree.StyNode) *W3CNode {
 	return &W3CNode{sn}
 }
 
 // NodeFromTreeNode creates a new DOM node from a tree node, which should
 // be the inner node of a styledtree.Node.
-func NodeFromTreeNode(tn *tree.Node) (w3cdom.Node, error) {
+func NodeFromTreeNode(tn *tree.Node) (*W3CNode, error) {
 	if tn == nil {
 		return nil, ErrNotAStyledNode
 	}
@@ -63,6 +63,11 @@ func NodeAsTreeNode(domnode w3cdom.Node) (*tree.Node, bool) {
 		return nil, false
 	}
 	return &w.stylednode.Node, true
+}
+
+// HTMLNode returns the HTML parse node this DOM node is derived from.
+func (w *W3CNode) HTMLNode() *html.Node {
+	return w.stylednode.HtmlNode()
 }
 
 // NodeType returns the type of the underlying HTML node, something like
@@ -248,10 +253,27 @@ func (w *W3CNode) Attributes() w3cdom.NamedNodeMap {
 
 // TextContent property of the Node interface represents the text content of
 // the node and its descendants.
-func (w *W3CNode) TextContent() string {
-	// TODO
-	// https://db.in.tum.de/~leis/papers/ART.pdf
-	return ""
+//
+// This implementation will include error strings in the text output, if errors occur.
+// They will be flagged as "(ERROR: ... )".
+func (w *W3CNode) TextContent() (string, error) {
+	future := w.Walk().DescendentsWith(NodeIsText).Promise()
+	textnodes, err := future()
+	if err != nil {
+		T().Errorf(err.Error())
+		return "(ERROR: " + err.Error() + " )", err
+	}
+	var b bytes.Buffer
+	var domnode *W3CNode
+	for _, t := range textnodes {
+		domnode, err = NodeFromTreeNode(t)
+		if err != nil {
+			b.WriteString("(ERROR: " + err.Error() + " )")
+		} else {
+			b.WriteString(domnode.NodeValue())
+		}
+	}
+	return b.String(), err
 }
 
 // ComputedStyles returns a map of style properties for a given (stylable) Node.
@@ -336,7 +358,7 @@ func (a *W3CAttr) NextSibling() w3cdom.Node { return nil }
 func (a *W3CAttr) Attributes() w3cdom.NamedNodeMap { return nil }
 
 // TextContent returns an empty string
-func (a *W3CAttr) TextContent() string { return "" }
+func (a *W3CAttr) TextContent() (string, error) { return "", nil }
 
 // ComputedStyles returns nil
 func (a *W3CAttr) ComputedStyles() *style.PropertyMap { return nil }
@@ -437,7 +459,7 @@ func (wl *W3CNodeList) String() string {
 // --------------------------------------------------------------------------------
 
 // FromHTMLParseTree returns a W3C DOM from parsed HTML.
-func FromHTMLParseTree(h *html.Node) w3cdom.Node {
+func FromHTMLParseTree(h *html.Node) *W3CNode {
 	styles := douceuradapter.ExtractStyleElements(h)
 	T().Debugf("Extracted %d <style> elements", len(styles))
 	//c, errcss := parser.Parse(mycss)
