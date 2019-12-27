@@ -1,6 +1,7 @@
 package layout
 
 import (
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/dimen"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
@@ -20,7 +21,7 @@ import (
 
 // T traces to the engine tracer.
 func T() tracing.Trace {
-	return tracing.EngineTracer
+	return gtrace.EngineTracer
 }
 
 // Layouter is a layout engine.

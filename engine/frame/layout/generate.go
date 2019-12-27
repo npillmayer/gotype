@@ -7,7 +7,6 @@ package layout
 import (
 	"fmt"
 
-	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
@@ -16,7 +15,7 @@ import (
 // Helper struct to pack a node of a styled tree.
 type stylednode struct {
 	treenode *tree.Node
-	toStyler style.StyleInterf
+	toStyler style.Interf
 }
 
 // TODO split into 2 runs:
@@ -32,7 +31,7 @@ func (l *Layouter) buildBoxTree() (*Container, error) {
 	T().Debugf("Creating box tree")
 	styler := l.styleCreator.ToStyler
 	sn := styler(l.styleroot)
-	T().Infof("ROOT node of style tree is %s", nodeTypeString(sn.HtmlNode().Type))
+	T().Infof("ROOT node of style tree is %s", nodeTypeString(sn.HTMLNode().Type))
 	style2BoxDict := newAssoc()
 	createBoxForEach := prepareBoxCreator(l.styleCreator.ToStyler, style2BoxDict)
 	future := styles.TopDown(createBoxForEach).Promise() // start asynchronous traversal
@@ -52,7 +51,7 @@ func (l *Layouter) buildBoxTree() (*Container, error) {
 	return l.boxroot, nil
 }
 
-func prepareBoxCreator(toStyler style.StyleInterf, styleToBox *styleToBoxAssoc) tree.Action {
+func prepareBoxCreator(toStyler style.Interf, styleToBox *styleToBoxAssoc) tree.Action {
 	action := func(n *tree.Node, parent *tree.Node, i int) (*tree.Node, error) {
 		sn := stylednode{
 			treenode: n,
@@ -64,12 +63,12 @@ func prepareBoxCreator(toStyler style.StyleInterf, styleToBox *styleToBoxAssoc) 
 }
 
 func makeBoxNode(sn stylednode, styleToBox *styleToBoxAssoc) (*tree.Node, error) {
-	T().Infof("making box for %s", nodeTypeString(sn.toStyler(sn.treenode).HtmlNode().Type))
+	T().Infof("making box for %s", nodeTypeString(sn.toStyler(sn.treenode).HTMLNode().Type))
 	box := boxForNode(sn.treenode, sn.toStyler)
 	if box == nil { // legit, e.g. for "display:none"
 		return nil, nil // will not descend to children of sn
 	}
-	T().Infof("assoc of %s", nodeTypeString(sn.toStyler(sn.treenode).HtmlNode().Type))
+	T().Infof("assoc of %s", nodeTypeString(sn.toStyler(sn.treenode).HTMLNode().Type))
 	styleToBox.Put(sn.treenode, box) // associate the styled tree node to this box
 	if parent := sn.treenode.Parent(); parent != nil {
 		fmt.Printf("parent is %s\n", parent)
@@ -107,7 +106,7 @@ func wrapInAnonymousBox(c *Container) *Container {
 
 // ----------------------------------------------------------------------
 
-func boxForNode(sn *tree.Node, toStyler style.StyleInterf) *Container {
+func boxForNode(sn *tree.Node, toStyler style.Interf) *Container {
 	if sn == nil {
 		return nil
 	}
@@ -126,8 +125,8 @@ func boxForNode(sn *tree.Node, toStyler style.StyleInterf) *Container {
 	return c
 }
 
-func possiblyCreateMiniHierarchy(c *Container, toStyler style.StyleInterf) {
-	htmlnode := toStyler(c.StyleNode).HtmlNode()
+func possiblyCreateMiniHierarchy(c *Container, toStyler style.Interf) {
+	htmlnode := toStyler(c.StyleNode).HTMLNode()
 	//propertyMap := styler.ComputedStyles()
 	switch htmlnode.Data {
 	case "li":
@@ -146,16 +145,16 @@ func possiblyCreateMiniHierarchy(c *Container, toStyler style.StyleInterf) {
 // container resulting from a
 // styled node. The context denotes the orientation in which a box's content
 // is layed out. It may be either InlineMode, BlockMode or NoMode.
-func GetFormattingContextForStyledNode(sn *tree.Node, toStyler style.StyleInterf) uint8 {
+func GetFormattingContextForStyledNode(sn *tree.Node, toStyler style.Interf) uint8 {
 	if sn == nil {
 		return NoMode
 	}
 	styler := toStyler(sn)
-	pmap := styler.ComputedStyles()
+	pmap := styler.Styles()
 	if val, _ := style.GetLocalProperty(pmap, "display"); val == "none" {
 		return DisplayNone
 	}
-	htmlnode := styler.HtmlNode()
+	htmlnode := styler.HTMLNode()
 	switch htmlnode.Type {
 	case html.ElementNode:
 		switch htmlnode.Data {
@@ -175,7 +174,7 @@ func GetFormattingContextForStyledNode(sn *tree.Node, toStyler style.StyleInterf
 		T().Errorf("Have styled node for non-element ?!?")
 		T().Errorf("type of node = %s", nodeTypeString(htmlnode.Type))
 		T().Errorf("data of node = %s", htmlnode.Data)
-		tracing.EngineTracer.Infof("unknown HTML element %s will stack children vertically",
+		T().Infof("unknown HTML element %s will stack children vertically",
 			htmlnode.Data)
 		return BlockMode
 	}

@@ -49,6 +49,7 @@ func (c *Container) IsPrincipal() bool {
 	return (c.StyleNode != nil)
 }
 
+// IsBlock returns true if a container has context orientation 'block'.
 func (c *Container) IsBlock() bool {
 	return c.contextOrientation == BlockMode
 }
@@ -111,23 +112,23 @@ func (c *Container) Add(child *Container) *Container {
 	return c
 }
 
-func getDisplayLevelForStyledNode(sn *tree.Node, toStyler style.StyleInterf) (uint8, string) {
+func getDisplayLevelForStyledNode(sn *tree.Node, toStyler style.Interf) (uint8, string) {
 	if sn == nil {
 		return NoMode, ""
 	}
 	styler := toStyler(sn)
-	T().Infof("display(%s/%s) = ?", styler.HtmlNode().Data, nodeTypeString(styler.HtmlNode().Type))
-	pmap := styler.ComputedStyles()
+	T().Infof("display(%s/%s) = ?", styler.HTMLNode().Data, nodeTypeString(styler.HTMLNode().Type))
+	pmap := styler.Styles()
 	dispProp, isSet := style.GetLocalProperty(pmap, "display")
 	if !isSet {
-		if styler.HtmlNode().Type != html.ElementNode &&
-			styler.HtmlNode().Type != html.DocumentNode {
+		if styler.HTMLNode().Type != html.ElementNode &&
+			styler.HTMLNode().Type != html.DocumentNode {
 			T().Errorf("Have styled node for non-element ?!?")
-			T().Errorf("type of node = %s", nodeTypeString(styler.HtmlNode().Type))
+			T().Errorf("type of node = %s", nodeTypeString(styler.HTMLNode().Type))
 			return InlineMode, ""
 		}
 	}
-	dispProp = style.DisplayPropertyForHtmlNode(styler.HtmlNode())
+	dispProp = style.DisplayPropertyForHTMLNode(styler.HTMLNode())
 	if strings.HasPrefix(dispProp.String(), "none") {
 		return DisplayNone, dispProp.String()
 	} else if strings.HasPrefix(dispProp.String(), "block") {
