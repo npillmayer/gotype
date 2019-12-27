@@ -27,9 +27,6 @@ func (d2c *domToBoxAssoc) Get(domnode *dom.W3CNode) (*Container, bool) {
 	d2c.RLock()
 	defer d2c.RUnlock()
 	c, ok := d2c.m[domnode]
-	if !ok {
-		return nil, false
-	}
 	return c, ok
 }
 
