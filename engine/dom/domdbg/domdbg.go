@@ -138,7 +138,7 @@ func domNode(n *dom.W3CNode, w io.Writer, dict map[*html.Node]string, gparams *g
 }
 
 func domStyles(n *dom.W3CNode, w io.Writer, dict map[*html.Node]string, gparams *graphParamsType) {
-	pmap := n.ComputedStyles().PropertiesMap()
+	pmap := n.ComputedStyles().Styles()
 	var prev *style.PropertyGroup
 	for _, s := range gparams.StyleGroups {
 		pg := pmap.Group(s)

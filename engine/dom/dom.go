@@ -67,7 +67,7 @@ func NodeAsTreeNode(domnode w3cdom.Node) (*tree.Node, bool) {
 
 // HTMLNode returns the HTML parse node this DOM node is derived from.
 func (w *W3CNode) HTMLNode() *html.Node {
-	return w.stylednode.HtmlNode()
+	return w.stylednode.HTMLNode()
 }
 
 // NodeType returns the type of the underlying HTML node, something like
@@ -76,7 +76,7 @@ func (w *W3CNode) NodeType() html.NodeType {
 	if w == nil {
 		return html.ErrorNode
 	}
-	return w.stylednode.HtmlNode().Type
+	return w.stylednode.HTMLNode().Type
 }
 
 // NodeName read-only property returns the name of the current Node as a string.
@@ -92,7 +92,7 @@ func (w *W3CNode) NodeName() string {
 	if w == nil {
 		return ""
 	}
-	h := w.stylednode.HtmlNode()
+	h := w.stylednode.HTMLNode()
 	switch h.Type {
 	case html.DocumentNode:
 		return "#document"
@@ -110,7 +110,7 @@ func (w *W3CNode) NodeValue() string {
 	if w == nil {
 		return ""
 	}
-	h := w.stylednode.HtmlNode()
+	h := w.stylednode.HTMLNode()
 	if h.Type == html.TextNode {
 		return h.Data
 	}
@@ -125,7 +125,7 @@ func (w *W3CNode) HasAttributes() bool {
 	}
 	tn, ok := NodeAsTreeNode(w)
 	if ok {
-		return len(styledtree.Node(tn).HtmlNode().Attr) > 0
+		return len(styledtree.Node(tn).HTMLNode().Attr) > 0
 	}
 	return false
 }
@@ -189,7 +189,7 @@ func (w *W3CNode) Children() w3cdom.NodeList {
 		j := 0
 		for _, ch := range children {
 			sn := styledtree.Node(ch)
-			if sn.HtmlNode().Type == html.ElementNode {
+			if sn.HTMLNode().Type == html.ElementNode {
 				childnodes[j] = &W3CNode{sn}
 				j++
 			}
@@ -242,7 +242,7 @@ func (w *W3CNode) Attributes() w3cdom.NamedNodeMap {
 	if w == nil {
 		return emptyNodeMap
 	}
-	h := w.stylednode.HtmlNode()
+	h := w.stylednode.HTMLNode()
 	switch h.Type {
 	case html.DocumentNode:
 	case html.ElementNode:
@@ -281,12 +281,12 @@ func (w *W3CNode) ComputedStyles() *ComputedStyles {
 	if w == nil {
 		return nil
 	}
-	return &ComputedStyles{w, w.stylednode.ComputedStyles()}
+	return &ComputedStyles{w, w.stylednode.Styles()}
 }
 
 // ComputedStyles is a proxy type for a node's styles.
 //
-// TODO include pseudo-elements => implement 
+// TODO include pseudo-elements => implement
 //
 //    var style = window.getComputedStyle(element [, pseudoElt]);
 //
@@ -309,8 +309,8 @@ func (cstyles *ComputedStyles) Styles() *style.PropertyMap {
 }
 
 // HTMLNode returns the underlying html.Node.
-func (cstyles *ComputedStyles) HTMLNode() *style.PropertyMap {
-	retrn cstyles.domnode.HTMLNode()
+func (cstyles *ComputedStyles) HTMLNode() *html.Node {
+	return cstyles.domnode.HTMLNode()
 }
 
 var _ style.Styler = &ComputedStyles{} // implementing style.Styler may be useful
@@ -429,7 +429,7 @@ func (wm *W3CMap) Length() int {
 	if wm == nil {
 		return 0
 	}
-	return len(wm.forNode.HtmlNode().Attr)
+	return len(wm.forNode.HTMLNode().Attr)
 }
 
 // Item returns the i.th item in a key-value map
@@ -437,7 +437,7 @@ func (wm *W3CMap) Item(i int) w3cdom.Attr {
 	if wm == nil {
 		return nil
 	}
-	attrs := wm.forNode.HtmlNode().Attr
+	attrs := wm.forNode.HTMLNode().Attr
 	if len(attrs) <= i || i < 0 {
 		return nil
 	}
@@ -449,7 +449,7 @@ func (wm *W3CMap) GetNamedItem(key string) w3cdom.Attr {
 	if wm == nil {
 		return nil
 	}
-	attrs := wm.forNode.HtmlNode().Attr
+	attrs := wm.forNode.HTMLNode().Attr
 	for _, a := range attrs {
 		if a.Key == key {
 			return &W3CAttr{&a}

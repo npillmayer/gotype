@@ -452,10 +452,10 @@ func (matches *matchesList) createStyleGroups(parent *tree.Node,
 func setupStyledNodeTree(domRoot *html.Node, defaults *style.PropertyMap,
 	creator style.Creator) *tree.Node {
 	//
-	rootNode := creator.StyleForHtmlNode(domRoot)
-	creator.SetComputedStyles(rootNode, defaults)
+	rootNode := creator.StyleForHTMLNode(domRoot)
+	creator.SetStyles(rootNode, defaults)
 	//T().Debugf("UA node has styles = %s", creator.ToStyler(rootNode).ComputedStyles())
-	docNode := creator.StyleForHtmlNode(domRoot)
+	docNode := creator.StyleForHTMLNode(domRoot)
 	rootNode.AddChild(docNode)
 	return docNode
 }
@@ -472,7 +472,7 @@ func findAncestorWithPropertyGroup(sn *tree.Node, group string,
 	it := sn // start search at styled node itself, then proceed upwards
 	last := sn
 	for it != nil && pg == nil {
-		styles := creator.ToStyler(it).ComputedStyles()
+		styles := creator.ToStyler(it).Styles()
 		if styles != nil {
 			pg = styles.Group(group)
 		}
@@ -549,7 +549,7 @@ func createStyledChildren(parent *tree.Node, rulesTree *rulesTreeType,
 	domnode := creator.ToStyler(parent)
 	//domnode := dom.NewRONode(parent, creator.ToStyler) // interface RODomNode
 	T().Debugf("Input node = %v, creating styled children", domnode)
-	h := domnode.HtmlNode()
+	h := domnode.HTMLNode()
 	if h.Type == html.ElementNode || h.Type == html.DocumentNode {
 		ch := h.FirstChild
 		for ch != nil {
@@ -557,7 +557,7 @@ func createStyledChildren(parent *tree.Node, rulesTree *rulesTreeType,
 				T().Infof("<style> nodes have to be extracted in advance")
 			} else if isInDom(ch.Type, ch.DataAtom) {
 				//} else if isStylable(ch.DataAtom) {
-				sn := creator.StyleForHtmlNode(ch)
+				sn := creator.StyleForHTMLNode(ch)
 				parent.AddChild(sn) // sn will be sent to next pipeline stage
 				if styleAttr := getStyleAttribute(ch); styleAttr != nil {
 					// attach local style attributes
@@ -606,15 +606,15 @@ func createStylesForNode(node *tree.Node, rulesTree *rulesTreeType, creator styl
 	splitters []CompoundPropertiesSplitter) (*tree.Node, error) {
 	//
 	styler := creator.ToStyler(node)
-	h := styler.HtmlNode()
+	h := styler.HTMLNode()
 	if h.Type == html.DocumentNode || h.Type == html.ElementNode {
 		if isStylable(h.DataAtom) {
-			matchlist := rulesTree.FilterMatchesFor(styler.HtmlNode())
+			matchlist := rulesTree.FilterMatchesFor(styler.HTMLNode())
 			if matchlist != nil && len(matchlist.matchingRules) != 0 {
 				matchlist.SortProperties(splitters)
 				pmap := matchlist.createStyleGroups(node.Parent(), creator)
 				T().Debugf("Setting styles for node %v =\n%s", node, pmap)
-				creator.SetComputedStyles(node, pmap)
+				creator.SetStyles(node, pmap)
 			} else {
 				T().Debugf("Node %v matched no style rules", node)
 			}

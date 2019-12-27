@@ -85,8 +85,10 @@ func TestW3CStyles1(t *testing.T) {
 	root := buildDOM(t)
 	body := root.FirstChild().FirstChild().NextSibling().(*dom.W3CNode)
 	props := body.ComputedStyles()
-	t.Logf("border-color = %v", props.GetPropertyValue("border-top-color"))
-	t.Fail()
+	color := props.GetPropertyValue("border-top-color")
+	if color != "red" {
+		t.Errorf("border-color = %v", color)
+	}
 }
 
 /*
