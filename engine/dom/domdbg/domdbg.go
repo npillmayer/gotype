@@ -58,10 +58,10 @@ type graphParamsType struct {
 }
 
 var defaultGroups = []string{
-	style.PG_Margins,
-	style.PG_Padding,
-	style.PG_Border,
-	style.PG_Display,
+	style.PGMargins,
+	style.PGPadding,
+	style.PGBorder,
+	style.PGDisplay,
 }
 
 // ToGraphViz outputs a diagram for a DOM tree. The diagram is in
@@ -138,7 +138,7 @@ func domNode(n *dom.W3CNode, w io.Writer, dict map[*html.Node]string, gparams *g
 }
 
 func domStyles(n *dom.W3CNode, w io.Writer, dict map[*html.Node]string, gparams *graphParamsType) {
-	pmap := n.ComputedStyles()
+	pmap := n.ComputedStyles().PropertiesMap()
 	var prev *style.PropertyGroup
 	for _, s := range gparams.StyleGroups {
 		pg := pmap.Group(s)

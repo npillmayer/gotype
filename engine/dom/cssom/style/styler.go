@@ -8,8 +8,8 @@ import (
 // Styler is an interface all concrete types of styled tree nodes
 // will have to implement to be usable for layout, rendering, etc.
 type Styler interface {
-	HtmlNode() *html.Node
-	ComputedStyles() *PropertyMap
+	HTMLNode() *html.Node
+	Styles() *PropertyMap
 }
 
 // Interf is a mapper from a concrete tree node to an interface
@@ -22,7 +22,7 @@ type Interf func(*tree.Node) Styler
 // You can think of this interface as
 // an adapter from a certain tree implementation to a styled tree.
 type Creator interface {
-	StyleForHtmlNode(*html.Node) *tree.Node
+	StyleForHTMLNode(*html.Node) *tree.Node
 	ToStyler(*tree.Node) Styler
-	SetComputedStyles(*tree.Node, *PropertyMap)
+	SetStyles(*tree.Node, *PropertyMap)
 }

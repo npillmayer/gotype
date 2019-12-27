@@ -65,8 +65,8 @@ type StyNode struct {
 
 var _ style.Styler = &StyNode{}
 
-// NewNodeForHtmlNode creates a new styled node linked to an HTML node.
-func NewNodeForHtmlNode(html *html.Node) *tree.Node {
+// NewNodeForHTMLNode creates a new styled node linked to an HTML node.
+func NewNodeForHTMLNode(html *html.Node) *tree.Node {
 	sn := &StyNode{}
 	sn.Payload = sn // Payload will always reference the node itself
 	sn.htmlNode = html
@@ -101,18 +101,18 @@ func (c creator) ToStyler(n *tree.Node) style.Styler {
 	return Node(n)
 }
 
-func (c creator) StyleForHtmlNode(htmlnode *html.Node) *tree.Node {
-	return NewNodeForHtmlNode(htmlnode)
+func (c creator) StyleForHTMLNode(htmlnode *html.Node) *tree.Node {
+	return NewNodeForHTMLNode(htmlnode)
 }
 
-func (c creator) SetComputedStyles(n *tree.Node, m *style.PropertyMap) {
-	Node(n).SetComputedStyles(m)
+func (c creator) SetStyles(n *tree.Node, m *style.PropertyMap) {
+	Node(n).SetStyles(m)
 }
 
 // ----------------------------------------------------------------------
 
-// HtmlNode gets the HTML DOM node corresponding to this styled node.
-func (sn StyNode) HtmlNode() *html.Node {
+// HTMLNode gets the HTML DOM node corresponding to this styled node.
+func (sn StyNode) HTMLNode() *html.Node {
 	return sn.Payload.(*StyNode).htmlNode
 }
 
@@ -164,13 +164,13 @@ func (sn StyNode) ChildNode(n int) style.TreeNode {
 
 // ----------------------------------------------------------------------
 
-// Interface style.TreeNode.
-func (sn StyNode) ComputedStyles() *style.PropertyMap {
+// Styles is part of interface style.Styler.
+func (sn StyNode) Styles() *style.PropertyMap {
 	return sn.computedStyles
 }
 
-// Interface cssom.StyledNode.
-func (sn *StyNode) SetComputedStyles(styles *style.PropertyMap) {
+// SetStyles sets the styling properties of a styled node.
+func (sn *StyNode) SetStyles(styles *style.PropertyMap) {
 	sn.computedStyles = styles
 }
 

@@ -17,7 +17,7 @@ func GetDefaultProperty(styler Styler, key string) Property {
 	p := NullStyle
 	switch key {
 	case "display":
-		p = DisplayPropertyForHTMLNode(styler.HtmlNode())
+		p = DisplayPropertyForHTMLNode(styler.HTMLNode())
 	}
 	// TODO get from user agent defaults
 	return p

@@ -433,7 +433,7 @@ func (pmap *PropertyMap) GetPropertyValue(key string, node *tree.Node, styler In
 		//func (pg *PropertyGroup) Cascade(key string) *PropertyGroup {
 		for node != nil && group == nil {
 			styler := styler(node)
-			group = styler.ComputedStyles().Group(groupname)
+			group = styler.Styles().Group(groupname)
 			node = node.Parent()
 		}
 		if group == nil {
@@ -686,7 +686,7 @@ func GetCascadedProperty(n *tree.Node, key string, sty Interf) (Property, error)
 	var group *PropertyGroup
 	for n != nil && group == nil {
 		styler := sty(n)
-		group = styler.ComputedStyles().Group(groupname)
+		group = styler.Styles().Group(groupname)
 		n = n.Parent()
 	}
 	if group == nil {
@@ -708,7 +708,7 @@ func GetProperty(n *tree.Node, key string, sty Interf) (Property, error) {
 	if nonInherited[key] {
 		T().Debugf("Property %s is not inherited", key)
 		styler := sty(n)
-		p, ok := GetLocalProperty(styler.ComputedStyles(), key)
+		p, ok := GetLocalProperty(styler.Styles(), key)
 		if !ok {
 			p = GetDefaultProperty(styler, key)
 		}

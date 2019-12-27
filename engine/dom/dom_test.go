@@ -79,6 +79,16 @@ func TestW3CTextContent1(t *testing.T) {
 	}
 }
 
+func TestW3CStyles1(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	root := buildDOM(t)
+	body := root.FirstChild().FirstChild().NextSibling().(*dom.W3CNode)
+	props := body.ComputedStyles()
+	t.Logf("border-color = %v", props.GetPropertyValue("border-top-color"))
+	t.Fail()
+}
+
 /*
 func prepareStyledTree(t *testing.T) *tree.Node {
 	h, errhtml := html.Parse(strings.NewReader(myhtml))

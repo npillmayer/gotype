@@ -290,6 +290,19 @@ type ComputedStyles struct {
 	propsMap *style.PropertyMap
 }
 
+// Styles returns the underlying style.PropertyMap.
+func (cstyles *ComputedStyles) Styles() *style.PropertyMap {
+	return cstyles.propsMap
+}
+
+// HTMLNode returns the underlying html.Node.
+func (cstyles *ComputedStyles) HTMLNode() *style.PropertyMap {
+	retrn cstyles.domnode.HTMLNode()
+}
+
+var _ style.Styler = &ComputedStyles{} // implementing style.Styler may be useful
+
+// Helper implementing style.Interf
 func styler(n *tree.Node) style.Styler {
 	return styledtree.Node(n)
 }
