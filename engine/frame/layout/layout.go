@@ -46,7 +46,8 @@ func NewLayouter(dom *dom.W3CNode) *Layouter {
 // of a styled tree (DOM).
 func (l *Layouter) Layout(viewport *dimen.Rect) *Container {
 	// First create the tree without calculating the dimensions
-	boxtree, err := l.buildBoxTree()
+	var err error
+	l.boxRoot, err = l.buildBoxTree()
 	if err != nil {
 		T().Errorf("Error building box tree")
 	}
@@ -57,5 +58,10 @@ func (l *Layouter) Layout(viewport *dimen.Rect) *Container {
 	layoutBoxes(layoutTree, viewport)
 	*/
 	//renderTree := layoutBoxes(layoutTree, viewport)
-	return boxtree
+	return l.boxRoot
+}
+
+// BoxRoot returns the root node of the render tree.
+func (l *Layouter) BoxRoot() *Container {
+	return l.boxRoot
 }

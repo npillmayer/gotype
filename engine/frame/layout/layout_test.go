@@ -1,8 +1,65 @@
-package layout
+package layout_test
 
 import (
+	"io/ioutil"
+	"strings"
+	"testing"
+
+	"github.com/npillmayer/gotype/engine/frame/layout"
+	"github.com/npillmayer/gotype/engine/frame/renderdbg"
+
+	"github.com/npillmayer/gotype/core/config/gtrace"
+	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
+	"github.com/npillmayer/gotype/engine/dom"
 	"golang.org/x/net/html"
 )
+
+var graphviz = true
+
+func T() tracing.Trace {
+	return gtrace.EngineTracer
+}
+
+var myhtml = `
+<html><head>
+<style>
+  body { border-color: red; }
+</style>
+</head><body>
+  <p>The quick brown fox jumps over the lazy dog.</p>
+  <p id="world">Hello <b>World</b>!</p>
+  <p style="padding-left: 5px;">This is a test.</p>
+</body>
+`
+
+func buildDOM(t *testing.T) *dom.W3CNode {
+	h, err := html.Parse(strings.NewReader(myhtml))
+	if err != nil {
+		t.Errorf("Cannot create test document")
+	}
+	return dom.FromHTMLParseTree(h)
+}
+
+func TestLayout1(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	root := buildDOM(t)
+	layout := layout.NewLayouter(root)
+	if layout.BoxRoot() == nil {
+		t.Errorf("Layout failed, render tree root is null")
+	} else {
+		if root.NodeName() != "#document" {
+			t.Errorf("name of root element expected to be '#document")
+		}
+		t.Logf("root node is %s", root.NodeName())
+		if graphviz {
+			gvz, _ := ioutil.TempFile(".", "layout-*.dot")
+			defer gvz.Close()
+			renderdbg.ToGraphViz(layout, gvz)
+		}
+	}
+}
 
 /*
 func Test0(t *testing.T) {
@@ -49,6 +106,7 @@ func TestLayout1(t *testing.T) {
 
 // ----------------------------------------------------------------------
 
+/*
 func makeHTMLNode(e string) *html.Node {
 	n := &html.Node{}
 	n.Type = html.ElementNode
@@ -62,9 +120,9 @@ func makeCData(s string) *html.Node {
 	n.Data = s
 	return n
 }
+*/
 
 /*
-
 func PrintTree(c *Container, t *testing.T) {
 	indent := 0
 	printContainer(c, indent, t)
