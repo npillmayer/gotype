@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/frame/box"
 	"github.com/npillmayer/gotype/engine/tree"
-	"golang.org/x/net/html"
 )
 
 // Flags for box context and display level.
@@ -18,14 +18,40 @@ const (
 	DisplayNone              // CSS display = none
 )
 
+// ModeString returns a string representation of a context/display mode.
+func ModeString(mode uint8) string {
+	switch mode {
+	case DisplayNone:
+		return "none"
+	case BlockMode:
+		return "block"
+	case InlineMode:
+		return "inline"
+	}
+	return "no-mode"
+}
+
+// ModeFromString returns a mode flag from a display property string.
+func ModeFromString(mode string) uint8 {
+	switch mode {
+	case "none":
+		return DisplayNone
+	case "block":
+		return BlockMode
+	case "inline":
+		return InlineMode
+	}
+	return NoMode
+}
+
 // Container is a (CSS-)styled box which may contain other boxes and/or
 // containers.
 type Container struct {
 	tree.Node                        // a container is a node within the layout tree
-	Box                box.StyledBox // styled box wich is layed out
+	Box                box.StyledBox // styled box for a DOM node
 	contextOrientation uint8         // context of children (block or inline)
 	displayLevel       uint8         // container lives in this mode (block or inline)
-	StyleNode          *tree.Node    // the DOM node this Container refers to
+	DOMNode            *dom.W3CNode  // the DOM node this Container refers to
 }
 
 // newContainer creates either a block-level container or an inline-level container
@@ -46,7 +72,7 @@ func newContainer(orientation uint8, displayLevel uint8) *Container {
 // list item marker and one for the item's text/content. Another example are anonymous
 // boxes, which will be generated for reconciling context/level-discrepancies.
 func (c *Container) IsPrincipal() bool {
-	return (c.StyleNode != nil)
+	return (c.DOMNode != nil)
 }
 
 // IsBlock returns true if a container has context orientation 'block'.
@@ -55,25 +81,25 @@ func (c *Container) IsBlock() bool {
 }
 
 // newVBox creates a block-level container with block context.
-func newBlockBox(sn *tree.Node) *Container {
+func newBlockBox(domnode *dom.W3CNode) *Container {
 	c := newContainer(BlockMode, BlockMode)
-	c.StyleNode = sn
+	c.DOMNode = domnode
 	return c
 }
 
 // newHBox creates an inline-level container with inline context.
-func newInlineBox(sn *tree.Node) *Container {
+func newInlineBox(domnode *dom.W3CNode) *Container {
 	c := newContainer(InlineMode, InlineMode)
-	c.StyleNode = sn
+	c.DOMNode = domnode
 	return c
 }
 
-// Node retrieves the payload of a tree node as a Container.
+// ContainerFromNode retrieves the payload of a tree node as a Container.
 // Will be called from clients as
 //
-//    container := layout.Node(n)
+//    container := layout.ContainerFromNode(n)
 //
-func Node(n *tree.Node) *Container {
+func ContainerFromNode(n *tree.Node) *Container {
 	if n == nil {
 		return nil
 	}
@@ -112,23 +138,16 @@ func (c *Container) Add(child *Container) *Container {
 	return c
 }
 
-func getDisplayLevelForStyledNode(sn *tree.Node, toStyler style.Interf) (uint8, string) {
-	if sn == nil {
+func getDisplayLevelForStyledNode(domnode *dom.W3CNode) (uint8, string) {
+	if domnode == nil {
 		return NoMode, ""
 	}
-	styler := toStyler(sn)
-	T().Infof("display(%s/%s) = ?", styler.HTMLNode().Data, nodeTypeString(styler.HTMLNode().Type))
-	pmap := styler.Styles()
-	dispProp, isSet := style.GetLocalProperty(pmap, "display")
-	if !isSet {
-		if styler.HTMLNode().Type != html.ElementNode &&
-			styler.HTMLNode().Type != html.DocumentNode {
-			T().Errorf("Have styled node for non-element ?!?")
-			T().Errorf("type of node = %s", nodeTypeString(styler.HTMLNode().Type))
-			return InlineMode, ""
-		}
+	T().Infof("display(%s/%s) = ?", domnode.NodeName(), domnode.NodeValue())
+	dispProp := domnode.ComputedStyles().GetPropertyValue("display")
+	if dispProp != style.NullStyle {
+		return ModeFromString(dispProp.String()), dispProp.String()
 	}
-	dispProp = style.DisplayPropertyForHTMLNode(styler.HTMLNode())
+	dispProp = style.DisplayPropertyForHTMLNode(domnode.HTMLNode())
 	if strings.HasPrefix(dispProp.String(), "none") {
 		return DisplayNone, dispProp.String()
 	} else if strings.HasPrefix(dispProp.String(), "block") {
@@ -139,6 +158,7 @@ func getDisplayLevelForStyledNode(sn *tree.Node, toStyler style.Interf) (uint8, 
 	return NoMode, ""
 }
 
+/*
 func nodeTypeString(nt html.NodeType) string {
 	switch nt {
 	case html.ErrorNode:
@@ -156,3 +176,4 @@ func nodeTypeString(nt html.NodeType) string {
 	}
 	return "?-node"
 }
+*/

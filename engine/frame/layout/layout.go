@@ -4,8 +4,7 @@ import (
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/dimen"
-	"github.com/npillmayer/gotype/engine/dom/cssom/style"
-	"github.com/npillmayer/gotype/engine/tree"
+	"github.com/npillmayer/gotype/engine/dom"
 )
 
 // TODO:
@@ -26,25 +25,25 @@ func T() tracing.Trace {
 
 // Layouter is a layout engine.
 type Layouter struct {
-	styleroot    *tree.Node    // input styled tree
-	boxroot      *Container    // layout tree to contruct
-	styleCreator style.Creator // to create a style node
-	err          error         // remember last error
+	domRoot *dom.W3CNode // input styled tree
+	boxRoot *Container   // layout tree to contruct
+	err     error        // remember last error
+	//styleCreator style.Creator // to create a style node
 }
 
 // NewLayouter creates a new layout engine for a given style tree.
 // The tree's styled nodes will be accessed using styler(node).
-func NewLayouter(styles *tree.Node, creator style.Creator) *Layouter {
+func NewLayouter(dom *dom.W3CNode) *Layouter {
 	//
 	l := &Layouter{
-		styleroot:    styles,
-		styleCreator: creator,
+		domRoot: dom,
+		//styleCreator: creator,
 	}
 	return l
 }
 
 // Layout produces a render tree from walking the nodes
-// of a styled tree.
+// of a styled tree (DOM).
 func (l *Layouter) Layout(viewport *dimen.Rect) *Container {
 	// First create the tree without calculating the dimensions
 	boxtree, err := l.buildBoxTree()

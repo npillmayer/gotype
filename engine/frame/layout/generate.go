@@ -7,16 +7,19 @@ package layout
 import (
 	"fmt"
 
-	"github.com/npillmayer/gotype/engine/dom/cssom/style"
+	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
 )
 
 // Helper struct to pack a node of a styled tree.
-type stylednode struct {
-	treenode *tree.Node
-	toStyler style.Interf
-}
+// type stylednode struct {
+// 	treenode *tree.Node
+// 	toStyler style.Interf
+// }
+
+var errDOMRootIsNull = fmt.Errorf("DOM root is null")
+var errDOMNodeNotSuitable = fmt.Errorf("DOM node is not suited for layout")
 
 // TODO split into 2 runs:
 //    1st: generate box nodes
@@ -24,65 +27,61 @@ type stylednode struct {
 // otherwise there is a danger that a child overtakes a parent
 //
 func (l *Layouter) buildBoxTree() (*Container, error) {
-	if l.styleroot == nil {
-		return nil, nil
+	if l.domRoot == nil {
+		return nil, errDOMRootIsNull
 	}
-	styles := tree.NewWalker(l.styleroot)
+	domWalker := l.domRoot.Walk()
 	T().Debugf("Creating box tree")
-	styler := l.styleCreator.ToStyler
-	sn := styler(l.styleroot)
-	T().Infof("ROOT node of style tree is %s", nodeTypeString(sn.HTMLNode().Type))
-	style2BoxDict := newAssoc()
-	createBoxForEach := prepareBoxCreator(l.styleCreator.ToStyler, style2BoxDict)
-	future := styles.TopDown(createBoxForEach).Promise() // start asynchronous traversal
-	_, err := future()                                   // wait for top-down traversal to finish
+	T().Infof("ROOT node of style tree is %s", l.domRoot.NodeName())
+	dom2box := newAssoc()
+	createBoxForEach := prepareBoxCreator(dom2box)
+	future := domWalker.TopDown(createBoxForEach).Promise() // start asynchronous traversal
+	_, err := future()                                      // wait for top-down traversal to finish
 	if err != nil {
 		return nil, err
 	}
 	var ok bool
-	l.boxroot, ok = style2BoxDict.Get(l.styleroot)
+	l.boxRoot, ok = dom2box.Get(l.domRoot)
 	if !ok {
 		T().Errorf("No box created for root style node")
-		l.boxroot = nil
+		l.boxRoot = nil
 	}
-	if l.boxroot != nil {
+	if l.boxRoot != nil {
 		T().Infof("ROOT BOX done!!")
 	}
-	return l.boxroot, nil
+	return l.boxRoot, nil
 }
 
-func prepareBoxCreator(toStyler style.Interf, styleToBox *styleToBoxAssoc) tree.Action {
-	action := func(n *tree.Node, parent *tree.Node, i int) (*tree.Node, error) {
-		sn := stylednode{
-			treenode: n,
-			toStyler: toStyler,
+func prepareBoxCreator(dom2box *domToBoxAssoc) tree.Action {
+	action := func(node *tree.Node, parent *tree.Node, pos int) (*tree.Node, error) {
+		domnode, err := dom.NodeFromTreeNode(node)
+		if err != nil {
+			return nil, err
 		}
-		return makeBoxNode(sn, styleToBox)
+		return makeBoxNode(domnode, dom2box)
 	}
 	return action
 }
 
-func makeBoxNode(sn stylednode, styleToBox *styleToBoxAssoc) (*tree.Node, error) {
-	T().Infof("making box for %s", nodeTypeString(sn.toStyler(sn.treenode).HTMLNode().Type))
-	box := boxForNode(sn.treenode, sn.toStyler)
+func makeBoxNode(domnode *dom.W3CNode, dom2box *domToBoxAssoc) (*tree.Node, error) {
+	T().Infof("making box for %s", domnode.NodeType())
+	box := boxForNode(domnode)
 	if box == nil { // legit, e.g. for "display:none"
 		return nil, nil // will not descend to children of sn
 	}
-	T().Infof("assoc of %s", nodeTypeString(sn.toStyler(sn.treenode).HTMLNode().Type))
-	styleToBox.Put(sn.treenode, box) // associate the styled tree node to this box
-	if parent := sn.treenode.Parent(); parent != nil {
-		fmt.Printf("parent is %s\n", parent)
-		p, found := styleToBox.Get(parent)
+	T().Infof("assoc of %s/%s", domnode.NodeType(), domnode.NodeName())
+	dom2box.Put(domnode, box) // associate the styled tree node to this box
+	if parentNode := domnode.ParentNode(); parentNode != nil {
+		parent := parentNode.(*dom.W3CNode)
+		fmt.Printf("parent is %s\n", parent.NodeName())
+		pbox, found := dom2box.Get(parent)
 		if found {
 			fmt.Println("------------------>")
-			fmt.Printf("adding new node to parent %s\n", p)
-			if parentbox, ok := styleToBox.Get(parent); ok {
-				parentbox.Add(box)
-			}
-			fmt.Printf("parent now has %d children\n", p.ChildCount())
-			ch, _ := p.Child(0)
-			c := Node(ch)
-			fmt.Printf("1st child is %s\n", c)
+			fmt.Printf("adding new box node to parent %s\n", pbox)
+			pbox.Add(box)
+			fmt.Printf("parent now has %d children\n", parent.Children().Length())
+			ch := parent.FirstChild()
+			fmt.Printf("1st child is %s\n", ch)
 			fmt.Println("------------------<")
 		}
 	}
@@ -106,31 +105,32 @@ func wrapInAnonymousBox(c *Container) *Container {
 
 // ----------------------------------------------------------------------
 
-func boxForNode(sn *tree.Node, toStyler style.Interf) *Container {
-	if sn == nil {
+func boxForNode(domnode *dom.W3CNode) *Container {
+	if domnode == nil {
 		return nil
 	}
-	context := GetFormattingContextForStyledNode(sn, toStyler)
+	context := GetFormattingContextForStyledNode(domnode)
 	if context == DisplayNone { // should not be displayed (display = none)
-		return nil
+		return nil // do not produce box
 	}
 	var c *Container
 	if context == BlockMode {
-		c = newBlockBox(sn)
+		c = newBlockBox(domnode)
 	} else {
-		c = newInlineBox(sn)
+		c = newInlineBox(domnode)
 	}
-	c.displayLevel, _ = getDisplayLevelForStyledNode(sn, toStyler)
-	possiblyCreateMiniHierarchy(c, toStyler)
+	c.displayLevel, _ = getDisplayLevelForStyledNode(domnode)
+	possiblyCreateMiniHierarchy(c)
 	return c
 }
 
-func possiblyCreateMiniHierarchy(c *Container, toStyler style.Interf) {
-	htmlnode := toStyler(c.StyleNode).HTMLNode()
+func possiblyCreateMiniHierarchy(c *Container) {
+	htmlnode := c.DOMNode.HTMLNode()
 	//propertyMap := styler.ComputedStyles()
 	switch htmlnode.Data {
 	case "li":
-		markertype, _ := style.GetCascadedProperty(c.StyleNode, "list-style-type", toStyler)
+		//markertype, _ := style.GetCascadedProperty(c.DOMNode, "list-style-type", toStyler)
+		markertype := c.DOMNode.ComputedStyles().GetPropertyValue("list-style-type")
 		if markertype != "none" {
 			markerbox := newInlineBox(nil)
 			// TODO: fill box with correct marker symbol
@@ -145,19 +145,18 @@ func possiblyCreateMiniHierarchy(c *Container, toStyler style.Interf) {
 // container resulting from a
 // styled node. The context denotes the orientation in which a box's content
 // is layed out. It may be either InlineMode, BlockMode or NoMode.
-func GetFormattingContextForStyledNode(sn *tree.Node, toStyler style.Interf) uint8 {
-	if sn == nil {
+func GetFormattingContextForStyledNode(domnode *dom.W3CNode) uint8 {
+	if domnode == nil {
 		return NoMode
 	}
-	styler := toStyler(sn)
-	pmap := styler.Styles()
-	if val, _ := style.GetLocalProperty(pmap, "display"); val == "none" {
-		return DisplayNone
+	dispProp := domnode.ComputedStyles().GetPropertyValue("display")
+	mode := ModeFromString(dispProp.String())
+	if mode != NoMode {
+		return mode
 	}
-	htmlnode := styler.HTMLNode()
-	switch htmlnode.Type {
+	switch domnode.HTMLNode().Type {
 	case html.ElementNode:
-		switch htmlnode.Data {
+		switch domnode.NodeName() {
 		case "html", "body", "div", "ul", "ol", "section":
 			return BlockMode
 		//case "p", "span", "it", "h1", "h2", "h3", "h4", "h5", "h6",
@@ -172,10 +171,9 @@ func GetFormattingContextForStyledNode(sn *tree.Node, toStyler style.Interf) uin
 		return InlineMode
 	default:
 		T().Errorf("Have styled node for non-element ?!?")
-		T().Errorf("type of node = %s", nodeTypeString(htmlnode.Type))
-		T().Errorf("data of node = %s", htmlnode.Data)
-		T().Infof("unknown HTML element %s will stack children vertically",
-			htmlnode.Data)
+		T().Errorf(" type of node = %s", domnode.NodeType())
+		T().Errorf(" name of node = %s", domnode.NodeName())
+		T().Infof("unknown HTML element will stack children vertically")
 		return BlockMode
 	}
 }

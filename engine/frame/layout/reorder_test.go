@@ -58,18 +58,20 @@ func prepareStyledTree(t *testing.T) *styledtree.StyNode {
 	*/
 }
 
+/*
 func TestBoxesCreate1(t *testing.T) {
-	gtrace.EngineTracer.Debugf("-------------------------------------------")
-	sn := prepareStyledTree(t)
-	PrintTree(&sn.Node, t, stylestring)
-	//layouter := NewLayouter(&sn.Node, styledtree.Creator())
-	gtrace.EngineTracer.Debugf("-------------------------------------------")
-	layouter := NewLayouter(&sn.Node, styledtree.Creator())
-	c, err := layouter.buildBoxTree()
-	if err != nil || c == nil {
-		t.Error("cannot create box tree")
-	}
+		gtrace.EngineTracer.Debugf("-------------------------------------------")
+		sn := prepareStyledTree(t)
+		PrintTree(&sn.Node, t, stylestring)
+		//layouter := NewLayouter(&sn.Node, styledtree.Creator())
+		gtrace.EngineTracer.Debugf("-------------------------------------------")
+		layouter := NewLayouter(&sn.Node, styledtree.Creator())
+		c, err := layouter.buildBoxTree()
+		if err != nil || c == nil {
+			t.Error("cannot create box tree")
+		}
 }
+*/
 
 // --- Helpers ----------------------------------------------------------
 

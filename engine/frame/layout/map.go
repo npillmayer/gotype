@@ -3,21 +3,21 @@ package layout
 import (
 	"sync"
 
-	"github.com/npillmayer/gotype/engine/tree"
+	"github.com/npillmayer/gotype/engine/dom"
 )
 
-type styleToBoxAssoc sync.Map
+type domToBoxAssoc sync.Map
 
-func newAssoc() *styleToBoxAssoc {
-	return &styleToBoxAssoc{}
+func newAssoc() *domToBoxAssoc {
+	return &domToBoxAssoc{}
 }
 
-func (m *styleToBoxAssoc) Put(sn *tree.Node, c *Container) {
-	(*sync.Map)(m).Store(sn, c)
+func (m *domToBoxAssoc) Put(domnode *dom.W3CNode, c *Container) {
+	(*sync.Map)(m).Store(domnode, c)
 }
 
-func (m *styleToBoxAssoc) Get(sn *tree.Node) (*Container, bool) {
-	c, ok := (*sync.Map)(m).Load(sn)
+func (m *domToBoxAssoc) Get(domnode *dom.W3CNode) (*Container, bool) {
+	c, ok := (*sync.Map)(m).Load(domnode)
 	if !ok {
 		return nil, false
 	}
