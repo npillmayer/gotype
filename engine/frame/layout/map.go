@@ -6,20 +6,35 @@ import (
 	"github.com/npillmayer/gotype/engine/dom"
 )
 
-type domToBoxAssoc sync.Map
+type domToBoxAssoc struct {
+	sync.RWMutex
+	m map[*dom.W3CNode]*Container
+}
 
 func newAssoc() *domToBoxAssoc {
-	return &domToBoxAssoc{}
+	return &domToBoxAssoc{
+		m: make(map[*dom.W3CNode]*Container),
+	}
 }
 
-func (m *domToBoxAssoc) Put(domnode *dom.W3CNode, c *Container) {
-	(*sync.Map)(m).Store(domnode, c)
+func (d2c *domToBoxAssoc) Put(domnode *dom.W3CNode, c *Container) {
+	d2c.Lock()
+	defer d2c.Unlock()
+	d2c.m[domnode] = c
 }
 
-func (m *domToBoxAssoc) Get(domnode *dom.W3CNode) (*Container, bool) {
-	c, ok := (*sync.Map)(m).Load(domnode)
+func (d2c *domToBoxAssoc) Get(domnode *dom.W3CNode) (*Container, bool) {
+	d2c.RLock()
+	defer d2c.RUnlock()
+	c, ok := d2c.m[domnode]
 	if !ok {
 		return nil, false
 	}
-	return c.(*Container), ok
+	return c, ok
+}
+
+func (d2c *domToBoxAssoc) Length() int {
+	d2c.RLock()
+	defer d2c.RUnlock()
+	return len(d2c.m)
 }
