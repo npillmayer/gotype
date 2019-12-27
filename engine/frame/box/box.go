@@ -17,7 +17,7 @@ the one introduced by the TeX typesetting system.
 
 BSD License
 
-Copyright (c) 2017–2018, Norbert Pillmayer
+Copyright (c) 2017–2020, Norbert Pillmayer
 
 All rights reserved.
 
@@ -32,7 +32,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -46,8 +46,7 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 package box
 
 import (
@@ -82,18 +81,18 @@ const (
  * No border or additional spacing is possible with glyphs.
  */
 
-// Type for styling with color.
+// ColorStyle is a type for styling with color.
 type ColorStyle struct {
 	Foreground color.Color
 	Background color.Color // may be (semi-)transparent
 }
 
-// A type for styling text.
+// TextStyle is a type for styling text.
 type TextStyle struct {
 	Typecase *font.TypeCase
 }
 
-// A type for simple borders.
+// BorderStyle is a type for simple borders.
 type BorderStyle struct {
 	LineColor     color.Color
 	LineThickness dimen.Dimen
@@ -101,30 +100,30 @@ type BorderStyle struct {
 	CornerRadius  dimen.Dimen
 }
 
-// A type for border line styles.
+// LineStyle is a type for border line styles.
 type LineStyle int8
 
 // We support these line styles only
 const (
-	LS_Solid  LineStyle = 0
-	LS_Dashed LineStyle = 1
-	LS_Dotted LineStyle = 2
+	LSSolid  LineStyle = 0
+	LSDashed LineStyle = 1
+	LSDotted LineStyle = 2
 )
 
-// BoxStyling rolls all styling options into one type.
-type BoxStyling struct {
+// Styling rolls all styling options into one type.
+type Styling struct {
 	TextStyle TextStyle
 	Colors    ColorStyle
 	Border    BorderStyle
 }
 
-// Type for a fully stylable box.
+// StyledBox is a type for a fully stylable box.
 type StyledBox struct {
 	Box
-	Styling *BoxStyling
+	Styling *Styling
 }
 
-// A box for glyphs. Glyphs currently are content-stylable only (no borders).
+// Glyph is a box for glyphs. Glyphs currently are content-stylable only (no borders).
 //
 // Wikipedia: In typography, a glyph [...] is an elemental symbol within
 // an agreed set of symbols, intended to represent a readable character
@@ -141,7 +140,7 @@ func (box *Box) Normalize() *Box {
 		box.TopL.X, box.BotR.X = box.BotR.X, box.TopL.X
 	}
 	if box.TopL.Y > box.BotR.Y {
-		box.TopL.Y, box.BotR.Y = box.BotR.Y, box.BotR.Y
+		box.TopL.Y, box.BotR.Y = box.BotR.Y, box.TopL.Y
 	}
 	return box
 }
