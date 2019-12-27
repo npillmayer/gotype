@@ -8,6 +8,7 @@ import (
 	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/frame/box"
 	"github.com/npillmayer/gotype/engine/tree"
+	"golang.org/x/net/html"
 )
 
 // Flags for box context and display level.
@@ -142,10 +143,13 @@ func getDisplayLevelForStyledNode(domnode *dom.W3CNode) (uint8, string) {
 	if domnode == nil {
 		return NoMode, ""
 	}
-	T().Infof("display(%s/%s) = ?", domnode.NodeName(), domnode.NodeValue())
 	dispProp := domnode.ComputedStyles().GetPropertyValue("display")
 	if dispProp != style.NullStyle {
+		T().Debugf("node %s has set display = ?", dbgNodeString(domnode), dispProp)
 		return ModeFromString(dispProp.String()), dispProp.String()
+	}
+	if domnode.NodeType() == html.TextNode {
+		return InlineMode, "inline"
 	}
 	dispProp = style.DisplayPropertyForHTMLNode(domnode.HTMLNode())
 	if strings.HasPrefix(dispProp.String(), "none") {

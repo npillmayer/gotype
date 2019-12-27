@@ -2,9 +2,11 @@ package renderdbg
 
 import (
 	"fmt"
-	"html/template"
 	"io"
 	"strings"
+	"text/template"
+
+	"github.com/npillmayer/gotype/core/config/gtrace"
 
 	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/frame/layout"
@@ -40,12 +42,25 @@ func ToGraphViz(l *layout.Layouter, w io.Writer) {
 	w.Write([]byte("}\n"))
 }
 
+var cnt int
+
 func boxes(c *layout.Container, w io.Writer, dict map[*layout.Container]string, gparams *graphParamsType) {
+	cnt++
+	if cnt == 300 {
+		return
+	}
 	box(c, w, dict, gparams)
-	if c.ChildCount() > 0 {
+	gtrace.EngineTracer.Infof("container = %s", c.DOMNode.NodeName())
+	if c.ChildCount() >= 0 {
 		children := c.Children()
-		for _, ch := range children {
+		nn := c.ChildCount()
+		gtrace.EngineTracer.Errorf("container has %d/%d children ..............", len(children), nn)
+
+		//for i, ch := range children {
+		for i := 0; i < c.ChildCount(); i++ {
+			ch, _ := c.Child(i)
 			child := ch.Payload.(*layout.Container)
+			gtrace.EngineTracer.Infof("  child[%d] = %s", i, child.DOMNode.NodeName())
 			boxes(child, w, dict, gparams)
 			edge(c, child, w, dict, gparams)
 		}

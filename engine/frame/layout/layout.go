@@ -1,8 +1,9 @@
 package layout
 
 import (
-	"github.com/npillmayer/gotype/core/config/gtrace"
-	"github.com/npillmayer/gotype/core/config/tracing"
+	"fmt"
+	"strings"
+
 	"github.com/npillmayer/gotype/core/dimen"
 	"github.com/npillmayer/gotype/engine/dom"
 )
@@ -17,11 +18,6 @@ import (
 //
 // Regions:
 // http://cna.mamk.fi/Public/FJAK/MOAC_MTA_HTML5_App_Dev/c06.pdf
-
-// T traces to the engine tracer.
-func T() tracing.Trace {
-	return gtrace.EngineTracer
-}
 
 // Layouter is a layout engine.
 type Layouter struct {
@@ -64,4 +60,27 @@ func (l *Layouter) Layout(viewport *dimen.Rect) *Container {
 // BoxRoot returns the root node of the render tree.
 func (l *Layouter) BoxRoot() *Container {
 	return l.boxRoot
+}
+
+// ---------------------------------------------------------------------------
+
+func dbgNodeString(domnode *dom.W3CNode) string {
+	if domnode == nil {
+		return "DOM(null)"
+	}
+	return fmt.Sprintf("DOM(%s/%s)", domnode.NodeName(), shortText(domnode))
+}
+
+func shortText(n *dom.W3CNode) string {
+	h := n.HTMLNode()
+	s := "\""
+	if len(h.Data) > 10 {
+		s += h.Data[:10] + "...\""
+	} else {
+		s += h.Data + "\""
+	}
+	s = strings.Replace(s, "\n", `\n`, -1)
+	s = strings.Replace(s, "\t", `\t`, -1)
+	s = strings.Replace(s, " ", "\u2423", -1)
+	return s
 }

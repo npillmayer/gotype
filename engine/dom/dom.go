@@ -70,6 +70,17 @@ func (w *W3CNode) HTMLNode() *html.Node {
 	return w.stylednode.HTMLNode()
 }
 
+// IsRoot returns wether this node is the root node of the styled tree.
+func (w *W3CNode) IsRoot() bool {
+	return w.ParentNode() == nil
+}
+
+// IsDocument returns wether this node is the document node of the styled tree.
+func (w *W3CNode) IsDocument() bool {
+	parent := w.ParentNode().(*W3CNode)
+	return w.ParentNode() != nil && parent.HTMLNode() == w.HTMLNode()
+}
+
 // NodeType returns the type of the underlying HTML node, something like
 // html.ElementNode, html.TextNode, etc.
 func (w *W3CNode) NodeType() html.NodeType {

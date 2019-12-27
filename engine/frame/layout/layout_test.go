@@ -5,21 +5,23 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/npillmayer/gotype/core/dimen"
+
 	"github.com/npillmayer/gotype/engine/frame/layout"
 	"github.com/npillmayer/gotype/engine/frame/renderdbg"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
+	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 	"github.com/npillmayer/gotype/engine/dom"
 	"golang.org/x/net/html"
 )
 
-var graphviz = true
+var graphviz = false
 
-func T() tracing.Trace {
-	return gtrace.EngineTracer
-}
+// func T() tracing.Trace {
+// 	return gtrace.EngineTracer
+// }
 
 var myhtml = `
 <html><head>
@@ -42,10 +44,15 @@ func buildDOM(t *testing.T) *dom.W3CNode {
 }
 
 func TestLayout1(t *testing.T) {
-	teardown := gotestingadapter.RedirectTracing(t)
-	defer teardown()
+	gtrace.EngineTracer = gologadapter.New()
+	// teardown := gotestingadapter.RedirectTracing(t)
+	// // defer teardown()
+	gtrace.EngineTracer.SetTraceLevel(tracing.LevelInfo)
 	root := buildDOM(t)
+	gtrace.EngineTracer.Infof("===================================================")
 	layout := layout.NewLayouter(root)
+	viewport := &dimen.Rect{TopL: dimen.Origin, BotR: dimen.DINA4}
+	layout.Layout(viewport)
 	if layout.BoxRoot() == nil {
 		t.Errorf("Layout failed, render tree root is null")
 	} else {
@@ -60,6 +67,8 @@ func TestLayout1(t *testing.T) {
 		}
 	}
 }
+
+// ----------------------------------------------------------------------
 
 /*
 func Test0(t *testing.T) {

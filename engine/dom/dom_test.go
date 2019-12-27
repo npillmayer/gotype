@@ -50,6 +50,18 @@ func buildDOM(t *testing.T) *dom.W3CNode {
 	return dom.FromHTMLParseTree(h)
 }
 
+func TestW3CDoc(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	root := buildDOM(t)
+	t.Logf("root is RootNode: %v", root.IsRoot())
+	t.Logf("root is Doc-Node: %v", root.IsDocument())
+	if !root.IsDocument() {
+		t.Logf("root node is %s", root.NodeName())
+		t.Errorf("node should be document root, but isn't")
+	}
+}
+
 func TestW3CDom1(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
