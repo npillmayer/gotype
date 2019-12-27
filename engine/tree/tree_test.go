@@ -349,7 +349,6 @@ func TestSerial1(t *testing.T) {
 	if z != 1193046 {
 		t.Errorf("checksum = %d, should be 1193046", z)
 	}
-	t.Fail()
 	checkRuntime(t, n)
 }
 

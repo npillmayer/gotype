@@ -378,7 +378,9 @@ func waitForCompletion(results <-chan nodePackage, errch <-chan error, counter *
 		serials = append(serials, serial)
 		// resultSlices is a helper struct for sorting
 		// it implements the Sort interface
-		sort.Sort(resultSlices{selection, serials})
+		if len(selection) > 0 && selection[0].Rank > 0 { // if rank is unset: no sorting possible
+			sort.Sort(resultSlices{selection, serials})
+		}
 		// after this, serials are discarded
 	}
 	// Get last error from error channel
