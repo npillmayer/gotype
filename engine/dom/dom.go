@@ -285,6 +285,19 @@ func (w *W3CNode) ComputedStyles() *ComputedStyles {
 }
 
 // ComputedStyles is a proxy type for a node's styles.
+//
+// TODO include pseudo-elements => implement 
+//
+//    var style = window.getComputedStyle(element [, pseudoElt]);
+//
+// see https://developer.mozilla.org/de/docs/Web/API/Window/getComputedStyle :
+//
+// pseudoElt (Optional):
+//     A string specifying the pseudo-element to match. Omitted (or null) for real elements.
+//
+// The returned style is a live CSSStyleDeclaration object, which updates automatically
+// when the element's styles are changed.
+//
 type ComputedStyles struct {
 	domnode  *W3CNode
 	propsMap *style.PropertyMap
@@ -308,6 +321,7 @@ func styler(n *tree.Node) style.Styler {
 }
 
 // GetPropertyValue returns the property value for a given key.
+// If cstyles is nil or the property could not be found, NullStyle is returned.
 func (cstyles *ComputedStyles) GetPropertyValue(key string) style.Property {
 	if cstyles == nil {
 		return style.NullStyle
