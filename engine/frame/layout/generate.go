@@ -7,8 +7,6 @@ package layout
 import (
 	"fmt"
 
-	"github.com/npillmayer/gotype/core/config/gtrace"
-
 	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
@@ -29,13 +27,10 @@ var errDOMNodeNotSuitable = fmt.Errorf("DOM node is not suited for layout")
 // otherwise there is a danger that a child overtakes a parent
 //
 func (l *Layouter) buildBoxTree() (*Container, error) {
-	gtrace.EngineTracer.Infof("SAY HI !")
-	fmt.Printf("SAY HI to Layout()\n")
 	if l.domRoot == nil {
 		return nil, errDOMRootIsNull
 	}
 	domWalker := l.domRoot.Walk()
-	gtrace.EngineTracer.Errorf("SAY HI !")
 	T().Debugf("Creating box tree")
 	T().Infof("ROOT node of style tree is %s", dbgNodeString(l.domRoot))
 	dom2box := newAssoc()
@@ -66,19 +61,25 @@ func (l *Layouter) buildBoxTree() (*Container, error) {
 
 func prepareBoxCreator(dict *domToBoxAssoc) tree.Action {
 	dom2box := dict
-	action := func(node *tree.Node, parent *tree.Node, pos int) (*tree.Node, error) {
+	action := func(node *tree.Node, parentNode *tree.Node, chpos int) (*tree.Node, error) {
 		domnode, err := dom.NodeFromTreeNode(node)
 		if err != nil {
 			return nil, err
 		}
-		return makeBoxNode(domnode, dom2box)
+		parent, err2 := dom.NodeFromTreeNode(parentNode)
+		if err2 != nil {
+			return nil, err2
+		}
+		return makeBoxNode(domnode, parent, chpos, dom2box)
 	}
 	return action
 }
 
-func makeBoxNode(domnode *dom.W3CNode, dom2box *domToBoxAssoc) (*tree.Node, error) {
+func makeBoxNode(domnode *dom.W3CNode, parent *dom.W3CNode, chpos int, dom2box *domToBoxAssoc) (
+	*tree.Node, error) {
+	//
 	T().Infof("making box for %s", domnode.NodeName())
-	box := boxForNode(domnode)
+	box := BoxForNode(domnode)
 	if box == nil { // legit, e.g. for "display:none"
 		return nil, nil // will not descend to children of sn
 	}
@@ -100,44 +101,50 @@ func makeBoxNode(domnode *dom.W3CNode, dom2box *domToBoxAssoc) (*tree.Node, erro
 			}
 		}
 	}
+	possiblyCreateMiniHierarchy(box)
 	return &box.Node, nil
 }
 
-func requiresAnonBox(context uint8, level uint8) bool {
-	return ((context == BlockMode && level == InlineMode) ||
-		(context == InlineMode && level == BlockMode))
+func requiresAnonBox(inner DisplayMode, outer DisplayMode) bool {
+	return ((inner == BlockMode && outer == InlineMode) ||
+		(inner == InlineMode && outer == BlockMode))
 }
 
 func wrapInAnonymousBox(c *Container) *Container {
 	mode := BlockMode
-	if c.displayLevel == BlockMode {
+	if c.outerMode == BlockMode {
 		mode = InlineMode
 	}
-	anon := newContainer(mode, c.contextOrientation)
+	anon := newContainer(mode, c.outerMode)
 	anon.AddChild(&c.Node)
 	return anon
 }
 
 // ----------------------------------------------------------------------
 
-func boxForNode(domnode *dom.W3CNode) *Container {
-	if domnode == nil {
+// BoxForNode creates an adequately initialized box for a given DOM node.
+func BoxForNode(domnode *dom.W3CNode) *Container {
+	if domnode == nil || domnode.HTMLNode() == nil {
 		return nil
 	}
-	context := GetFormattingContextForStyledNode(domnode)
-	T().Infof("display context = %s", ModeString(context))
-	if context == DisplayNone { // should not be displayed (display = none)
-		return nil // do not produce box
-	}
-	var c *Container
-	if context == BlockMode {
-		c = newBlockBox(domnode)
+	var innerMode, outerMode DisplayMode
+	display := domnode.ComputedStyles().GetPropertyValue("display")
+	if display.String() == "initial" {
+		innerMode, outerMode = DefaultDisplayModeForHTMLNode(domnode.HTMLNode())
 	} else {
-		c = newInlineBox(domnode)
+		var err error
+		innerMode, outerMode, err = ParseDisplay(display.String())
+		if err != nil {
+			T().Errorf("unrecognized display property: %s", display)
+			innerMode, outerMode = BlockMode, BlockMode
+		}
 	}
-	c.displayLevel, _ = getDisplayLevelForStyledNode(domnode)
-	T().Infof("display level = %s", ModeString(c.displayLevel))
-	possiblyCreateMiniHierarchy(c)
+	T().Infof("display modes = %s | %s", innerMode.String(), outerMode.String())
+	if outerMode == DisplayNone {
+		return nil // do not produce box for display = "none"
+	}
+	c := newContainer(innerMode, outerMode)
+	c.DOMNode = domnode
 	return c
 }
 
@@ -158,39 +165,44 @@ func possiblyCreateMiniHierarchy(c *Container) {
 
 // --- Default Display Properties ---------------------------------------
 
-// GetFormattingContextForStyledNode gets the formatting context for a
-// container resulting from a
-// styled node. The context denotes the orientation in which a box's content
-// is layed out. It may be either InlineMode, BlockMode or NoMode.
-func GetFormattingContextForStyledNode(domnode *dom.W3CNode) uint8 {
-	if domnode == nil {
-		return NoMode
+// DefaultDisplayModeForHTMLNode returns the default display mode for a HTML node type,
+// as described by the CSS specification.
+//
+// TODO possibly move this to package style (= part of browser defaults)
+// If, then return a string.
+func DefaultDisplayModeForHTMLNode(h *html.Node) (DisplayMode, DisplayMode) {
+	if h == nil {
+		return NoMode, NoMode
 	}
-	dispProp := domnode.ComputedStyles().GetPropertyValue("display")
-	mode := ModeFromString(dispProp.String())
-	if mode != NoMode {
-		return mode
-	}
-	switch domnode.HTMLNode().Type {
-	case html.ElementNode:
-		switch domnode.NodeName() {
-		case "html", "body", "div", "ul", "ol", "section":
-			return BlockMode
-		//case "p", "span", "it", "h1", "h2", "h3", "h4", "h5", "h6",
-		//	"h7", "b", "i", "strong":
-		//	return InlineMode
-		default:
-			return InlineMode
-		}
+	switch h.Type {
 	case html.DocumentNode:
-		return BlockMode
+		return BlockMode, BlockMode
 	case html.TextNode:
-		return InlineMode
+		return InlineMode, InlineMode
+	case html.ElementNode:
+		switch h.Data {
+		case "table":
+			return BlockMode, TableMode
+		case "ul", "ol":
+			return BlockMode, ListItemMode
+		case "li":
+			return ListItemMode, BlockMode
+		case "html", "body", "div", "section", "article", "nav":
+			return BlockMode, BlockMode
+		case "p":
+			return BlockMode, FlowMode
+		case "span", "i", "b", "strong", "em":
+			return InlineMode, InlineMode
+		case "h1", "h2", "h3", "h4", "h5", "h6":
+			return BlockMode, BlockMode
+		default:
+			return BlockMode, BlockMode
+		}
 	default:
 		T().Errorf("Have styled node for non-element ?!?")
-		T().Errorf(" type of node = %d", domnode.NodeType())
-		T().Errorf(" name of node = %s", domnode.NodeName())
+		T().Errorf(" type of node = %d", h.Type)
+		T().Errorf(" name of node = %s", h.Data)
 		T().Infof("unknown HTML element will stack children vertically")
-		return BlockMode
+		return BlockMode, BlockMode
 	}
 }

@@ -22,7 +22,7 @@ func (d2c *domToBoxAssoc) Put(domnode *dom.W3CNode, c *Container) {
 	d2c.Lock()
 	defer d2c.Unlock()
 	d2c.m[domnode.HTMLNode()] = c
-	T().Infof("%s -> %s", domnode.NodeName(), ModeString(c.contextOrientation))
+	T().Infof("%s -> %s", domnode.NodeName(), c.innerMode.String())
 }
 
 func (d2c *domToBoxAssoc) Get(domnode *dom.W3CNode) (*Container, bool) {
@@ -30,7 +30,7 @@ func (d2c *domToBoxAssoc) Get(domnode *dom.W3CNode) (*Container, bool) {
 	defer d2c.RUnlock()
 	c, ok := d2c.m[domnode.HTMLNode()]
 	if ok {
-		T().Infof("%s => %s", domnode.NodeName(), ModeString(c.contextOrientation))
+		T().Infof("%s => %s", domnode.NodeName(), c.innerMode.String())
 	}
 	return c, ok
 }

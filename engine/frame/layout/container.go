@@ -11,61 +11,47 @@ import (
 	"golang.org/x/net/html"
 )
 
-// Flags for box context and display level.
+// DisplayMode is a type for CSS property "display".
+type DisplayMode uint16
+
+// Flags for box context and display mode (outer and inner).
+//go:generate stringer -type=DisplayMode
 const (
-	NoMode      uint8 = iota // in most cases an error condition
-	BlockMode                // CSS block context / display level
-	InlineMode               // CSS inline context / display level
-	DisplayNone              // CSS display = none
+	NoMode       DisplayMode = iota   // unset or error condition
+	DisplayNone  DisplayMode = 0x0001 // CSS outer display = none
+	FlowMode     DisplayMode = 0x0002 // CSS inner display = flow
+	BlockMode    DisplayMode = 0x0004 // CSS block context (inner or outer)
+	InlineMode   DisplayMode = 0x0008 // CSS inline context
+	ListItemMode DisplayMode = 0x0010 // CSS list-item display
+	FlowRoot     DisplayMode = 0x0020 // CSS flow-root display property
+	FlexMode     DisplayMode = 0x0040 // CSS inner display = flex
+	GridMode     DisplayMode = 0x0080 // CSS inner display = grid
+	TableMode    DisplayMode = 0x0100 // CSS table display property (inner or outer)
+	ContentsMode DisplayMode = 0x0200 // CSS contents display, experimental !
 )
 
-// ModeString returns a string representation of a context/display mode.
-func ModeString(mode uint8) string {
-	switch mode {
-	case DisplayNone:
-		return "none"
-	case BlockMode:
-		return "block"
-	case InlineMode:
-		return "inline"
-	}
-	return "no-mode"
-}
-
-// ModeFromString returns a mode flag from a display property string.
-func ModeFromString(mode string) uint8 {
-	switch mode {
-	case "none":
-		return DisplayNone
-	case "block":
-		return BlockMode
-	case "inline":
-		return InlineMode
-	}
-	return NoMode
-}
-
-// Container is a (CSS-)styled box which may contain other boxes and/or
-// containers.
+// Container is a (CSS-)styled box which may contain other boxes or
+// text.
 type Container struct {
-	tree.Node                        // a container is a node within the layout tree
-	Box                box.StyledBox // styled box for a DOM node
-	contextOrientation uint8         // context of children (block or inline)
-	displayLevel       uint8         // container lives in this mode (block or inline)
-	DOMNode            *dom.W3CNode  // the DOM node this Container refers to
+	tree.Node                // a container is a node within the layout tree
+	Box       *box.StyledBox // styled box for a DOM node
+	DOMNode   *dom.W3CNode   // the DOM node this Container refers to
+	innerMode DisplayMode    // context of children (block or inline)
+	outerMode DisplayMode    // container lives in this mode (block or inline)
+	ChildInx  uint32         // this box represents child(ren) #ChildInx of the principal box
 }
 
 // newContainer creates either a block-level container or an inline-level container
-func newContainer(orientation uint8, displayLevel uint8) *Container {
+func newContainer(innerMode DisplayMode, outerMode DisplayMode) *Container {
 	c := &Container{
-		contextOrientation: orientation,
-		displayLevel:       displayLevel,
+		innerMode: innerMode,
+		outerMode: outerMode,
 	}
 	c.Payload = c // always points to itself
 	return c
 }
 
-// IsPrincipal is a predicate if this is a principal box.
+// IsPrincipal returns true if this is a principal box.
 //
 // Some HTML elements create a mini-hierachy of boxes for rendering. The outermost box
 // is called the principal box. It will always refer to the styled node.
@@ -78,7 +64,7 @@ func (c *Container) IsPrincipal() bool {
 
 // IsBlock returns true if a container has context orientation 'block'.
 func (c *Container) IsBlock() bool {
-	return c.contextOrientation == BlockMode
+	return c.innerMode == BlockMode
 }
 
 // newVBox creates a block-level container with block context.
@@ -113,7 +99,7 @@ func (c *Container) String() string {
 	}
 	n := "_"
 	b := "inline-box"
-	if c.contextOrientation == BlockMode {
+	if c.innerMode == BlockMode {
 		b = "block-box"
 	}
 	return fmt.Sprintf("\\%s<%s>", b, n)
@@ -129,8 +115,8 @@ func (c *Container) Add(child *Container) *Container {
 	if child == nil {
 		return c
 	}
-	if requiresAnonBox(c.contextOrientation, child.displayLevel) {
-		anon := newContainer(child.displayLevel, c.contextOrientation)
+	if requiresAnonBox(c.innerMode, child.outerMode) {
+		anon := newContainer(child.outerMode, c.innerMode)
 		anon.AddChild(&child.Node)
 		c.AddChild(&anon.Node)
 		return c
@@ -139,45 +125,26 @@ func (c *Container) Add(child *Container) *Container {
 	return c
 }
 
-func getDisplayLevelForStyledNode(domnode *dom.W3CNode) (uint8, string) {
+func getDisplayLevelForStyledNode(domnode *dom.W3CNode) (DisplayMode, DisplayMode) {
 	if domnode == nil {
-		return NoMode, ""
+		return NoMode, NoMode
 	}
 	dispProp := domnode.ComputedStyles().GetPropertyValue("display")
 	if dispProp != style.NullStyle {
 		T().Debugf("node %s has set display = ?", dbgNodeString(domnode), dispProp)
-		return ModeFromString(dispProp.String()), dispProp.String()
+		inner, outer, _ := ParseDisplay(dispProp.String())
+		return inner, outer
 	}
 	if domnode.NodeType() == html.TextNode {
-		return InlineMode, "inline"
+		return InlineMode, InlineMode
 	}
 	dispProp = style.DisplayPropertyForHTMLNode(domnode.HTMLNode())
 	if strings.HasPrefix(dispProp.String(), "none") {
-		return DisplayNone, dispProp.String()
+		return DisplayNone, NoMode
 	} else if strings.HasPrefix(dispProp.String(), "block") {
-		return BlockMode, dispProp.String()
+		return BlockMode, BlockMode
 	} else if strings.HasPrefix(dispProp.String(), "inline") {
-		return InlineMode, dispProp.String() // inline or inline-block
+		return InlineMode, InlineMode
 	}
-	return NoMode, ""
+	return NoMode, NoMode
 }
-
-/*
-func nodeTypeString(nt html.NodeType) string {
-	switch nt {
-	case html.ErrorNode:
-		return "error-node"
-	case html.TextNode:
-		return "text-node"
-	case html.CommentNode:
-		return "comment-node"
-	case html.DocumentNode:
-		return "doc-node"
-	case html.ElementNode:
-		return "element-node"
-	case html.DoctypeNode:
-		return "doctype-node"
-	}
-	return "?-node"
-}
-*/
