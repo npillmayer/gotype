@@ -42,10 +42,10 @@ type Container struct {
 }
 
 // newContainer creates either a block-level container or an inline-level container
-func newContainer(innerMode DisplayMode, outerMode DisplayMode) *Container {
+func newContainer(outerMode DisplayMode, innerMode DisplayMode) *Container {
 	c := &Container{
-		innerMode: innerMode,
 		outerMode: outerMode,
+		innerMode: innerMode,
 	}
 	c.Payload = c // always points to itself
 	return c

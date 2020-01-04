@@ -130,20 +130,20 @@ func BoxForNode(domnode *dom.W3CNode) *Container {
 	var innerMode, outerMode DisplayMode
 	display := domnode.ComputedStyles().GetPropertyValue("display")
 	if display.String() == "initial" {
-		innerMode, outerMode = DefaultDisplayModeForHTMLNode(domnode.HTMLNode())
+		outerMode, innerMode = DefaultDisplayModeForHTMLNode(domnode.HTMLNode())
 	} else {
 		var err error
-		innerMode, outerMode, err = ParseDisplay(display.String())
+		outerMode, innerMode, err = ParseDisplay(display.String())
 		if err != nil {
 			T().Errorf("unrecognized display property: %s", display)
-			innerMode, outerMode = BlockMode, BlockMode
+			outerMode, innerMode = BlockMode, BlockMode
 		}
 	}
-	T().Infof("display modes = %s | %s", innerMode.String(), outerMode.String())
+	T().Infof("display modes = %s | %s", outerMode.String(), innerMode.String())
 	if outerMode == DisplayNone {
 		return nil // do not produce box for display = "none"
 	}
-	c := newContainer(innerMode, outerMode)
+	c := newContainer(outerMode, innerMode)
 	c.DOMNode = domnode
 	return c
 }
