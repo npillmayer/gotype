@@ -16,6 +16,35 @@ func Test0(t *testing.T) {
 	gtrace.EngineTracer.SetTraceLevel(tracing.LevelDebug)
 }
 
+func TestAddChild(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	parent := NewNode(-1)
+	parent.AddChild(NewNode(0)).AddChild(NewNode(1))
+	ch4 := NewNode(4)
+	parent.SetChildAt(4, ch4)
+	ch, _ := parent.Child(4)
+	if ch == nil {
+		t.Errorf("Inserted child at position 4 should have payload of 4, is nil")
+	} else if ch != ch4 {
+		t.Errorf("Inserted child at position 4 should have payload of 4, has %d", ch.Payload)
+	}
+	ch3 := NewNode(3)
+	parent.InsertChildAt(1, ch3)
+	ch, _ = parent.Child(1)
+	if ch == nil {
+		t.Errorf("Inserted child at position 1 should have payload of 3, is nil")
+	} else if ch != ch3 {
+		t.Errorf("Inserted child at position 1 should have payload of 3, has %d", ch.Payload)
+	}
+	ch, _ = parent.Child(5)
+	if ch == nil {
+		t.Errorf("Inserted child at position 5 should have payload of 4, is nil")
+	} else if ch != ch4 {
+		t.Errorf("Inserted child at position 5 should have payload of 4, has %d", ch.Payload)
+	}
+}
+
 func TestEmptyWalker(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
