@@ -34,6 +34,11 @@ var allDisplayModes = []DisplayMode{
 	GridMode, TableMode, ContentsMode,
 }
 
+// Set sets a given atomic mode within this display mode.
+func (disp *DisplayMode) Set(d DisplayMode) {
+	*disp = (*disp) | d
+}
+
 // Contains checks if a display mode contains a given atomic mode.
 // Returns false for d = NoMode.
 func (disp DisplayMode) Contains(d DisplayMode) bool {
@@ -231,27 +236,53 @@ func (pbox *PrincipalBox) String() string {
 	return fmt.Sprintf("\\%s<%s>", b, n)
 }
 
-// Add appends a child container as the last sibling of existing
-// child containers for c. Does nothing if child is nil.
-// Will wrap the child in an anonymous container, if necessary.
-//
-// Returns the container itself (for chaining).
-/*
-func (pbox *PrincipalBox) Add(child *PrincipalBox) *PrincipalBox {
-	T().Debugf("Adding child to %s", pbox)
-	if child == nil {
-		return pbox
-	}
-	if requiresAnonBox(pbox.innerMode, child.outerMode) {
-		anon := newPrincipalBox(child.outerMode, pbox.innerMode)
-		anon.AddChild(&child.Node)
-		pbox.AddChild(&anon.Node)
-		return pbox
-	}
-	pbox.AddChild(&child.Node)
-	return pbox
+// ErrNullChild flags an error condition when a non-nil child has been expected.
+var ErrNullChild = fmt.Errorf("Child box max not be null")
+
+// ErrAnonBoxNotFound flags an error condition where an anonymous box should be
+// present but could not be found.
+var ErrAnonBoxNotFound = fmt.Errorf("No anonymous box found for index")
+
+// AddChild appends a child box to its parent principal box.
+// The child is a principal box itself, i.e. references a styleable DOM node.
+// The child must have its child index set.
+func (pbox *PrincipalBox) AddChild(child *PrincipalBox) error {
+	return pbox.addChildContainer(child)
 }
-*/
+
+// AddTextChild appends a child box to its parent principal box.
+// The child is a text box, i.e., references a HTML text node.
+// The child must have its child index set.
+func (pbox *PrincipalBox) AddTextChild(child *TextBox) error {
+	err := pbox.addChildContainer(child)
+	if err == nil {
+		if pbox.innerMode.Contains(InlineMode) {
+			child.outerMode.Set(InlineMode)
+		}
+	}
+	return err
+}
+
+func (pbox *PrincipalBox) addChildContainer(child Container) error {
+	if child == nil {
+		return ErrNullChild
+	}
+	inx, _ := child.ChildIndices()
+	anon, ino, j := pbox.anonMask.Translate(inx)
+	var node *tree.Node
+	var ok bool
+	if anon {
+		node = pbox.TreeNode() // we will add the child to the principal box
+	} else {
+		// we will add the child to an anonymous box
+		node, ok = pbox.TreeNode().Child(int(ino))
+		if !ok { // oops, we expected an anonymous box there
+			return ErrAnonBoxNotFound
+		}
+	}
+	node.SetChildAt(int(j), child.TreeNode())
+	return nil
+}
 
 // --- Anonymous Boxes -----------------------------------------------------------------
 
@@ -372,8 +403,10 @@ func (rl runlength) Empty() bool {
 // Condense returns a list of positions, where every interval of rl is counted
 // as a single position. This gives positional indices for anonymous boxes
 // associated with the intervals, usable as indices in the parents child-vector.
-func (rl runlength) Condense() []uint32 {
-	var positions []uint32
+func (rl runlength) Condense() (positions []uint32) {
+	if rl == nil {
+		return positions
+	}
 	pos := uint32(0)
 	next := uint32(0)
 	for _, intv := range rl {
@@ -393,6 +426,9 @@ func (rl runlength) Condense() []uint32 {
 // position. The boolean return value is true, if the input index lies within
 // one of the intervals of rl, otherwise false.
 func (rl runlength) Translate(inx uint32) (bool, uint32, uint32) {
+	if rl == nil {
+		return false, 0, inx // nothing to translate
+	}
 	last := uint32(0) // max input index processed + 1
 	pos := uint32(0)  // next possible output index
 	for ino, intv := range rl {
