@@ -67,10 +67,10 @@ type Box struct {
 
 // For padding, margins
 const (
-	Top    int = 0
-	Right      = 1
-	Bottom     = 2
-	Left       = 3
+	Top int = iota
+	Right
+	Bottom
+	Left
 )
 
 /* Box styling: We follow the CSS paradigm for boxes. Boxes are stylable
