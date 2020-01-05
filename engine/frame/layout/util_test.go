@@ -35,7 +35,6 @@ func TestIntervalTranslation(t *testing.T) {
 			t.Errorf("local index for Translate(%d) is %d, should be %d", inx, j, expected[n])
 		}
 	}
-	t.Fail()
 }
 
 func TestDisplayMode(t *testing.T) {
