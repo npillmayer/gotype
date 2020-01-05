@@ -9,6 +9,7 @@ import (
 	"github.com/npillmayer/gotype/core/config/gtrace"
 
 	"github.com/npillmayer/gotype/engine/dom"
+	"github.com/npillmayer/gotype/engine/dom/w3cdom"
 	"github.com/npillmayer/gotype/engine/frame/layout"
 )
 
@@ -37,52 +38,53 @@ func ToGraphViz(l *layout.Layouter, w io.Writer) {
 	if err != nil {
 		panic(err)
 	}
-	dict := make(map[*layout.Container]string, 4096)
+	dict := make(map[layout.Container]string, 4096)
 	boxes(l.BoxRoot(), w, dict, &gparams)
 	w.Write([]byte("}\n"))
 }
 
 var cnt int
 
-func boxes(c *layout.Container, w io.Writer, dict map[*layout.Container]string, gparams *graphParamsType) {
+func boxes(c layout.Container, w io.Writer, dict map[layout.Container]string, gparams *graphParamsType) {
 	cnt++
 	if cnt == 300 {
 		return
 	}
 	box(c, w, dict, gparams)
-	gtrace.EngineTracer.Infof("container = %s", c.DOMNode.NodeName())
-	if c.ChildCount() >= 0 {
-		children := c.Children()
-		nn := c.ChildCount()
+	gtrace.EngineTracer.Infof("container = %s", c.DOMNode().NodeName())
+	n := c.TreeNode()
+	if n.ChildCount() >= 0 {
+		children := n.Children()
+		nn := n.ChildCount()
 		gtrace.EngineTracer.Errorf("container has %d/%d children ..............", len(children), nn)
 
 		//for i, ch := range children {
-		for i := 0; i < c.ChildCount(); i++ {
-			ch, _ := c.Child(i)
-			child := ch.Payload.(*layout.Container)
-			gtrace.EngineTracer.Infof("  child[%d] = %s", i, child.DOMNode.NodeName())
+		for i := 0; i < n.ChildCount(); i++ {
+			ch, _ := n.Child(i)
+			child := ch.Payload.(layout.Container)
+			gtrace.EngineTracer.Infof("  child[%d] = %s", i, child.DOMNode().NodeName())
 			boxes(child, w, dict, gparams)
 			edge(c, child, w, dict, gparams)
 		}
 	}
 }
 
-func box(c *layout.Container, w io.Writer, dict map[*layout.Container]string, gparams *graphParamsType) {
+func box(c layout.Container, w io.Writer, dict map[layout.Container]string, gparams *graphParamsType) {
 	name := dict[c]
 	if name == "" {
 		sz := len(dict) + 1
 		name = fmt.Sprintf("node%05d", sz)
 		dict[c] = name
 	}
-	if err := gparams.BoxTmpl.Execute(w, &cbox{c, c.DOMNode, name}); err != nil {
+	if err := gparams.BoxTmpl.Execute(w, &cbox{c, c.DOMNode(), name}); err != nil {
 		panic(err)
 	}
 }
 
 // Helper struct
 type cbox struct {
-	C    *layout.Container
-	N    *dom.W3CNode
+	C    layout.Container
+	N    w3cdom.Node
 	Name string
 }
 
@@ -104,13 +106,13 @@ type cedge struct {
 	N1, N2 cbox
 }
 
-func edge(c1 *layout.Container, c2 *layout.Container, w io.Writer, dict map[*layout.Container]string,
+func edge(c1 layout.Container, c2 layout.Container, w io.Writer, dict map[layout.Container]string,
 	gparams *graphParamsType) {
 	//
 	//fmt.Printf("dict has %d entries\n", len(dict))
 	name1 := dict[c1]
 	name2 := dict[c2]
-	e := cedge{cbox{c1, c1.DOMNode, name1}, cbox{c2, c2.DOMNode, name2}}
+	e := cedge{cbox{c1, c1.DOMNode(), name1}, cbox{c2, c2.DOMNode(), name2}}
 	if err := gparams.EdgeTmpl.Execute(w, e); err != nil {
 		panic(err)
 	}
