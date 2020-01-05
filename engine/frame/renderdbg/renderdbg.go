@@ -23,7 +23,7 @@ type graphParamsType struct {
 
 // ToGraphViz creates a graphical representation of a render tree.
 // It produces a DOT file format suitable as input for Graphviz, given a Writer.
-func ToGraphViz(l *layout.Layouter, w io.Writer) {
+func ToGraphViz(boxroot *layout.PrincipalBox, w io.Writer) {
 	header, err := template.New("renderTree").Parse(graphHeadTmpl)
 	if err != nil {
 		panic(err)
@@ -39,7 +39,7 @@ func ToGraphViz(l *layout.Layouter, w io.Writer) {
 		panic(err)
 	}
 	dict := make(map[layout.Container]string, 4096)
-	boxes(l.BoxRoot(), w, dict, &gparams)
+	boxes(boxroot, w, dict, &gparams)
 	w.Write([]byte("}\n"))
 }
 

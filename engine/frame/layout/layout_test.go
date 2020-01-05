@@ -5,8 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/npillmayer/gotype/core/dimen"
-
 	"github.com/npillmayer/gotype/engine/frame/layout"
 	"github.com/npillmayer/gotype/engine/frame/renderdbg"
 
@@ -40,7 +38,7 @@ func buildDOM(t *testing.T) *dom.W3CNode {
 	if err != nil {
 		t.Errorf("Cannot create test document")
 	}
-	return dom.FromHTMLParseTree(h)
+	return dom.FromHTMLParseTree(h, nil) // nil = no external stylesheet
 }
 
 func TestLayout1(t *testing.T) {
@@ -48,22 +46,23 @@ func TestLayout1(t *testing.T) {
 	// teardown := gotestingadapter.RedirectTracing(t)
 	// // defer teardown()
 	gtrace.EngineTracer.SetTraceLevel(tracing.LevelInfo)
-	root := buildDOM(t)
+	domroot := buildDOM(t)
 	gtrace.EngineTracer.Infof("===================================================")
-	layout := layout.NewLayouter(root)
-	viewport := &dimen.Rect{TopL: dimen.Origin, BotR: dimen.DINA4}
-	layout.Layout(viewport)
-	if layout.BoxRoot() == nil {
-		t.Errorf("Layout failed, render tree root is null")
+	//viewport := &dimen.Rect{TopL: dimen.Origin, BotR: dimen.DINA4}
+	boxes, err := layout.BuildBoxTree(domroot)
+	if err != nil {
+		t.Errorf(err.Error())
+	} else if boxes == nil {
+		t.Errorf("Render tree root is null")
 	} else {
-		if root.NodeName() != "#document" {
-			t.Errorf("name of root element expected to be '#document")
-		}
-		t.Logf("root node is %s", root.NodeName())
+		// if root.NodeName() != "#document" {
+		// 	t.Errorf("name of root element expected to be '#document")
+		// // }
+		t.Logf("root node is %s", boxes.DOMNode().NodeName())
 		if graphviz {
 			gvz, _ := ioutil.TempFile(".", "layout-*.dot")
 			defer gvz.Close()
-			renderdbg.ToGraphViz(layout, gvz)
+			renderdbg.ToGraphViz(boxes.(*layout.PrincipalBox), gvz)
 		}
 	}
 }

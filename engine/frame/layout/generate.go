@@ -7,6 +7,8 @@ package layout
 import (
 	"fmt"
 
+	"github.com/npillmayer/gotype/core/config/tracing"
+
 	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
@@ -21,18 +23,21 @@ import (
 var errDOMRootIsNull = fmt.Errorf("DOM root is null")
 var errDOMNodeNotSuitable = fmt.Errorf("DOM node is not suited for layout")
 
+// BuildBoxTree creates a render box tree from a styled tree.
+//
 // TODO split into 2 runs:
 //    1st: generate box nodes
 //    2nd: re-order them
 // otherwise there is a danger that a child overtakes a parent
 //
-func (l *Layouter) buildBoxTree() (Container, error) {
-	if l.domRoot == nil {
+func BuildBoxTree(domRoot *dom.W3CNode) (Container, error) {
+	if domRoot == nil {
 		return nil, errDOMRootIsNull
 	}
-	domWalker := l.domRoot.Walk()
+	domWalker := domRoot.Walk()
 	T().Debugf("Creating box tree")
-	T().Infof("ROOT node of style tree is %s", dbgNodeString(l.domRoot))
+	T().SetTraceLevel(tracing.LevelDebug)
+	T().Infof("ROOT node of style tree is %s", dbgNodeString(domRoot))
 	dom2box := newAssoc()
 	createBoxForEach := prepareBoxCreator(dom2box)
 	future := domWalker.TopDown(createBoxForEach).Promise() // start asynchronous traversal
@@ -46,17 +51,16 @@ func (l *Layouter) buildBoxTree() (Container, error) {
 		T().Infof("  node for %s", n.domNode.NodeName())
 	}
 	T().Infof("dom2box contains %d entries", dom2box.Length())
-	T().Errorf("domRoot/2 = %s", dbgNodeString(l.domRoot))
-	var ok bool
-	l.boxRoot, ok = dom2box.Get(l.domRoot)
-	T().Errorf("box for domRoot = %v", l.boxRoot)
+	T().Errorf("domRoot/2 = %s", dbgNodeString(domRoot))
+	boxRoot, ok := dom2box.Get(domRoot)
+	T().Errorf("box for domRoot = %v", boxRoot)
 	if !ok {
 		T().Errorf("No box created for root style node")
 	}
-	if l.boxRoot != nil {
+	if boxRoot != nil {
 		T().Infof("ROOT BOX done!!")
 	}
-	return l.boxRoot, nil
+	return boxRoot, nil
 }
 
 func prepareBoxCreator(dict *domToBoxAssoc) tree.Action {
@@ -64,11 +68,16 @@ func prepareBoxCreator(dict *domToBoxAssoc) tree.Action {
 	action := func(node *tree.Node, parentNode *tree.Node, chpos int) (*tree.Node, error) {
 		domnode, err := dom.NodeFromTreeNode(node)
 		if err != nil {
+			T().Errorf("action 1: %s", err.Error())
 			return nil, err
 		}
-		parent, err2 := dom.NodeFromTreeNode(parentNode)
-		if err2 != nil {
-			return nil, err2
+		var parent *dom.W3CNode
+		if parentNode != nil {
+			parent, err = dom.NodeFromTreeNode(parentNode)
+			if err != nil {
+				T().Errorf("action 2: %s", err.Error())
+				return nil, err
+			}
 		}
 		return makeBoxNode(domnode, parent, chpos, dom2box)
 	}
