@@ -3,7 +3,7 @@ Package douceuradapter is a concrete implementation of interface cssom.StyleShee
 
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -18,7 +18,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -32,8 +32,7 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 package douceuradapter
 
 import (
@@ -45,41 +44,41 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-// CssStyle is an adapter for interface cssom.StyleSheet.
+// CSSStyles is an adapter for interface cssom.StyleSheet.
 // For an explanation of the motivation behind this design, please refer
 // to documentation for interface cssom.StyleSheet.
-type CssStyles struct {
+type CSSStyles struct {
 	css css.Stylesheet
 }
 
 // Wrap a douceur.css.Stylesheet into CssStyles.
 // The stylesheet is now managed by the wrapper.
-func Wrap(css *css.Stylesheet) *CssStyles {
-	sheet := &CssStyles{*css}
+func Wrap(css *css.Stylesheet) *CSSStyles {
+	sheet := &CSSStyles{*css}
 	return sheet
 }
 
-// Does this stylesheet contain any rules?
+// Empty checks if this stylesheet contains any rules.
 //
 // Interface cssom.StyleSheet
-func (sheet *CssStyles) Empty() bool {
+func (sheet *CSSStyles) Empty() bool {
 	return len(sheet.css.Rules) == 0
 }
 
-// Append rules from another stylesheet
+// AppendRules appends rules from another stylesheet.
 //
 // Interface cssom.StyleSheet
-func (sheet *CssStyles) AppendRules(other cssom.StyleSheet) {
-	othercss := other.(*CssStyles)
+func (sheet *CSSStyles) AppendRules(other cssom.StyleSheet) {
+	othercss := other.(*CSSStyles)
 	for _, r := range othercss.css.Rules { // append every rule from other
 		sheet.css.Rules = append(sheet.css.Rules, r)
 	}
 }
 
-// All the rules of a stylesheet
+// Rules returns all the rules of a stylesheet.
 //
 // Interface style.StyleSheet
-func (sheet *CssStyles) Rules() []cssom.Rule {
+func (sheet *CSSStyles) Rules() []cssom.Rule {
 	rules := make([]cssom.Rule, len(sheet.css.Rules))
 	for i := range sheet.css.Rules {
 		r := sheet.css.Rules[i]
@@ -88,17 +87,18 @@ func (sheet *CssStyles) Rules() []cssom.Rule {
 	return rules
 }
 
-var _ cssom.StyleSheet = &CssStyles{}
+var _ cssom.StyleSheet = &CSSStyles{}
 
 // Rule is an adapter for interface cssom.Rule.
 type Rule css.Rule
 
-// The prelude / selectors of the rule
+// Selector returns the prelude / selectors of the rule.
 func (r Rule) Selector() string {
 	return r.Prelude
 }
 
-// Property keys, e.g. "margin-top"
+// Properties returns the property keys of a rule,
+// e.g. "margin-top"
 func (r Rule) Properties() []string {
 	decl := r.Declarations
 	props := make([]string, 0, len(decl))
@@ -108,7 +108,7 @@ func (r Rule) Properties() []string {
 	return props
 }
 
-// Property value for key, e.g. "15px"
+// Value returns the property values for given key with this rule, e.g. "15px"
 func (r Rule) Value(key string) style.Property {
 	decl := r.Declarations
 	for _, d := range decl {
@@ -119,7 +119,7 @@ func (r Rule) Value(key string) style.Property {
 	return ""
 }
 
-// Is property key marked as important?
+// IsImportant returns true if a style key is marked as important ("!").
 func (r Rule) IsImportant(key string) bool {
 	decl := r.Declarations
 	for _, d := range decl {
@@ -135,7 +135,7 @@ var _ cssom.Rule = &Rule{}
 // ExtractStyleElements visits <head> and <body> elements in an HTML parse
 // tree and searches for embedded <style>s. It returns the content of
 // style-elements as style sheets.
-func ExtractStyleElements(htmldoc *html.Node) []*CssStyles {
+func ExtractStyleElements(htmldoc *html.Node) []*CSSStyles {
 	head := findElement(atom.Head, htmldoc)
 	body := findElement(atom.Body, htmldoc)
 	css := extractStyles(head)
@@ -146,8 +146,8 @@ func ExtractStyleElements(htmldoc *html.Node) []*CssStyles {
 	return css
 }
 
-func extractStyles(h *html.Node) []*CssStyles {
-	var css []*CssStyles
+func extractStyles(h *html.Node) []*CSSStyles {
+	var css []*CSSStyles
 	ch := h.FirstChild
 	for ch != nil {
 		if ch.DataAtom == atom.Style {
