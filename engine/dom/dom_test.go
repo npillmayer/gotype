@@ -47,7 +47,7 @@ func buildDOM(t *testing.T) *dom.W3CNode {
 	if err != nil {
 		t.Errorf("Cannot create test document")
 	}
-	return dom.FromHTMLParseTree(h)
+	return dom.FromHTMLParseTree(h, nil)
 }
 
 func TestW3CDoc(t *testing.T) {

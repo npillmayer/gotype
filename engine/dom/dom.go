@@ -512,19 +512,21 @@ func (wl *W3CNodeList) String() string {
 
 // --------------------------------------------------------------------------------
 
-// FromHTMLParseTree returns a W3C DOM from parsed HTML.
-func FromHTMLParseTree(h *html.Node) *W3CNode {
+// FromHTMLParseTree returns a W3C DOM from parsed HTML and an optional style sheet.
+func FromHTMLParseTree(h *html.Node, css cssom.StyleSheet) *W3CNode {
+	if h == nil {
+		T().Infof("Cannot create DOM for null-HTML")
+		return nil
+	}
 	styles := douceuradapter.ExtractStyleElements(h)
 	T().Debugf("Extracted %d <style> elements", len(styles))
-	//c, errcss := parser.Parse(mycss)
-	//if errhtml != nil || errcss != nil {
-	//	T().Errorf("Cannot create test document")
-	//}
-	s := cssom.NewCSSOM(nil)
+	s := cssom.NewCSSOM(nil) // nil = no additional properties
 	for _, sty := range styles {
 		s.AddStylesForScope(nil, sty, cssom.Script)
 	}
-	//s.AddStylesForScope(nil, douceuradapter.Wrap(c), cssom.Author)
+	if css != nil {
+		s.AddStylesForScope(nil, css, cssom.Author)
+	}
 	stytree, err := s.Style(h, styledtree.Creator())
 	if err != nil {
 		T().Errorf("Cannot style test document: %s", err.Error())
