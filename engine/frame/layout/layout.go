@@ -14,55 +14,6 @@ import (
 // Regions:
 // http://cna.mamk.fi/Public/FJAK/MOAC_MTA_HTML5_App_Dev/c06.pdf
 
-// Layouter is a layout engine.
-/*
-type Layouter struct {
-	domRoot *dom.W3CNode // input styled tree
-	boxRoot Container    // layout tree to contruct
-	err     error        // remember last error
-	//styleCreator style.Creator // to create a style node
-}
-*/
-
-// NewLayouter creates a new layout engine for a given style tree.
-// The tree's styled nodes will be accessed using styler(node).
-/*
-func NewLayouter(dom *dom.W3CNode) *Layouter {
-	//
-	l := &Layouter{
-		domRoot: dom,
-		//styleCreator: creator,
-	}
-	return l
-}
-*/
-
-// Layout produces a render tree from walking the nodes
-// of a styled tree (DOM).
-/*
-func (l *Layouter) Layout(viewport *dimen.Rect) Container {
-	// First create the tree without calculating the dimensions
-	var err error
-	l.boxRoot, err = l.buildBoxTree()
-	if err != nil {
-		T().Errorf("Error building box tree")
-	}
-	// Next calculate position and dimensions for every box
-	layoutBoxes(layoutTree, viewport)
-	//renderTree := layoutBoxes(layoutTree, viewport)
-	return l.boxRoot
-}
-*/
-
-// BoxRoot returns the root node of the render tree.
-/*
-func (l *Layouter) BoxRoot() Container {
-	return l.boxRoot
-}
-*/
-
-// --------------------------------------------------------------------------------------
-
 // DisplayModesForDOMNode returns outer and inner display mode for a given DOM node.
 func DisplayModesForDOMNode(domnode *dom.W3CNode) (outerMode DisplayMode, innerMode DisplayMode) {
 	if domnode == nil || domnode.HTMLNode() == nil {
@@ -114,7 +65,7 @@ func DefaultDisplayModeForHTMLNode(h *html.Node) (DisplayMode, DisplayMode) {
 		case "html", "body", "div", "section", "article", "nav":
 			return BlockMode, BlockMode
 		case "p":
-			return BlockMode, FlowMode
+			return BlockMode, InlineMode
 		case "span", "i", "b", "strong", "em":
 			return InlineMode, InlineMode
 		case "h1", "h2", "h3", "h4", "h5", "h6":
