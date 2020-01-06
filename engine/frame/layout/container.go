@@ -72,6 +72,24 @@ func (disp DisplayMode) FullString() string {
 	return b.String()
 }
 
+// Symbol returns a Unicode symbol for a mode.
+func (disp DisplayMode) Symbol() string {
+	if disp == FlowMode {
+		return "\u25a7"
+	} else if disp.Contains(BlockMode) {
+		return "\u25fe"
+	} else if disp.Contains(InlineMode) {
+		return "\u25b6"
+	} else if disp.Contains(FlexMode) {
+		return "\u25a4"
+	} else if disp.Contains(GridMode) {
+		return "\u25a5"
+	} else if disp.Contains(TableMode) {
+		return "\u25a6"
+	}
+	return "?"
+}
+
 // --- Container -----------------------------------------------------------------------
 
 // Container is an interface type for render tree nodes, i.e., boxes.
@@ -223,17 +241,14 @@ func (pbox *PrincipalBox) checkForChildrenWithDisplayMode(dispMode DisplayMode) 
 	return rl
 }
 
-// TODO
 func (pbox *PrincipalBox) String() string {
 	if pbox == nil {
 		return "<empty box>"
 	}
-	n := "_"
-	b := "inline-box"
-	if pbox.innerMode == BlockMode {
-		b = "block-box"
-	}
-	return fmt.Sprintf("\\%s<%s>", b, n)
+	name := pbox.DOMNode().NodeName()
+	innerSym := pbox.innerMode.Symbol()
+	outerSym := pbox.outerMode.Symbol()
+	return fmt.Sprintf("[%s | %s %s]", outerSym, innerSym, name)
 }
 
 // ErrNullChild flags an error condition when a non-nil child has been expected.
@@ -269,16 +284,17 @@ func (pbox *PrincipalBox) addChildContainer(child Container) error {
 	}
 	inx, _ := child.ChildIndices()
 	anon, ino, j := pbox.anonMask.Translate(inx)
+	T().Debugf("Translated child-index #%d to %v->(%d,%d)", inx, anon, ino, j)
 	var node *tree.Node
 	var ok bool
 	if anon {
-		node = pbox.TreeNode() // we will add the child to the principal box
-	} else {
 		// we will add the child to an anonymous box
 		node, ok = pbox.TreeNode().Child(int(ino))
 		if !ok { // oops, we expected an anonymous box there
 			return ErrAnonBoxNotFound
 		}
+	} else {
+		node = pbox.TreeNode() // we will add the child to the principal box
 	}
 	node.SetChildAt(int(j), child.TreeNode())
 	return nil
