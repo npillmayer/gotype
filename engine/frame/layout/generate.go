@@ -46,10 +46,12 @@ func BuildBoxTree(domRoot *dom.W3CNode) (Container, error) {
 		return nil, err
 	}
 	T().Infof("Walker returned %d render nodes", len(renderNodes))
-	for _, rnode := range renderNodes {
-		n := TreeNodeAsPrincipalBox(rnode)
-		T().Infof("  node for %s", n.domNode.NodeName())
-	}
+	/*
+		for _, rnode := range renderNodes {
+			n := TreeNodeAsPrincipalBox(rnode)
+			T().Infof("  node for %s", n.domNode.NodeName())
+		}
+	*/
 	T().Infof("dom2box contains %d entries", dom2box.Length())
 	T().Errorf("domRoot/2 = %s", dbgNodeString(domRoot))
 	boxRoot, ok := dom2box.Get(domRoot)
@@ -98,27 +100,38 @@ func makeBoxNode(domnode *dom.W3CNode, parent *dom.W3CNode, chpos int, dom2box *
 		if parentNode := domnode.ParentNode(); parentNode != nil {
 			parent := parentNode.(*dom.W3CNode)
 			fmt.Printf("parent is %s\n", parent.NodeName())
-			pbox, found := dom2box.Get(parent)
+			parentbox, found := dom2box.Get(parent)
 			if found {
 				fmt.Println("------------------>")
-				fmt.Printf("adding new box node to parent %s\n", pbox)
-
-				//pbox.Add(box)
-
-				// fmt.Printf("parent now has %d children\n", parent.Children().Length())
-				// ch := parent.FirstChild()
-				// // fmt.Printf("1st child is %s\n", ch)
+				fmt.Printf("adding new box node to parent %s\n", parentbox)
+				p := parentbox.(*PrincipalBox)
+				var err error
+				switch b := box.(type) {
+				case *PrincipalBox:
+					b.ChildInx = uint32(chpos)
+					err = p.AddChild(b)
+				case *TextBox:
+					b.ChildInx = uint32(chpos)
+					err = p.AddTextChild(b)
+				default:
+					T().Errorf("Unknown box type for %v", box)
+				}
+				if err != nil {
+					T().Errorf(err.Error())
+				}
+				fmt.Printf("parent now has %d children\n", p.ChildCount())
+				ch, ok := p.Child(0)
+				if ok {
+					fmt.Printf("1st child is %s\n", ch)
+				} else {
+					T().Errorf("Parent has no child!")
+				}
 				fmt.Println("------------------<")
 			}
 		}
 	}
 	//possiblyCreateMiniHierarchy(box)
-	//return &box.Node, nil
-	return nil, nil
-}
-
-func (pbox *PrincipalBox) InsertChildBoxAt(child Container, inx int) error {
-	return nil
+	return box.TreeNode(), nil
 }
 
 // ----------------------------------------------------------------------
