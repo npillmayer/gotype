@@ -8,7 +8,6 @@ import (
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 
-	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/dom/w3cdom"
 	"github.com/npillmayer/gotype/engine/frame/layout"
 )
@@ -51,7 +50,7 @@ func boxes(c layout.Container, w io.Writer, dict map[layout.Container]string, gp
 		return
 	}
 	box(c, w, dict, gparams)
-	gtrace.EngineTracer.Infof("container = %s", c.DOMNode().NodeName())
+	gtrace.EngineTracer.Infof("container = %v", c)
 	n := c.TreeNode()
 	if n.ChildCount() >= 0 {
 		children := n.Children()
@@ -60,11 +59,20 @@ func boxes(c layout.Container, w io.Writer, dict map[layout.Container]string, gp
 
 		//for i, ch := range children {
 		for i := 0; i < n.ChildCount(); i++ {
-			ch, _ := n.Child(i)
-			child := ch.Payload.(layout.Container)
-			gtrace.EngineTracer.Infof("  child[%d] = %s", i, child.DOMNode().NodeName())
-			boxes(child, w, dict, gparams)
-			edge(c, child, w, dict, gparams)
+			ch, ok := n.Child(i)
+			if !ok {
+				gtrace.EngineTracer.Errorf("Child at #%d could not be retrieved", i)
+			} else {
+				if ch == nil {
+					gtrace.EngineTracer.Errorf("Child at #%d is nil", i)
+				} else {
+					gtrace.EngineTracer.Errorf("Child is %v", ch)
+					child := ch.Payload.(layout.Container)
+					gtrace.EngineTracer.Infof("  child[%d] = %v", i, child)
+					boxes(child, w, dict, gparams)
+					edge(c, child, w, dict, gparams)
+				}
+			}
 		}
 	}
 }
@@ -88,13 +96,15 @@ type cbox struct {
 	Name string
 }
 
-func shortText(n *dom.W3CNode) string {
-	h := n.HTMLNode()
-	s := "\"\\\""
-	if len(h.Data) > 10 {
-		s += h.Data[:10] + "...\\\"\""
+func shortText(box *cbox) string {
+	txt := box.N.NodeValue()
+	disp, _ := box.C.DisplayModes()
+	sym := disp.Symbol()
+	s := fmt.Sprintf("\"%s\u2000\\\"", sym)
+	if len(txt) > 10 {
+		s += txt[:10] + "...\\\"\""
 	} else {
-		s += h.Data + "\\\"\""
+		s += txt + "\\\"\""
 	}
 	s = strings.Replace(s, "\n", `\\n`, -1)
 	s = strings.Replace(s, "\t", `\\t`, -1)
@@ -122,15 +132,19 @@ func edge(c1 layout.Container, c2 layout.Container, w io.Writer, dict map[layout
 
 const graphHeadTmpl = `digraph g {                                                                                                             
   graph [labelloc="t" label="" splines=true overlap=false rankdir = "LR"];
-  graph [{{ .Fontname }} = "helvetica" fontsize=14] ;
-   node [fontname = "{{ .Fontname }}" fontsize=14] ;
-   edge [fontname = "{{ .Fontname }}" fontsize=14] ;
+  graph [{{ .Fontname }} = "helvetica" fontsize=12] ;
+   node [fontname = "{{ .Fontname }}" fontsize=12] ;
+   edge [fontname = "{{ .Fontname }}" fontsize=12] ;
 `
 
-const boxTmpl = `{{ if eq .N.NodeName "#text" }}
-{{ .Name }}	[ label={{ shortstring .N }} shape=box style=filled fillcolor=grey95 fontname="Courier" fontsize=11.0 ] ;
+const boxTmpl = `{{ if .C.IsAnonymous }}
+{{ if .C.IsText }}
+{{ .Name }}	[ label={{ shortstring . }} shape=box style=filled fillcolor=grey95 fontname="Courier" fontsize=11.0 ] ;
 {{ else }}
-{{ .Name }}	[ label={{ printf "%q" .N.NodeName }} shape=ellipse style=filled fillcolor=lightblue3 ] ;
+{{ .Name }}	[ label="{{.C.String }}" shape=box style=filled fillcolor=grey90 fontname="Courier" fontsize=11.0 ] ;
+{{ end }}
+{{ else }}
+{{ .Name }}	[ label={{ printf "%q" .C.String }} shape=box style=filled fillcolor=lightblue3 ] ;
 {{ end }}
 `
 
