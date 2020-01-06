@@ -73,13 +73,12 @@ const (
 	Left
 )
 
-/* Box styling: We follow the CSS paradigm for boxes. Boxes are stylable
- * objects which have dimensions, spacing, borders and colors.
- *
- * Some boxes may just implement a subset of the styling parameters. Most
- * notably this holds for glyphs: Glyphs may have styled their content only.
- * No border or additional spacing is possible with glyphs.
- */
+// Box styling: We follow the CSS paradigm for boxes. Boxes are stylable
+// objects which have dimensions, spacing, borders and colors.
+//
+// Some boxes may just implement a subset of the styling parameters. Most
+// notably this holds for glyphs: Glyphs may have styled their content only.
+// No border or additional spacing is possible with glyphs.
 
 // ColorStyle is a type for styling with color.
 type ColorStyle struct {
