@@ -81,6 +81,8 @@ func DisplayModesForDOMNode(domnode *dom.W3CNode) (outerMode DisplayMode, innerM
 		if err != nil {
 			T().Errorf("unrecognized display property: %s", display)
 			outerMode, innerMode = BlockMode, BlockMode
+		} else if outerMode == NoMode {
+			outerMode, innerMode = DefaultDisplayModeForHTMLNode(domnode.HTMLNode())
 		}
 	}
 	T().Infof("display modes = %s | %s", outerMode.String(), innerMode.String())
