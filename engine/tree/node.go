@@ -103,6 +103,14 @@ func (node *Node) Parent() *Node {
 	return node.parent
 }
 
+// Isolate removes a node from its parent.
+func (node *Node) Isolate() {
+	if node == nil || node.parent == nil {
+		return
+	}
+	node.parent.children.remove(node)
+}
+
 // ChildCount returns the number of children-nodes for a node
 // (concurrency-safe).
 func (node *Node) ChildCount() int {
@@ -199,6 +207,18 @@ func (chs *childrenSlice) insertChildAt(i int, child *Node, parent *Node) {
 	}
 	chs.slice[i] = child
 	child.parent = parent
+}
+
+func (chs *childrenSlice) remove(node *Node) {
+	chs.Lock()
+	defer chs.Unlock()
+	for i, ch := range chs.slice {
+		if ch == node {
+			chs.slice[i] = nil
+			node.parent = nil
+			break
+		}
+	}
 }
 
 func (chs *childrenSlice) child(n int) *Node {
