@@ -80,7 +80,6 @@ func makeBoxNode(domnode *dom.W3CNode, parent *dom.W3CNode, chpos int, dom2box *
 	if !domnode.IsDocument() {
 		if parentNode := domnode.ParentNode(); parentNode != nil {
 			parent := parentNode.(*dom.W3CNode)
-			fmt.Printf("parent is %s\n", parent.NodeName())
 			parentbox, found := dom2box.Get(parent)
 			if found {
 				T().Debugf("adding new box %s node to parent %s\n", box, parentbox)

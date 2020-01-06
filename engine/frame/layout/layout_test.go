@@ -10,7 +10,7 @@ import (
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/engine/dom"
 	"golang.org/x/net/html"
 )
@@ -44,9 +44,9 @@ func buildDOM(t *testing.T) *dom.W3CNode {
 }
 
 func TestLayout1(t *testing.T) {
-	gtrace.EngineTracer = gologadapter.New()
-	// teardown := gotestingadapter.RedirectTracing(t)
-	// // defer teardown()
+	//gtrace.EngineTracer = gologadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	gtrace.EngineTracer.SetTraceLevel(tracing.LevelInfo)
 	domroot := buildDOM(t)
 	gtrace.EngineTracer.Infof("===================================================")
