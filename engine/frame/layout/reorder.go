@@ -1,17 +1,61 @@
 package layout
 
 import (
+	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"github.com/npillmayer/gotype/engine/tree"
 )
 
-// TODO
-func reorder(*tree.Node) (*tree.Node, error) {
+// ReorderBoxTree reorders box nodes of a render tree to account for
+// "position" CSS properties.
+// In a future version, CSS regions will be supported as well.
+func ReorderBoxTree(boxRoot *PrincipalBox) error {
+	if boxRoot == nil {
+		return nil
+	}
+	walker := tree.NewWalker(boxRoot.TreeNode())
+	future := walker.TopDown(reorderBoxes).Promise() // start asynchronous traversal
+	_, err := future()                               // wait for top-down traversal to finish
+	return err
+}
+
+func reorderBoxes(node *tree.Node, parentNode *tree.Node, chpos int) (*tree.Node, error) {
+	pbox, ok := node.Payload.(*PrincipalBox)
+	if !ok {
+		return nil, nil // do nothing for other boxes
+	}
+	position := pbox.DOMNode().ComputedStyles().GetPropertyValue("position")
+	switch position {
+	case "fixed": // attach to viewport
+		viewport := findViewport(pbox)
+		if viewport != nil {
+			viewport.AppendChild(pbox)
+		}
+	case "absolute": // attach to ancestor with position ≠ static
+		// TODO: I want to say 'findAncestorWith(PropIsNot("static"))'
+		anc := sn.Parent()
+		styler := ctx.styleCreator.ToStyler(anc)
+		pp, err := style.GetLocalProperty(styler.ComputedStyles(), "position")
+		for !err && (pp == "static" || pp == style.NullStyle) {
+			anc = anc.Parent() // stopper is style of viewport, which has position=fixed
+			styler = ctx.styleCreator.ToStyler(anc)
+			pp, err = style.GetLocalProperty(styler.ComputedStyles(), "position")
+		}
+	}
 	return nil, nil
 }
 
-// TODO
-func prepareReorderer() func(*tree.Node) (*tree.Node, error) {
-	return reorder
+func findViewport(pbox *PrincipalBox) *PrincipalBox {
+	node := pbox.TreeNode()
+	for node != nil {
+		box := TreeNodeAsPrincipalBox(node.Parent())
+		if box != nil {
+			if box.DOMNode().NodeName() == "#document" {
+				return box
+			}
+		}
+		node := node.Parent()
+	}
+	return nil
 }
 
 /*

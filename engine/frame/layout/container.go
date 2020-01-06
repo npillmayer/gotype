@@ -142,7 +142,11 @@ func TreeNodeAsPrincipalBox(n *tree.Node) *PrincipalBox {
 	if n == nil {
 		return nil
 	}
-	return n.Payload.(*PrincipalBox)
+	pbox, ok := n.Payload.(*PrincipalBox)
+	if ok {
+		return pbox
+	}
+	return nil
 }
 
 // TreeNode returns the underlying tree node for a box.
@@ -308,14 +312,25 @@ func (pbox *PrincipalBox) addChildContainer(child Container) error {
 		if !ok { // oops, we expected an anonymous box there
 			return ErrAnonBoxNotFound
 		}
-		if node == nil {
-			panic(fmt.Sprintf("NO ANONYMOUS BOX FOUND AT %d", ino))
-		}
 	} else {
 		node = pbox.TreeNode() // we will add the child to the principal box
 	}
 	node.SetChildAt(int(j), child.TreeNode())
 	return nil
+}
+
+// AppendChild appends a child box to a principal box.
+// The child is a principal box itself, i.e. references a styleable DOM node.
+// It is appended as the last child of pbox.
+func (pbox *PrincipalBox) AppendChild(child *PrincipalBox) {
+	if !pbox.innerMode.Overlaps(child.outerMode) {
+		// create an anon box
+		anon := newAnonymousBox(pbox.innerMode, child.outerMode)
+		anon.TreeNode().AddChild(child.TreeNode())
+		pbox.TreeNode().AddChild(anon.TreeNode())
+		return
+	}
+	pbox.TreeNode().AddChild(child.TreeNode())
 }
 
 // --- Anonymous Boxes -----------------------------------------------------------------
