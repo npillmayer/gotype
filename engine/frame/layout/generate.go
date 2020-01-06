@@ -7,37 +7,21 @@ package layout
 import (
 	"fmt"
 
-	"github.com/npillmayer/gotype/core/config/tracing"
-
 	"github.com/npillmayer/gotype/engine/dom"
 	"github.com/npillmayer/gotype/engine/tree"
 	"golang.org/x/net/html"
 )
 
-// Helper struct to pack a node of a styled tree.
-// type stylednode struct {
-// 	treenode *tree.Node
-// 	toStyler style.Interf
-// }
-
 var errDOMRootIsNull = fmt.Errorf("DOM root is null")
 var errDOMNodeNotSuitable = fmt.Errorf("DOM node is not suited for layout")
 
 // BuildBoxTree creates a render box tree from a styled tree.
-//
-// TODO split into 2 runs:
-//    1st: generate box nodes
-//    2nd: re-order them
-// otherwise there is a danger that a child overtakes a parent
-//
 func BuildBoxTree(domRoot *dom.W3CNode) (Container, error) {
 	if domRoot == nil {
 		return nil, errDOMRootIsNull
 	}
 	domWalker := domRoot.Walk()
 	T().Debugf("Creating box tree")
-	T().SetTraceLevel(tracing.LevelDebug)
-	T().Infof("ROOT node of style tree is %s", dbgNodeString(domRoot))
 	dom2box := newAssoc()
 	createBoxForEach := prepareBoxCreator(dom2box)
 	future := domWalker.TopDown(createBoxForEach).Promise() // start asynchronous traversal
@@ -52,15 +36,12 @@ func BuildBoxTree(domRoot *dom.W3CNode) (Container, error) {
 			T().Infof("  node for %s", n.domNode.NodeName())
 		}
 	*/
-	T().Infof("dom2box contains %d entries", dom2box.Length())
-	T().Errorf("domRoot/2 = %s", dbgNodeString(domRoot))
+	T().Infof("dom2box dict contains %d entries", dom2box.Length())
+	//T().Errorf("domRoot/2 = %s", dbgNodeString(domRoot))
 	boxRoot, ok := dom2box.Get(domRoot)
-	T().Errorf("box for domRoot = %v", boxRoot)
+	//T().Errorf("box for domRoot = %v", boxRoot)
 	if !ok {
 		T().Errorf("No box created for root style node")
-	}
-	if boxRoot != nil {
-		T().Infof("ROOT BOX done!!")
 	}
 	return boxRoot, nil
 }
@@ -102,8 +83,7 @@ func makeBoxNode(domnode *dom.W3CNode, parent *dom.W3CNode, chpos int, dom2box *
 			fmt.Printf("parent is %s\n", parent.NodeName())
 			parentbox, found := dom2box.Get(parent)
 			if found {
-				fmt.Println("------------------>")
-				fmt.Printf("adding new box %s node to parent %s\n", box, parentbox)
+				T().Debugf("adding new box %s node to parent %s\n", box, parentbox)
 				p := parentbox.(*PrincipalBox)
 				var err error
 				switch b := box.(type) {
@@ -119,14 +99,10 @@ func makeBoxNode(domnode *dom.W3CNode, parent *dom.W3CNode, chpos int, dom2box *
 				if err != nil {
 					T().Errorf(err.Error())
 				}
-				fmt.Printf("parent now has %d children\n", p.ChildCount())
-				ch, ok := p.Child(0)
-				if ok {
-					fmt.Printf("1st child is %s\n", ch)
-				} else {
+				_, ok := p.Child(0)
+				if !ok {
 					T().Errorf("Parent has no child!")
 				}
-				fmt.Println("------------------<")
 			}
 		}
 	}
