@@ -103,7 +103,7 @@ func makeBoxNode(domnode *dom.W3CNode, parent *dom.W3CNode, chpos int, dom2box *
 			parentbox, found := dom2box.Get(parent)
 			if found {
 				fmt.Println("------------------>")
-				fmt.Printf("adding new box node to parent %s\n", parentbox)
+				fmt.Printf("adding new box %s node to parent %s\n", box, parentbox)
 				p := parentbox.(*PrincipalBox)
 				var err error
 				switch b := box.(type) {
@@ -150,6 +150,7 @@ func NewBoxForDOMNode(domnode *dom.W3CNode) Container {
 		return nil // do not produce box for illegal mode or for display = "none"
 	}
 	pbox := newPrincipalBox(domnode, outerMode, innerMode)
+	pbox.prepareAnonymousBoxes()
 	// TODO find index within parent
 	// and set #ChildInx
 	return pbox

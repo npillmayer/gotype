@@ -21,13 +21,15 @@ var graphviz = false
 // 	return gtrace.EngineTracer
 // }
 
+var Xmyhtml = `<div><b>bold</b><table></table><span>spanned</span></div>`
+
 var myhtml = `
 <html><head>
 <style>
   body { border-color: red; }
 </style>
 </head><body>
-  <p>The quick brown fox jumps over the lazy dog.</p>
+  <p>The quick brown fox jumps over the lazy</p><b>dog.</b>
   <p id="world">Hello <b>World</b>!</p>
   <p style="padding-left: 5px;">This is a test.</p>
 </body>

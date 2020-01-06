@@ -77,15 +77,17 @@ func (disp DisplayMode) Symbol() string {
 	if disp == FlowMode {
 		return "\u25a7"
 	} else if disp.Contains(BlockMode) {
-		return "\u25fe"
+		return "\u25a9"
 	} else if disp.Contains(InlineMode) {
-		return "\u25b6"
+		return "\u25ba"
 	} else if disp.Contains(FlexMode) {
 		return "\u25a4"
 	} else if disp.Contains(GridMode) {
-		return "\u25a5"
+		return "\u25f0"
+	} else if disp.Contains(ListItemMode) {
+		return "\u25a3"
 	} else if disp.Contains(TableMode) {
-		return "\u25a6"
+		return "\u25a5"
 	}
 	return "?"
 }
@@ -97,6 +99,7 @@ type Container interface {
 	DOMNode() w3cdom.Node
 	TreeNode() *tree.Node
 	IsAnonymous() bool
+	IsText() bool
 	DisplayModes() (DisplayMode, DisplayMode)
 	ChildIndices() (uint32, uint32)
 }
@@ -168,9 +171,24 @@ func (pbox *PrincipalBox) IsAnonymous() bool {
 	return false
 }
 
+// IsText will always return false for a principal box.
+func (pbox *PrincipalBox) IsText() bool {
+	return false
+}
+
 // DisplayModes returns outer and inner display mode of this box.
 func (pbox *PrincipalBox) DisplayModes() (DisplayMode, DisplayMode) {
 	return pbox.outerMode, pbox.innerMode
+}
+
+func (pbox *PrincipalBox) String() string {
+	if pbox == nil {
+		return "<empty box>"
+	}
+	name := pbox.DOMNode().NodeName()
+	innerSym := pbox.innerMode.Symbol()
+	outerSym := pbox.outerMode.Symbol()
+	return fmt.Sprintf("%s %s %s", outerSym, innerSym, name)
 }
 
 // ChildIndices returns the positional index of this box reference to
@@ -193,12 +211,11 @@ func (pbox *PrincipalBox) prepareAnonymousBoxes() {
 					anon := newAnonymousBox(InlineMode, BlockMode)
 					anon.ChildInxFrom = intv.from
 					anon.ChildInxTo = intv.from + intv.len - 1
-					// TODO add child at correct index, tricky...
 					pbox.SetChildAt(int(anonpos[i]), anon.TreeNode())
 				}
 			}
 		}
-		if pbox.innerMode.Contains(FlowMode) {
+		if pbox.innerMode.Contains(BlockMode) {
 			// In flow mode all children must have the same outer display mode,
 			// either block or inline.
 			// TODO This holds for flow and grid, too ?! others?
@@ -206,13 +223,13 @@ func (pbox *PrincipalBox) prepareAnonymousBoxes() {
 			if !(pbox.checkForChildrenWithDisplayMode(BlockMode).Empty() ||
 				inlineChPos.Empty()) { // found both
 				// Both inline and block children => need anon boxes for inline children
+				T().Debugf("Creating inline anon boxes at %s", inlineChPos)
 				pbox.anonMask = inlineChPos
 				anonpos := inlineChPos.Condense()
 				for i, intv := range inlineChPos {
 					anon := newAnonymousBox(BlockMode, InlineMode)
 					anon.ChildInxFrom = intv.from
 					anon.ChildInxTo = intv.from + intv.len - 1
-					// TODO add child at correct index, tricky...
 					pbox.SetChildAt(int(anonpos[i]), anon.TreeNode())
 				}
 			}
@@ -221,7 +238,7 @@ func (pbox *PrincipalBox) prepareAnonymousBoxes() {
 }
 
 func (pbox *PrincipalBox) checkForChildrenWithDisplayMode(dispMode DisplayMode) runlength {
-	domchildren := pbox.domNode.Children()
+	domchildren := pbox.domNode.ChildNodes()
 	var rl runlength
 	var openintv intv
 	for i := 0; i < domchildren.Length(); i++ {
@@ -232,23 +249,18 @@ func (pbox *PrincipalBox) checkForChildrenWithDisplayMode(dispMode DisplayMode) 
 				openintv.len++
 			} else {
 				openintv = intv{uint32(i), uint32(1)}
-				rl = append(rl, openintv)
 			}
 		} else {
+			if openintv.len > 0 {
+				rl = append(rl, openintv)
+			}
 			openintv = nullintv
 		}
 	}
-	return rl
-}
-
-func (pbox *PrincipalBox) String() string {
-	if pbox == nil {
-		return "<empty box>"
+	if openintv.len > 0 {
+		rl = append(rl, openintv)
 	}
-	name := pbox.DOMNode().NodeName()
-	innerSym := pbox.innerMode.Symbol()
-	outerSym := pbox.outerMode.Symbol()
-	return fmt.Sprintf("[%s %s %s]", outerSym, innerSym, name)
+	return rl
 }
 
 // ErrNullChild flags an error condition when a non-nil child has been expected.
@@ -270,11 +282,13 @@ func (pbox *PrincipalBox) AddChild(child *PrincipalBox) error {
 // The child must have its child index set.
 func (pbox *PrincipalBox) AddTextChild(child *TextBox) error {
 	err := pbox.addChildContainer(child)
-	if err == nil {
-		if pbox.innerMode.Contains(InlineMode) {
-			child.outerMode.Set(InlineMode)
-		}
-	}
+	// if err == nil {
+	// 	if pbox.innerMode.Contains(InlineMode) {
+	// 		child.outerMode.Set(InlineMode)
+	// 	} else if pbox.innerMode.Contains(BlockMode) {
+	// 		child.outerMode.Set(BlockMode)
+	// 	}
+	// }
 	return err
 }
 
@@ -284,7 +298,8 @@ func (pbox *PrincipalBox) addChildContainer(child Container) error {
 	}
 	inx, _ := child.ChildIndices()
 	anon, ino, j := pbox.anonMask.Translate(inx)
-	T().Debugf("Translated child-index #%d to %v->(%d,%d)", inx, anon, ino, j)
+	T().Debugf("Anon mask of %s is %s, transl child #%d to %v->(%d,%d)",
+		pbox.String(), pbox.anonMask, inx, anon, ino, j)
 	var node *tree.Node
 	var ok bool
 	if anon {
@@ -292,6 +307,9 @@ func (pbox *PrincipalBox) addChildContainer(child Container) error {
 		node, ok = pbox.TreeNode().Child(int(ino))
 		if !ok { // oops, we expected an anonymous box there
 			return ErrAnonBoxNotFound
+		}
+		if node == nil {
+			panic(fmt.Sprintf("NO ANONYMOUS BOX FOUND AT %d", ino))
 		}
 	} else {
 		node = pbox.TreeNode() // we will add the child to the principal box
@@ -334,9 +352,23 @@ func (anon *AnonymousBox) IsAnonymous() bool {
 	return true
 }
 
+// IsText will always return false for an anonymous box.
+func (anon *AnonymousBox) IsText() bool {
+	return false
+}
+
 // DisplayModes returns outer and inner display mode of this box.
 func (anon *AnonymousBox) DisplayModes() (DisplayMode, DisplayMode) {
 	return anon.outerMode, anon.innerMode
+}
+
+func (anon *AnonymousBox) String() string {
+	if anon == nil {
+		return "<empty anon box>"
+	}
+	innerSym := anon.innerMode.Symbol()
+	outerSym := anon.outerMode.Symbol()
+	return fmt.Sprintf("%s %s", outerSym, innerSym)
 }
 
 // ChildIndices returns the positional indices of all child-boxes in reference to
@@ -346,10 +378,12 @@ func (anon *AnonymousBox) ChildIndices() (uint32, uint32) {
 }
 
 func newAnonymousBox(outer DisplayMode, inner DisplayMode) *AnonymousBox {
-	return &AnonymousBox{
+	anon := &AnonymousBox{
 		outerMode: outer,
 		innerMode: inner,
 	}
+	anon.Payload = anon // always points to itself: tree node -> box
+	return anon
 }
 
 // --- Anonymous Boxes -----------------------------------------------------------------
@@ -362,14 +396,14 @@ type TextBox struct {
 	tree.Node              // a text box is a node within the layout tree
 	Box       *box.Box     // text box cannot be explicitely styled
 	domNode   *dom.W3CNode // the DOM text-node this box refers to
-	outerMode DisplayMode  // container lives in this mode (block or inline)
-	ChildInx  uint32       // this box represents a text node at #ChildInx of the principal box
+	//outerMode DisplayMode  // container lives in this mode (block or inline)
+	ChildInx uint32 // this box represents a text node at #ChildInx of the principal box
 }
 
 func newTextBox(domnode *dom.W3CNode) *TextBox {
 	tbox := &TextBox{
-		domNode:   domnode,
-		outerMode: FlowMode,
+		domNode: domnode,
+		//outerMode: FlowMode,
 	}
 	tbox.Payload = tbox // always points to itself: tree node -> box
 	return tbox
@@ -390,10 +424,14 @@ func (tbox *TextBox) IsAnonymous() bool {
 	return true
 }
 
-// DisplayModes returns the text box's outer display mode and a inner mode of
-// "inline".
+// IsText will always return true for a text box.
+func (tbox *TextBox) IsText() bool {
+	return true
+}
+
+// DisplayModes always returns inline.
 func (tbox *TextBox) DisplayModes() (DisplayMode, DisplayMode) {
-	return tbox.outerMode, InlineMode
+	return InlineMode, InlineMode
 }
 
 // ChildIndices returns the positional index of the text node in reference to
@@ -447,14 +485,13 @@ func (rl runlength) Translate(inx uint32) (bool, uint32, uint32) {
 	}
 	last := uint32(0) // max input index processed + 1
 	pos := uint32(0)  // next possible output index
-	for ino, intv := range rl {
+	for _, intv := range rl {
 		if inx < intv.from { // inx is left of this interval
 			pos = pos + inx - last
 			return false, uint32(0), pos
 		}
 		if inx <= intv.from+intv.len-1 { // inx is in this interval
-			pos = inx - intv.from
-			return true, uint32(ino), pos
+			return true, pos + intv.from - last, inx - intv.from
 		}
 		// account for positions including the current interval
 		pos = pos + intv.from - last + 1
