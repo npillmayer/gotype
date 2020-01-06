@@ -104,11 +104,12 @@ func (node *Node) Parent() *Node {
 }
 
 // Isolate removes a node from its parent.
-func (node *Node) Isolate() {
-	if node == nil || node.parent == nil {
-		return
+// Isolate returns the isolated node.
+func (node *Node) Isolate() *Node {
+	if node != nil && node.parent != nil {
+		node.parent.children.remove(node)
 	}
-	node.parent.children.remove(node)
+	return node
 }
 
 // ChildCount returns the number of children-nodes for a node
