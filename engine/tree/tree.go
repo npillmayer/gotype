@@ -172,18 +172,19 @@ func (w *Walker) Promise() func() ([]*Node, error) {
 // Predicate is a function type to match against nodes of a tree.
 // Is is used as an argument for various Walker functions to
 // collect a selection of nodes.
-type Predicate func(*Node) (match *Node, err error)
+// test is the node under test, node is the input node.
+type Predicate func(test *Node, node *Node) (match *Node, err error)
 
 // Whatever is a predicate to match anything (see type Predicate).
 // It is useful to match the first node in a given direction.
-var Whatever Predicate = func(n *Node) (*Node, error) {
-	return n, nil
+var Whatever Predicate = func(test *Node, node *Node) (*Node, error) {
+	return test, nil
 }
 
 // NodeIsLeaf is a predicate to match leafs of a tree.
-var NodeIsLeaf = func(n *Node) (match *Node, err error) {
-	if n.ChildCount() == 0 {
-		return n, nil
+var NodeIsLeaf = func(test *Node, node *Node) (match *Node, err error) {
+	if test.ChildCount() == 0 {
+		return test, nil
 	}
 	return nil, nil
 }
@@ -278,7 +279,7 @@ func ancestorWith(node *Node, isBuffered bool, udata userdata, push func(*Node, 
 	anc := node.Parent()
 	serial := udata.serial
 	for anc != nil {
-		matchedNode, err := predicate(anc)
+		matchedNode, err := predicate(anc, node)
 		if err != nil {
 			return err
 		}
@@ -316,7 +317,7 @@ func descendentsWith(node *Node, isBuffered bool, udata userdata, push func(*Nod
 	//
 	if isBuffered {
 		predicate := udata.filterdata.(Predicate)
-		matchedNode, err := predicate(node)
+		matchedNode, err := predicate(node, nil) // currently no origin node availabe
 		serial := udata.serial
 		if serial == 0 {
 			serial = node.Rank
@@ -454,7 +455,8 @@ func setAttribute(node *Node, isBuffered bool, udata userdata, push func(*Node),
 // nil otherwise.
 //
 // If w is nil, Filter will return nil.
-func (w *Walker) Filter(f func(*Node) (*Node, error)) *Walker {
+func (w *Walker) Filter(f Predicate) *Walker {
+	//func (w *Walker) Filter(f func(*Node) (*Node, error)) *Walker {
 	if w == nil {
 		return nil
 	}
@@ -470,12 +472,13 @@ func (w *Walker) Filter(f func(*Node) (*Node, error)) *Walker {
 	return w
 }
 
+//func clientFilter(node *Node, isBuffered bool, udata userdata, push func(*Node, uint32),
 func clientFilter(node *Node, isBuffered bool, udata userdata, push func(*Node, uint32),
 	pushBuf func(*Node, interface{}, uint32)) error {
 	//
-	userfunc := udata.filterdata.(func(*Node) (*Node, error))
+	userfunc := udata.filterdata.(Predicate)
 	serial := udata.serial
-	n, err := userfunc(node)
+	n, err := userfunc(node, node)
 	if n != nil && err != nil {
 		push(n, serial) // forward filtered node to next pipeline stage
 	}

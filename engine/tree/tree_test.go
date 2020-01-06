@@ -133,7 +133,7 @@ func TestDescendents(t *testing.T) {
 	node1.AddChild(node2)
 	node2.AddChild(node3)
 	node1.AddChild(node4)
-	gr3 := func(node *Node) (*Node, error) {
+	gr3 := func(node *Node, n *Node) (*Node, error) {
 		val := node.Payload.(int)
 		if val >= 3 { // match nodes (3) and (4)
 			return node, nil
@@ -168,7 +168,7 @@ func ExampleWalker_Promise() {
 	root.AddChild(n2).AddChild(n4)
 	n2.AddChild(n3)
 	// Define our ad-hoc predicate
-	greater5 := func(node *Node) (*Node, error) {
+	greater5 := func(node *Node, n *Node) (*Node, error) {
 		val := node.Payload.(int)
 		if val > 5 { // match nodes with value > 5
 			return node, nil
