@@ -61,7 +61,7 @@ func DefaultDisplayModeForHTMLNode(h *html.Node) (DisplayMode, DisplayMode) {
 		case "ul", "ol":
 			return BlockMode, ListItemMode
 		case "li":
-			return ListItemMode, BlockMode
+			return ListItemMode, FlowMode | BlockMode
 		case "html", "body", "div", "section", "article", "nav":
 			return BlockMode, BlockMode
 		case "p":
@@ -69,7 +69,7 @@ func DefaultDisplayModeForHTMLNode(h *html.Node) (DisplayMode, DisplayMode) {
 		case "span", "i", "b", "strong", "em":
 			return InlineMode, InlineMode
 		case "h1", "h2", "h3", "h4", "h5", "h6":
-			return BlockMode, BlockMode
+			return BlockMode, InlineMode
 		default:
 			return BlockMode, BlockMode
 		}
