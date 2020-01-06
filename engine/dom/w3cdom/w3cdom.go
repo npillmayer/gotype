@@ -41,23 +41,25 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 package w3cdom
 
 import (
+	"github.com/npillmayer/gotype/engine/dom/cssom/style"
 	"golang.org/x/net/html"
 )
 
 // Node represents W3C-type Node
 type Node interface {
-	NodeType() html.NodeType      // type of the underlying HTML node (ElementNode, TextNode, etc.)
-	NodeName() string             // node name output depends on the node's type
-	NodeValue() string            // node value output depends on the node's type
-	HasAttributes() bool          // check for existence of attributes
-	ParentNode() Node             // get the parent node, if any
-	HasChildNodes() bool          // check for existende of sub-nodes
-	ChildNodes() NodeList         // get a list of all children-nodes
-	Children() NodeList           // get a list of element child-nodes
-	FirstChild() Node             // get the first children-node
-	NextSibling() Node            // get the Node's next sibling or nil if last
-	Attributes() NamedNodeMap     // get all attributes of a node
-	TextContent() (string, error) // get text from node and all descendents
+	NodeType() html.NodeType        // type of the underlying HTML node (ElementNode, TextNode, etc.)
+	NodeName() string               // node name output depends on the node's type
+	NodeValue() string              // node value output depends on the node's type
+	HasAttributes() bool            // check for existence of attributes
+	ParentNode() Node               // get the parent node, if any
+	HasChildNodes() bool            // check for existende of sub-nodes
+	ChildNodes() NodeList           // get a list of all children-nodes
+	Children() NodeList             // get a list of element child-nodes
+	FirstChild() Node               // get the first children-node
+	NextSibling() Node              // get the Node's next sibling or nil if last
+	Attributes() NamedNodeMap       // get all attributes of a node
+	ComputedStyles() ComputedStyles // get computed CSS styles
+	TextContent() (string, error)   // get text from node and all descendents
 }
 
 // NodeList represents W3C-type NodeList
@@ -79,4 +81,9 @@ type NamedNodeMap interface {
 	Length() int
 	Item(int) Attr
 	GetNamedItem(string) Attr
+}
+
+// ComputedStyles represents a CSS style
+type ComputedStyles interface {
+	GetPropertyValue(string) style.Property
 }

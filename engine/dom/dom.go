@@ -288,11 +288,11 @@ func (w *W3CNode) TextContent() (string, error) {
 }
 
 // ComputedStyles returns a map of style properties for a given (stylable) Node.
-func (w *W3CNode) ComputedStyles() *ComputedStyles {
+func (w *W3CNode) ComputedStyles() w3cdom.ComputedStyles {
 	if w == nil {
 		return nil
 	}
-	return &ComputedStyles{w, w.stylednode.Styles()}
+	return &computedStyles{w, w.stylednode.Styles()}
 }
 
 // ComputedStyles is a proxy type for a node's styles.
@@ -309,22 +309,22 @@ func (w *W3CNode) ComputedStyles() *ComputedStyles {
 // The returned style is a live CSSStyleDeclaration object, which updates automatically
 // when the element's styles are changed.
 //
-type ComputedStyles struct {
+type computedStyles struct {
 	domnode  *W3CNode
 	propsMap *style.PropertyMap
 }
 
 // Styles returns the underlying style.PropertyMap.
-func (cstyles *ComputedStyles) Styles() *style.PropertyMap {
+func (cstyles *computedStyles) Styles() *style.PropertyMap {
 	return cstyles.propsMap
 }
 
 // HTMLNode returns the underlying html.Node.
-func (cstyles *ComputedStyles) HTMLNode() *html.Node {
+func (cstyles *computedStyles) HTMLNode() *html.Node {
 	return cstyles.domnode.HTMLNode()
 }
 
-var _ style.Styler = &ComputedStyles{} // implementing style.Styler may be useful
+var _ style.Styler = &computedStyles{} // implementing style.Styler may be useful
 
 // Helper implementing style.Interf
 func styler(n *tree.Node) style.Styler {
@@ -333,7 +333,7 @@ func styler(n *tree.Node) style.Styler {
 
 // GetPropertyValue returns the property value for a given key.
 // If cstyles is nil or the property could not be found, NullStyle is returned.
-func (cstyles *ComputedStyles) GetPropertyValue(key string) style.Property {
+func (cstyles *computedStyles) GetPropertyValue(key string) style.Property {
 	if cstyles == nil {
 		return style.NullStyle
 	}
@@ -416,6 +416,17 @@ func (a *W3CAttr) Attributes() w3cdom.NamedNodeMap { return nil }
 
 // TextContent returns an empty string
 func (a *W3CAttr) TextContent() (string, error) { return "", nil }
+
+// ComputedStyles gets null-styles
+func (a *W3CAttr) ComputedStyles() w3cdom.ComputedStyles {
+	return nullStyles{}
+}
+
+type nullStyles struct{}
+
+func (nullStyles) GetPropertyValue(string) style.Property {
+	return style.NullStyle
+}
 
 // --- NamedNodeMap ---------------------------------------------------------------
 
