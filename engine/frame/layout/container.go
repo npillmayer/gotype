@@ -248,7 +248,7 @@ func (pbox *PrincipalBox) String() string {
 	name := pbox.DOMNode().NodeName()
 	innerSym := pbox.innerMode.Symbol()
 	outerSym := pbox.outerMode.Symbol()
-	return fmt.Sprintf("[%s | %s %s]", outerSym, innerSym, name)
+	return fmt.Sprintf("[%s %s %s]", outerSym, innerSym, name)
 }
 
 // ErrNullChild flags an error condition when a non-nil child has been expected.
