@@ -55,59 +55,6 @@ func anchor(test *tree.Node, node *tree.Node) (match *tree.Node, err error) {
 }
 
 /*
-func reorderBoxes(node *tree.Node, parentNode *tree.Node, chpos int) (*tree.Node, error) {
-	pbox, ok := node.Payload.(*PrincipalBox)
-	if !ok {
-		return nil, nil // do nothing for other boxes
-	}
-	position := pbox.DOMNode().ComputedStyles().GetPropertyValue("position")
-	switch position {
-	case "fixed": // attach to viewport
-		viewport := findViewport(pbox)
-		if viewport != nil {
-			viewport.AppendChild(TreeNodeAsPrincipalBox(pbox.Isolate()))
-		}
-	case "absolute": // attach to ancestor with position ≠ static
-		// TODO: I want to say 'findAncestorWith(PropIsNot("static"))'
-		ancestor := findNonStaticAncestor(pbox)
-		if ancestor != nil {
-			ancestor.AppendChild(TreeNodeAsPrincipalBox(pbox.Isolate()))
-		}
-	}
-	return nil, nil
-}
-
-func findViewport(pbox *PrincipalBox) *PrincipalBox {
-	node := pbox.TreeNode()
-	for node != nil {
-		box := TreeNodeAsPrincipalBox(node.Parent())
-		if box != nil {
-			if box.DOMNode().NodeName() == "#document" {
-				return box
-			}
-		}
-		node = node.Parent()
-	}
-	return nil
-}
-
-func findNonStaticAncestor(pbox *PrincipalBox) *PrincipalBox {
-	node := pbox.TreeNode()
-	for node != nil {
-		box := TreeNodeAsPrincipalBox(node.Parent())
-		if box != nil {
-			position := box.DOMNode().ComputedStyles().GetPropertyValue("position")
-			if position != style.NullStyle && position != "static" {
-				return box
-			}
-		}
-		node = node.Parent()
-	}
-	return nil
-}
-*/
-
-/*
 type nodeContext struct {
 	viewport     *Container
 	boxes        map[*tree.Node]*Container

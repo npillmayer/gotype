@@ -71,17 +71,22 @@ func TestBoxGeneration(t *testing.T) {
 func TestReorderingSimple(t *testing.T) {
 	//viewport := &dimen.Rect{TopL: dimen.Origin, BotR: dimen.DINA4}
 	gtrace.EngineTracer = gologadapter.New()
-	gtrace.EngineTracer.SetTraceLevel(tracing.LevelDebug)
-	gtrace.EngineTracer.Debugf("==============================================")
+	gtrace.EngineTracer.SetTraceLevel(tracing.LevelError)
 	domroot := buildDOM(t)
 	boxes, err := layout.BuildBoxTree(domroot)
 	if err != nil {
 		t.Errorf(err.Error())
 	} else {
 		t.Logf("root node is %s", boxes.DOMNode().NodeName())
+		gtrace.EngineTracer.SetTraceLevel(tracing.LevelDebug)
+		gtrace.EngineTracer.Debugf("=== Reordering Boxes =========================")
 		renderRoot := layout.TreeNodeAsPrincipalBox(boxes.TreeNode())
 		if err = layout.ReorderBoxTree(renderRoot); err != nil {
 			t.Errorf(err.Error())
+		} else if graphviz {
+			gvz, _ := ioutil.TempFile(".", "reorder-*.dot")
+			defer gvz.Close()
+			renderdbg.ToGraphViz(boxes.(*layout.PrincipalBox), gvz)
 		}
 	}
 }
