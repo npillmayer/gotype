@@ -67,12 +67,12 @@ https://nedbatchelder.com/code/modules/hyphenate.html   (Python implementation)
 http://www.mnn.ch/hyph/hyphenation2.html  / https://github.com/mnater/hyphenator
 */
 
-// Dictionnary is a type representing a hyphenation dictionnary.
-// A hyphenation dictionnary consists of hyphenation patterns and a list of exceptions
-type Dictionnary struct {
+// Dictionary is a type representing a hyphenation dictionary.
+// A hyphenation dictionary consists of hyphenation patterns and a list of exceptions
+type Dictionary struct {
 	exceptions map[string][]int // e.g., "computer" => [3,5] = "com-pu-ter"
 	patterns   *trie.Trie       // where we store patterns and positions
-	Identifier string           // Identifies the dictionnary
+	Identifier string           // Identifies the dictionary
 }
 
 // LoadPatterns loads a pattern file. Returns the identifier of the pattern file and a trie.
@@ -95,13 +95,13 @@ type Dictionnary struct {
 //
 //    "a5ban" => (a)(5b)(a)(n) => positions["aban"] = [0,5,0,0].
 //
-func LoadPatterns(patternfile string) *Dictionnary {
+func LoadPatterns(patternfile string) *Dictionary {
 	file, err := os.Open(patternfile)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer file.Close()
-	dict := &Dictionnary{
+	dict := &Dictionary{
 		exceptions: make(map[string][]int),
 		patterns:   trie.New(),
 		Identifier: fmt.Sprintf("patterns: %s", patternfile),
@@ -155,7 +155,7 @@ and so on, a single word per line. Exceptions are enclosed in
    }
 
 */
-func (dict *Dictionnary) readExceptions(scanner *bufio.Scanner) {
+func (dict *Dictionary) readExceptions(scanner *bufio.Scanner) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "}") {
@@ -184,7 +184,7 @@ func (dict *Dictionnary) readExceptions(scanner *bufio.Scanner) {
 //
 //   "table" => "ta-ble".
 //
-func (dict *Dictionnary) HyphenationString(word string) string {
+func (dict *Dictionary) HyphenationString(word string) string {
 	s := dict.Hyphenate(word)
 	return strings.Join(s, "-")
 }
@@ -195,7 +195,7 @@ func (dict *Dictionnary) HyphenationString(word string) string {
 //
 //     "table" => [ "ta", "ble" ].
 //
-func (dict *Dictionnary) Hyphenate(word string) []string {
+func (dict *Dictionary) Hyphenate(word string) []string {
 	if positions, found := dict.exceptions[word]; found {
 		return splitAtPositions(word, positions)
 	}

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-var germanDict, usDict *Dictionnary
+var germanDict, usDict *Dictionary
 
 func init() {
 	germanDict = LoadPatterns("/Users/npi/prg/go/gotype/etc/hyph-de-1996.tex")
@@ -31,7 +31,7 @@ func TestDEPatterns2(t *testing.T) {
 }
 
 func TestUSPatterns(t *testing.T) {
-	h := usDict.HyphenationString("table") // exception dictionnary
+	h := usDict.HyphenationString("table") // exception dictionary
 	if h != "ta-ble" {
 		t.Fail()
 	}
