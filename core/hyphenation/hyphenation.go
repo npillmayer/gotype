@@ -16,7 +16,7 @@ import (
 /* ----------------------------------------------------------------------
 
 BSD License
-Copyright (c) 2017, Norbert Pillmayer
+Copyright (c) 2017-20, Norbert Pillmayer
 
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
@@ -27,7 +27,7 @@ are met:
 2. Redistributions in binary form must reproduce the above copyright
    notice, this list of conditions and the following disclaimer in the
    documentation and/or other materials provided with the distribution.
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
    may be used to endorse or promote products derived from this software
    without specific prior written permission.
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
@@ -67,6 +67,7 @@ https://nedbatchelder.com/code/modules/hyphenate.html   (Python implementation)
 http://www.mnn.ch/hyph/hyphenation2.html  / https://github.com/mnater/hyphenator
 */
 
+// Dictionnary is a type representing a hyphenation dictionnary.
 // A hyphenation dictionnary consists of hyphenation patterns and a list of exceptions
 type Dictionnary struct {
 	exceptions map[string][]int // e.g., "computer" => [3,5] = "com-pu-ter"
@@ -74,28 +75,26 @@ type Dictionnary struct {
 	Identifier string           // Identifies the dictionnary
 }
 
-/*
-Load a pattern file. Returns the identifier of the pattern file and a trie.
-
-Patterns are enclosed in between
-
-   \patterns{ % some comment
-    ...
-   .wil5i
-   .ye4
-   4ab.
-   a5bal
-   a5ban
-   abe2
-    ...
-   }
-
-Odd numbers stand for possible discretionnaries, even numbers forbid
-hyphenation. Digits belong to the character immediately after them, i.e.,
-
-   "a5ban" => (a)(5b)(a)(n) => positions["aban"] = [0,5,0,0].
-
-*/
+// LoadPatterns loads a pattern file. Returns the identifier of the pattern file and a trie.
+//
+// Patterns are enclosed in between
+//
+//    \patterns{ % some comment
+//     ...
+//    .wil5i
+//    .ye4
+//    4ab.
+//    a5bal
+//    a5ban
+//    abe2
+//     ...
+//    }
+//
+// Odd numbers stand for possible discretionnaries, even numbers forbid
+// hyphenation. Digits belong to the character immediately after them, i.e.,
+//
+//    "a5ban" => (a)(5b)(a)(n) => positions["aban"] = [0,5,0,0].
+//
 func LoadPatterns(patternfile string) *Dictionnary {
 	file, err := os.Open(patternfile)
 	if err != nil {
@@ -180,43 +179,38 @@ func (dict *Dictionnary) readExceptions(scanner *bufio.Scanner) {
 	}
 }
 
-/*
-Return a word with possible hyphens inserted.
-Example:
-
-   "table" => "ta-ble".
-
-*/
+// HyphenationString return a word with possible hyphens inserted.
+// Example:
+//
+//   "table" => "ta-ble".
+//
 func (dict *Dictionnary) HyphenationString(word string) string {
 	s := dict.Hyphenate(word)
 	return strings.Join(s, "-")
 }
 
-/*
-Return a word split up at legal hyphenation positions.
-
-Example:
-
-    "table" => [ "ta", "ble" ].
-
-*/
+// Hyphenate returns a word split up at legal hyphenation positions.
+//
+// Example:
+//
+//     "table" => [ "ta", "ble" ].
+//
 func (dict *Dictionnary) Hyphenate(word string) []string {
 	if positions, found := dict.exceptions[word]; found {
 		return splitAtPositions(word, positions)
-	} else {
-		dottedword := "." + word + "."
-		var positions []int = make([]int, 10) // the resulting hyphenation positions
-		l := len(dottedword)
-		for i := 0; i < l; i++ { // "word", "ord", "rd", "d"
-			pp := findPrefixPositions(dottedword[i:l], dict.patterns)
-			positions = mergePositions(positions, pp, i)
-		}
-		positions = positions[1 : len(positions)-1]
-		if positions[0] > 0 { // sometimes hyphen before first letter is "allowed"
-			positions[0] = 0
-		}
-		return splitAtPositions(word, positions)
 	}
+	dottedword := "." + word + "."
+	var positions = make([]int, 10) // the resulting hyphenation positions
+	l := len(dottedword)
+	for i := 0; i < l; i++ { // "word", "ord", "rd", "d"
+		pp := findPrefixPositions(dottedword[i:l], dict.patterns)
+		positions = mergePositions(positions, pp, i)
+	}
+	positions = positions[1 : len(positions)-1]
+	if positions[0] > 0 { // sometimes hyphen before first letter is "allowed"
+		positions[0] = 0
+	}
+	return splitAtPositions(word, positions)
 }
 
 /*
@@ -268,7 +262,7 @@ func mergePositions(positions []int, pp [][]int, at int) []int {
 /* Helper: split a string at positions given by an integer slice.
  */
 func splitAtPositions(word string, positions []int) []string {
-	var pp []string = make([]string, 0, len(word)/3)
+	var pp = make([]string, 0, len(word)/3)
 	prev := 0                       // holds the last split index
 	for i, pos := range positions { // check every position
 		if pos > 0 && pos%2 != 0 { // if position is odd > 0

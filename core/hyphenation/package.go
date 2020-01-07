@@ -1,5 +1,5 @@
 /*
-Quick and dirty implementation of a hyphenation algorithm.
+Package hyphenation is a quick and dirty implementation of a hyphenation algorithm.
 
 (TODO: make more time and space efficient).
 
@@ -25,7 +25,7 @@ Further Reading
 
 BSD License
 
-Copyright (c) 2017, Norbert Pillmayer
+Copyright (c) 2017-20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -40,7 +40,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -54,8 +54,5 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-----------------------------------------------------------------------
-*/
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 package hyphenation
