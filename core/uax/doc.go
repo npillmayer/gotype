@@ -163,3 +163,13 @@ will apply the following logic: (1) Mandatory breaks will have a penalty/merit
 of -1000. (2) Inhibited breaks will have penalty >= 1000.
 (2) Neutral breaks will have a penalty of 0.  */
 package uax
+
+import (
+	"github.com/npillmayer/gotype/core/config/gtrace"
+	"github.com/npillmayer/gotype/core/config/tracing"
+)
+
+// CT traces to the core-tracer.
+func CT() tracing.Trace {
+	return gtrace.CoreTracer
+}

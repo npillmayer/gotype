@@ -4,16 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/npillmayer/gotype/core/config/gtrace"
-
 	pool "github.com/jolestar/go-commons-pool"
-	"github.com/npillmayer/gotype/core/config/tracing"
 )
-
-// CT traces to the core-tracer.
-func CT() tracing.Trace {
-	return gtrace.CoreTracer
-}
 
 // UnicodeBreaker represents a logic to split up
 // Unicode sequences into smaller parts. They are used by Segmenters
@@ -201,7 +193,7 @@ type RuneSubscriber interface {
 	Unsubscribed()                              // this subscriber has been unsubscribed
 }
 
-// RunePublishers notify subscribers with rune events: a new rune has been read
+// A RunePublisher notifies subscribers with rune events: a new rune has been read
 // and the subscriber – usually a recognizer rule – has to react to it.
 //
 // UnicodeBreakers are not required to use the RunePublisher/RuneSubscriber
@@ -216,15 +208,14 @@ type RunePublisher interface {
 	SetPenaltyAggregator(pa PenaltyAggregator) // function to aggregate break penalties
 }
 
-// Create a new default RunePublisher.
+// NewRunePublisher creates a new default RunePublisher.
 func NewRunePublisher() *DefaultRunePublisher {
-	CT = tracing.CoreTracer
 	rpub := &DefaultRunePublisher{}
 	rpub.aggregate = AddPenalties
 	return rpub
 }
 
-// Trigger a rune event notification to all subscribers. Rune events
+// PublishRuneEvent triggers a rune event notification to all subscribers. Rune events
 // include the rune (code-point) and an optional code-point class for
 // the rune.
 //
@@ -271,11 +262,16 @@ func (rpub *DefaultRunePublisher) PublishRuneEvent(r rune, codePointClass int) (
 	return longest, rpub.penaltiesTotal
 }
 
-// Function type for methods of penalty-aggregation. Aggregates all the
+// PenaltyAggregator is a
+// function type for methods of penalty-aggregation. Aggregates all the
 // break penalties each a break-point to a single penalty value at that point.
 type PenaltyAggregator func(int, int) int
 
-// Interface RunePublisher
+// SetPenaltyAggregator sets a PenaltyAggregator for a rune publisher.
+// A PenaltyAggregator aggregates all the
+// break penalties each a break-point to a single penalty value at that point.
+//
+// Part of interface RunePublisher.
 func (rpub *DefaultRunePublisher) SetPenaltyAggregator(pa PenaltyAggregator) {
 	if pa == nil {
 		rpub.aggregate = AddPenalties
@@ -284,19 +280,21 @@ func (rpub *DefaultRunePublisher) SetPenaltyAggregator(pa PenaltyAggregator) {
 	}
 }
 
-// The default function to aggregate break-penalties.
+// AddPenalties is the default function to aggregate break-penalties.
 // Simply adds up all penalties at each break position, respectively.
 func AddPenalties(total int, p int) int {
 	return total + p
 }
 
-// Alternative function to aggregate break-penalties.
+// MaxPenalties is an alternative function to aggregate break-penalties.
 // Returns maximum of all penalties at each break position.
 func MaxPenalties(total int, p int) int {
 	return max(total, p)
 }
 
-// Interface RunePublisher
+// SubscribeMe lets a client subscribe to a RunePublisher.
+//
+// Part of interface RunePublisher.
 func (rpub *DefaultRunePublisher) SubscribeMe(rsub RuneSubscriber) RunePublisher {
 	if rpub.aggregate == nil { // this is necessary as we allow uninitialzed DefaultRunePublishers
 		rpub.aggregate = AddPenalties

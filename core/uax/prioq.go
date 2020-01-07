@@ -22,7 +22,7 @@ type DefaultRunePublisher struct {
 	penaltiesTotal []int             // set of penalties collected from subscribers
 }
 
-// Number of subscribers held.
+// Len returns the number of subscribers held.
 func (pq DefaultRunePublisher) Len() int { return len(pq.q) }
 
 func (pq DefaultRunePublisher) empty() bool { return len(pq.q) == 0 }
@@ -40,7 +40,8 @@ func (pq DefaultRunePublisher) Top() RuneSubscriber {
 	return pq.q[pq.Len()-1]
 }
 
-// The Done()-flag of a subscriber has changed: inform the queue to let
+// Fix signals that the
+// Done()-flag of a subscriber has changed: inform the queue to let
 // it re-organize.
 func (pq *DefaultRunePublisher) Fix(at int) {
 	if at < pq.Len() {
@@ -52,7 +53,7 @@ func (pq *DefaultRunePublisher) Fix(at int) {
 		}
 		for i := 0; i < pq.gap; i++ {
 			if pq.q[i].Done() {
-				CT.Errorf("prioq.Fix(%d) failed", at)
+				CT().Errorf("prioq.Fix(%d) failed", at)
 				pq.print()
 				panic("internal queue order compromised")
 			}
@@ -60,7 +61,7 @@ func (pq *DefaultRunePublisher) Fix(at int) {
 	}
 }
 
-// Put a new subscriber into the queue.
+// Push puts a new subscriber to the queue.
 func (pq *DefaultRunePublisher) Push(subscr RuneSubscriber) {
 	l := pq.Len() // index of new item
 	pq.q = append(pq.q, subscr)
@@ -86,7 +87,7 @@ func (pq *DefaultRunePublisher) Pop() RuneSubscriber {
 	return subscr
 }
 
-// Pop the topmost subscriber if it is Done(), otherwise return nil.
+// PopDone pops the topmost subscriber if it is Done(), otherwise return nil.
 // If the method returns nil, the queue either is empty or holds
 // subscribers with Done()=false only (i.e., subscribers still active).
 func (pq *DefaultRunePublisher) PopDone() RuneSubscriber {
@@ -126,10 +127,10 @@ func (pq *DefaultRunePublisher) bubbleDown(i int) {
 	}
 }
 
-func (rpub *DefaultRunePublisher) print() {
-	fmt.Printf("Publisher of length %d (gap = %d):\n", rpub.Len(), rpub.gap)
-	for i := rpub.Len() - 1; i >= 0; i-- {
-		subscr := rpub.at(i)
+func (pq *DefaultRunePublisher) print() {
+	fmt.Printf("Publisher of length %d (gap = %d):\n", pq.Len(), pq.gap)
+	for i := pq.Len() - 1; i >= 0; i-- {
+		subscr := pq.at(i)
 		fmt.Printf(" - [%d] %s done=%v\n", i, subscr, subscr.Done())
 	}
 }
