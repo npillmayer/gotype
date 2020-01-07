@@ -6,26 +6,13 @@ import (
 	"testing"
 
 	"github.com/npillmayer/gotype/core/arithmetic"
-	"github.com/npillmayer/gotype/core/config"
-	"github.com/npillmayer/gotype/core/config/testadapter"
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 	"github.com/shopspring/decimal"
 )
 
 var zero = arithmetic.ConstZero
 var one = arithmetic.ConstOne
 var two = decimal.New(2, 0)
-
-func Test0(t *testing.T) {
-	config.Initialize(testadapter.New())
-	t.Log("setting equations tracer")
-	T = gologadapter.New()
-	T.SetTraceLevel(tracing.LevelDebug)
-	tracing.EquationsTracer = T
-	T.Infof("Equations tracer alive")
-	T.SetTraceLevel(tracing.LevelError)
-}
 
 func testpath() (*Path, SplineControls) {
 	path, controls := Nullpath().Knot(P(1, 1)).Curve().Knot(P(2, 2)).
@@ -132,15 +119,15 @@ func TestPsiCyclePadding(t *testing.T) {
 
 func TestOpen(t *testing.T) {
 	path, controls := testpath()
-	fmt.Println(PathAsString(path, nil))
+	fmt.Println(AsString(path, nil))
 	controls = FindHobbyControls(path, controls)
-	fmt.Println(PathAsString(path, controls))
+	fmt.Println(AsString(path, controls))
 }
 
 func TestCycle(t *testing.T) {
 	p, _ := testpath()
 	path, controls := p.Knot(P(2, 0)).Curve().Cycle()
-	fmt.Println(PathAsString(path, nil))
+	fmt.Println(AsString(path, nil))
 	controls = FindHobbyControls(path, controls)
 	//fmt.Println(PathAsString(path, controls))
 }
@@ -155,10 +142,10 @@ where they get filled.
 func ExampleSplineControls_usage() {
 	path, controls := Nullpath().Knot(P(1, 1)).Curve().Knot(P(2, 2)).Curve().Knot(P(3, 1)).
 		Curve().Knot(P(2, 0)).Curve().Cycle()
-	fmt.Printf("skeleton path = %s\n\n", PathAsString(path, nil))
-	fmt.Printf("unknown path = \n%s\n\n", PathAsString(path, controls))
+	fmt.Printf("skeleton path = %s\n\n", AsString(path, nil))
+	fmt.Printf("unknown path = \n%s\n\n", AsString(path, controls))
 	controls = FindHobbyControls(path, controls)
-	fmt.Printf("smooth path = \n%s\n\n", PathAsString(path, controls))
+	fmt.Printf("smooth path = \n%s\n\n", AsString(path, controls))
 
 	// skeleton path = (1,1) .. (2,2) .. (3,1) .. (2,0) .. cycle
 
@@ -195,7 +182,7 @@ func TestSegments(t *testing.T) {
 }
 
 func TestSegmentedPath(t *testing.T) {
-	T.SetTraceLevel(tracing.LevelInfo)
+	T().SetTraceLevel(tracing.LevelInfo)
 	path, controls := Nullpath().Knot(P(1, 1)).Line().Knot(P(2, 2)).Line().Knot(P(3, 1)).End()
 	controls = FindHobbyControls(path, controls)
 }

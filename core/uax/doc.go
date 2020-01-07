@@ -45,7 +45,7 @@ requires the use of dictionary lookup, analogous to English hyphenation.
 
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
@@ -59,7 +59,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -161,6 +161,5 @@ this break.
 The UnicodeBreakers in this package (including sub-packages)
 will apply the following logic: (1) Mandatory breaks will have a penalty/merit
 of -1000. (2) Inhibited breaks will have penalty >= 1000.
-(2) Neutral breaks will have a penalty of 0.
-*/
+(2) Neutral breaks will have a penalty of 0.  */
 package uax

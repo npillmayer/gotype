@@ -4,14 +4,18 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/npillmayer/gotype/core/config/gtrace"
+
 	pool "github.com/jolestar/go-commons-pool"
 	"github.com/npillmayer/gotype/core/config/tracing"
 )
 
-// We trace to the core-tracer.
-var CT tracing.Trace
+// CT traces to the core-tracer.
+func CT() tracing.Trace {
+	return gtrace.CoreTracer
+}
 
-// Object of type UnicodeBreaker represent logic components to split up
+// UnicodeBreaker represents a logic to split up
 // Unicode sequences into smaller parts. They are used by Segmenters
 // to supply breaking logic.
 type UnicodeBreaker interface {
@@ -22,6 +26,7 @@ type UnicodeBreaker interface {
 	Penalties() []int
 }
 
+// NfaStateFn represents a state in a non-deterministic finite automata.
 // Functions of type NfaStateFn try to match a rune (Unicode code-point).
 // The caller may provide a third argument, which should be a rune class.
 // Rune (code-point) classes are described in various Unicode standards
@@ -62,8 +67,10 @@ type Recognizer struct {
 	nextStep  NfaStateFn  // next step of a DFA
 }
 
-// Create a new Recognizer. This is rarely used, as clients rather should
-// call NewPooledRecognizer().
+// NewRecognizer creates a new Recognizer.
+// This is rarely used, as clients rather should call NewPooledRecognizer().
+//
+// see NewPooledRecognizer.
 func NewRecognizer(codePointClass int, next NfaStateFn) *Recognizer {
 	rec := &Recognizer{}
 	rec.Expect = codePointClass
@@ -95,7 +102,7 @@ func init() {
 	globalRecognizerPool.opool = pool.NewObjectPool(globalRecognizerPool.ctx, factory, config)
 }
 
-// Returns a new Recognizer, pre-filled with an expected code-point class
+// NewPooledRecognizer returns a new Recognizer, pre-filled with an expected code-point class
 // and a state function. The Recognizer is pooled for efficiency.
 func NewPooledRecognizer(cpClass int, stateFn NfaStateFn) *Recognizer {
 	o, _ := globalRecognizerPool.opool.BorrowObject(globalRecognizerPool.ctx)
@@ -122,7 +129,8 @@ func (rec *Recognizer) String() string {
 	return fmt.Sprintf("[%d -> done=%v]", rec.Expect, rec.Done())
 }
 
-// Signal a Recognizer that it has been unsubscribed from a RunePublisher;
+// Unsubscribed signals to
+// a Recognizer that it has been unsubscribed from a RunePublisher;
 // usually after the Recognizer's NfaStateFn has returned nil.
 //
 // Interface RuneSubscriber
@@ -130,7 +138,7 @@ func (rec *Recognizer) Unsubscribed() {
 	rec.releaseIntoPool()
 }
 
-// A Recognizer signals that it is done matching runes.
+// Done is used by a Recognizer that it is done matching runes.
 // If MatchLength() > 0 is has been accepting a sequence of runes,
 // otherwise it has aborted to further try a match.
 //
@@ -139,12 +147,12 @@ func (rec *Recognizer) Done() bool {
 	return rec.nextStep == nil
 }
 
-// Interface RuneSubscriber
+// MatchLength is part of interface RuneSubscriber.
 func (rec *Recognizer) MatchLength() int {
 	return rec.MatchLen
 }
 
-// Interface RuneSubscriber
+// RuneEvent is part  of interface RuneSubscriber.
 func (rec *Recognizer) RuneEvent(r rune, codePointClass int) []int {
 	//fmt.Printf("received rune event: %+q / %d\n", r, codePointClass)
 	var penalties []int
@@ -163,24 +171,24 @@ func (rec *Recognizer) RuneEvent(r rune, codePointClass int) []int {
 
 // --- Standard Recognizer Rules ----------------------------------------
 
-// Get a state function which signals abort.
+// DoAbort returns a state function which signals abort.
 func DoAbort(rec *Recognizer) NfaStateFn {
 	rec.MatchLen = 0
 	return nil
 }
 
-// Get a state function which signals accept, together with break
+// DoAccept returns a state function which signals accept, together with break
 // penalties for matches runes (in reverse sequence).
 func DoAccept(rec *Recognizer, penalties ...int) NfaStateFn {
 	rec.MatchLen++
 	rec.penalties = penalties
-	CT.Debugf("ACCEPT with %v", rec.penalties)
+	CT().Debugf("ACCEPT with %v", rec.penalties)
 	return nil
 }
 
 // --- Rune Publishing and Subscription ---------------------------------
 
-// RuneSubscribers are receivers of rune events, i.e. messages to
+// A RuneSubscriber is a receiver of rune events, i.e. messages to
 // process a new code-point (rune). If they can match the rune, they
 // will expect further runes, otherwise they abort. To they are finished,
 // either by accepting or rejecting input, they set Done() to true.

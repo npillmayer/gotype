@@ -92,7 +92,7 @@ to MetaPost, which is a really great piece of software!
 
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -107,7 +107,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -121,9 +121,7 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-*/
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 package path
 
 import (
@@ -132,14 +130,15 @@ import (
 	"math/cmplx"
 
 	a "github.com/npillmayer/gotype/core/arithmetic"
-	"github.com/npillmayer/gotype/core/config"
+	"github.com/npillmayer/gotype/core/config/gconf"
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	dec "github.com/shopspring/decimal"
 )
 
-// We are tracing to the graphics tracer.
+// T is tracing to the graphics tracer.
 func T() tracing.Trace {
-	return tracing.GraphicsTracer
+	return gtrace.GraphicsTracer
 }
 
 const pi float64 = 3.14159265
@@ -148,34 +147,32 @@ const _epsilon = 0.0000001
 
 // --- Interfaces ------------------------------------------------------------
 
-/*
-This is the path type we're dealing with. We base the implementation
-on an interface, with numeric values and point values represented
-by Go's native float types.
-
-The interface is a "read only" interface in the sense that it provides
-the input path's parameters for the MetaFont spline interpolation.
-A path may have parameters provided for knots or for joins/curves. Possible
-knot parameters are: dir (= an explicit angle for the tangent at the knot) or
-curl (= the amount of curvature at the knot). Curves may be given tension
-parameters, which control the "tightness" of the line between knots. A
-negative value for a tension means "at least" the amount of tension and is
-used to prevent the spline from leaving the bounding box of its control
-point.
-
-Paths may be cyclic, i.e. closed. Knots, addressed by path.Z(i), must
-adhere to the following requirement: Z() must accept subscipts >= N, i.e.
-larger than the length of the path, and return knot[i mod N]. The last
-knot of a cyclic path is identical to the first one, but it must not be
-included twice! Instead, the algorithm relies on the modulo-subscripting
-mechanism for adressing all knots of the cycle.
-
-A HobbyPath does not contain information about spline control points (the
-path's properties are understood as "input parameters" for the Hobby
-algorithm). Control point information is handled using a separate interface.
-
-see type SplineControls.
-*/
+// HobbyPath is the path type we're dealing with. We base the implementation
+// on an interface, with numeric values and point values represented
+// by Go's native float types.
+//
+// The interface is a "read only" interface in the sense that it provides
+// the input path's parameters for the MetaFont spline interpolation.
+// A path may have parameters provided for knots or for joins/curves. Possible
+// knot parameters are: dir (= an explicit angle for the tangent at the knot) or
+// curl (= the amount of curvature at the knot). Curves may be given tension
+// parameters, which control the "tightness" of the line between knots. A
+// negative value for a tension means "at least" the amount of tension and is
+// used to prevent the spline from leaving the bounding box of its control
+// point.
+//
+// Paths may be cyclic, i.e. closed. Knots, addressed by path.Z(i), must
+// adhere to the following requirement: Z() must accept subscipts >= N, i.e.
+// larger than the length of the path, and return knot[i mod N]. The last
+// knot of a cyclic path is identical to the first one, but it must not be
+// included twice! Instead, the algorithm relies on the modulo-subscripting
+// mechanism for adressing all knots of the cycle.
+//
+// A HobbyPath does not contain information about spline control points (the
+// path's properties are understood as "input parameters" for the Hobby
+// algorithm). Control point information is handled using a separate interface.
+//
+// see type SplineControls.
 type HobbyPath interface {
 	IsCycle() bool           // is this a cyclic path?
 	N() int                  // number of knots in the path
@@ -188,18 +185,16 @@ type HobbyPath interface {
 	PostTension(int) float64 // explicit tension after knot #i
 }
 
-/*
-Interface SplineControls is used for gathering the spline control points
-calculated by Hobby's algorithm.
-
-A HobbyPath starts out being void of spline control points (a skeleton
-path, which may be interpreted as a polygon). The path may include
-tension or tangent angle information (dir and/or curl). Clients then use
-FindHobbyControls(...) to fill in appropriate control point information
-for a curved path through the path's knots.
-
-see FindHobbyControls(...)
-*/
+// SplineControls is used for gathering the spline control points
+// // calculated by Hobby's algorithm.
+//
+// A HobbyPath starts out being void of spline control points (a skeleton
+// path, which may be interpreted as a polygon). The path may include
+// tension or tangent angle information (dir and/or curl). Clients then use
+// FindHobbyControls(...) to fill in appropriate control point information
+// for a curved path through the path's knots.
+//
+// // see FindHobbyControls(...)
 type SplineControls interface {
 	PreControl(i int) complex128
 	PostControl(i int) complex128
@@ -207,22 +202,21 @@ type SplineControls interface {
 	SetPostControl(int, complex128) // set control point (after calculation)
 }
 
-/*
-Return a path -- optionally including spline control points -- as a (debugging)
-string. The string contains newlines if control point information is present.
-Otherwise it will include the knot coordinates in one line.
-
-Example, a circle of diameter 1 around (2,1):
-
-    (1,1) .. controls (1.0000,1.5523) and (1.4477,2.0000)
-      .. (2,2) .. controls (2.5523,2.0000) and (3.0000,1.5523)
-      .. (3,1) .. controls (3.0000,0.4477) and (2.5523,0.0000)
-      .. (2,0) .. controls (1.4477,0.0000) and (1.0000,0.4477)
-      .. cycle
-
-The format is not fully equivalent to MetaFont's, but close.
-*/
-func PathAsString(path HobbyPath, contr SplineControls) string {
+// AsString returns
+// a path -- optionally including spline control points -- as a (debugging)
+// string. The string contains newlines if control point information is present.
+// Otherwise it will include the knot coordinates in one line.
+//
+// Example, a circle of diameter 1 around (2,1):
+//
+//     (1,1) .. controls (1.0000,1.5523) and (1.4477,2.0000)
+//       .. (2,2) .. controls (2.5523,2.0000) and (3.0000,1.5523)
+//       .. (3,1) .. controls (3.0000,0.4477) and (2.5523,0.0000)
+//       .. (2,0) .. controls (1.4477,0.0000) and (1.0000,0.4477)
+//       .. cycle
+//
+// The format is not fully equivalent to MetaFont's, but close.
+func AsString(path HobbyPath, contr SplineControls) string {
 	var s string
 	for i := 0; i < path.N(); i++ {
 		pt := path.Z(i)
@@ -249,7 +243,7 @@ func PathAsString(path HobbyPath, contr SplineControls) string {
 
 // --- Implementation --------------------------------------------------------
 
-// Type Path is a concrete implementation of interface HobbyPath.
+// Path is a concrete implementation of interface HobbyPath.
 // To construct a path, start with Nullpath(), which creates an empty
 // path, and then extend it.
 type Path struct {
@@ -300,7 +294,7 @@ func newSkeletonPath(points []a.Pair) *Path {
 
 // --- Building Paths --------------------------------------------------------
 
-// Interface for helping control the construction of a path. It is used
+// KnotAdder is an interface for helping control the construction of a path. It is used
 // to ensure that evey path-join (curve) is followed by a knot (or by a
 // cycle statement).
 //
@@ -315,8 +309,8 @@ type KnotAdder interface {
 	Cycle() (HobbyPath, SplineControls)
 }
 
-// Interface for helping control the construction of a path. It is used
-// to ensure that evey knot is followed by a join/curve (or ends the path).
+// JoinAdder is an interface for helping control the construction of a path. It is used
+// to ensure that every knot is followed by a join/curve (or ends the path).
 //
 // It is probably only useful in conjunction with type Path. It is made
 // public to support source code editors with code completion.
@@ -330,19 +324,17 @@ type JoinAdder interface {
 var _ KnotAdder = &Path{}
 var _ JoinAdder = &Path{}
 
-/*
-Nullpath() creates an empty path, to be extended by subsequent builder
-calls. the following example builds a closed path of three knots, which are
-connected by a curve, then a straight line, and a curve again.
-
-    var path HobbyPath
-    var controls SplineControls
-    path, controls = Nullpath().Knot(0,0).Curve().Knot(3,2).Line().Knot(5,2.5).Curve().Cycle()
-
-Calling Cycle() or End() returns a path and a container for spline control point
-information. The latter is empty and to be filled by calculating the Hobby
-spline control points.
-*/
+// Nullpath creates an empty path, to be extended by subsequent builder
+// calls. the following example builds a closed path of three knots, which are
+// connected by a curve, then a straight line, and a curve again.
+//
+//     var path HobbyPath
+//     var controls SplineControls
+//     path, controls = Nullpath().Knot(0,0).Curve().Knot(3,2).Line().Knot(5,2.5).Curve().Cycle()
+//
+// Calling Cycle() or End() returns a path and a container for spline control point
+// information. The latter is empty and to be filled by calculating the Hobby
+// spline control points.
 func Nullpath() *Path {
 	return newSkeletonPath(nil)
 }
@@ -352,25 +344,25 @@ func (path *Path) End() (HobbyPath, SplineControls) {
 	return path, path.Controls
 }
 
-// Close a cyclic path. Part of builder functionality.
+// Cycle closes a cyclic path. Part of builder functionality.
 func (path *Path) Cycle() (HobbyPath, SplineControls) {
 	path.cycle = true
 	return path, path.Controls
 }
 
-// Add a standard smooth knot to a path. Part of builder functionality.
+// Knot adds a standard smooth knot to a path. Part of builder functionality.
 func (path *Path) Knot(pr a.Pair) JoinAdder {
 	return path.SmoothKnot(pr)
 }
 
-// Add a standard smooth knot to a path (same as Knot(pr)).
+// SmoothKnot adds a standard smooth knot to a path (same as Knot(pr)).
 // Part of builder functionality.
 func (path *Path) SmoothKnot(pr a.Pair) JoinAdder {
 	path.points = append(path.points, pair2cmplx(pr))
 	return path
 }
 
-// Add a path with curl information to a path. Callers may specify pre- and/or
+// CurlKnot adds a path with curl information to a path. Callers may specify pre- and/or
 // post-curl. A curl value of 1.0 is considered neutral.
 // Part of builder functionality.
 func (path *Path) CurlKnot(pr a.Pair, precurl, postcurl dec.Decimal) JoinAdder {
@@ -380,7 +372,7 @@ func (path *Path) CurlKnot(pr a.Pair, precurl, postcurl dec.Decimal) JoinAdder {
 	return path
 }
 
-// Add a knot with a given tangent direction.
+// DirKnot adds a knot with a given tangent direction.
 // Part of builder functionality.
 func (path *Path) DirKnot(pr a.Pair, dir a.Pair) JoinAdder {
 	path.points = append(path.points, pair2cmplx(pr))
@@ -389,7 +381,7 @@ func (path *Path) DirKnot(pr a.Pair, dir a.Pair) JoinAdder {
 	return path
 }
 
-// Connect two knots with a straight line.
+// Line connects two knots with a straight line.
 // Part of builder functionality.
 func (path *Path) Line() KnotAdder {
 	if path.N() == 0 {
@@ -400,7 +392,7 @@ func (path *Path) Line() KnotAdder {
 	return path
 }
 
-// Connect two knots with a smooth curve.
+// Curve connects two knots with a smooth curve.
 // Part of builder functionality.
 func (path *Path) Curve() KnotAdder {
 	if path.N() == 0 {
@@ -410,7 +402,7 @@ func (path *Path) Curve() KnotAdder {
 	return path
 }
 
-// Connect two knots with a tense curve.
+// TensionCurve connects two knots with a tense curve.
 // Part of builder functionality.
 //
 // Tensions are adapted to lie between 3/4 and 4 (absolute).  Negative tensions
@@ -431,15 +423,8 @@ func (path *Path) TensionCurve(t1, t2 dec.Decimal) KnotAdder {
 	return path
 }
 
-// Concatenate two paths at an overlapping knot.
+// AppendSubpath concatenates two paths at an overlapping knot.
 // Part of builder functionality.
-/*
-func (path *Path) Concat() KnotAdder {
-	panic("not yet implemented")
-	return path
-}
-*/
-
 func (path *Path) AppendSubpath(sp *Path) JoinAdder {
 	T().Errorf("AppendSubpath not yet implemented")
 	return path
@@ -447,21 +432,21 @@ func (path *Path) AppendSubpath(sp *Path) JoinAdder {
 
 // --- Setting Path Properties -----------------------------------------------
 
-// Property setter.
+// SetPreDir is a property setter.
 func (path *Path) SetPreDir(i int, dir a.Pair) *Path {
 	path.predirs = extendC(path.predirs, i, cmplx.NaN())
 	path.predirs[i] = pair2cmplx(dir)
 	return path
 }
 
-// Property setter.
+// SetPostDir is a property setter.
 func (path *Path) SetPostDir(i int, dir a.Pair) *Path {
 	path.postdirs = extendC(path.postdirs, i, cmplx.NaN())
 	path.postdirs[i] = pair2cmplx(dir)
 	return path
 }
 
-// Property setter.
+// SetPreCurl is a property setter.
 func (path *Path) SetPreCurl(i int, curl dec.Decimal) *Path {
 	path.curls = extendC(path.curls, i, 1+1i)
 	c := path.curls[i]
@@ -470,7 +455,7 @@ func (path *Path) SetPreCurl(i int, curl dec.Decimal) *Path {
 	return path
 }
 
-// Property setter.
+// SetPostCurl is a property setter.
 func (path *Path) SetPostCurl(i int, curl dec.Decimal) *Path {
 	path.curls = extendC(path.curls, i, 1+1i)
 	//fmt.Printf("i = %d, len(path.curls) = %d\n", i, len(path.curls))
@@ -480,7 +465,7 @@ func (path *Path) SetPostCurl(i int, curl dec.Decimal) *Path {
 	return path
 }
 
-// Property setter.
+// SetPreTension is a property setter.
 //
 // Tensions are adapted to lie between 3/4 and 4 (absolute).  Negative tensions
 // are interpreted as "at least" tensions to ensure the spline stays within
@@ -499,7 +484,7 @@ func (path *Path) SetPreTension(i int, tension dec.Decimal) *Path {
 	return path
 }
 
-// Property setter.
+// SetPostTension is a property setter.
 //
 // Tensions are adapted to lie between 3/4 and 4 (absolute).  Negative tensions
 // are interpreted as "at least" tensions to ensure the spline stays within
@@ -520,14 +505,14 @@ func (path *Path) SetPostTension(i int, tension dec.Decimal) *Path {
 
 // === Interface Implementation ==============================================
 
-// Predicate: is this path cyclic?
+// IsCycle is a predicate: is this path cyclic?
 //
 // Interface HobbyPath.
 func (path *Path) IsCycle() bool {
 	return path.cycle
 }
 
-// Lenght of this path (knot count). For cyclic paths, the first and last knot
+// N returns the length of this path (knot count). For cyclic paths, the first and last knot
 // should count as one.
 //
 // Interface HobbyPath.
@@ -535,7 +520,7 @@ func (path *Path) N() int {
 	return len(path.points)
 }
 
-// Knot at position (i mod N).
+// Z returns the knot at position (i mod N).
 //
 // Interface HobbyPath.
 func (path *Path) Z(i int) complex128 {
@@ -546,38 +531,46 @@ func (path *Path) Z(i int) complex128 {
 	return z
 }
 
-// Get explicit incoming tangent / direction vector at z.i .
+// PreDir gets the incoming tangent / direction vector at z.i .
 //
 // Interface HobbyPath.
 func (path *Path) PreDir(i int) complex128 {
 	return getC(path.predirs, i, cmplx.NaN())
 }
 
-// Get explicit outgoing tangent / direction vector at z.i .
+// PostDir gets the outgoing tangent / direction vector at z.i .
 //
 // Interface HobbyPath.
 func (path *Path) PostDir(i int) complex128 {
 	return getC(path.postdirs, i, cmplx.NaN())
 }
 
+// PreCurl gets the curl before z.i.
+//
 // Interface HobbyPath.
 func (path *Path) PreCurl(i int) float64 {
 	c := getC(path.curls, i, 1+1i)
 	return real(c)
 }
 
+// PostCurl gets the curl after z.i.
+//
 // Interface HobbyPath.
 func (path *Path) PostCurl(i int) float64 {
 	c := getC(path.curls, i, 1+1i)
 	return imag(c)
 }
 
+// PreTension returns the tension before z.i.
+//
 // Interface HobbyPath.
 func (path *Path) PreTension(i int) float64 {
 	t := getC(path.tensions, i, 1+1i)
 	return real(t)
 }
 
+// PostTension returns the tension after z.i.
+//
 // Interface HobbyPath.
 func (path *Path) PostTension(i int) float64 {
 	t := getC(path.tensions, i, 1+1i)
@@ -602,9 +595,8 @@ func (pp *pathPartial) pmap(i int) int {
 func (pp *pathPartial) Z(i int) complex128 {
 	if pp.IsCycle() {
 		return pp.whole.Z(i)
-	} else {
-		return pp.whole.Z(pp.pmap(i))
 	}
+	return pp.whole.Z(pp.pmap(i))
 }
 
 func (pp *pathPartial) PreDir(i int) complex128 {
@@ -674,10 +666,12 @@ func (ctrls *splcntrls) PostControl(i int) complex128 {
 
 // === Calculation API =======================================================
 
+// FindHobbyControls finds the parameters for Hobby-spline control points
+// for a given skeletion path.
+//
 // BUG(norbert@pillmayer.com): Currently there are slight deviations from
 // MetaFont's calculation, probably due to different rounding. These are under
 // investigation.
-
 func FindHobbyControls(path HobbyPath, controls SplineControls) SplineControls {
 	if controls == nil {
 		controls = &splcntrls{}
@@ -686,7 +680,7 @@ func FindHobbyControls(path HobbyPath, controls SplineControls) SplineControls {
 	if len(segments) > 0 {
 		for _, segment := range segments {
 			segment.controls = controls
-			T().Infof("find controls for segment %s", PathAsString(segment, nil))
+			T().Infof("find controls for segment %s", AsString(segment, nil))
 			findSegmentControls(segment, segment)
 		}
 	}
@@ -704,11 +698,11 @@ FindHobbyControls(...) will trace the calculated final path using log-level
 INFO, if tracingchoices=true (as MetaFont does).
 */
 func findSegmentControls(path HobbyPath, controls SplineControls) SplineControls {
-	var u []float64 = make([]float64, path.N()+2)
-	var v []float64 = make([]float64, path.N()+2)
-	var theta []float64 = make([]float64, path.N()+2)
+	var u = make([]float64, path.N()+2)
+	var v = make([]float64, path.N()+2)
+	var theta = make([]float64, path.N()+2)
 	if path.IsCycle() {
-		var w []float64 = make([]float64, path.N()+2)
+		var w = make([]float64, path.N()+2)
 		solveCyclePath(path, theta, u, v, w)
 	} else {
 		solveOpenPath(path, theta, u, v)
@@ -859,8 +853,8 @@ func setControls(path HobbyPath, theta []float64, controls SplineControls) Splin
 		controls.SetPostControl(i%n, path.Z(i)+p2)
 		controls.SetPreControl((i+1)%n, path.Z(i+1)-p3)
 	}
-	if config.IsSet("tracingchoices") {
-		T().Infof(PathAsString(path, controls))
+	if gconf.IsSet("tracingchoices") {
+		T().Infof(AsString(path, controls))
 	}
 	return controls
 }
@@ -967,10 +961,10 @@ func makePathSegment(path HobbyPath, from, to int) *pathPartial {
 		start: from, // first index within parent path
 		end:   to,   // last index within parent path
 	}
-	if config.IsSet("tracingchoices") {
+	if gconf.IsSet("tracingchoices") {
 		T().Debugf("breaking segment %d - %d of length %d, at %s and %s", from, to, partial.N(),
 			ptstring(path.Z(from), false), ptstring(path.Z(to), false))
-		T().Infof("partial = %s", PathAsString(partial, nil))
+		T().Infof("partial = %s", AsString(partial, nil))
 	}
 	return partial
 }
@@ -1076,9 +1070,8 @@ func reduceAngle(a float64) float64 {
 func recip(a float64) float64 {
 	if math.IsNaN(a) {
 		return 1.0
-	} else {
-		return 1.0 / a
 	}
+	return 1.0 / a
 }
 
 /* Return a^2 for a.
@@ -1087,14 +1080,14 @@ func square(a float64) float64 {
 	return math.Pow(a, 2.0)
 }
 
-// Quick notation for contructing a pair, i.e. knot coordinates.
+// P is a quick notation for contructing a pair, i.e. knot coordinates.
 // Use it during path creation:
 //   Knot(P(0,0))  // knot at origin
 func P(x, y float64) a.Pair {
 	return a.MakePair(dec.NewFromFloat(x), dec.NewFromFloat(y))
 }
 
-// Quick notation to get a fixed point decimal from a float.
+// N is a quick notation to get a fixed point decimal from a float.
 // Use it during path creation:
 //    TensionCurve(N(1.2),N(1.2))    // tense path join
 func N(f float64) dec.Decimal {
@@ -1118,9 +1111,8 @@ func ptstring(pt complex128, iscontrol bool) string {
 func round(x float64) float64 {
 	if x >= 0 {
 		return float64(int64(x*10000.0+0.5)) / 10000.0
-	} else {
-		return float64(int64(x*10000.0-0.5)) / 10000.0
 	}
+	return float64(int64(x*10000.0-0.5)) / 10000.0
 }
 
 func equal(c1, c2 complex128) bool {
