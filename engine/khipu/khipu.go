@@ -9,10 +9,8 @@ import (
 )
 
 /*
----------------------------------------------------------------------------
-
 BSD License
-Copyright (c) 2017-18, Norbert Pillmayer
+Copyright (c) 2017-20, Norbert Pillmayer
 
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
@@ -26,7 +24,7 @@ are met:
    notice, this list of conditions and the following disclaimer in the
    documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
    may be used to endorse or promote products derived from this software
    without specific prior written permission.
 
@@ -41,21 +39,18 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-----------------------------------------------------------------------
-
-/* Knots implement items for typesetting paragraphs. The various knot
- * types more or less implement the corresponding node types from the TeX
- * typesetting system.
-
 */
+
+// Knots implement items for typesetting paragraphs. The various knot
+// types more or less implement the corresponding node types from the TeX
+// typesetting system.
 
 // === Knots =================================================================
 
-// Every knot has a type
+// KnotType is a type for the different flavours of knots.
 type KnotType int8
 
-// A knot has a width and may be discardable
+// A Knot has a width and may be discardable
 type Knot interface {
 	Type() KnotType      // type identifier of this knot
 	W() dimen.Dimen      // width
@@ -74,7 +69,7 @@ const (
 	KTUserDefined // clients should use custom knot types above this
 )
 
-// Factory method to create a knot. Parameter is a valid knot type.
+// NewKnot is a factory method to create a knot. Parameter is a valid knot type.
 func NewKnot(knottype KnotType) Knot {
 	switch knottype {
 	case KTKern:
@@ -92,22 +87,25 @@ func NewKnot(knottype KnotType) Knot {
 	return nil
 }
 
+// KnotString is a debugging helper and returns a textual representation of a knot.
 func KnotString(k Knot) string {
 	switch k.Type() {
 	case KTKern:
-		return fmt.Sprintf("[kern %s]", k.W())
+		return k.(Kern).String()
 	case KTGlue:
 		//return fmt.Sprintf("[glue %v]", k)
-		g := k.(Glue)
-		return g.String()
+		//g := k.(Glue)
+		return k.(Glue).String()
 	case KTPenalty:
-		p := k.(Penalty)
-		return fmt.Sprintf("[penalty %d]", p)
+		return k.(Penalty).String()
 	case KTTextBox:
-		s := k.(*TextBox)
-		return s.String()
+		s, ok := k.(*TextBox)
+		if ok {
+			return s.String()
+		}
+		return k.(TextBox).String()
 	case KTDiscretionary:
-		return "\\-"
+		return "\u2af6"
 	default:
 		return "yes, it is a knot"
 	}
@@ -115,76 +113,81 @@ func KnotString(k Knot) string {
 
 // --- Kern ------------------------------------------------------------------
 
-// A kern is an unshrinkable space
+// A Kern is an unshrinkable space
 type Kern dimen.Dimen // fixed width
 
-// Interface Knot.
+// Type is part of interface Knot.
 func (k Kern) Type() KnotType {
 	return KTKern
 }
 
-// Interface Knot. Width of the kern.
+func (k Kern) String() string {
+	return fmt.Sprintf("[\u29e6%s]", k.W())
+}
+
+// W is part of interface Knot. Width of the kern.
 func (k Kern) W() dimen.Dimen {
 	return dimen.Dimen(k)
 }
 
-// Interface Knot. Kerns do not shrink.
+// MinW is part of interface Knot. Kerns do not shrink.
 func (k Kern) MinW() dimen.Dimen {
 	return dimen.Dimen(k)
 }
 
-// Interface Knot. Kerns do not stretch.
+// MaxW is part of interface Knot. Kerns do not stretch.
 func (k Kern) MaxW() dimen.Dimen {
 	return dimen.Dimen(k)
 }
 
-// Interface Knot. Kerns are discardable.
+// IsDiscardable is part of interface Knot. Kerns are discardable.
 func (k Kern) IsDiscardable() bool {
 	return true
 }
 
 // --- Glue ------------------------------------------------------------------
 
-// A glue is a space which can shrink and expand
+// A Glue is a space which can shrink and expand
 type Glue [3]dimen.Dimen
 
-// Interface Knot.
+// Type is part of interface Knot.
 func (g Glue) Type() KnotType {
 	return KTGlue
 }
 
 func (g Glue) String() string {
-	return fmt.Sprintf("[glue %s <%s >%s]", g.W().String(), g.MinW().String(),
-		g.MaxW().String())
+	minus := g.W() - g.MinW()
+	plus := g.MaxW() - g.W()
+	return fmt.Sprintf("(\u29df %s-%s+%s)", g.W().String(), minus, plus)
 }
 
-// Interface Knot. Natural width of the glue.
+// W is part of interface Knot. Natural width of the glue.
 func (g Glue) W() dimen.Dimen {
 	return g[0]
 }
 
-// Interface Knot. Minimum width of the glue.
+// MinW is part of interface Knot. Minimum width of the glue.
 func (g Glue) MinW() dimen.Dimen {
 	return g[0] + g[1]
 }
 
-// Interface Knot. Maximum width of the glue.
+// MaxW is part of interface Knot. Maximum width of the glue.
 func (g Glue) MaxW() dimen.Dimen {
 	return g[0] + g[2]
 }
 
-// Interface Knot. Glue is discardable.
+// IsDiscardable is part of interface Knot. Glue is discardable.
 func (g Glue) IsDiscardable() bool {
 	return true
 }
 
-// Create a new drop of glue with stretch and shrink.
+// NewGlue creates a new drop of glue with stretch and shrink.
 func NewGlue(w dimen.Dimen, shrink dimen.Dimen, stretch dimen.Dimen) Glue {
 	g := Glue{w, shrink, stretch}
 	return g
 }
 
-// Create a drop of infinitely stretchable glue.
+// NewFill creates a drop of infinitely stretchable glue.
 func NewFill(f int) Glue {
 	var stretch dimen.Dimen
 	switch f {
@@ -200,30 +203,30 @@ func NewFill(f int) Glue {
 
 // --- Discretionary ---------------------------------------------------------
 
-// A discretionary is a hyphenation opportunity
+// A Discretionary is a hyphenation opportunity
 type Discretionary rune
 
-// Interface Knot.
+// Type is part of interface Knot.
 func (d Discretionary) Type() KnotType {
 	return KTDiscretionary
 }
 
-// Interface Knot. Returns the width of the un-hyphenated text.
+// W is part of interface Knot. Returns the width of the un-hyphenated text.
 func (d Discretionary) W() dimen.Dimen {
 	return 0
 }
 
-// Interface Knot. Returns the width of the pre-hyphen text.
+// MinW is part of interface Knot. Returns the width of the pre-hyphen text.
 func (d Discretionary) MinW() dimen.Dimen {
 	return 0
 }
 
-// Interface Knot. Returns the width of the post-hyphen text.
+// MaxW is part of interface Knot. Returns the width of the post-hyphen text.
 func (d Discretionary) MaxW() dimen.Dimen {
 	return 5 * dimen.PT // TODO
 }
 
-// Interface Knot. Discretionaries are not discardable.
+// IsDiscardable is part of interface Knot. Discretionaries are not discardable.
 func (d Discretionary) IsDiscardable() bool {
 	return false
 }
@@ -239,39 +242,40 @@ type TextBox struct {
 	//knotlist Khipu // content, if available
 }
 
+// NewTextBox creates a text box.
 func NewTextBox(s string) *TextBox {
 	box := &TextBox{}
 	box.text = s
 	return box
 }
 
-// Interface Knot.
-func (b *TextBox) Type() KnotType {
+// Type is part of interface Knot.
+func (b TextBox) Type() KnotType {
 	return KTTextBox
 }
 
-// Interface Knot.
-func (b *TextBox) String() string {
-	return fmt.Sprintf("\\box{%s}", b.text)
+func (b TextBox) String() string {
+	//return fmt.Sprintf("\u25a1\u00ab%s\u00bb", b.text)
+	return fmt.Sprintf("\u00ab%s\u00bb", b.text)
 }
 
-// Interface Knot. Width of the glue.
-func (b *TextBox) W() dimen.Dimen {
+// W is part of interface Knot. Width of the glue.
+func (b TextBox) W() dimen.Dimen {
 	return b.Width
 }
 
-// Interface Knot. Width of the glue.
-func (b *TextBox) MinW() dimen.Dimen {
+// MinW is part of interface Knot. Width of the glue.
+func (b TextBox) MinW() dimen.Dimen {
 	return b.Width
 }
 
-// Interface Knot. Width of the glue.
-func (b *TextBox) MaxW() dimen.Dimen {
+// MaxW is part of interface Knot. Width of the glue.
+func (b TextBox) MaxW() dimen.Dimen {
 	return b.Width
 }
 
-// Interface Knot. Glue is discardable.
-func (b *TextBox) IsDiscardable() bool {
+// IsDiscardable is part of interface Knot. Text is not discardable.
+func (b TextBox) IsDiscardable() bool {
 	return false
 }
 
@@ -279,37 +283,42 @@ var _ Knot = &TextBox{}
 
 // --- Penalty ---------------------------------------------------------------
 
-// A penalty contributes to demerits, i.e. the quality index of paragraphs
+// A Penalty contributes to demerits, i.e. the quality index of paragraphs
 type Penalty int
 
-// Interface Knot.
+// Type is part of interface Knot.
 func (p Penalty) Type() KnotType {
 	return KTPenalty
 }
 
-// Interface Knot. Returns 0.
+func (p Penalty) String() string {
+	return fmt.Sprintf("(\u2af2 %d)", p)
+}
+
+// W is part of interface Knot. Returns 0.
 func (p Penalty) W() dimen.Dimen {
 	return 0
 }
 
-// Interface Knot. Returns 0.
+// MinW is part of interface Knot. Returns 0.
 func (p Penalty) MinW() dimen.Dimen {
 	return 0
 }
 
-// Interface Knot. Returns 0.
+// MaxW is part of interface Knot. Returns 0.
 func (p Penalty) MaxW() dimen.Dimen {
 	return 0
 }
 
-// Interface Knot. Penalties are discardable.
+// IsDiscardable is part of interface Knot. Penalties are discardable.
 func (p Penalty) IsDiscardable() bool {
 	return true
 }
 
 // === Khipus ================================================================
 
-// We handle text/paragraphcs as khipus, i.e. string of knots
+// Khipu is a string of knots.
+// We handle text/paragraphs as khipus.
 type Khipu struct {
 	typ   int    // hlist, vlist or mlist
 	knots []Knot // array of knots of different type
@@ -322,25 +331,25 @@ const (
 	MList
 )
 
-// Create a new knot list.
+// NewKhipu creates a new knot list.
 func NewKhipu() *Khipu {
 	kh := &Khipu{}
 	kh.knots = make([]Knot, 0, 50)
 	return kh
 }
 
-// Number of knots in the list.
+// Length gives the number of knots in the list.
 func (kh *Khipu) Length() int {
 	return len(kh.knots)
 }
 
-// Append a knot at the end of the list.
+// AppendKnot appends a knot at the end of the list.
 func (kh *Khipu) AppendKnot(knot Knot) *Khipu {
 	kh.knots = append(kh.knots, knot)
 	return kh
 }
 
-// Concatenate two khipus.
+// AppendKhipu concatenates two khipus.
 func (kh *Khipu) AppendKhipu(k *Khipu) *Khipu {
 	for _, knot := range k.knots {
 		kh.knots = append(kh.knots, knot)
@@ -348,7 +357,7 @@ func (kh *Khipu) AppendKhipu(k *Khipu) *Khipu {
 	return kh
 }
 
-// Return the widths of a subset of this knot list. The subset runs from
+// Measure returns the widths of a subset of this knot list. The subset runs from
 // index [from ... to-1]. The method returns natural, maximum and minimum
 // width.
 func (kh *Khipu) Measure(from, to int) (dimen.Dimen, dimen.Dimen, dimen.Dimen) {
@@ -363,6 +372,7 @@ func (kh *Khipu) Measure(from, to int) (dimen.Dimen, dimen.Dimen, dimen.Dimen) {
 	return w, max, min
 }
 
+// Reach iterates over a khipu to find a point beyond a given distance.
 // Starting from a knot (index), return a set of knots which mark possible
 // endpoints for a sequence of knots to cover a certain width distance.
 // The knot set is returned as a pair (from,to) of indices.
@@ -385,7 +395,7 @@ func (kh *Khipu) Reach(start int, distance dimen.Dimen) (int, int) {
 	return from, to
 }
 
-// Find the maximum width of the knots in the range [from ... to-1].
+// MaxWidth finds the maximum width of the knots in the range [from ... to-1].
 func (kh *Khipu) MaxWidth(from, to int) dimen.Dimen {
 	to = iMax(to, len(kh.knots))
 	var w dimen.Dimen
@@ -398,9 +408,9 @@ func (kh *Khipu) MaxWidth(from, to int) dimen.Dimen {
 	return w
 }
 
-/* Find the maximum height and depth of the knots in the range [from ... to-1].
- * Only knots of type TextBox are considered.
- */
+// MaxHeightAndDepth finds the maximum height and depth of the knots in the range
+// [from ... to-1].
+// Only knots of type TextBox are considered.
 func (kh *Khipu) MaxHeightAndDepth(from, to int) (dimen.Dimen, dimen.Dimen) {
 	to = iMax(to, len(kh.knots))
 	var h, d dimen.Dimen
@@ -417,8 +427,7 @@ func (kh *Khipu) MaxHeightAndDepth(from, to int) (dimen.Dimen, dimen.Dimen) {
 	return h, d
 }
 
-/* Debug representation of a knot list.
- */
+// Debug representation of a knot list.
 func (kh *Khipu) String() string {
 	buf := make([]byte, 30)
 	w := bytes.NewBuffer(buf)
@@ -440,7 +449,7 @@ func (kh *Khipu) String() string {
 // ----------------------------------------------------------------------
 
 var (
-	errorIteratatorEnd error = errors.New("Khipu-iterator at end of knot list")
+	errorIteratatorEnd = errors.New("Khipu-iterator at end of knot list")
 )
 
 type khipuIterator struct {
@@ -448,6 +457,7 @@ type khipuIterator struct {
 	inx   int
 }
 
+// Iterator returns an interator over a khipu.
 func (kh *Khipu) Iterator() *khipuIterator {
 	return &khipuIterator{kh, -1}
 }

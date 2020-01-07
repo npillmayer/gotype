@@ -4,28 +4,25 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/core/dimen"
 	"github.com/npillmayer/gotype/core/parameters"
 )
 
-func Test0(t *testing.T) {
-	t.Log("setting core tracer")
-	CT = gologadapter.New()
-	CT.SetTraceLevel(tracing.LevelDebug)
-	tracing.CoreTracer = CT
-	CT.Infof("Core tracer alive")
-	CT.SetTraceLevel(tracing.LevelError)
-}
-
 func TestDimen(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	if dimen.BP.String() != "65536sp" {
 		t.Error("a big point BP should be 65536 scaled points SP")
 	}
 }
 
 func TestKhipu(t *testing.T) {
+	gtrace.CoreTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	khipu := NewKhipu()
 	khipu.AppendKnot(NewKnot(KTKern)).AppendKnot(NewKnot(KTGlue))
 	khipu.AppendKnot(NewTextBox("Hello"))
@@ -36,10 +33,14 @@ func TestKhipu(t *testing.T) {
 }
 
 func TestBreaking1(t *testing.T) {
+	gtrace.CoreTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.CoreTracer.SetTraceLevel(tracing.LevelInfo)
 	regs := parameters.NewTypesettingRegisters()
 	regs.Push(parameters.P_MINHYPHENLENGTH, 3)
 	khipu := KnotEncode(strings.NewReader("Hello world!"), nil, regs)
-	if khipu.Length() != 9 {
-		t.Errorf("khipu length is %d, should be 9", khipu.Length())
+	if khipu.Length() != 8 {
+		t.Errorf("khipu length is %d, should be 8", khipu.Length())
 	}
 }

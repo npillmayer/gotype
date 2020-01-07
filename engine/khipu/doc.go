@@ -19,9 +19,8 @@ information in knots.
 We will use this analogy to call typesetting items "khipus" or "knots",
 and objects which produce khipus will be "Khipukamayuqs".
 Knots implement items for typesetting paragraphs. We will use a
-box-and-glue model and the various knot
-types more or less implement the corresponding node types from the TeX
-typesetting system.
+box-and-glue model, the various knot types more or less implementing
+the corresponding node types from the TeX typesetting system.
 
 A Khipukamayuqs is part of a typsetting pipeline and will transform
 text into khipus.
@@ -37,7 +36,7 @@ Create Khipus from Text
 (2) Find natural text wrap opportunities
 (words in many scripts, syllables/character in East Asia, etc.)
 
-	https://godoc.org/github.com/npillmayer/gotype/gtcore/uax
+	https://godoc.org/github.com/npillmayer/gotype/core/uax
 
 (3) Bi-directional text
 
@@ -47,7 +46,7 @@ Create Khipus from Text
 (4) Hyphenation:
 Lliang patterns + language-specific code
 
-	https://godoc.org/github.com/npillmayer/gotype/gtcore/hyphenation
+	https://godoc.org/github.com/npillmayer/gotype/core/hyphenation
 
 (5) Translate feasible breakpoints to penalties, glue and discretionaries
 
@@ -62,7 +61,7 @@ At this point, text has been fully converted to khipus.
 
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -77,7 +76,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -91,7 +90,15 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-*/
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 package khipu
+
+import (
+	"github.com/npillmayer/gotype/core/config/gtrace"
+	"github.com/npillmayer/gotype/core/config/tracing"
+)
+
+// CT traces to the core-tracer.
+func CT() tracing.Trace {
+	return gtrace.CoreTracer
+}

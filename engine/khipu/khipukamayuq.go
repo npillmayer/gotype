@@ -3,7 +3,7 @@ package khipu
 /*
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -18,7 +18,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -37,11 +37,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"strings"
 
-	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/dimen"
 	params "github.com/npillmayer/gotype/core/parameters"
 	"github.com/npillmayer/gotype/core/uax/segment"
@@ -51,27 +49,16 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-/*
-Interfaces and methods to create lists of typesetting items,
-such as glyphs, kerns, glue, etc.
-We will call these kinds of items "khipus".
-*/
-
-// We trace to the core-tracer.
-var CT tracing.Trace
-
+// A TypesettingPipeline consists of steps to produce a khipu from text.
 type TypesettingPipeline struct {
 	input       io.RuneReader
-	linewrap    *uax14.UAX14LineWrap
+	linewrap    *uax14.LineWrap
 	wordbreaker *uax29.WordBreaker
 	segmenter   *segment.Segmenter
 	words       *segment.Segmenter
 }
 
-type Khipukamayuq interface {
-	KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) *Khipu
-}
-
+// KnotEncode transforms an input text into a khipu.
 func KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) *Khipu {
 	if regs == nil {
 		regs = params.NewTypesettingRegisters()
@@ -81,14 +68,14 @@ func KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.Type
 	seg := pipeline.segmenter
 	for seg.Next() {
 		fragment := seg.Text()
-		CT.Infof("next segment = '%s'\twith penalties %v", fragment, seg.Penalties())
+		CT().Debugf("next segment = '%s'\twith penalties %v", fragment, seg.Penalties())
 		k := createPartialKhipuFromSegment(seg, pipeline, regs)
 		if regs.N(params.P_MINHYPHENLENGTH) < dimen.Infty {
-			HypenateTextBoxes(k, pipeline, regs)
+			HyphenateTextBoxes(k, pipeline, regs)
 		}
 		khipu.AppendKhipu(k)
 	}
-	fmt.Printf("resulting khipu = %s\n", khipu)
+	CT().Infof("resulting khipu = %s\n", khipu)
 	return khipu
 }
 
@@ -96,7 +83,7 @@ func KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.Type
 // is a segmenter which already has detected a segment, i.e. seg.Next()
 // has been called successfully.
 //
-// Calls to CreatePartialKhipuFromSegment will panic if one of its
+// Calls to createPartialKhipuFromSegment will panic if one of its
 // arguments is invalid.
 //
 // Returns a khipu consisting of text-boxes, glues and penalties.
@@ -132,12 +119,12 @@ func createPartialKhipuFromSegment(seg *segment.Segmenter, pipeline *Typesetting
 	return khipu
 }
 
-// Hypenate all the words in a khipu. Words are contained inside TextBox
-// knots.
+// HyphenateTextBoxes hypenates all the words in a khipu.
+// Words are contained inside TextBox knots.
 //
 // Hyphenation is governed by the typesetting registers provided.
 // If regs is nil, no hyphenation is done.
-func HypenateTextBoxes(khipu *Khipu, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) {
+func HyphenateTextBoxes(khipu *Khipu, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) {
 	if regs == nil || khipu == nil {
 		return
 	}
@@ -148,12 +135,12 @@ func HypenateTextBoxes(khipu *Khipu, pipeline *TypesettingPipeline, regs *params
 			k = append(k, iterator.Knot())
 			continue
 		}
-		CT.Infof("knot = %v | %v", iterator.Knot(), iterator.Knot())
+		CT().Infof("knot = %v | %v", iterator.Knot(), iterator.Knot())
 		text := iterator.AsTextBox().text
 		pipeline.words.Init(strings.NewReader(text))
 		for pipeline.words.Next() {
 			word := pipeline.words.Text()
-			CT.Infof("   word = '%s'", word)
+			CT().Infof("   word = '%s'", word)
 			if len(word) < regs.N(params.P_MINHYPHENLENGTH) {
 				k = append(k, iterator.Knot())
 				continue
@@ -172,8 +159,8 @@ func HypenateTextBoxes(khipu *Khipu, pipeline *TypesettingPipeline, regs *params
 	khipu.knots = k
 }
 
-// Check if a typesetting pipeline is correctly initialized and create
-// a new one if is is invalid.
+// PrepareTypesettingPipeline checks if a typesetting pipeline is correctly
+// initialized and creates a new one if is is invalid.
 //
 // We use a uax14.LineWrapper as the primariy breaker and
 // use a segment.SimpleWordBreaker to extract spans of whitespace.
@@ -193,18 +180,19 @@ func PrepareTypesettingPipeline(text io.Reader, pipeline *TypesettingPipeline) *
 	return pipeline
 }
 
+// HyphenateWord hyphenates a single word.
 func HyphenateWord(word string, regs *params.TypesettingRegisters) ([]string, bool) {
-	dict := gtlocate.Dictionnary(regs.S(params.P_LANGUAGE))
+	dict := gtlocate.Dictionary(regs.S(params.P_LANGUAGE))
 	ok := false
 	if dict == nil {
 		panic("TODO not yet implemented: find dictionnary for language")
 	}
-	CT.Infof("   will try to hyphenate word")
+	CT().Infof("   will try to hyphenate word")
 	splitWord := dict.Hyphenate(word)
 	if len(splitWord) > 1 {
 		ok = true
 	}
-	CT.Infof("   %v", splitWord)
+	CT().Infof("   %v", splitWord)
 	return splitWord, ok
 }
 
