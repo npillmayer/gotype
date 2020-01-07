@@ -7,6 +7,7 @@ import (
 
 	"github.com/npillmayer/gotype/core/arithmetic"
 	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/shopspring/decimal"
 )
 
@@ -21,6 +22,8 @@ func testpath() (*Path, SplineControls) {
 }
 
 func TestSliceEnlargement(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	arr := make([]complex128, 0)
 	arr = extendC(arr, 3, 2+1i)
 	c := arr[3]
@@ -30,6 +33,8 @@ func TestSliceEnlargement(t *testing.T) {
 }
 
 func TestCreatePath(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	path, _ := testpath()
 	if path.N() != 3 {
 		t.Fail()
@@ -37,6 +42,8 @@ func TestCreatePath(t *testing.T) {
 }
 
 func TestPadding(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	path, _ := testpath()
 	path.cycle = true
 	if path.Z(1) != path.Z(path.N()+1) {
@@ -45,6 +52,8 @@ func TestPadding(t *testing.T) {
 }
 
 func TestSetTension(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	path, _ := Nullpath().Knot(P(1, 1)).TensionCurve(one, two).Cycle()
 	if path.PostTension(0) < 0.99 {
 		t.Fail()
@@ -55,90 +64,111 @@ func TestSetTension(t *testing.T) {
 }
 
 func TestDir(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	path, _ := Nullpath().DirKnot(P(1, 1), P(1, 0)).End()
-	fmt.Printf("dir(0) = %g\n", path.PostDir(0))
+	t.Logf("dir(0) = %g\n", path.PostDir(0))
 	if angle(path.PostDir(0)) > 0.01 {
 		t.Fail()
 	}
 }
 
 func TestCurl(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	path, _ := Nullpath().Knot(P(1, 1)).Line().Cycle()
-	fmt.Printf("curl(0) = %g\n", path.PostCurl(0))
+	t.Logf("curl(0) = %g\n", path.PostCurl(0))
 	if path.PostCurl(0) > 0.09 {
 		t.Fail()
 	}
 }
 
 func TestDelta(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	path, _ := testpath()
 	delta1 := delta(path, 1)
-	fmt.Printf("delta [1->2] = %g\n", delta1)
+	t.Logf("delta [1->2] = %g\n", delta1)
 	if delta1 != 1-1i {
 		t.Fail()
 	}
 }
 
 func TestD(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	path, _ := testpath()
 	d := d(path, 2)
-	fmt.Printf("d [2->3] = %g\n", d)
+	t.Logf("d [2->3] = %g\n", d)
 	if d < 1.9 {
 		t.Fail()
 	}
 }
 
 func TestPsi(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	path, _ := testpath()
 	psi := psi(path, 1)
-	fmt.Printf("psi [1->2] = %g\n", rad2deg(psi)) // -90.0000001
+	t.Logf("psi [1->2] = %g\n", rad2deg(psi)) // -90.0000001
 	if math.Abs(rad2deg(psi)+90.0) > 0.01 {
 		t.Fail()
 	}
 }
 
 func TestPsiCycle(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	path, _ := testpath()
 	path.cycle = true
 	psi := psi(path, 2)
-	fmt.Printf("psi [2->3] = %g\n", rad2deg(psi)) // -134.9999997
+	t.Logf("psi [2->3] = %g\n", rad2deg(psi)) // -134.9999997
 	if math.Abs(rad2deg(psi)+135.0) > 0.01 {
 		t.Fail()
 	}
 }
 
 func TestPsiCyclePadding(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	path, _ := testpath()
 	path.cycle = true
 	psi1 := psi(path, 1)
+	t.Logf("psi [1->2] = %g\n", rad2deg(psi1)) // -90
+	if math.Abs(rad2deg(psi1)+90.0) > 0.01 {
+		t.Fail()
+	}
 	psiN1 := psi(path, path.N()+1)
+	t.Logf("psi [4->5] = %g\n", rad2deg(psiN1)) // -90
 	if math.Abs(math.Abs(psi1)-math.Abs(psiN1)) > 0.0001 {
 		t.Fail()
 	}
 }
 
 func TestOpen(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	path, controls := testpath()
-	fmt.Println(AsString(path, nil))
+	t.Logf(AsString(path, nil))
 	controls = FindHobbyControls(path, controls)
-	fmt.Println(AsString(path, controls))
+	t.Logf(AsString(path, controls))
 }
 
 func TestCycle(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	p, _ := testpath()
 	path, controls := p.Knot(P(2, 0)).Curve().Cycle()
-	fmt.Println(AsString(path, nil))
+	t.Logf(AsString(path, nil))
 	controls = FindHobbyControls(path, controls)
-	//fmt.Println(PathAsString(path, controls))
+	t.Logf(AsString(path, controls))
 }
 
-/*
-Draw a cicle with diameter 1 around (2,1). The builder statement returns
-a HobbyPath (type Path under the hood) and SplineControls. Type Path actually
-contains a link to its spline controls (field path.Controls). These controls
-are initially empty and then used for the call to FindHobbyControls(...),
-where they get filled.
-*/
+// Draw a cicle with diameter 1 around (2,1). The builder statement returns
+// a HobbyPath (type Path under the hood) and SplineControls. Type Path actually
+// contains a link to its spline controls (field path.Controls). These controls
+// are initially empty and then used for the call to FindHobbyControls(...),
+// where they get filled.
 func ExampleSplineControls_usage() {
 	path, controls := Nullpath().Knot(P(1, 1)).Curve().Knot(P(2, 2)).Curve().Knot(P(3, 1)).
 		Curve().Knot(P(2, 0)).Curve().Cycle()
@@ -165,6 +195,8 @@ func ExampleSplineControls_usage() {
 }
 
 func TestSegmentProjection(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	path, _ := Nullpath().Knot(P(1, 1)).Curve().Knot(P(2, 2)).Curve().Knot(P(3, 1)).End()
 	seg := makePathSegment(path, 0, 1)
 	if seg.N() != 2 {
@@ -173,6 +205,8 @@ func TestSegmentProjection(t *testing.T) {
 }
 
 func TestSegments(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	path, _ := Nullpath().Knot(P(0, 0)).Curve().Knot(P(0, 3)).Curve().
 		Knot(P(5, 3)).Line().DirKnot(P(3, -1), P(0, -1)).Curve().Cycle()
 	segs := splitSegments(path)
@@ -182,6 +216,8 @@ func TestSegments(t *testing.T) {
 }
 
 func TestSegmentedPath(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	T().SetTraceLevel(tracing.LevelInfo)
 	path, controls := Nullpath().Knot(P(1, 1)).Line().Knot(P(2, 2)).Line().Knot(P(3, 1)).End()
 	controls = FindHobbyControls(path, controls)
