@@ -194,7 +194,7 @@ type HobbyPath interface {
 // FindHobbyControls(...) to fill in appropriate control point information
 // for a curved path through the path's knots.
 //
-// // see FindHobbyControls(...)
+// see FindHobbyControls(...)
 type SplineControls interface {
 	PreControl(i int) complex128
 	PostControl(i int) complex128
