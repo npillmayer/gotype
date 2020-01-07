@@ -10,22 +10,15 @@ import (
 	"unicode"
 
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/core/uax/segment"
 )
 
 //var TC tracing.Trace = gologadapter.New()
 
-func Test0(t *testing.T) {
-	t.Log("setting core tracer")
-	TC = gologadapter.New()
-	TC.SetTraceLevel(tracing.LevelDebug)
-	tracing.CoreTracer = TC
-	TC.Infof("Core tracer alive")
-	TC.SetTraceLevel(tracing.LevelError)
-}
-
 func TestGraphemeClasses(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	c1 := LClass
 	if c1.String() != "LClass" {
 		t.Errorf("String(LClass) should be 'LClass', is %s", c1)
@@ -35,15 +28,17 @@ func TestGraphemeClasses(t *testing.T) {
 		t.Error("<TAB> should be identified as control character")
 	}
 	hangsyl := '\uac1c'
-	if c := GraphemeClassForRune(hangsyl); c != LVClass {
+	if c := ClassForRune(hangsyl); c != LVClass {
 		t.Errorf("Hang syllable GAE should be of class LV, is %s", c)
 	}
-	if c := GraphemeClassForRune(0); c != eot {
+	if c := ClassForRune(0); c != eot {
 		t.Errorf("\\0x00 should be of class eot, is %s", c)
 	}
 }
 
 func TestGraphemes1(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	onGraphemes := NewBreaker()
 	input := bytes.NewReader([]byte("Hello\tWorld"))
 	seg := segment.NewSegmenter(onGraphemes)
@@ -56,6 +51,8 @@ func TestGraphemes1(t *testing.T) {
 }
 
 func TestGraphemes2(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	onGraphemes := NewBreaker()
 	input := bytes.NewReader([]byte("Hello\tWorld"))
 	seg := segment.NewSegmenter(onGraphemes)
@@ -69,7 +66,9 @@ func TestGraphemes2(t *testing.T) {
 }
 
 func TestGraphemesTestFile(t *testing.T) {
-	TC.SetTraceLevel(tracing.LevelError)
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	TC().SetTraceLevel(tracing.LevelError)
 	SetupGraphemeClasses()
 	onGraphemes := NewBreaker()
 	seg := segment.NewSegmenter(onGraphemes)
@@ -91,7 +90,7 @@ func TestGraphemesTestFile(t *testing.T) {
 		if i >= from {
 			parts := strings.Split(line, "#")
 			testInput, comment := parts[0], parts[1]
-			TC.Infof(comment)
+			TC().Infof(comment)
 			in, out := breakTestInput(testInput)
 			if !executeSingleTest(t, seg, i, in, out) {
 				failcnt++
@@ -102,7 +101,7 @@ func TestGraphemesTestFile(t *testing.T) {
 		}
 	}
 	if err := scan.Err(); err != nil {
-		TC.Errorf("reading input:", err)
+		TC().Errorf("reading input:", err)
 	}
 	t.Logf("%d TEST CASES OUT of %d FAILED", failcnt, i-from+1)
 }

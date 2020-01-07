@@ -27,7 +27,7 @@ type atom struct {
 	penalty1 int // penalty for all secondary breakers
 }
 
-var eotAtom atom = atom{rune(0), 0, 0} // the atom denoting End of Text
+var eotAtom = atom{rune(0), 0, 0} // the atom denoting End of Text
 
 func (a *atom) String() string {
 	return fmt.Sprintf("[%+q p=%d|%d]", a.r, a.penalty0, a.penalty1)

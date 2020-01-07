@@ -5,18 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 )
 
-//var CT tracing.Trace = tracing.CoreTracer
-
-func TestInit(t *testing.T) {
-	tracing.CoreTracer = gologadapter.New()
-	CT = tracing.CoreTracer
-}
-
 func TestWhitespace1(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	seg := NewSegmenter()
 	seg.Init(strings.NewReader("Hello World!"))
 	for seg.Next() {
@@ -25,6 +19,8 @@ func TestWhitespace1(t *testing.T) {
 }
 
 func TestWhitespace2(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	seg := NewSegmenter()
 	seg.Init(strings.NewReader("	for (i=0; i<5; i++)   count += i;"))
 	for seg.Next() {
