@@ -1,4 +1,4 @@
-package gtcore
+package language
 
 // Language setting
 
