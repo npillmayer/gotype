@@ -10,16 +10,13 @@ import (
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/engine/dom"
 	"golang.org/x/net/html"
 )
 
 var graphviz = false
-
-// func T() tracing.Trace {
-// 	return gtrace.EngineTracer
-// }
 
 var Xmyhtml = `<div><b>bold</b><table></table><span>spanned</span></div>`
 
@@ -31,7 +28,7 @@ var myhtml = `
 </head><body>
   <p>The quick brown fox jumps over the lazy</p><b>dog.</b>
   <p id="world">Hello <b>World</b>!</p>
-  <p style="padding-left: 5px;">This is a test.</p>
+  <p style="padding-left: 5px; position: fixed;">This is a test.</p>
 </body>
 `
 
@@ -40,31 +37,51 @@ func buildDOM(t *testing.T) *dom.W3CNode {
 	if err != nil {
 		t.Errorf("Cannot create test document")
 	}
-	return dom.FromHTMLParseTree(h, nil) // nil = no external stylesheet
+	dom := dom.FromHTMLParseTree(h, nil) // nil = no external stylesheet
+	if dom == nil {
+		t.Errorf("Could not build DOM from HTML")
+	}
+	return dom
 }
 
-func TestLayout1(t *testing.T) {
+func TestBoxGeneration(t *testing.T) {
 	//gtrace.EngineTracer = gologadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	gtrace.EngineTracer.SetTraceLevel(tracing.LevelInfo)
 	domroot := buildDOM(t)
-	gtrace.EngineTracer.Infof("===================================================")
-	//viewport := &dimen.Rect{TopL: dimen.Origin, BotR: dimen.DINA4}
 	boxes, err := layout.BuildBoxTree(domroot)
 	if err != nil {
 		t.Errorf(err.Error())
 	} else if boxes == nil {
 		t.Errorf("Render tree root is null")
 	} else {
-		// if root.NodeName() != "#document" {
-		// 	t.Errorf("name of root element expected to be '#document")
-		// // }
 		t.Logf("root node is %s", boxes.DOMNode().NodeName())
+		if boxes.DOMNode().NodeName() != "#document" {
+			t.Errorf("name of root element expected to be '#document")
+		}
 		if graphviz {
 			gvz, _ := ioutil.TempFile(".", "layout-*.dot")
 			defer gvz.Close()
 			renderdbg.ToGraphViz(boxes.(*layout.PrincipalBox), gvz)
+		}
+	}
+}
+
+func TestReorderingSimple(t *testing.T) {
+	//viewport := &dimen.Rect{TopL: dimen.Origin, BotR: dimen.DINA4}
+	gtrace.EngineTracer = gologadapter.New()
+	gtrace.EngineTracer.SetTraceLevel(tracing.LevelDebug)
+	gtrace.EngineTracer.Debugf("==============================================")
+	domroot := buildDOM(t)
+	boxes, err := layout.BuildBoxTree(domroot)
+	if err != nil {
+		t.Errorf(err.Error())
+	} else {
+		t.Logf("root node is %s", boxes.DOMNode().NodeName())
+		renderRoot := layout.TreeNodeAsPrincipalBox(boxes.TreeNode())
+		if err = layout.ReorderBoxTree(renderRoot); err != nil {
+			t.Errorf(err.Error())
 		}
 	}
 }
