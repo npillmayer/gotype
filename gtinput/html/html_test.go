@@ -14,7 +14,7 @@ func TestParseFile1(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error opening HTML file: %s", err)
 	} else {
-		dom, htmlerr := ReadHTMLbook(f)
+		dom, htmlerr := ReadHTMLBook(f)
 		if htmlerr != nil {
 			t.Errorf("Error parsing HTML file: %s", htmlerr)
 		} else {
@@ -36,7 +36,7 @@ func TestParseFile2(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error opening HTML file: %s", err)
 	} else {
-		dom, htmlerr := ReadHTMLbook(f)
+		dom, htmlerr := ReadHTMLBook(f)
 		if htmlerr != nil {
 			t.Errorf("Error parsing HTML file: %s", htmlerr)
 		} else {

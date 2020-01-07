@@ -51,11 +51,11 @@ func FileResource(item string, typ string) string {
 	return path
 }
 
-var dicts map[string]*hyphenation.Dictionnary
+var dicts map[string]*hyphenation.Dictionary
 
-func Dictionnary(loc string) *hyphenation.Dictionnary {
+func Dictionary(loc string) *hyphenation.Dictionary {
 	if dicts == nil {
-		dicts = make(map[string]*hyphenation.Dictionnary)
+		dicts = make(map[string]*hyphenation.Dictionary)
 	}
 	if dicts[loc] == nil {
 		pname := "hyph-en-us.tex"
