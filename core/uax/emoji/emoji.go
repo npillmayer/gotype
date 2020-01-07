@@ -3,7 +3,7 @@ Package emoji implements Unicode UTS #51 emoji classes.
 
 BSD License
 
-Copyright (c) 2017-18, Norbert Pillmayer
+Copyright (c) 2017-20, Norbert Pillmayer
 
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
@@ -40,8 +40,7 @@ Before using emoji classes, clients will have to initialize them.
   SetupEmojiClasses()
 
 This initializes all the code-point range tables. Initialization is
-not done beforehand, as it consumes quite some memory.
-*/
+not done beforehand, as it consumes quite some memory. */
 package emoji
 
 import (
@@ -49,7 +48,7 @@ import (
 	"unicode"
 )
 
-// Top-level client function:
+// EmojisClassForRune is the top-level client function:
 // Get the emoji class for a Unicode code-point
 // Will return -1 if the code-point has no emoji-class.
 func EmojisClassForRune(r rune) EmojisClass {
@@ -64,7 +63,7 @@ func EmojisClassForRune(r rune) EmojisClass {
 
 var setupOnce sync.Once
 
-// Top-level preparation function:
+// SetupEmojisClasses is the top-level preparation function:
 // Create code-point classes for emojis.
 // (Concurrency-safe).
 func SetupEmojisClasses() {
