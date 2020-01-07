@@ -3,7 +3,7 @@ package pdf
 /*
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -18,7 +18,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -41,7 +41,7 @@ import (
 	"sync"
 
 	"github.com/npillmayer/gotype/backend/print/pdf/pdfapi"
-	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/dimen"
 )
 
@@ -59,6 +59,7 @@ import (
 // contPageNo is a contiguous page number.
 type contPageNo int16
 
+// PageStatus reflects a printer status for a page.
 type PageStatus int8
 
 // Pages queued for printing may be in these states:
@@ -71,8 +72,8 @@ const (
 
 // ----------------------------------------------------------------------
 
-// PdfPrinter is used for outputting a render tree in PDF format.
-type PdfPrinter struct {
+// Printer is used for outputting a render tree in PDF format.
+type Printer struct {
 	doc       *pdfapi.Document // PDF document to assemble
 	Proofing  bool             // are we in proof mode?
 	Colormode bool             // color or b/w ?
@@ -89,12 +90,12 @@ type PdfPrinter struct {
 	pagecount contPageNo       // number of pages already completed
 }
 
-// Printer creates a new PdfPrinter, given a paper format and scale factor.
-func Printer(papersize dimen.Point, scale float64) *PdfPrinter {
+// NewPrinter creates a new Printer, given a paper format and scale factor.
+func NewPrinter(papersize dimen.Point, scale float64) *Printer {
 	if papersize.X <= 0 || papersize.Y <= 0 {
 		return nil
 	}
-	pr := &PdfPrinter{}
+	pr := &Printer{}
 	pr.Proofing = true
 	pr.Colormode = true
 	if scale <= 0 {
@@ -114,7 +115,7 @@ func Printer(papersize dimen.Point, scale float64) *PdfPrinter {
 
 // pageComplete signals the page assembler that this page is complete,
 // i.e, all the rendering for this page has been done.
-func (pr *PdfPrinter) pageComplete(page *Page) {
+func (pr *Printer) pageComplete(page *Page) {
 	pr.mtx.Lock()
 	if page != nil {
 		page.status = Assembling
@@ -136,7 +137,7 @@ func (pr *PdfPrinter) pageComplete(page *Page) {
 
 // pageFailed signals the page assembler that this page failed to render.
 // We will create an error page instead and queue it for the assembler.
-func (pr *PdfPrinter) pageFailed(page *Page, err error) {
+func (pr *Printer) pageFailed(page *Page, err error) {
 	page.pdfcanvas = pr.doc.NewPage(pr.papersize.X, pr.papersize.Y)
 	errtext := &pdfapi.Text{}
 	cv := makeConv(pr.papersize, page.pageGeom, pr.scale)
@@ -154,14 +155,14 @@ func (pr *PdfPrinter) pageFailed(page *Page, err error) {
 // IsRunning returns true if the printer is accepting input, false otherwise.
 // Printers will be running after calls to Start(...) until either the
 // expected number of pages has been printed or Abort(...) has been called.
-func (pr *PdfPrinter) IsRunning() bool {
+func (pr *Printer) IsRunning() bool {
 	pr.mtx.RLock()
 	defer pr.mtx.RUnlock()
 	return pr.running
 }
 
-// Status returns the print status of a page in the printer's queue.
-func (pr *PdfPrinter) StatusOf(page *Page) PageStatus {
+// StatusOf returns the print status of a page in the printer's queue.
+func (pr *Printer) StatusOf(page *Page) PageStatus {
 	pr.mtx.RLock()
 	defer pr.mtx.RUnlock()
 	return page.status
@@ -170,7 +171,7 @@ func (pr *PdfPrinter) StatusOf(page *Page) PageStatus {
 // assemblePagesToDocument is intended to be executed by a single assembly
 // goroutine. It is only safe to be used with many page creation
 // workers and a single page assembly worker.
-func assemblePagesToDocument(pr *PdfPrinter, w io.Writer) {
+func assemblePagesToDocument(pr *Printer, w io.Writer) {
 	var nextPage *Page
 	for pr.IsRunning() { // wait for next page to assemble until stopped by signal
 		select {
@@ -209,10 +210,10 @@ func assemblePagesToDocument(pr *PdfPrinter, w io.Writer) {
 			close(pr.errch) // signal to printing clients
 		}
 	}
-	tracing.EngineTracer.Debugf("Assembly worker stopped")
+	gtrace.EngineTracer.Debugf("Assembly worker stopped")
 }
 
-func (pr *PdfPrinter) drainAssemblyQueueAndStop() {
+func (pr *Printer) drainAssemblyQueueAndStop() {
 	// We are fetching pending page events from the assembly queue.
 	// This is for the regular case only. For an interrupt, we currently
 	// have no means to detect how many page workers will return.
@@ -245,7 +246,7 @@ func (pr *PdfPrinter) drainAssemblyQueueAndStop() {
 // SetMaxPage must be called from clients as soon as they know how many
 // pages there will be in the print job.
 // Page numbers range from 0 to 32767.
-func (pr *PdfPrinter) SetMaxPage(n int) {
+func (pr *Printer) SetMaxPage(n int) {
 	pr.mtx.Lock()
 	defer pr.mtx.Unlock()
 	pr.maxPageNo = contPageNo(n)
@@ -257,11 +258,11 @@ func (pr *PdfPrinter) SetMaxPage(n int) {
 // Start starts printing to w. It returns a promise/future.
 // Clients will call this promise to synchronously wait for printing
 // to finish.
-func (pr *PdfPrinter) Start(w io.Writer) func() error {
+func (pr *Printer) Start(w io.Writer) func() error {
 	pr.mtx.Lock()
 	pr.running = true
 	pr.mtx.Unlock()
-	go func(pp *PdfPrinter) {
+	go func(pp *Printer) {
 		assemblePagesToDocument(pp, w)
 	}(pr)
 	return func() error {
@@ -277,7 +278,7 @@ func (pr *PdfPrinter) Start(w io.Writer) func() error {
 
 // Abort stops the printer. The call will block until the printer stopped.
 // err should be nil to signal a successful completion of printing.
-func (pr *PdfPrinter) Abort(err error) {
+func (pr *Printer) Abort(err error) {
 	go func() {
 		pr.errch <- err
 	}()
@@ -291,7 +292,7 @@ func (pr *PdfPrinter) Abort(err error) {
 // numbers. The printer expects pages ranging from 1..n, where n is set
 // by SetMaxPage(n). If this constraint is violated, the printer may stall
 // waiting for non-existent pages. Page numbers range from 0 to 32767.
-func (pr *PdfPrinter) PrintPage(pageno int, pageGeom dimen.Rect, content *RenderTree) *Page {
+func (pr *Printer) PrintPage(pageno int, pageGeom dimen.Rect, content *RenderTree) *Page {
 	page := &Page{}
 	page.pageNo = contPageNo(pageno)
 	page.pageGeom.Min = dpt2upt(pageGeom.TopL)
@@ -303,21 +304,21 @@ func (pr *PdfPrinter) PrintPage(pageno int, pageGeom dimen.Rect, content *Render
 }
 
 // PageCount returns the current number of completed pages.
-func (pr *PdfPrinter) PageCount() int {
+func (pr *Printer) PageCount() int {
 	pr.mtx.RLock()
 	defer pr.mtx.RUnlock()
 	return int(pr.pagecount)
 }
 
-func (pr *PdfPrinter) appendToDocument(page *Page) error {
-	tracing.EngineTracer.Infof("OUTPUT PAGE [%d]", page.pageNo)
+func (pr *Printer) appendToDocument(page *Page) error {
+	gtrace.EngineTracer.Infof("OUTPUT PAGE [%d]", page.pageNo)
 	page.pdfcanvas.Close()
 	pr.doc.Assemble(page.pdfcanvas)
 	return nil
 }
 
 // serialize outputs the PDF structure to a writer.
-func (pr *PdfPrinter) serialize(w io.Writer) {
+func (pr *Printer) serialize(w io.Writer) {
 	T().Debugf("Serializing document")
 	pr.doc.Encode(w)
 }
@@ -347,14 +348,14 @@ func (page *Page) PageNo() int {
 // will be enqueued into this queue.
 type pageQueue struct {
 	sync.RWMutex
-	printer *PdfPrinter // the printer this queue is attached to
-	running bool        // guarded by mutex
-	working bool        // guarded by mutex
-	pages   chan *Page  // pages in print
+	printer *Printer   // the printer this queue is attached to
+	running bool       // guarded by mutex
+	working bool       // guarded by mutex
+	pages   chan *Page // pages in print
 }
 
 //Create a new printer queue. pr must not be nil.
-func newQueue(pr *PdfPrinter) *pageQueue {
+func newQueue(pr *Printer) *pageQueue {
 	q := &pageQueue{}
 	q.printer = pr
 	q.pages = make(chan *Page, 10)
@@ -394,7 +395,7 @@ const workerCount = 3
 // the printer's intput queue and render them.
 func (pq *pageQueue) startWorkers() {
 	for i := 0; i < workerCount; i++ {
-		go func(pages <-chan *Page, printer *PdfPrinter) {
+		go func(pages <-chan *Page, printer *Printer) {
 			for page := range pages {
 				err := printer.render(page)
 				if err == nil {
@@ -446,9 +447,4 @@ func dimen2unit(d dimen.Dimen) pdfapi.Unit {
 
 func unit2dimen(u pdfapi.Unit) dimen.Dimen {
 	return dimen.Dimen(float64(u) * float64(dimen.BP))
-}
-
-// We are tracing to the EngineTracer.
-func T() tracing.Trace {
-	return tracing.EngineTracer
 }

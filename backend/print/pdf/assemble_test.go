@@ -7,8 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/core/dimen"
 )
 
@@ -17,13 +16,10 @@ var a5page = dimen.Rect{
 	dimen.Point{3*dimen.CM + dimen.DINA5.X, 4*dimen.CM + dimen.DINA5.Y},
 }
 
-func Test0(t *testing.T) {
-	tracing.EngineTracer = gologadapter.New()
-	tracing.EngineTracer.SetTraceLevel(tracing.LevelDebug)
-}
-
 func TestAssemble1(t *testing.T) {
-	printer := Printer(dimen.DINA4, 0.5)
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	printer := NewPrinter(dimen.DINA4, 0.5)
 	f := tmpPdfFile(t)
 	defer f.Close()
 	future := printer.Start(f)

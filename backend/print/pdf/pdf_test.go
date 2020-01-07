@@ -6,9 +6,12 @@ import (
 	"testing"
 
 	"github.com/npillmayer/gotype/backend/print/pdf/pdfapi"
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 )
 
 func TestSimple(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	pdffile, err := os.Create("apitest.pdf")
 	if err != nil {
 		t.Error(err)

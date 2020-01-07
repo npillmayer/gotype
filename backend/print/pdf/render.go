@@ -10,7 +10,7 @@ import (
 // render will be executed by concurrent render workers.
 // TODO Walk the render tree of the pages content
 // TODO and create pdfapi calls on it.
-func (pr *PdfPrinter) render(page *Page) error {
+func (pr *Printer) render(page *Page) error {
 	T().Debugf("Rendering page [%d]", page.pageNo)
 	cv := makeConv(pr.papersize, page.pageGeom, pr.scale) // set up conversion
 	renderPrinterMarks(cv, page.pdfcanvas, pr.Proofing)
