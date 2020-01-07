@@ -5,7 +5,7 @@ Under active development; use at your own risk
 
 BSD License
 
-Copyright (c) 2017-18, Norbert Pillmayer
+Copyright (c) 2017-20, Norbert Pillmayer
 
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
@@ -19,7 +19,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -57,11 +57,11 @@ breaking engine for a segmenter.
 Before using line breakers, clients usually will want to initialize the UAX#14
 classes and rules.
 
-  SetupUAX14Classes()
+  SetupClasses()
 
 This initializes all the code-point range tables. Initialization is
 not done beforehand, as it consumes quite some memory, and using UAX#14
-is not mandatory. SetupUAX14Classes() is called automatically, however,
+is not mandatory. SetupClasses() is called automatically, however,
 if clients call NewLineWrap().
 
 Status
@@ -85,14 +85,15 @@ point of view they aren't consistent.
 3 out of the 7282 test cases fail. That doesn't sound too much of a problem,
 but I'm afraid the interpretation I chose is not the best one. Nevertheless,
 at this point I'm inclined to postpone the problem and to first seek some
-practical experience with real-life multi-lingual texts.
-*/
+practical experience with real-life multi-lingual texts. */
 package uax14
 
 import (
 	"math"
 	"sync"
 	"unicode"
+
+	"github.com/npillmayer/gotype/core/config/gtrace"
 
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/uax"
@@ -104,19 +105,21 @@ const (
 	optSpaces UAX14Class = 1002 // pseudo class
 )
 
-// We trace to the core-tracer.
-var TC tracing.Trace
+// TC traces to the core-tracer.
+func TC() tracing.Trace {
+	return gtrace.CoreTracer
+}
 
-// Top-level client function:
+// ClassForRune is the top-level client function:
 // Get the line breaking/wrap class for a Unicode code-point
-func UAX14ClassForRune(r rune) UAX14Class {
+func ClassForRune(r rune) UAX14Class {
 	if r == rune(0) {
 		return eot
 	}
 	for lbc := UAX14Class(0); lbc <= ZWJClass; lbc++ {
 		urange := rangeFromUAX14Class[lbc]
 		if urange == nil {
-			TC.Errorf("-- no range for class %s\n", lbc)
+			TC().Errorf("-- no range for class %s\n", lbc)
 		} else if unicode.Is(urange, r) {
 			return lbc
 		}
@@ -126,18 +129,18 @@ func UAX14ClassForRune(r rune) UAX14Class {
 
 var setupOnce sync.Once
 
-// Top-level preparation function:
+// SetupClasses is the top-level preparation function:
 // Create code-point classes for UAX#14 line breaking/wrap.
 // (Concurrency-safe).
-func SetupUAX14Classes() {
+func SetupClasses() {
 	setupOnce.Do(setupUAX14Classes)
 }
 
 // === UAX#14 Line Breaker ==============================================
 
-// Objects of this type are used by a unicode.Segmenter to break lines
+// LineWrap is a type used by a unicode.Segmenter to break lines
 // up according to UAX#14. It implements the unicode.UnicodeBreaker interface.
-type UAX14LineWrap struct {
+type LineWrap struct {
 	publisher    uax.RunePublisher
 	longestMatch int   // longest active match of a rule
 	penalties    []int // returned to the segmenter: penalties to insert
@@ -148,18 +151,17 @@ type UAX14LineWrap struct {
 	shadow       UAX14Class // class before substitution
 }
 
-// Create a new UAX#14 line breaker.
+// NewLineWrap creates a new UAX#14 line breaker.
 //
 // Usage:
 //
-//   linewrap := NewUAX14LineWrap()
+//   linewrap := NewLineWrap()
 //   segmenter := segment.NewSegmenter(linewrap)
 //   segmenter.Init(...)
 //   for segmenter.Next() ...
 //
-func NewLineWrap() *UAX14LineWrap {
-	TC = tracing.CoreTracer
-	uax14 := &UAX14LineWrap{}
+func NewLineWrap() *LineWrap {
+	uax14 := &LineWrap{}
 	uax14.publisher = uax.NewRunePublisher()
 	uax14.rules = map[UAX14Class][]uax.NfaStateFn{
 		//sot:      {rule_LB2},
@@ -202,18 +204,18 @@ func NewLineWrap() *UAX14LineWrap {
 		ZWJClass: {rule_LB8a},
 	}
 	if rangeFromUAX14Class == nil {
-		TC.Infof("UAX#14 classes not yet initialized -> initializing")
+		TC().Infof("UAX#14 classes not yet initialized -> initializing")
 	}
-	SetupUAX14Classes()
+	SetupClasses()
 	uax14.lastClass = sot
 	return uax14
 }
 
-// Return the UAX#14 code-point class for a rune (= code-point).
+// CodePointClassFor returns the UAX#14 code-point class for a rune (= code-point).
 //
 // Interface unicode.UnicodeBreaker
-func (uax14 *UAX14LineWrap) CodePointClassFor(r rune) int {
-	c := UAX14ClassForRune(r)
+func (uax14 *LineWrap) CodePointClassFor(r rune) int {
+	c := ClassForRune(r)
 	c = resolveSomeClasses(r, c)
 	cnew, shadow := substitueSomeClasses(c, uax14.lastClass)
 	uax14.substituted = (c != cnew)
@@ -221,22 +223,22 @@ func (uax14 *UAX14LineWrap) CodePointClassFor(r rune) int {
 	return int(cnew)
 }
 
-// Start all recognizers where the starting symbol is rune r.
+// StartRulesFor starts all recognizers where the starting symbol is rune r.
 // r is of code-point-class cpClass.
 //
 // Interface unicode.UnicodeBreaker
-func (uax14 *UAX14LineWrap) StartRulesFor(r rune, cpClass int) {
+func (uax14 *LineWrap) StartRulesFor(r rune, cpClass int) {
 	c := UAX14Class(cpClass)
 	if c != RIClass || !uax14.blockedRI {
 		if rules := uax14.rules[c]; len(rules) > 0 {
-			TC.P("class", c).Debugf("starting %d rule(s) for class %s", len(rules), c)
+			TC().P("class", c).Debugf("starting %d rule(s) for class %s", len(rules), c)
 			for _, rule := range rules {
 				rec := uax.NewPooledRecognizer(cpClass, rule)
 				rec.UserData = uax14
 				uax14.publisher.SubscribeMe(rec)
 			}
 		} else {
-			TC.P("class", c).Debugf("starting no rule")
+			TC().P("class", c).Debugf("starting no rule")
 		}
 		/*
 			if uax14.shadow == ZWJClass {
@@ -272,9 +274,8 @@ func resolveSomeClasses(r rune, c UAX14Class) UAX14Class {
 	} else if c == SAClass {
 		if unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Mc, r) {
 			return CMClass
-		} else {
-			return ALClass
 		}
+		return ALClass
 	} else if c == CJClass {
 		return NSClass
 	}
@@ -303,16 +304,15 @@ func substitueSomeClasses(c UAX14Class, lastClass UAX14Class) (UAX14Class, UAX14
 		}
 	}
 	if shadow != c {
-		TC.Debugf("subst %+q -> %+q", shadow, c)
+		TC().Debugf("subst %+q -> %+q", shadow, c)
 	}
 	return c, shadow
 }
 
+// ProceedWithRune is part of interface unicode.Breaker.
 // A new code-point has been read and this breaker receives a message to
 // consume it.
-//
-// Interface unicode.UnicodeBreaker
-func (uax14 *UAX14LineWrap) ProceedWithRune(r rune, cpClass int) {
+func (uax14 *LineWrap) ProceedWithRune(r rune, cpClass int) {
 	c := UAX14Class(cpClass)
 	uax14.longestMatch, uax14.penalties = uax14.publisher.PublishRuneEvent(r, int(c))
 	x := uax14.penalties
@@ -341,34 +341,34 @@ func (uax14 *UAX14LineWrap) ProceedWithRune(r rune, cpClass int) {
 	uax14.lastClass = c
 }
 
-// Interface unicode.UnicodeBreaker
-func (uax14 *UAX14LineWrap) LongestActiveMatch() int {
+// LongestActiveMatch is part of interface unicode.UnicodeBreaker
+func (uax14 *LineWrap) LongestActiveMatch() int {
 	return uax14.longestMatch
 }
 
-// Get all active penalties for all active recognizers combined.
+// Penalties gets all active penalties for all active recognizers combined.
 // Index 0 belongs to the most recently read rune.
 //
 // Interface unicode.UnicodeBreaker
-func (uax14 *UAX14LineWrap) Penalties() []int {
+func (uax14 *LineWrap) Penalties() []int {
 	return uax14.penalties
 }
 
 // Helper: do not start any recognizers for class RI, until
 // unblocked again.
-func (uax14 *UAX14LineWrap) block() {
+func (uax14 *LineWrap) block() {
 	uax14.blockedRI = true
 }
 
 // Helper: stop blocking new recognizers for class RI.
-func (uax14 *UAX14LineWrap) unblock() {
+func (uax14 *LineWrap) unblock() {
 	uax14.blockedRI = false
 }
 
 // Penalties (suppress break and mandatory break).
 var (
-	PenaltyToSuppressBreak int = 5000
-	PenaltyForMustBreak    int = -10000
+	PenaltyToSuppressBreak = 5000
+	PenaltyForMustBreak    = -10000
 )
 
 // This is a small function to return a penalty value for a rule.
@@ -377,7 +377,7 @@ var (
 func p(w int) int {
 	q := 31 - w
 	r := int(math.Pow(1.3, float64(q)))
-	TC.P("rule", w).Debugf("penalty %d => %d", w, r)
+	TC().P("rule", w).Debugf("penalty %d => %d", w, r)
 	return r
 }
 

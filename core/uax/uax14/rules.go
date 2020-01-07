@@ -5,7 +5,7 @@ import "github.com/npillmayer/gotype/core/uax"
 /*
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer (norbert@pillmayer.com)
+Copyright (c) 2017–20, Norbert Pillmayer (norbert@pillmayer.com)
 
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
@@ -19,7 +19,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -196,7 +196,7 @@ func rule_LB12(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 // [^SP BA HY] x GL
 func rule_LB12(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	//c := UAX14Class(cpClass)
-	uax14 := rec.UserData.(*UAX14LineWrap)
+	uax14 := rec.UserData.(*LineWrap)
 	last := uax14.lastClass
 	if last == SPClass || last == BAClass || last == HYClass {
 		return uax.DoAccept(rec, p(12))
@@ -307,7 +307,7 @@ func rule_LB19(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 //
 // + CB +
 func rule_LB20(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
-	uax14 := rec.UserData.(*UAX14LineWrap)
+	uax14 := rec.UserData.(*LineWrap)
 	if uax14.lastClass == CBClass && uax14.substituted {
 		return uax.DoAccept(rec, -p(20), p(20))
 	}
@@ -699,7 +699,7 @@ func finish_LB30_2(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 //
 // (RI RI)* RI x RI
 func rule_LB30a(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
-	lw := rec.UserData.(*UAX14LineWrap)
+	lw := rec.UserData.(*LineWrap)
 	lw.block()
 	rec.MatchLen++
 	return finish_LB30a
@@ -710,7 +710,7 @@ func rule_LB30a(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 // TODO: This will clash with rule LB 9 and 10 !
 func finish_LB30a(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := UAX14Class(cpClass)
-	lw := rec.UserData.(*UAX14LineWrap)
+	lw := rec.UserData.(*LineWrap)
 	if c == RIClass {
 		if lw.substituted {
 			return finish_LB30a
@@ -733,6 +733,7 @@ func rule_LB30b(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 // ... x EM
 func finish_LB30b(rec *uax.Recognizer, r rune, cpClass int) uax.NfaStateFn {
 	c := UAX14Class(cpClass)
+
 	if c == EMClass {
 		return uax.DoAccept(rec, 0, p(30))
 	}
