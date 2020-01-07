@@ -3,7 +3,7 @@ Package uax29 implements Unicode Annex #29 word breaking.
 
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 Redistribution and use in source and binary forms, with or without
@@ -17,7 +17,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -70,17 +70,21 @@ import (
 	"sync"
 	"unicode"
 
+	"github.com/npillmayer/gotype/core/config/gtrace"
+
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/uax"
 	"github.com/npillmayer/gotype/core/uax/emoji"
 )
 
-// We trace to the core-tracer.
-var TC tracing.Trace
+// TC traces to the core-tracer.
+func TC() tracing.Trace {
+	return gtrace.CoreTracer
+}
 
-// Top-level client function:
+// ClassForRune is the top-level client function:
 // Get the line word class for a Unicode code-point
-func UAX29ClassForRune(r rune) UAX29Class {
+func ClassForRune(r rune) UAX29Class {
 	if r == rune(0) {
 		return eot
 	}
@@ -95,7 +99,7 @@ func UAX29ClassForRune(r rune) UAX29Class {
 
 var setupOnce sync.Once
 
-// Top-level preparation function:
+// SetupUAX29Classes is the top-level preparation function:
 // Create code-point classes for word breaking.
 // Will in turn set up emoji classes as well.
 // (Concurrency-safe).
@@ -108,7 +112,7 @@ func SetupUAX29Classes() {
 
 // === Word Breaker ==============================================
 
-// Objects of this type are used by a uax.Segmenter to break text
+// WordBreaker is a type used by a uax.Segmenter to break text
 // up according to UAX#29 / Words.
 // It implements the uax.UnicodeBreaker interface.
 type WordBreaker struct {
@@ -119,7 +123,7 @@ type WordBreaker struct {
 	blockedRI    bool // are rules for Regional_Indicator currently blocked?
 }
 
-// Create a new UAX#29 word breaker.
+// NewWordBreaker creates a a new UAX#29 word breaker.
 //
 // Usage:
 //
@@ -129,7 +133,6 @@ type WordBreaker struct {
 //   for segmenter.Next() ...
 //
 func NewWordBreaker() *WordBreaker {
-	TC = tracing.CoreTracer
 	gb := &WordBreaker{}
 	gb.publisher = uax.NewRunePublisher()
 	gb.rules = map[UAX29Class][]uax.NfaStateFn{
@@ -148,7 +151,7 @@ func NewWordBreaker() *WordBreaker {
 		Regional_IndicatorClass: {rule_WB15},
 	}
 	if rangeFromUAX29Class == nil {
-		TC.Infof("UAX#29 classes not yet initialized -> initializing")
+		TC().Infof("UAX#29 classes not yet initialized -> initializing")
 	}
 	SetupUAX29Classes()
 	return gb
@@ -158,10 +161,10 @@ func NewWordBreaker() *WordBreaker {
 // We append it after the last UAX#29 class, which is ZWJ.
 const emojiPictographic UAX29Class = ZWJClass + 1
 
-// Return the UAX#29 word code-point class for a rune (= code-point).
+// CodePointClassFor returns the UAX#29 word code-point class for a rune (= code-point).
 // (Interface uax.UnicodeBreaker)
 func (gb *WordBreaker) CodePointClassFor(r rune) int {
-	c := UAX29ClassForRune(r)
+	c := ClassForRune(r)
 	if c == Other {
 		if unicode.Is(emoji.Extended_Pictographic, r) {
 			return int(emojiPictographic)
@@ -170,14 +173,14 @@ func (gb *WordBreaker) CodePointClassFor(r rune) int {
 	return int(c)
 }
 
-// Start all recognizers where the starting symbol is rune r.
+// StartRulesFor starts all recognizers where the starting symbol is rune r.
 // r is of code-point-class cpClass.
 // (Interface uax.UnicodeBreaker)
 func (gb *WordBreaker) StartRulesFor(r rune, cpClass int) {
 	c := UAX29Class(cpClass)
 	if c != Regional_IndicatorClass || !gb.blockedRI {
 		if rules := gb.rules[c]; len(rules) > 0 {
-			TC.P("class", c).Debugf("starting %d rule(s) for class %s", len(rules), c)
+			TC().P("class", c).Debugf("starting %d rule(s) for class %s", len(rules), c)
 			for _, rule := range rules {
 				rec := uax.NewPooledRecognizer(cpClass, rule)
 				rec.UserData = gb
@@ -199,6 +202,7 @@ func (gb *WordBreaker) unblock(c UAX29Class) {
 	gb.blockedRI = false
 }
 
+// ProceedWithRune is a signal:
 // A new code-point has been read and this breaker receives a message to
 // consume it.
 // (Interface uax.UnicodeBreaker)
@@ -209,14 +213,15 @@ func (gb *WordBreaker) ProceedWithRune(r rune, cpClass int) {
 	//TC.P("class", c).Infof("...done with |match|=%d and %v", gb.longestMatch, gb.penalties)
 }
 
-// Collect form all active recognizers information about current match length
+// LongestActiveMatch collects
+// from all active recognizers information about current match length
 // and return the longest one for all still active recognizers.
 // (Interface uax.UnicodeBreaker)
 func (gb *WordBreaker) LongestActiveMatch() int {
 	return gb.longestMatch
 }
 
-// Get all active penalties for all active recognizers combined.
+// Penalties gets all active penalties for all active recognizers combined.
 // Index 0 belongs to the most recently read rune, i.e., represents
 // the penalty for breaking after it.
 // (Interface uax.UnicodeBreaker)
@@ -226,9 +231,9 @@ func (gb *WordBreaker) Penalties() []int {
 
 // Penalties (inter-word optional break, suppress break and mandatory break).
 var (
-	PenaltyForBreak        int = 50
-	PenaltyToSuppressBreak int = 5000
-	PenaltyForMustBreak    int = -10000
+	PenaltyForBreak        = 50
+	PenaltyToSuppressBreak = 5000
+	PenaltyForMustBreak    = -10000
 )
 
 // --- Rules ------------------------------------------------------------

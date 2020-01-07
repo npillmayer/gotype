@@ -5,23 +5,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/core/uax/segment"
 	"github.com/npillmayer/gotype/core/uax/uax29"
 	"github.com/npillmayer/gotype/core/uax/ucd"
 )
-
-//var TC tracing.Trace = tracing.CoreTracer
-var TC tracing.Trace = gologadapter.New()
-
-func Test0(t *testing.T) {
-	t.Log("setting core tracer")
-	TC.SetTraceLevel(tracing.LevelDebug)
-	tracing.CoreTracer = TC
-	TC.Infof("Core tracer alive")
-	TC.SetTraceLevel(tracing.LevelError)
-}
 
 func ExampleWordBreaker() {
 	onWords := uax29.NewWordBreaker()
@@ -38,7 +28,9 @@ func ExampleWordBreaker() {
 }
 
 func TestWordBreakTestFile(t *testing.T) {
-	TC.SetTraceLevel(tracing.LevelError)
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.CoreTracer.SetTraceLevel(tracing.LevelError)
 	onWordBreak := uax29.NewWordBreaker()
 	seg := segment.NewSegmenter(onWordBreak)
 	tf := ucd.OpenTestFile("./WordBreakTest.txt", t)
@@ -47,7 +39,7 @@ func TestWordBreakTestFile(t *testing.T) {
 	for tf.Scan() {
 		i++
 		if i >= from {
-			TC.Infof(tf.Comment())
+			//t.Logf(tf.Comment())
 			in, out := ucd.BreakTestInput(tf.Text())
 			if !executeSingleTest(t, seg, i, in, out) {
 				failcnt++
@@ -58,7 +50,7 @@ func TestWordBreakTestFile(t *testing.T) {
 		}
 	}
 	if err := tf.Err(); err != nil {
-		TC.Errorf("reading input:", err)
+		t.Errorf("reading input: %s", err)
 	}
 	t.Logf("%d TEST CASES OUT of %d FAILED", failcnt, i-from+1)
 }
