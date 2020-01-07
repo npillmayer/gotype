@@ -4,7 +4,7 @@ Package arithmetic implements basic arithmetic objects.
 
 BSD License
 
-Copyright (c) 2017–18, Norbert Pillmayer
+Copyright (c) 2017–20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -19,7 +19,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer nor the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -33,8 +33,7 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 package arithmetic
 
 import (
@@ -42,41 +41,45 @@ import (
 	"math"
 	"math/cmplx"
 
+	"github.com/npillmayer/gotype/core/config/gtrace"
+
 	"github.com/npillmayer/gotype/core/config/tracing"
 	dec "github.com/shopspring/decimal"
 )
 
-// We trace to the equations-tracer.
-var T tracing.Trace
+// T traces to the equations-tracer.
+func T() tracing.Trace {
+	return gtrace.EngineTracer
+}
 
 // === Numeric Data Type =====================================================
 
-// Often used constant 0
+// ConstZero represents a frequently used constant 0.
 var ConstZero = dec.Zero
 
-// Often used constant 1.0
+// ConstOne represents a frequently used constant 1.0
 var ConstOne = dec.New(1, 0)
 
-// Often used constant -1.0
+// MinusOne represents a frequently used constant -1.0
 var MinusOne = dec.New(-1, 0)
 
-// constant for converting from DEG to RAD or vice versa
+// Deg2Rad is a constant for converting from DEG to RAD or vice versa
 var Deg2Rad, _ = dec.NewFromString("0.01745329251")
 
 // numerics below epsilon are considered Zero
-var epsilon dec.Decimal = dec.New(1, -6)
+var epsilon = dec.New(1, -6)
 
-// Predicate: is n zero ?
+// Zero is a predicate: is n zero ?
 func Zero(n dec.Decimal) bool {
 	return n.Abs().LessThanOrEqual(epsilon)
 }
 
-// Predicate: is n = 1.0 ?
+// One is a predicate: is n = 1.0 ?
 func One(n dec.Decimal) bool {
 	return n.Sub(ConstOne).Abs().LessThanOrEqual(epsilon)
 }
 
-// Make n = 0 if n "means" to be zero
+// Zap makes n = 0 if n "means" to be zero
 func Zap(n dec.Decimal) dec.Decimal {
 	if Zero(n) {
 		n = ConstZero
@@ -91,25 +94,25 @@ func Round(n dec.Decimal) dec.Decimal {
 
 // === Pair Data Type ========================================================
 
-// Interface for pairs / 2D-points
+// Pair is an interface for pairs / 2D-points
 type Pair interface {
 	fmt.Stringer
 	XPart() dec.Decimal
 	YPart() dec.Decimal
 }
 
-// A concrete implementation of interface Pair
+// SimplePair is a concrete implementation of interface Pair
 type SimplePair struct {
 	X dec.Decimal
 	Y dec.Decimal
 }
 
-// Often used constant
-var Origin Pair = MakePair(ConstZero, ConstZero)
+// Origin represents the frequently used constant (0,0).
+var Origin = MakePair(ConstZero, ConstZero)
 
 // --- Constructing Pairs ----------------------------------------------------
 
-// Constructor for simple pairs
+// MakePair is a constructor for simple pairs.
 func MakePair(x, y dec.Decimal) Pair {
 	return SimplePair{
 		X: x,
@@ -122,46 +125,45 @@ func (p SimplePair) String() string {
 	return fmt.Sprintf("(%s,%s)", p.X.Round(3).String(), p.Y.Round(3).String())
 }
 
-// Return a SimplePair as a complex number.
+// AsCmplx returns a SimplePair as a complex number.
 func (p SimplePair) AsCmplx() complex128 {
 	x, _ := p.X.Float64()
 	y, _ := p.Y.Float64()
 	return complex(x, y)
 }
 
-// Create a Pair from a complex number.
+// C2Pr returns a Pair from a complex number.
 func C2Pr(c complex128) Pair {
 	if cmplx.IsNaN(c) || cmplx.IsInf(c) {
-		tracing.EquationsTracer.Errorf("created pair for complex.NaN")
+		gtrace.EquationsTracer.Errorf("created pair for complex.NaN")
 		return MakePair(ConstZero, ConstZero)
-	} else {
-		return Pr(real(c), imag(c))
 	}
+	return Pr(real(c), imag(c))
 }
 
-// Quick notation for contructing a pair from floats.
+// Pr is a quick notation for contructing a pair from floats.
 func Pr(x, y float64) Pair {
 	return MakePair(dec.NewFromFloat(x), dec.NewFromFloat(y))
 }
 
-// Quick notation for getting float values of a pair.
+// Pr2Pt is a quick notation for getting float values of a pair.
 func Pr2Pt(pr Pair) (float64, float64) {
 	px, _ := pr.XPart().Float64()
 	py, _ := pr.YPart().Float64()
 	return px, py
 }
 
-// Interface Pair.
+// XPart is for interface Pair.
 func (p SimplePair) XPart() dec.Decimal {
 	return p.X
 }
 
-// Interface Pair.
+// YPart is for interface Pair.
 func (p SimplePair) YPart() dec.Decimal {
 	return p.Y
 }
 
-// Round x-part and y-part to epsilon.
+// Zap rounds x-part and y-part to epsilon.
 func (p SimplePair) Zap() Pair {
 	p = SimplePair{
 		X: Zap(p.X),
@@ -170,12 +172,12 @@ func (p SimplePair) Zap() Pair {
 	return p
 }
 
-// Predicate: is this pair origin?
+// Zero is a predicate: is this pair origin?
 func (p SimplePair) Zero() bool {
 	return p.Equal(Origin)
 }
 
-// Compare 2 pairs.
+// Equal compares 2 pairs.
 func (p SimplePair) Equal(p2 Pair) bool {
 	p = p.Zap().(SimplePair)
 	return p.X.Equal(p2.XPart()) && p.Y.Equal(p2.YPart())
@@ -219,7 +221,7 @@ func (p SimplePair) Divide(n dec.Decimal) Pair {
 
 // === Affine Transformations ================================================
 
-// A matrix type, used for transforming vectors
+// AffineTransform is a matrix type, used for transforming vectors
 type AffineTransform struct {
 	matrix []dec.Decimal // a 3x3 matrix, flattened by rows
 }

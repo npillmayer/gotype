@@ -3,6 +3,7 @@ package arithmetic
 import (
 	"testing"
 
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	dec "github.com/shopspring/decimal"
 )
 
@@ -19,8 +20,10 @@ func init() {
 }
 
 func TestNumericCompare(t *testing.T) {
-	var x dec.Decimal = dec.New(1, -2)
-	var y dec.Decimal = dec.New(1, -1)
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	var x = dec.New(1, -2)
+	var y = dec.New(1, -1)
 	if x.LessThan(y) {
 		t.Logf(" %s < %s", x.String(), y.String())
 	} else {
@@ -29,6 +32,8 @@ func TestNumericCompare(t *testing.T) {
 }
 
 func TestMatrix1(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	a := newAffineTransform()
 	if !a.get(1, 1).Equal(ConstZero) {
 		t.Error("expected 0 at M(1,1)")
@@ -42,6 +47,8 @@ func TestMatrix1(t *testing.T) {
 }
 
 func TestMatrixRow(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	a := Identity()
 	row := a.row(0)
 	if !row[0].Equal(ConstOne) || !row[1].Equal(ConstZero) {
@@ -51,6 +58,8 @@ func TestMatrixRow(t *testing.T) {
 }
 
 func TestMatrix2(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	a := Identity()
 	if !a.get(1, 1).Equal(ConstOne) {
 		t.Error("expected 1 at M(1,1)")
@@ -65,6 +74,8 @@ func TestMatrix2(t *testing.T) {
 }
 
 func TestTranslation(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	a := Translation(MakePair(two, six))
 	p := MakePair(ConstZero, ConstZero)
 	p = a.Transform(p)
@@ -75,6 +86,8 @@ func TestTranslation(t *testing.T) {
 }
 
 func TestRotation(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	a := Rotation(dec.New(90, 0).Mul(Deg2Rad))
 	p := MakePair(ConstOne, ConstZero)
 	p = a.Transform(p)
@@ -85,6 +98,8 @@ func TestRotation(t *testing.T) {
 }
 
 func TestCombine(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	a := Rotation(dec.New(90, 0).Mul(Deg2Rad))
 	b := Translation(MakePair(two, six))
 	c := a.Combine(b)

@@ -3,16 +3,11 @@ package arithmetic
 import (
 	"testing"
 
-	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
+
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 )
-
-func TestInit0(t *testing.T) {
-	tracing.EquationsTracer = gologadapter.New()
-	T = tracing.EquationsTracer
-}
 
 type X struct { // helper for quick construction of polynomials
 	i int
@@ -29,7 +24,7 @@ func polyn(c float64, tms ...X) Polynomial { // construct a polynomial
 
 type res map[int]decimal.Decimal // a variable resolver for testing purposes
 
-func NewResolver() res {
+func newResolver() res {
 	var r res
 	r = make(map[int]decimal.Decimal)
 	return r
@@ -51,6 +46,8 @@ func (r res) IsCapsule(int) bool { // x.i has gone out of scope
 // --- Tests -----------------------------------------------------------------
 
 func TestPolynSimple1(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	p := NewConstantPolynomial(decimal.Zero)
 	if p.Terms.Size() != 1 {
 		t.Fail()
@@ -58,6 +55,8 @@ func TestPolynSimple1(t *testing.T) {
 }
 
 func TestPolynSimple2(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	p := NewConstantPolynomial(decimal.NewFromFloat(0.5))
 	p.SetTerm(1, decimal.NewFromFloat(3))
 	if p.Terms.Size() != 2 {
@@ -66,6 +65,8 @@ func TestPolynSimple2(t *testing.T) {
 }
 
 func TestPolynConstant(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	p := NewConstantPolynomial(decimal.NewFromFloat(0.5))
 	_, isconst := p.IsConstant()
 	if !isconst {
@@ -79,12 +80,16 @@ func TestPolynConstant(t *testing.T) {
 }
 
 func TestZapPolyn(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	p := NewConstantPolynomial(decimal.NewFromFloat(0.5))
 	p.SetTerm(1, decimal.NewFromFloat(0.0000000005))
 	p.Zap()
 }
 
 func TestPolynAdd(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	p := polyn(5, X{1, 1}, X{2, 2})
 	t.Logf("# p  = %s\n", p.String())
 	p2 := polyn(4, X{1, 6}, X{5, 4})
@@ -98,6 +103,8 @@ func TestPolynAdd(t *testing.T) {
 }
 
 func TestPolynMul(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	p := polyn(6, X{1, 4}, X{2, 2})
 	t.Logf("T p  = %s\n", p.String())
 	p2 := NewConstantPolynomial(decimal.New(2, 0))
@@ -111,6 +118,8 @@ func TestPolynMul(t *testing.T) {
 }
 
 func TestPolynDiv(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	p := polyn(6, X{1, 4}, X{2, 2})
 	t.Logf("T p  = %s\n", p.String())
 	p2 := NewConstantPolynomial(decimal.New(2, 0))
@@ -136,6 +145,8 @@ func TestPolynDiv(t *testing.T) {
 }
 
 func TestPolynSubst(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	p := polyn(1, X{1, 10}, X{2, 20})
 	t.Logf("T p  = %s\n", p.String())
 	p2 := polyn(2, X{3, 30}, X{4, 40})
@@ -148,6 +159,8 @@ func TestPolynSubst(t *testing.T) {
 }
 
 func TestPolynMaxCoeff(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	p := polyn(1, X{1, 8}, X{2, 2}, X{3, -2})
 	t.Logf("T p  = %s\n", p.String())
 	i, c := p.maxCoeff(nil)
@@ -158,6 +171,8 @@ func TestPolynMaxCoeff(t *testing.T) {
 }
 
 func TestSubst1(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	p := polyn(1, X{3, 3})
 	q := polyn(2, X{1, 3}, X{4, 4}, X{5, 5})
 	t.Logf("   x.%d = %s\n", 1, p.String())
@@ -171,6 +186,8 @@ func TestSubst1(t *testing.T) {
 }
 
 func TestSubst2(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	p := polyn(1, X{3, 3})
 	q := polyn(2, X{1, 3}, X{3, 4}, X{5, 5})
 	t.Logf("   x.%d = %s\n", 1, p.String())
@@ -184,6 +201,8 @@ func TestSubst2(t *testing.T) {
 }
 
 func TestSubst3(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	p := polyn(1, X{2, 1})
 	q := polyn(2, X{1, 1}, X{4, 4}, X{5, 5})
 	t.Logf("   x.%d = %s\n", 1, p.String())
@@ -197,6 +216,8 @@ func TestSubst3(t *testing.T) {
 }
 
 func TestNewSolver(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	leq := CreateLinEqSolver()
 	if leq == nil {
 		t.Error("cannot create solver")
@@ -205,8 +226,10 @@ func TestNewSolver(t *testing.T) {
 }
 
 func TestLinEqAddPolyn(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	leq := CreateLinEqSolver()
-	r := NewResolver()
+	r := newResolver()
 	leq.SetVariableResolver(r)
 	p := polyn(1, X{1, 2})
 	leq.AddEq(p)
@@ -217,8 +240,10 @@ func TestLinEqAddPolyn(t *testing.T) {
 }
 
 func TestLinEqAddPolyn2(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	leq := CreateLinEqSolver()
-	r := NewResolver()
+	r := newResolver()
 	leq.SetVariableResolver(r)
 	p := polyn(6, X{1, -1}, X{2, -1})
 	leq.AddEq(p)
@@ -231,8 +256,10 @@ func TestLinEqAddPolyn2(t *testing.T) {
 }
 
 func TestLEQ1(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	leq := CreateLinEqSolver()
-	r := NewResolver()
+	r := newResolver()
 	leq.SetVariableResolver(r)
 	p1 := polyn(100, X{1, -2})           // 2a=100   =>  0=100-2a
 	p2 := polyn(100, X{2, -1}, X{3, -1}) // 100=b+c  =>  0=100-b-c
@@ -245,8 +272,10 @@ func TestLEQ1(t *testing.T) {
 }
 
 func TestLEQ2(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	leq := CreateLinEqSolver()
-	r := NewResolver()
+	r := newResolver()
 	leq.SetVariableResolver(r)
 	p1 := polyn(100, X{2, -1}, X{3, -1})        // b+c=100 =>  0=100-b-c
 	p2 := polyn(0, X{1, 2}, X{2, -1}, X{3, -1}) // 2a=b+c  =>  0=2a-b-c
@@ -259,8 +288,10 @@ func TestLEQ2(t *testing.T) {
 }
 
 func TestLEQ3(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	leq := CreateLinEqSolver()
-	r := NewResolver()
+	r := newResolver()
 	leq.SetVariableResolver(r)
 	p1 := polyn(100, X{1, -1}) // a = 100
 	p2 := polyn(99, X{1, -2})  // 2a = 99
@@ -270,9 +301,10 @@ func TestLEQ3(t *testing.T) {
 }
 
 func TestLEQ4(t *testing.T) {
-	//T.SetLevel(logrus.DebugLevel)
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	leq := CreateLinEqSolver()
-	r := NewResolver()
+	r := newResolver()
 	leq.SetVariableResolver(r)
 	p1 := polyn(100, X{1, -1})                          // a=100
 	p2 := polyn(0, X{1, 2}, X{2, -1}, X{3, 1}, X{4, 4}) // 2a=b-c-e
@@ -287,10 +319,11 @@ func TestLEQ4(t *testing.T) {
 }
 
 func TestLEQ5(t *testing.T) {
-	//T.SetLevel(logrus.DebugLevel)
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	leq := CreateLinEqSolver()
 	//leq.showdependencies = true
-	r := NewResolver()
+	r := newResolver()
 	leq.SetVariableResolver(r)
 	p1 := polyn(0, X{2, -1}, X{3, 1}) // b=c
 	p2 := polyn(0, X{3, -1}, X{4, 1}) // c=d
@@ -310,9 +343,11 @@ func TestLEQ5(t *testing.T) {
 // Example for solving linear equations. We use a variable resolver, which
 // maps a numeric value of 0..<n> to lowercase letters 'a'..'z'.
 func TestExampleLinEqSolver_usage(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	//func TestExampleLinEqSolver_usage() {
 	leq := CreateLinEqSolver()
-	r := NewResolver() // clients have to provide their own
+	r := newResolver() // clients have to provide their own
 	leq.SetVariableResolver(r)
 	p := polyn(6, X{1, -1}, X{2, -1})
 	leq.AddEq(p)
