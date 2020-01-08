@@ -462,6 +462,10 @@ func (kh *Khipu) Iterator() *khipuIterator {
 	return &khipuIterator{kh, -1}
 }
 
+func (khit *khipuIterator) String() string {
+	return fmt.Sprintf("[%d]", khit.inx)
+}
+
 func (khit *khipuIterator) Next() bool {
 	khit.inx++
 	return khit.inx < len(khit.khipu.knots)
