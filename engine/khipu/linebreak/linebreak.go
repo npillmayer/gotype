@@ -40,9 +40,6 @@ import (
 	"github.com/npillmayer/gotype/engine/khipu"
 )
 
-// Parshape is a type to return the line length for a given line number.
-type Parshape func(int) dimen.Dimen
-
 // WSS (width stretch & shrink) is a type to hold an elastic width (of text).
 type WSS struct {
 	W   dimen.Dimen
@@ -66,9 +63,31 @@ func (wss WSS) SetFromKnot(knot khipu.Knot) WSS {
 const InfinityDemerits int32 = 10000
 const InfinityMerits int32 = -10000
 
-func demerits(d int32) int32 {
+func CapDemerits(d int32) int32 {
 	if d > InfinityDemerits {
 		d = InfinityDemerits
 	}
 	return d
+}
+
+// --- Interfaces -------------------------------------------------------
+
+type GlyphMeasure interface {
+	Measure(knot khipu.Knot) dimen.Dimen
+}
+
+// Parshaper is a type to return the line length for a given line number.
+type Parshaper interface {
+	Parshape(int) dimen.Dimen
+}
+
+type Mark interface {
+	Position() int
+	Knot() khipu.Knot
+}
+
+type Cursor interface {
+	Next() bool
+	Knot() khipu.Knot
+	Mark() Mark
 }
