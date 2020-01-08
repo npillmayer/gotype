@@ -5,14 +5,12 @@ import (
 	"sort"
 
 	"github.com/npillmayer/gotype/engine/khipu/linebreak"
-
-	"github.com/emirpasic/gods/sets/hashset"
 )
 
 // fbGraph is a directed weighted graph of feasible breakpoints.
 // Its implementation is inspired by the great Gonum packages. However, Gonum
-// is in some respects too restrictive and in others too much of an overkill.
-// Moreover, it panics in certain error conditions.
+// is in some respects too restrictive and in others too much of an overkill
+// for our needs. Moreover, it panics in certain error conditions.
 // We taylor it heavily to fit our specific needs.
 //
 // Gonum-license:
@@ -20,27 +18,40 @@ import (
 // Use of Gonum source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 //
+// A node in the graph refers to a numeric position within an input text.
+// The text is represented by a khipu (see package khipu), which is something
+// like a TeX hlist, i.e. a list of boxes, glue, penalties etc.  These kind
+// of list-items are called knots. Positions are indices of knots.
+//
+// A single position can be reached optimally by exactly one segment (path
+// through breakpoints). However, for reasons explained by Knuth/Plass it is
+// advantageous in some situations to permit for more than one segment, if
+// they result in different line-counts. This allows in effect to defer the
+// optimality-decision until the target for the last line is known.
+//
+// We implement this feed-forward by labelling the edges with a tuple
+// (cost, linecount). A breakpoint may be reached by more than one edge
+// if either cost or linecount differ.
 type fbGraph struct {
-	nodes   map[int]*feasibleBreakpoint
-	from    map[int]map[int]wEdge
-	to      map[int]map[int]wEdge
-	nodeIDs *hashset.Set
+	nodes map[int]*feasibleBreakpoint
+	//from    map[int]map[int][]wEdge
+	edgesTo map[int]map[int]map[int]wEdge // edge to, from, with linecount
 }
 
 // newFBGraph returns a fbGraph with the specified self and absent
 // edge weight values.
 func newFBGraph() *fbGraph {
 	return &fbGraph{
-		nodes:   make(map[int]*feasibleBreakpoint),
-		from:    make(map[int]map[int]wEdge),
-		to:      make(map[int]map[int]wEdge),
-		nodeIDs: hashset.New(),
+		nodes: make(map[int]*feasibleBreakpoint),
+		//from:    make(map[int]map[int][]wEdge),
+		edgesTo: make(map[int]map[int]map[int]wEdge),
 	}
 }
 
 type wEdge struct {
-	from, to int   // this is an edge between from and to
-	cost     int32 // demerits for breaking here
+	from, to  int // this is an edge between two text-positions
+	cost      int32
+	linecount int
 }
 
 // nullEdge denotes an edge that is not present in a graph.
@@ -51,35 +62,48 @@ func (e wEdge) isNull() bool {
 	return e == nullEdge
 }
 
-// newWEdge returns a new weighted edge from one breakpoint to another.
-func (g *fbGraph) newWEdge(from, to *feasibleBreakpoint, cost int32, wss linebreak.WSS) wEdge {
+// newWEdge returns a new weighted edge from one breakpoint to another,
+// given two breakpoints and a label-key.
+// It is not yet inserted into a graph.
+func newWEdge(from, to *feasibleBreakpoint, cost int32, linecnt int) wEdge {
 	return wEdge{
-		from: from.mark.Position(),
-		to:   to.mark.Position(),
-		cost: cost,
+		from:      from.mark.Position(),
+		to:        to.mark.Position(),
+		cost:      cost,
+		linecount: linecnt,
 	}
 }
 
 // Add adds a feasible breakpoint to the graph.
 // It returns an error if the breakpoint is already present.
 func (g *fbGraph) Add(fb *feasibleBreakpoint) error {
+	T().Debugf("Added new breakpoint at %d/%v", fb.mark.Position(), fb.mark.Knot())
 	if _, exists := g.nodes[fb.mark.Position()]; exists {
 		return fmt.Errorf("Breakpoint at position %d already known", fb.mark.Position())
 	}
 	g.nodes[fb.mark.Position()] = fb
-	g.nodeIDs.Add(fb.mark.Position())
 	return nil
 }
 
 // Edge returns the edge (from,to), if such an edge exists,
 // otherwise it returns nullEdge.
 // The to-node must be directly reachable from the from-node.
-func (g *fbGraph) Edge(from, to int) wEdge {
-	edge, ok := g.from[from][to]
+func (g *fbGraph) Edge(from, to *feasibleBreakpoint, linecnt int) wEdge {
+	edges, ok := g.edgesTo[to.mark.Position()][from.mark.Position()]
 	if !ok {
 		return nullEdge
 	}
-	return edge
+	if edge, ok := edges[linecnt]; ok {
+		return edge
+	}
+	return nullEdge
+}
+
+func (g *fbGraph) EdgeFrom(edge wEdge) *feasibleBreakpoint {
+	if from, ok := g.nodes[edge.from]; ok {
+		return from
+	}
+	return nil
 }
 
 // Edges returns all the edges in the graph.
@@ -176,18 +200,25 @@ func (g *fbGraph) Nodes() graph.Nodes {
 }
 */
 
-// RemoveEdge removes the edge between two breakpoints.
+// RemoveEdge removes the edge between two breakpoints for a linecount.
 // The breakpoints are not deleted from the graph.
 // If the edge does not exist, this is a no-op.
-func (g *fbGraph) RemoveEdge(from, to int) {
-	if _, ok := g.nodes[from]; !ok {
+func (g *fbGraph) RemoveEdge(from, to *feasibleBreakpoint, linecnt int) {
+	if _, ok := g.nodes[from.mark.Position()]; !ok {
 		return
 	}
-	if _, ok := g.nodes[to]; !ok {
+	if _, ok := g.nodes[to.mark.Position()]; !ok {
 		return
 	}
-	delete(g.from[from], to)
-	delete(g.to[to], from)
+	//delete(g.from[from.mark.Position()], to.mark.Position())
+	if edgesFrom, ok := g.edgesTo[to.mark.Position()]; ok {
+		if edges, ok := edgesFrom[from.mark.Position()]; ok {
+			delete(edges, linecnt)
+			if len(edges) == 0 {
+				delete(edgesFrom, to.mark.Position())
+			}
+		}
+	}
 }
 
 // RemoveNode removes the node with the given ID from the graph, as well as any edges attached
@@ -213,47 +244,84 @@ func (g *fbGraph) RemoveNode(id int) {
 }
 */
 
-// AddEdge adds a weighted edge from one node to another. If the nodes do not exist, they are added
-// and are set to the endpoints of the edge otherwise.
-func (g *fbGraph) AddSegment(from, to *feasibleBreakpoint, cost int32, totals linebreak.WSS) {
-	edge := newWEdge()
-	if from. == e.to {
+// AddSegment adds a weighted edge from one node to another. Endpoints which are
+// not yet contained in the graph are added.
+// Does nothing if from=to.
+func (g *fbGraph) AddSegment(from, to *feasibleBreakpoint, cost int32, linecnt int) {
+	if from.mark.Position() == to.mark.Position() {
 		return
 	}
-	if g.Breakpoint(from) == nil {
-		g.Add(from)
-	} else {
-		g.nodes[fid] = from
+	// if g.Breakpoint(from.mark.Position()) == nil {
+	// 	g.Add(from)
+	// }
+	if g.Breakpoint(to.mark.Position()) == nil {
+		g.Add(to)
 	}
-	if _, ok := g.nodes[tid]; !ok {
-		g.AddNode(to)
-	} else {
-		g.nodes[tid] = to
-	}
-
-	if fm, ok := g.from[fid]; ok {
-		fm[tid] = e
-	} else {
-		g.from[fid] = map[int]graph.wEdge{tid: e}
-	}
-	if tm, ok := g.to[tid]; ok {
-		tm[fid] = e
-	} else {
-		g.to[tid] = map[int]graph.wEdge{fid: e}
+	if g.Edge(from, to, linecnt).isNull() {
+		edge := newWEdge(from, to, cost, linecnt)
+		// if f, ok := g.from[from.mark.Position()]; ok {
+		// 	f[to.mark.Position()] = edge
+		// } else {
+		// 	edges := []wEdge{edge}
+		// 	g.from[from.mark.Position()] = map[int][]wEdge{to.mark.Position(): edges}
+		// }
+		if t, ok := g.edgesTo[to.mark.Position()]; ok {
+			edges := t[from.mark.Position()]
+			if edges == nil {
+				edges = make(map[int]wEdge)
+				t[from.mark.Position()] = edges
+			}
+			edges[linecnt] = edge
+		} else {
+			edges := map[int]wEdge{linecnt: edge}
+			g.edgesTo[to.mark.Position()] = map[int]map[int]wEdge{from.mark.Position(): edges}
+		}
 	}
 }
 
 var noBreakpoints []*feasibleBreakpoint
 
+func (g *fbGraph) EdgesTo(fb *feasibleBreakpoint) edgesDict {
+	return edgesDict{
+		g:         g,
+		edgesFrom: g.edgesTo[fb.mark.Position()],
+	}
+}
+
+type edgesDict struct {
+	g         *fbGraph
+	edgesFrom map[int]map[int]wEdge
+}
+
+func (dict edgesDict) SelectFrom(fb *feasibleBreakpoint, linecnt int) wEdge {
+	if edges, ok := dict.edgesFrom[fb.mark.Position()]; ok {
+		if edge, ok := edges[linecnt]; ok {
+			return edge
+		}
+	}
+	return nullEdge
+}
+
+func (dict edgesDict) WithLabel(linecnt int) []wEdge {
+	var r []wEdge
+	for _, edges := range dict.edgesFrom {
+		if edge, ok := edges[linecnt]; ok {
+			r = append(r, edge)
+		}
+	}
+	return r
+}
+
 // To returns all breakpoints in g that can reach directly to a breakpoint given by
 // a position. The returned breakpoints are sorted by position.
-func (g *fbGraph) To(position int) []*feasibleBreakpoint {
-	if _, ok := g.to[position]; !ok || len(g.to[position]) == 0 {
+func (g *fbGraph) To(fb *feasibleBreakpoint) []*feasibleBreakpoint {
+	position := fb.mark.Position()
+	if _, ok := g.edgesTo[position]; !ok || len(g.edgesTo[position]) == 0 {
 		return noBreakpoints
 	}
-	breakpoints := make([]*feasibleBreakpoint, len(g.to[position]))
+	breakpoints := make([]*feasibleBreakpoint, len(g.edgesTo[position]))
 	i := 0
-	for pos := range g.to[position] {
+	for pos := range g.edgesTo[position] {
 		breakpoints[i] = g.nodes[pos]
 		i++
 	}
@@ -279,17 +347,20 @@ func (s breakpointSorter) Swap(i, j int) {
 	s.breakpoints[i], s.breakpoints[j] = s.breakpoints[j], s.breakpoints[i]
 }
 
-// Cost returns the cost for the edge between between two breakpoints.
+// Cost returns the cost for the edge between between two breakpoints,
+// valid for a linecount.
 // If from and to are the same node or if there is no edge (from,to),
-// in infinite cost ist returned.
+// a pseudo-label with infinite cost is returned.
 // Cost returns true if an edge (from,to) exists, false otherwise.
-func (g *fbGraph) Cost(from, to int) (int32, bool) {
+func (g *fbGraph) Cost(from, to *feasibleBreakpoint, linecnt int) (int32, bool) {
 	if from == to {
 		return linebreak.InfinityDemerits, false
 	}
-	if edges, ok := g.from[from]; ok {
-		if e, ok := edges[to]; ok {
-			return e.cost, true
+	if edgesFrom, ok := g.edgesTo[to.mark.Position()]; ok {
+		if edges, ok := edgesFrom[from.mark.Position()]; ok {
+			if edge, ok := edges[linecnt]; ok {
+				return edge.cost, true
+			}
 		}
 	}
 	return linebreak.InfinityDemerits, false

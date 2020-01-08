@@ -60,9 +60,22 @@ func (wss WSS) SetFromKnot(knot khipu.Knot) WSS {
 	return wss
 }
 
+// Add adds dimensions from a given WSS to wss, creating a new WSS.
+func (wss WSS) Add(other WSS) WSS {
+	return WSS{
+		W:   wss.W + other.W,
+		Min: wss.Min + other.Min,
+		Max: wss.Max + other.Max,
+	}
+}
+
+// InfinityDemerits is the worst demerit value possible.
 const InfinityDemerits int32 = 10000
+
+// InfinityMerits is the best (most desirable) demerit value possible.
 const InfinityMerits int32 = -10000
 
+// CapDemerits caps a demerit value at infinity.
 func CapDemerits(d int32) int32 {
 	if d > InfinityDemerits {
 		d = InfinityDemerits
@@ -76,16 +89,18 @@ type GlyphMeasure interface {
 	Measure(knot khipu.Knot) dimen.Dimen
 }
 
-// Parshaper is a type to return the line length for a given line number.
-type Parshaper interface {
-	Parshape(int) dimen.Dimen
+// Parshape is a type to return the line length for a given line number.
+type Parshape interface {
+	LineLength(int) dimen.Dimen
 }
 
+// Mark is a type for a position within a khipu.
 type Mark interface {
 	Position() int
 	Knot() khipu.Knot
 }
 
+// Cursor is a type to iterate over a khipu.
 type Cursor interface {
 	Next() bool
 	Knot() khipu.Knot
