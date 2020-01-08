@@ -1,5 +1,6 @@
 /*
-Line breaking algorithm described by D.E. Knuth and M.F. Plass (early draft).
+Package knuthplass implements (in an early draft) a
+line breaking algorithm described by D.E. Knuth and M.F. Plass.
 
 Definite source of information is of course
 
@@ -46,9 +47,6 @@ const (
 	DiscretionaryType
 )
 
-const InfinityDemerits int32 = 10000
-const InfinityMerits int32 = -10000
-
 func beadtype(t int8) string {
 	switch t {
 	case BoxType:
@@ -62,6 +60,9 @@ func beadtype(t int8) string {
 	}
 	return "<unknown>"
 }
+
+const InfinityDemerits int32 = 10000
+const InfinityMerits int32 = -10000
 
 func demerits(d int32) int32 {
 	if d > InfinityDemerits {
@@ -112,36 +113,36 @@ type activeFeasibleBreakpoints struct {
 
 func newActiveFeasibleBreakpoints() *activeFeasibleBreakpoints {
 	set := hashset.New()
-	h := &activeFeasibleBreakpoints{set, nil, -1}
-	return h
+	afb := &activeFeasibleBreakpoints{set, nil, -1}
+	return afb
 }
 
-func (h *activeFeasibleBreakpoints) first() *FeasibleBreakpoint {
-	var f *FeasibleBreakpoint
+func (h *activeFeasibleBreakpoints) first() *feasibleBreakpoint {
+	var fb *feasibleBreakpoint
 	fmt.Printf("horizon: there are %d active FBs\n", h.Size())
 	if h.Size() > 0 {
-		h.values = h.Values()
-		f = h.values[0].(*FeasibleBreakpoint)
+		h.values = h.Values() // get set values as list, unsorted
+		fb = h.values[0].(*feasibleBreakpoint)
 		h.iterinx = 1
 	}
-	return f
+	return fb
 }
 
-func (h *activeFeasibleBreakpoints) next() *FeasibleBreakpoint {
-	var f *FeasibleBreakpoint
+func (h *activeFeasibleBreakpoints) next() *feasibleBreakpoint {
+	var fb *feasibleBreakpoint
 	if h.values != nil && h.iterinx < len(h.values) {
-		f = h.values[h.iterinx].(*FeasibleBreakpoint)
+		fb = h.values[h.iterinx].(*feasibleBreakpoint)
 		h.iterinx++
 	}
-	return f
+	return fb
 }
 
-func (h *activeFeasibleBreakpoints) append(f *FeasibleBreakpoint) {
-	h.Add(f)
+func (h *activeFeasibleBreakpoints) append(fb *feasibleBreakpoint) {
+	h.Add(fb)
 }
 
-func (h *activeFeasibleBreakpoints) remove(f *FeasibleBreakpoint) {
-	h.Remove(f)
+func (h *activeFeasibleBreakpoints) remove(fb *feasibleBreakpoint) {
+	h.Remove(fb)
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +165,7 @@ func NewKPLinebreaker() *KnuthPlassLinebreaker {
 	return kp
 }
 
-type FeasibleBreakpoint struct {
+type feasibleBreakpoint struct {
 	graph.Node
 	LineNum   int64
 	marker    BeadingCursor
@@ -172,36 +173,37 @@ type FeasibleBreakpoint struct {
 	totalcost int32 // sum of costs for segments up to this breakpoint
 }
 
-func (h *FeasibleBreakpoint) String() string {
-	if h.marker == nil {
+func (fb *feasibleBreakpoint) String() string {
+	if fb.marker == nil {
 		return "<para-start>"
 	}
-	return fmt.Sprintf("<break l.%d @ %v>", h.LineNum, h.marker.GetBead())
+	return fmt.Sprintf("<break l.%d @ %v>", fb.LineNum, fb.marker.GetBead())
 }
 
 // internal
-func (kp *KnuthPlassLinebreaker) newFeasibleBreakpoint(id int64) *FeasibleBreakpoint {
+func (kp *KnuthPlassLinebreaker) newFeasibleBreakpoint(id int64) *feasibleBreakpoint {
 	node := sg.Node(id)
-	fb := &FeasibleBreakpoint{node, 1, nil, WSS{}, 0}
+	fb := &feasibleBreakpoint{node, 1, nil, WSS{}, 0}
 	kp.AddNode(fb)
 	return fb
 }
 
-func (kp *KnuthPlassLinebreaker) breakpointAfterBead(marker BeadingCursor) *FeasibleBreakpoint {
+func (kp *KnuthPlassLinebreaker) breakpointAfterBead(marker BeadingCursor) *feasibleBreakpoint {
 	fb := kp.newFeasibleBreakpoint(marker.ID())
 	fb.marker = marker
 	return fb
 }
 
-func (kp *KnuthPlassLinebreaker) findBreakpointAtMarker(marker BeadingCursor) *FeasibleBreakpoint {
-	var fb *FeasibleBreakpoint
-	if marker != nil {
-		if kp.Has(sg.Node(marker.ID())) {
-			node := kp.Node(marker.ID())
-			fmt.Printf("found existing feas. bp = %v\n", node)
-			if node != nil {
-				fb = node.(*FeasibleBreakpoint)
-			}
+func (kp *KnuthPlassLinebreaker) findBreakpointAtMarker(marker BeadingCursor) *feasibleBreakpoint {
+	if marker == nil {
+		return nil
+	}
+	var fb *feasibleBreakpoint
+	if kp.Has(sg.Node(marker.ID())) {
+		node := kp.Node(marker.ID())
+		fmt.Printf("found existing feas. bp = %v\n", node)
+		if node != nil {
+			fb = node.(*feasibleBreakpoint)
 		}
 	}
 	return fb
@@ -215,24 +217,23 @@ type feasibleSegment struct { // an edge between nodes of feasible breakpoints
 func (fseg *feasibleSegment) String() string {
 	if fseg == nil {
 		return "<--no edge-->"
-	} else {
-		return fmt.Sprintf("<-%v--(%.1f)--%v->", fseg.From(), fseg.Weight(), fseg.To())
 	}
+	return fmt.Sprintf("<-%v--(%.1f)--%v->", fseg.From(), fseg.Weight(), fseg.To())
 }
 
-func (kp *KnuthPlassLinebreaker) feasibleLineBetween(from, to *FeasibleBreakpoint,
+func (kp *KnuthPlassLinebreaker) feasibleLineBetween(from, to *feasibleBreakpoint,
 	cost int32, totals WSS, prune bool) *feasibleSegment {
 	//
 	predecs := kp.To(to)
 	var seg *feasibleSegment
-	var p *FeasibleBreakpoint
+	var p *feasibleBreakpoint
 	mintotal := InfinityDemerits
 	if prune && len(predecs) > 0 {
 		if len(predecs) > 1 {
 			fmt.Printf("breakpoint %v has %d predecessors", to, len(predecs))
 			panic("breakpoint (with pruning) has more than one predecessor")
 		}
-		p = predecs[0].(*FeasibleBreakpoint)
+		p = predecs[0].(*feasibleBreakpoint)
 		w, _ := kp.Weight(p, to)
 		mintotal = p.totalcost + int32(w)
 	}
@@ -249,26 +250,24 @@ func (kp *KnuthPlassLinebreaker) feasibleLineBetween(from, to *FeasibleBreakpoin
 
 // === Algorithms ============================================================
 
-/*
-Calculate the cost of a breakpoint. A breakpoint may result either in being
-infeasible (demerits >= infinity) or having a positive (demerits) or negative
-(merits) cost/benefit.
-
-TODO: the cost/badness function should be deleted to a strategy delegate (or
-a chain of delegate => Holkner). Maybe refactor: skeleton algorithm in
-central package, & different strategy delegates in sub-packages. K&P is a
-special delegate with the TeX strategy formalized.
-
-Question: Is the box-glue-model part of the central algorithm? Or is it
-already a strategy (component) ?
-*/
-func (fb *FeasibleBreakpoint) calculateCostTo(bead Bead, linelen int64) (int32, bool) {
+// Calculate the cost of a breakpoint. A breakpoint may result either in being
+// infeasible (demerits >= infinity) or having a positive (demerits) or negative
+// (merits) cost/benefit.
+//
+// TODO: the cost/badness function should be deleted to a strategy delegate (or
+// a chain of delegate => Holkner). Maybe refactor: skeleton algorithm in
+// central package, & different strategy delegates in sub-packages. K&P is a
+// special delegate with the TeX strategy formalized.
+//
+// Question: Is the box-glue-model part of the central algorithm? Or is it
+// already a strategy (component) ?
+func (fb *feasibleBreakpoint) calculateCostTo(bead Bead, linelen int64) (int32, bool) {
 	w, min, max := w(bead.Width())
 	fb.fragment.W += w
 	fb.fragment.Min += min
 	fb.fragment.Max += max
 	stillreachable := true
-	var d int32 = InfinityDemerits
+	var d = InfinityDemerits
 	if fb.fragment.W <= linelen {
 		if fb.fragment.Max >= linelen {
 			d = int32(linelen * 100 / (fb.fragment.Max - fb.fragment.W))
@@ -285,10 +284,10 @@ func (fb *FeasibleBreakpoint) calculateCostTo(bead Bead, linelen int64) (int32, 
 	return demerits(d), stillreachable
 }
 
-func (kp *KnuthPlassLinebreaker) FindBreakpoints(prune bool) (int, []*FeasibleBreakpoint) {
+func (kp *KnuthPlassLinebreaker) FindBreakpoints(prune bool) (int, []*feasibleBreakpoint) {
 	fb := kp.newFeasibleBreakpoint(-1) // without bead
 	kp.horizon.append(fb)              // begin of paragraph is first "active node"
-	var cursor BeadingCursor = kp.beading.GetCursor(nil)
+	var cursor = kp.beading.GetCursor(nil)
 	var bead Bead          // will hold the current bead of kp.beading
 	for cursor.Advance() { // loop over beading
 		bead = cursor.GetBead() // will shift horizon one bead further
@@ -315,12 +314,12 @@ func (kp *KnuthPlassLinebreaker) FindBreakpoints(prune bool) (int, []*FeasibleBr
 	return kp.collectFeasibleBreakpoints(cursor.ID())
 }
 
-func (kp *KnuthPlassLinebreaker) collectFeasibleBreakpoints(last int64) (int, []*FeasibleBreakpoint) {
-	//var optimalBreaks []*FeasibleBreakpoint
+func (kp *KnuthPlassLinebreaker) collectFeasibleBreakpoints(last int64) (int, []*feasibleBreakpoint) {
+	//var optimalBreaks []*feasibleBreakpoint
 	fmt.Printf("collecting breakpoints, backwards from #%d\n", last)
 	fb := kp.Node(last)
 	stack := arraystack.New()
-	var breakpoints []*FeasibleBreakpoint = make([]*FeasibleBreakpoint, 20)
+	var breakpoints = make([]*feasibleBreakpoint, 20)
 	for fb != nil {
 		stack.Push(fb)
 		predecs := kp.To(fb)
@@ -335,7 +334,7 @@ func (kp *KnuthPlassLinebreaker) collectFeasibleBreakpoints(last int64) (int, []
 		fmt.Printf("optimal paragraph breaking uses %d breakpoints\n", stack.Size())
 		p, ok := stack.Pop()
 		for ok {
-			breakpoints = append(breakpoints, p.(*FeasibleBreakpoint))
+			breakpoints = append(breakpoints, p.(*feasibleBreakpoint))
 			p, ok = stack.Pop()
 		}
 	}
