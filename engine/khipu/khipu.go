@@ -351,9 +351,10 @@ func (kh *Khipu) AppendKnot(knot Knot) *Khipu {
 
 // AppendKhipu concatenates two khipus.
 func (kh *Khipu) AppendKhipu(k *Khipu) *Khipu {
-	for _, knot := range k.knots {
-		kh.knots = append(kh.knots, knot)
-	}
+	kh.knots = append(kh.knots, k.knots...)
+	// for _, knot := range k.knots {
+	// 	kh.knots = append(kh.knots, knot)
+	// }
 	return kh
 }
 

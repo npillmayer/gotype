@@ -4,12 +4,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/npillmayer/gotype/core/config/configtestadapter"
+	"github.com/npillmayer/gotype/core/config/gconf"
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/core/dimen"
 	"github.com/npillmayer/gotype/core/parameters"
 )
+
+func init() {
+	gconf.Initialize(configtestadapter.New())
+	gtrace.CoreTracer = gotestingadapter.New()
+}
 
 func TestDimen(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
@@ -20,7 +27,6 @@ func TestDimen(t *testing.T) {
 }
 
 func TestKhipu(t *testing.T) {
-	gtrace.CoreTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	khipu := NewKhipu()
@@ -33,14 +39,13 @@ func TestKhipu(t *testing.T) {
 }
 
 func TestBreaking1(t *testing.T) {
-	gtrace.CoreTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelInfo)
 	regs := parameters.NewTypesettingRegisters()
 	regs.Push(parameters.P_MINHYPHENLENGTH, 3)
-	khipu := KnotEncode(strings.NewReader("Hello world!"), nil, regs)
-	if khipu.Length() != 8 {
-		t.Errorf("khipu length is %d, should be 8", khipu.Length())
+	khipu := KnotEncode(strings.NewReader("Hello World!"), nil, regs)
+	if khipu.Length() != 9 {
+		t.Errorf("khipu length is %d, should be 9", khipu.Length())
 	}
 }

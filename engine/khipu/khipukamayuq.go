@@ -68,7 +68,7 @@ func KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.Type
 	seg := pipeline.segmenter
 	for seg.Next() {
 		fragment := seg.Text()
-		CT().Debugf("next segment = '%s'\twith penalties %v", fragment, seg.Penalties())
+		CT().Infof("next segment = '%s'\twith penalties %v", fragment, seg.Penalties())
 		k := createPartialKhipuFromSegment(seg, pipeline, regs)
 		if regs.N(params.P_MINHYPHENLENGTH) < dimen.Infty {
 			HyphenateTextBoxes(k, pipeline, regs)
@@ -141,18 +141,23 @@ func HyphenateTextBoxes(khipu *Khipu, pipeline *TypesettingPipeline, regs *param
 		for pipeline.words.Next() {
 			word := pipeline.words.Text()
 			CT().Infof("   word = '%s'", word)
-			if len(word) < regs.N(params.P_MINHYPHENLENGTH) {
-				k = append(k, iterator.Knot())
-				continue
-			}
-			if syllables, isHyphenated := HyphenateWord(word, regs); isHyphenated {
-				for _, sy := range syllables[:len(syllables)-1] {
-					k = append(k, NewTextBox(sy))
-					k = append(k, Discretionary(regs.N(params.P_HYPHENCHAR)))
+			var syllables []string
+			isHyphenated := false
+			if len(word) >= regs.N(params.P_MINHYPHENLENGTH) {
+				if syllables, isHyphenated = HyphenateWord(word, regs); isHyphenated {
+					for _, sy := range syllables[:len(syllables)-1] {
+						k = append(k, NewTextBox(sy))
+						k = append(k, Discretionary(regs.N(params.P_HYPHENCHAR)))
+					}
+					k = append(k, NewTextBox(syllables[len(syllables)-1]))
 				}
-				k = append(k, NewTextBox(syllables[len(syllables)-1]))
-			} else {
-				k = append(k, iterator.Knot())
+			}
+			if !isHyphenated {
+				if word == text {
+					k = append(k, iterator.Knot())
+				} else {
+					k = append(k, NewTextBox(word))
+				}
 			}
 		}
 	}
