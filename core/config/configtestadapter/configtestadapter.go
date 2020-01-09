@@ -3,7 +3,7 @@ Package configtestadapter is for application configuration during tests.
 
 Clients will start configuration explicitely with a call to
 
-	config.Initialize(testadapter.New())
+	gconf.Initialize(configtestadapter.New())
 
 There is no init() call to set up configuration a priori. The reason
 is to avoid coupling to a specific configuration framework, but rather
@@ -45,6 +45,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 package configtestadapter
 
 import (
+	"os"
 	"strconv"
 	"strings"
 
@@ -83,6 +84,11 @@ func (c *Conf) InitDefaults() {
 	m["tracingcapsules"] = "Error"
 	m["tracingrestores"] = "Error"
 	m["tracingchoices"] = "true"
+	etc := os.Getenv("ETC")
+	if etc == "" {
+		etc = os.Getenv("HOME") + "/etc"
+	}
+	m["etc-dir"] = etc
 }
 
 // Set is part of the interface Configuration
