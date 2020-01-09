@@ -106,3 +106,53 @@ type Cursor interface {
 	Knot() khipu.Knot
 	Mark() Mark
 }
+
+type rectParshape int
+
+func (r rectParshape) LineLength(int) dimen.Dimen {
+	return (dimen.PT * dimen.Dimen(r))
+}
+
+// RectangularParshape returns a Parshape for paragraphs of constant line length.
+func RectangularParshape(linelen int) Parshape {
+	return rectParshape(linelen)
+}
+
+type khipuCursor struct {
+	it *khipu.KhipuIterator
+}
+
+func (cur khipuCursor) Next() bool {
+	return cur.it.Next()
+}
+
+func (cur khipuCursor) Knot() khipu.Knot {
+	return cur.it.Knot()
+}
+
+func (cur khipuCursor) Mark() Mark {
+	return mark{
+		pos:  cur.it.Index(),
+		knot: cur.it.Knot(),
+	}
+}
+
+type mark struct {
+	pos  int
+	knot khipu.Knot
+}
+
+func (m mark) Position() int {
+	return m.pos
+}
+
+func (m mark) Knot() khipu.Knot {
+	return m.knot
+}
+
+// KhipuCursor returns a Cursor for an input-khipu.
+func KhipuCursor(k *khipu.Khipu) Cursor {
+	return &khipuCursor{
+		it: k.Iterator(),
+	}
+}

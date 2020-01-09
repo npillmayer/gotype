@@ -324,7 +324,7 @@ func (fb *feasibleBreakpoint) calculateCostsTo(knot khipu.Knot, parshape linebre
 //func (kp *linebreaker) FindBreakpoints(input *khipu.Khipu, prune bool) (int, []*feasibleBreakpoint) {
 
 // FindBreakpoints is the main client API.
-func FindBreakpoints(input *khipu.Khipu, cursor linebreak.Cursor, parshape linebreak.Parshape,
+func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape,
 	measure linebreak.GlyphMeasure, prune bool) (int, []linebreak.Mark) {
 	//
 	kp := newLinebreaker(parshape, measure)

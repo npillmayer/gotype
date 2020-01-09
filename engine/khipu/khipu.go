@@ -452,43 +452,47 @@ var (
 	errorIteratatorEnd = errors.New("Khipu-iterator at end of knot list")
 )
 
-type khipuIterator struct {
+type KhipuIterator struct {
 	khipu *Khipu
 	inx   int
 }
 
 // Iterator returns an interator over a khipu.
-func (kh *Khipu) Iterator() *khipuIterator {
-	return &khipuIterator{kh, -1}
+func (kh *Khipu) Iterator() *KhipuIterator {
+	return &KhipuIterator{kh, -1}
 }
 
-func (khit *khipuIterator) String() string {
-	return fmt.Sprintf("[%d]", khit.inx)
+func (khit *KhipuIterator) String() string {
+	return fmt.Sprintf("[%d]%v", khit.inx, khit.Knot())
 }
 
-func (khit *khipuIterator) Next() bool {
+func (khit *KhipuIterator) Next() bool {
 	khit.inx++
 	return khit.inx < len(khit.khipu.knots)
 }
 
-func (khit *khipuIterator) Knot() Knot {
+func (khit *KhipuIterator) Index() int {
+	return khit.inx
+}
+
+func (khit *KhipuIterator) Knot() Knot {
 	k := khit.khipu.knots[khit.inx]
 	return k
 }
 
-func (khit *khipuIterator) AsGlue() Glue {
+func (khit *KhipuIterator) AsGlue() Glue {
 	return khit.Knot().(Glue)
 }
 
-func (khit *khipuIterator) AsPenalty() Penalty {
+func (khit *KhipuIterator) AsPenalty() Penalty {
 	return khit.Knot().(Penalty)
 }
 
-func (khit *khipuIterator) AsKern() Kern {
+func (khit *KhipuIterator) AsKern() Kern {
 	return khit.Knot().(Kern)
 }
 
-func (khit *khipuIterator) AsTextBox() *TextBox {
+func (khit *KhipuIterator) AsTextBox() *TextBox {
 	return khit.Knot().(*TextBox)
 }
 
