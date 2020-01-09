@@ -18,7 +18,7 @@ func TestGraph1(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	g := newLinebreaker(nil, nil)
-	g.Add(g.newBreakpointAtMark(provisionalMark(1)))
+	g.newBreakpointAtMark(provisionalMark(1))
 	if g.Breakpoint(1) == nil {
 		t.Errorf("Expected to find breakpoint at %d in graph, is nil", 1)
 	}
