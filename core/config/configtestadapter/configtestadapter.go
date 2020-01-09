@@ -84,10 +84,7 @@ func (c *Conf) InitDefaults() {
 	m["tracingcapsules"] = "Error"
 	m["tracingrestores"] = "Error"
 	m["tracingchoices"] = "true"
-	etc := os.Getenv("ETC")
-	if etc == "" {
-		etc = os.Getenv("HOME") + "/etc"
-	}
+	etc := os.Getenv("GOPATH") + "/src/github.com/npillmayer/gotype/GTROOT"
 	m["etc-dir"] = etc
 }
 
