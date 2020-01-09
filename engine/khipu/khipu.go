@@ -453,48 +453,92 @@ var (
 	errorIteratatorEnd = errors.New("Khipu-iterator at end of knot list")
 )
 
-type KhipuIterator struct {
+// Mark is a type for a position within a khipu.
+type Mark interface {
+	Position() int
+	Knot() Knot
+}
+
+type mark struct {
+	pos  int
+	knot Knot
+}
+
+func (m mark) Position() int {
+	return m.pos
+}
+
+func (m mark) Knot() Knot {
+	return m.knot
+}
+
+// A Cursor navigates over the knots of a khipu
+type Cursor struct {
 	khipu *Khipu
 	inx   int
 }
 
-// Iterator returns an interator over a khipu.
-func (kh *Khipu) Iterator() *KhipuIterator {
-	return &KhipuIterator{kh, -1}
+// NewCursor creates a cursor for a given khipu.
+// Usage is unsafe if the referenced khipu changes during lifetime of the cursor.
+func NewCursor(kh *Khipu) *Cursor {
+	return &Cursor{kh, -1}
 }
 
-func (khit *KhipuIterator) String() string {
-	return fmt.Sprintf("[%d]%v", khit.inx, khit.Knot())
+func (c Cursor) String() string {
+	return fmt.Sprintf("[%d]%v", c.inx, c.Knot())
 }
 
-func (khit *KhipuIterator) Next() bool {
-	khit.inx++
-	return khit.inx < len(khit.khipu.knots)
+// Position returns the current position within the khipu as an integer.
+func (c *Cursor) Position() int {
+	return c.inx
 }
 
-func (khit *KhipuIterator) Index() int {
-	return khit.inx
+// Next moves the cursor one knot ahead.
+// Returns true if the cursor is still at a valid position, false otherwise.
+func (c *Cursor) Next() bool {
+	c.inx++
+	return c.inx < len(c.khipu.knots)
 }
 
-func (khit *KhipuIterator) Knot() Knot {
-	k := khit.khipu.knots[khit.inx]
+// Prev moves the cursor one knot back.
+// Returns true if the cursor is still at a valid position, false otherwise.
+func (c *Cursor) Prev() bool {
+	c.inx--
+	return c.inx >= 0
+}
+
+// Knot returns the knot at the current position.
+func (c *Cursor) Knot() Knot {
+	k := c.khipu.knots[c.inx]
 	return k
 }
 
-func (khit *KhipuIterator) AsGlue() Glue {
-	return khit.Knot().(Glue)
+// Mark returns a mark for the current position/glyph.
+func (c *Cursor) Mark() Mark {
+	return mark{
+		pos:  c.Position(),
+		knot: c.Knot(),
+	}
 }
 
-func (khit *KhipuIterator) AsPenalty() Penalty {
-	return khit.Knot().(Penalty)
+// AsGlue returns the current knot as a glue item.
+func (c Cursor) AsGlue() Glue {
+	return c.Knot().(Glue)
 }
 
-func (khit *KhipuIterator) AsKern() Kern {
-	return khit.Knot().(Kern)
+// AsPenalty returns the current knot as a penalty.
+func (c Cursor) AsPenalty() Penalty {
+	return c.Knot().(Penalty)
 }
 
-func (khit *KhipuIterator) AsTextBox() *TextBox {
-	return khit.Knot().(*TextBox)
+// AsKern returns the current knot as a kern item.
+func (c Cursor) AsKern() Kern {
+	return c.Knot().(Kern)
+}
+
+// AsTextBox returns the current knot as a text box.
+func (c Cursor) AsTextBox() *TextBox {
+	return c.Knot().(*TextBox)
 }
 
 // ----------------------------------------------------------------------

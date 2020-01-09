@@ -89,7 +89,7 @@ func KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.Type
 // Returns a khipu consisting of text-boxes, glues and penalties.
 func createPartialKhipuFromSegment(seg *segment.Segmenter, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) *Khipu {
 	khipu := NewKhipu()
-	if seg.Penalties()[0] < 1000 { // broken by primary breaker
+	if seg.Penalties()[0] < 1000 { // broken by primary breaker // TODO: this API is aweful...
 		// fragment is terminated by possible line wrap opportunity
 		if seg.Penalties()[1] < 1000 { // broken by secondary breaker, too
 			if seg.Penalties()[1] == segment.PenaltyAfterWhitespace {
@@ -129,7 +129,7 @@ func HyphenateTextBoxes(khipu *Khipu, pipeline *TypesettingPipeline, regs *param
 		return
 	}
 	k := make([]Knot, 0, khipu.Length())
-	iterator := khipu.Iterator()
+	iterator := NewCursor(khipu)
 	for iterator.Next() {
 		if iterator.Knot().Type() != KTTextBox { // can only hyphenate text knots
 			k = append(k, iterator.Knot())
@@ -167,8 +167,10 @@ func HyphenateTextBoxes(khipu *Khipu, pipeline *TypesettingPipeline, regs *param
 // PrepareTypesettingPipeline checks if a typesetting pipeline is correctly
 // initialized and creates a new one if is is invalid.
 //
-// We use a uax14.LineWrapper as the primariy breaker and
+// We use a uax14.LineWrapper as the primary breaker and
 // use a segment.SimpleWordBreaker to extract spans of whitespace.
+// For the inner loop we use a uax29.WordBreaker.
+// This is a default configuration adequate for western languages.
 func PrepareTypesettingPipeline(text io.Reader, pipeline *TypesettingPipeline) *TypesettingPipeline {
 	// wrap a normalization-reader around the input
 	if pipeline == nil {

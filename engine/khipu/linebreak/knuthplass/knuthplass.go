@@ -99,7 +99,7 @@ func (h *activeFeasibleBreakpoints) remove(fb *feasibleBreakpoint) {
 // We will hold some bookkeeping information to reflect active segments.
 type feasibleBreakpoint struct {
 	//lineno    int            // line number (line count this break creates)
-	mark  linebreak.Mark      // location of this breakpoint
+	mark  khipu.Mark          // location of this breakpoint
 	books map[int]bookkeeping // bookkeeping per linecount
 }
 
@@ -170,7 +170,7 @@ func (fb *feasibleBreakpoint) Book(linecnt int) (bookkeeping, bool) {
 }
 
 // newBreakpointAtMark creates a breakpoint at the given cursor position.
-func (kp *linebreaker) newBreakpointAtMark(mark linebreak.Mark) *feasibleBreakpoint {
+func (kp *linebreaker) newBreakpointAtMark(mark khipu.Mark) *feasibleBreakpoint {
 	fb := &feasibleBreakpoint{
 		mark: mark,
 	}
@@ -178,7 +178,7 @@ func (kp *linebreaker) newBreakpointAtMark(mark linebreak.Mark) *feasibleBreakpo
 	return fb
 }
 
-func (kp *linebreaker) findBreakpointAtMark(mark linebreak.Mark) *feasibleBreakpoint {
+func (kp *linebreaker) findBreakpointAtMark(mark khipu.Mark) *feasibleBreakpoint {
 	if mark == nil {
 		return nil
 	}
@@ -325,14 +325,16 @@ func (fb *feasibleBreakpoint) calculateCostsTo(knot khipu.Knot, parshape linebre
 
 // FindBreakpoints is the main client API.
 func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape,
-	measure linebreak.GlyphMeasure, prune bool) (int, []linebreak.Mark) {
+	measure linebreak.GlyphMeasure, prune bool) (int, []khipu.Mark) {
 	//
 	kp := newLinebreaker(parshape, measure)
 	fb := kp.newBreakpointAtMark(provisionalMark(-1)) // start of paragraph
 	kp.horizon.append(fb)                             // this is the first "active node"
 	//cursor := input.Iterator()
 	//var knot khipu.Knot // will hold the current knot of the input khipu
+	var last khipu.Mark // will hold last position within input khipu
 	for cursor.Next() { // loop over input
+		last = cursor.Mark()
 		//fmt.Printf("next knot is %s\n", khipu.KnotString(knot))
 		fb = kp.horizon.first() // loop over feasible breakpoints of horizon
 		for fb != nil {         // while there are active breakpoints in horizon n
@@ -359,10 +361,10 @@ func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape,
 			fb = kp.horizon.next()
 		}
 	}
-	return kp.collectFeasibleBreakpoints(cursor.Mark())
+	return kp.collectFeasibleBreakpoints(last)
 }
 
-func (kp *linebreaker) collectFeasibleBreakpoints(last linebreak.Mark) (int, []linebreak.Mark) {
+func (kp *linebreaker) collectFeasibleBreakpoints(last khipu.Mark) (int, []khipu.Mark) {
 	//var optimalBreaks []*feasibleBreakpoint
 	//fmt.Printf("collecting breakpoints, backwards from #%d\n", last)
 	fb := kp.findBreakpointAtMark(last)
@@ -370,7 +372,7 @@ func (kp *linebreaker) collectFeasibleBreakpoints(last linebreak.Mark) (int, []l
 		fb = kp.newBreakpointAtMark(last)
 	}
 	stack := arraystack.New() // for reversing the breakpoint order, TODO this is overkill
-	var breakpoints = make([]linebreak.Mark, 20)
+	var breakpoints = make([]khipu.Mark, 20)
 	for {
 		stack.Push(fb.mark)
 		predecessors := kp.To(fb)
@@ -381,10 +383,10 @@ func (kp *linebreaker) collectFeasibleBreakpoints(last linebreak.Mark) (int, []l
 		fb = predecessors[0] // with pruning, there should only be one
 	}
 	if stack.Size() > 0 {
-		fmt.Printf("optimal paragraph breaking uses %d breakpoints\n", stack.Size())
+		T().Infof("optimal paragraph breaking uses %d breakpoints\n", stack.Size())
 		p, ok := stack.Pop()
 		for ok {
-			breakpoints = append(breakpoints, p.(linebreak.Mark))
+			breakpoints = append(breakpoints, p.(khipu.Mark))
 			p, ok = stack.Pop()
 		}
 	}

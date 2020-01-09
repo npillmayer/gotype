@@ -90,17 +90,11 @@ type Parshape interface {
 	LineLength(int) dimen.Dimen
 }
 
-// Mark is a type for a position within a khipu.
-type Mark interface {
-	Position() int
-	Knot() khipu.Knot
-}
-
 // Cursor is a type to iterate over a khipu.
 type Cursor interface {
 	Next() bool
 	Knot() khipu.Knot
-	Mark() Mark
+	Mark() khipu.Mark
 }
 
 type rectParshape int
@@ -114,8 +108,9 @@ func RectangularParshape(linelen int) Parshape {
 	return rectParshape(linelen)
 }
 
+/*
 type khipuCursor struct {
-	it *khipu.KhipuIterator
+	c *khipu.Cursor
 }
 
 func (cur khipuCursor) Next() bool {
@@ -133,22 +128,10 @@ func (cur khipuCursor) Mark() Mark {
 	}
 }
 
-type mark struct {
-	pos  int
-	knot khipu.Knot
-}
-
-func (m mark) Position() int {
-	return m.pos
-}
-
-func (m mark) Knot() khipu.Knot {
-	return m.knot
-}
-
 // KhipuCursor returns a Cursor for an input-khipu.
 func KhipuCursor(k *khipu.Khipu) Cursor {
 	return &khipuCursor{
 		it: k.Iterator(),
 	}
 }
+*/
