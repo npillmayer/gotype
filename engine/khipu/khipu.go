@@ -326,9 +326,9 @@ type Khipu struct {
 
 // List types
 const (
-	HList int = iota
-	VList
-	MList
+	HList int = iota // horizontal list
+	VList            // vertical list
+	MList            // math list
 )
 
 // NewKhipu creates a new knot list.
