@@ -85,10 +85,6 @@ func CapDemerits(d int32) int32 {
 
 // --- Interfaces -------------------------------------------------------
 
-type GlyphMeasure interface {
-	Measure(knot khipu.Knot) dimen.Dimen
-}
-
 // Parshape is a type to return the line length for a given line number.
 type Parshape interface {
 	LineLength(int) dimen.Dimen
