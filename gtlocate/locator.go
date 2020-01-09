@@ -46,7 +46,7 @@ func FileResource(item string, typ string) string {
 	case "font":
 		path = filepath.Join(os.Getenv("HOME"), "Library", "Fonts", item)
 	case "pattern":
-		path = filepath.Join(gtroot, "pattern")
+		path = filepath.Join(gtroot, "pattern", item)
 		//path = "/Users/npi/prg/go/gotype/etc/" + item
 	}
 	return path
