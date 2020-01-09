@@ -372,7 +372,7 @@ func (kp *linebreaker) collectFeasibleBreakpoints(last khipu.Mark) (int, []khipu
 		fb = kp.newBreakpointAtMark(last)
 	}
 	stack := arraystack.New() // for reversing the breakpoint order, TODO this is overkill
-	var breakpoints = make([]khipu.Mark, 20)
+	var breakpoints = make([]khipu.Mark, 0, 20)
 	for {
 		stack.Push(fb.mark)
 		predecessors := kp.To(fb)
@@ -392,14 +392,3 @@ func (kp *linebreaker) collectFeasibleBreakpoints(last khipu.Mark) (int, []khipu
 	}
 	return len(breakpoints), breakpoints
 }
-
-/*
-func (kp *linebreaker) MarshalToDotFile(id string) {
-	dot, err := dot.Marshal(kp, "linebreaks", "", "", false)
-	if err != nil {
-		fmt.Printf("mashalling error: %v", err.Error())
-	} else {
-		ioutil.WriteFile(fmt.Sprintf("./kp_graph_%s.dot", id), dot, 0644)
-	}
-}
-*/

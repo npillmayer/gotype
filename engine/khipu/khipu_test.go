@@ -29,11 +29,11 @@ func TestDimen(t *testing.T) {
 func TestKhipu(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
-	khipu := NewKhipu()
-	khipu.AppendKnot(NewKnot(KTKern)).AppendKnot(NewKnot(KTGlue))
-	khipu.AppendKnot(NewTextBox("Hello"))
-	t.Logf("khipu = %s\n", khipu.String())
-	if khipu.Length() != 3 {
+	kh := NewKhipu()
+	kh.AppendKnot(NewKnot(KTKern)).AppendKnot(NewKnot(KTGlue))
+	kh.AppendKnot(NewTextBox("Hello"))
+	t.Logf("khipu = %s\n", kh.String())
+	if kh.Length() != 3 {
 		t.Errorf("Length of khipu should be 3")
 	}
 }
@@ -44,8 +44,23 @@ func TestBreaking1(t *testing.T) {
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelInfo)
 	regs := parameters.NewTypesettingRegisters()
 	regs.Push(parameters.P_MINHYPHENLENGTH, 3)
-	khipu := KnotEncode(strings.NewReader("Hello World!"), nil, regs)
-	if khipu.Length() != 9 {
-		t.Errorf("khipu length is %d, should be 9", khipu.Length())
+	kh := KnotEncode(strings.NewReader("Hello World!"), nil, regs)
+	if kh.Length() != 9 {
+		t.Errorf("khipu length is %d, should be 9", kh.Length())
+	}
+}
+
+func TestText(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.CoreTracer.SetTraceLevel(tracing.LevelInfo)
+	text := "The quick brown fox jumps over the lazy dog!"
+	regs := parameters.NewTypesettingRegisters()
+	regs.Push(parameters.P_MINHYPHENLENGTH, 3)
+	kh := KnotEncode(strings.NewReader(text), nil, regs)
+	out := kh.Text(0, kh.Length())
+	if out != text {
+		t.Logf("Text: %s", out)
+		t.Errorf("output text != input text")
 	}
 }

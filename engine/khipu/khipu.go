@@ -413,7 +413,7 @@ func (kh *Khipu) MaxWidth(from, to int) dimen.Dimen {
 // [from ... to-1].
 // Only knots of type TextBox are considered.
 func (kh *Khipu) MaxHeightAndDepth(from, to int) (dimen.Dimen, dimen.Dimen) {
-	to = iMax(to, len(kh.knots))
+	to = iMax(from, iMin(to, len(kh.knots)))
 	var h, d dimen.Dimen
 	for i := from; i < to; i++ {
 		if knot, ok := kh.knots[i].(*TextBox); ok {
@@ -426,6 +426,29 @@ func (kh *Khipu) MaxHeightAndDepth(from, to int) (dimen.Dimen, dimen.Dimen) {
 		}
 	}
 	return h, d
+}
+
+// Text returns the text contents of a khipu segment.
+func (kh *Khipu) Text(from, to int) string {
+	var b bytes.Buffer
+	to = iMax(from, iMin(to, len(kh.knots)))
+	spacecnt := 0
+	for i := from; i < to; i++ {
+		knot := kh.knots[i]
+		if knot.Type() == KTTextBox {
+			b.WriteString(knot.(*TextBox).text)
+			spacecnt = 0
+		} else if knot.Type() == KTGlue {
+			if spacecnt == 0 {
+				b.WriteString(" ")
+			}
+		} else if knot.Type() == KTKern {
+			if spacecnt == 0 {
+				b.WriteString(" ")
+			}
+		}
+	}
+	return b.String()
 }
 
 // Debug representation of a knot list.

@@ -108,30 +108,9 @@ func RectangularParshape(linelen int) Parshape {
 	return rectParshape(linelen)
 }
 
-/*
-type khipuCursor struct {
-	c *khipu.Cursor
-}
+// ----------------------------------------------------------------------
 
-func (cur khipuCursor) Next() bool {
-	return cur.it.Next()
+func PrintParagraphBreaks(k *khipu.Khipu, breaks []khipu.Mark) string {
+	//cursor := khipu.NewCursor(k)
+	return ""
 }
-
-func (cur khipuCursor) Knot() khipu.Knot {
-	return cur.it.Knot()
-}
-
-func (cur khipuCursor) Mark() Mark {
-	return mark{
-		pos:  cur.it.Index(),
-		knot: cur.it.Knot(),
-	}
-}
-
-// KhipuCursor returns a Cursor for an input-khipu.
-func KhipuCursor(k *khipu.Khipu) Cursor {
-	return &khipuCursor{
-		it: k.Iterator(),
-	}
-}
-*/

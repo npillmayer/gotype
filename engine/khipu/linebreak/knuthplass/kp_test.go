@@ -22,10 +22,17 @@ func TestKP1(t *testing.T) {
 	defer teardown()
 	regs := parameters.NewTypesettingRegisters()
 	regs.Push(parameters.P_MINHYPHENLENGTH, 3)
-	k := khipu.KnotEncode(strings.NewReader("Hello world!"), nil, regs)
-	if k.Length() < 5 {
-		t.Errorf("Length of khipu is too short; is %d", k.Length())
+	kh := khipu.KnotEncode(strings.NewReader("The quick brown fox jumps over the lazy dog!"), nil, regs)
+	if kh.Length() < 5 {
+		t.Errorf("Length of khipu is too short; is %d", kh.Length())
 	}
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
-	FindBreakpoints(khipu.NewCursor(k), linebreak.RectangularParshape(20), nil, true)
+	n, breaks := FindBreakpoints(khipu.NewCursor(kh), linebreak.RectangularParshape(20), nil, true)
+	t.Logf("%d breakpoints found: %v", n, breaks)
+	j := 0
+	for i := 0; i < n; i++ {
+		t.Logf(": %s", kh.Text(j, breaks[i].Position()))
+		j = breaks[i].Position()
+	}
+	t.Fail()
 }
