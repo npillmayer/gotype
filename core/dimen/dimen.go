@@ -71,6 +71,11 @@ func (d Dimen) String() string {
 	return fmt.Sprintf("%dsp", int32(d))
 }
 
+// Points returns a dimension in big (PDF) points.
+func (d Dimen) Points() float64 {
+	return float64(d) / float64(BP)
+}
+
 // Point is a point on a page.
 //
 // TODO see methods in https://golang.org/pkg/image/#Point
