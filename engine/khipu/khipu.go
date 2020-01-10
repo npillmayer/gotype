@@ -481,7 +481,13 @@ func (kh *Khipu) String() string {
 	case MList:
 		w.WriteString("\\mlist{")
 	}
+	first := true
 	for _, knot := range kh.knots {
+		if !first {
+			w.WriteString(" ")
+		} else {
+			first = false
+		}
 		w.WriteString(KnotString(knot))
 	}
 	w.WriteString("}")
