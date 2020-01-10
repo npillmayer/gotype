@@ -209,6 +209,8 @@ func (dict *Dictionary) Hyphenate(word string) []string {
 	positions = positions[1 : len(positions)-1]
 	if positions[0] > 0 { // sometimes hyphen before first letter is "allowed"
 		positions[0] = 0
+	} else if len(positions) > len(word) && positions[len(word)] > 0 {
+		positions[len(word)] = 0 // sometimes hyphen after last letter is "allowed"
 	}
 	return splitAtPositions(word, positions)
 }

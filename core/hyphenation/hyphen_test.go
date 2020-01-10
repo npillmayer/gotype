@@ -71,4 +71,9 @@ func TestUSPatterns(t *testing.T) {
 		t.Logf("concatenation should be con-cate-na-tion, is %s", h)
 		t.Fail()
 	}
+	h = usDict.HyphenationString("quick")
+	if h != "quick" {
+		t.Logf("quick should be quick, is %s", h)
+		t.Fail()
+	}
 }
