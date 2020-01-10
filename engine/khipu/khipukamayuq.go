@@ -93,7 +93,7 @@ func createPartialKhipuFromSegment(seg *segment.Segmenter, pipeline *Typesetting
 		// fragment is terminated by possible line wrap opportunity
 		if seg.Penalties()[1] < 1000 { // broken by secondary breaker, too
 			if seg.Penalties()[1] == segment.PenaltyAfterWhitespace {
-				g := NewGlue(5*dimen.PT, 1*dimen.PT, 2*dimen.PT)
+				g := NewGlue(5*dimen.BP, 1*dimen.BP, 2*dimen.BP)
 				p := Penalty(seg.Penalties()[1])
 				khipu.AppendKnot(g).AppendKnot(p)
 			} else {
@@ -145,9 +145,10 @@ func HyphenateTextBoxes(khipu *Khipu, pipeline *TypesettingPipeline, regs *param
 			isHyphenated := false
 			if len(word) >= regs.N(params.P_MINHYPHENLENGTH) {
 				if syllables, isHyphenated = HyphenateWord(word, regs); isHyphenated {
+					hyphen := NewKnot(KTDiscretionary)
 					for _, sy := range syllables[:len(syllables)-1] {
 						k = append(k, NewTextBox(sy))
-						k = append(k, Discretionary(regs.N(params.P_HYPHENCHAR)))
+						k = append(k, hyphen)
 					}
 					k = append(k, NewTextBox(syllables[len(syllables)-1]))
 				}
