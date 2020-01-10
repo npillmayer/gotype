@@ -2,7 +2,6 @@ package khipu
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 
 	"github.com/npillmayer/gotype/core/dimen"
@@ -79,7 +78,7 @@ func NewKnot(knottype KnotType) Knot {
 	case KTPenalty:
 		return Penalty(0)
 	case KTDiscretionary:
-		return Discretionary('-') // TODO should be hyphenchar of current font or -1
+		return Discretionary{HyphenChar: '-', Width: 5 * dimen.BP}
 	case KTTextBox:
 		box := &TextBox{}
 		return box
@@ -122,7 +121,7 @@ func (k Kern) Type() KnotType {
 }
 
 func (k Kern) String() string {
-	return fmt.Sprintf("[\u29e6%s]", k.W())
+	return fmt.Sprintf("\u29e6%s", k.W())
 }
 
 // W is part of interface Knot. Width of the kern.
@@ -156,9 +155,9 @@ func (g Glue) Type() KnotType {
 }
 
 func (g Glue) String() string {
-	minus := g.W() - g.MinW()
-	plus := g.MaxW() - g.W()
-	return fmt.Sprintf("(\u29df %s-%s+%s)", g.W().String(), minus, plus)
+	// minus := g.W() - g.MinW()
+	// plus := g.MaxW() - g.W()
+	return fmt.Sprintf("\u29df %.2f\u00b1", g.W().Points())
 }
 
 // W is part of interface Knot. Natural width of the glue.
@@ -168,7 +167,7 @@ func (g Glue) W() dimen.Dimen {
 
 // MinW is part of interface Knot. Minimum width of the glue.
 func (g Glue) MinW() dimen.Dimen {
-	return g[0] + g[1]
+	return g[0] - g[1]
 }
 
 // MaxW is part of interface Knot. Maximum width of the glue.
@@ -204,7 +203,10 @@ func NewFill(f int) Glue {
 // --- Discretionary ---------------------------------------------------------
 
 // A Discretionary is a hyphenation opportunity
-type Discretionary rune
+type Discretionary struct {
+	HyphenChar rune
+	Width      dimen.Dimen
+}
 
 // Type is part of interface Knot.
 func (d Discretionary) Type() KnotType {
@@ -223,7 +225,7 @@ func (d Discretionary) MinW() dimen.Dimen {
 
 // MaxW is part of interface Knot. Returns the width of the post-hyphen text.
 func (d Discretionary) MaxW() dimen.Dimen {
-	return 5 * dimen.PT // TODO
+	return d.Width
 }
 
 // IsDiscardable is part of interface Knot. Discretionaries are not discardable.
@@ -247,6 +249,11 @@ func NewTextBox(s string) *TextBox {
 	box := &TextBox{}
 	box.text = s
 	return box
+}
+
+// Text returns the enclosed text as a string.
+func (b TextBox) Text() string {
+	return b.text
 }
 
 // Type is part of interface Knot.
@@ -292,7 +299,8 @@ func (p Penalty) Type() KnotType {
 }
 
 func (p Penalty) String() string {
-	return fmt.Sprintf("(\u2af2 %d)", p)
+	//return fmt.Sprintf("\u2af2%d", p) // crossed-out parallels
+	return fmt.Sprintf("\u29bb%d", p) // white circle with cross
 }
 
 // W is part of interface Knot. Returns 0.
@@ -352,10 +360,20 @@ func (kh *Khipu) AppendKnot(knot Knot) *Khipu {
 // AppendKhipu concatenates two khipus.
 func (kh *Khipu) AppendKhipu(k *Khipu) *Khipu {
 	kh.knots = append(kh.knots, k.knots...)
-	// for _, knot := range k.knots {
-	// 	kh.knots = append(kh.knots, knot)
-	// }
 	return kh
+}
+
+// ReplaceKnot replaces a knot within the khipu. If inx is not a valid
+// index for the khipu, nothing is done.
+//
+// Returns the current knot at position inx.
+func (kh *Khipu) ReplaceKnot(inx int, knot Knot) Knot {
+	if inx >= 0 && inx < len(kh.knots) {
+		k := kh.knots[inx]
+		kh.knots[inx] = knot
+		return k
+	}
+	return nil
 }
 
 // Measure returns the widths of a subset of this knot list. The subset runs from
@@ -468,100 +486,6 @@ func (kh *Khipu) String() string {
 	}
 	w.WriteString("}")
 	return w.String()
-}
-
-// ----------------------------------------------------------------------
-
-var (
-	errorIteratatorEnd = errors.New("Khipu-iterator at end of knot list")
-)
-
-// Mark is a type for a position within a khipu.
-type Mark interface {
-	Position() int
-	Knot() Knot
-}
-
-type mark struct {
-	pos  int
-	knot Knot
-}
-
-func (m mark) Position() int {
-	return m.pos
-}
-
-func (m mark) Knot() Knot {
-	return m.knot
-}
-
-// A Cursor navigates over the knots of a khipu
-type Cursor struct {
-	khipu *Khipu
-	inx   int
-}
-
-// NewCursor creates a cursor for a given khipu.
-// Usage is unsafe if the referenced khipu changes during lifetime of the cursor.
-func NewCursor(kh *Khipu) *Cursor {
-	return &Cursor{kh, -1}
-}
-
-func (c Cursor) String() string {
-	return fmt.Sprintf("[%d]%v", c.inx, c.Knot())
-}
-
-// Position returns the current position within the khipu as an integer.
-func (c *Cursor) Position() int {
-	return c.inx
-}
-
-// Next moves the cursor one knot ahead.
-// Returns true if the cursor is still at a valid position, false otherwise.
-func (c *Cursor) Next() bool {
-	c.inx++
-	return c.inx < len(c.khipu.knots)
-}
-
-// Prev moves the cursor one knot back.
-// Returns true if the cursor is still at a valid position, false otherwise.
-func (c *Cursor) Prev() bool {
-	c.inx--
-	return c.inx >= 0
-}
-
-// Knot returns the knot at the current position.
-func (c *Cursor) Knot() Knot {
-	k := c.khipu.knots[c.inx]
-	return k
-}
-
-// Mark returns a mark for the current position/glyph.
-func (c *Cursor) Mark() Mark {
-	return mark{
-		pos:  c.Position(),
-		knot: c.Knot(),
-	}
-}
-
-// AsGlue returns the current knot as a glue item.
-func (c Cursor) AsGlue() Glue {
-	return c.Knot().(Glue)
-}
-
-// AsPenalty returns the current knot as a penalty.
-func (c Cursor) AsPenalty() Penalty {
-	return c.Knot().(Penalty)
-}
-
-// AsKern returns the current knot as a kern item.
-func (c Cursor) AsKern() Kern {
-	return c.Knot().(Kern)
-}
-
-// AsTextBox returns the current knot as a text box.
-func (c Cursor) AsTextBox() *TextBox {
-	return c.Knot().(*TextBox)
 }
 
 // ----------------------------------------------------------------------

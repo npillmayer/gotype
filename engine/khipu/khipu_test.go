@@ -46,7 +46,21 @@ func TestBreaking1(t *testing.T) {
 	regs.Push(parameters.P_MINHYPHENLENGTH, 3)
 	kh := KnotEncode(strings.NewReader("Hello World!"), nil, regs)
 	if kh.Length() != 9 {
+		t.Logf("khipu = %s", kh)
 		t.Errorf("khipu length is %d, should be 9", kh.Length())
+	}
+}
+
+func TestBreaking2(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.CoreTracer.SetTraceLevel(tracing.LevelInfo)
+	regs := parameters.NewTypesettingRegisters()
+	regs.Push(parameters.P_MINHYPHENLENGTH, 3)
+	kh := KnotEncode(strings.NewReader("The quick !"), nil, regs)
+	if kh.Length() != 10 {
+		t.Logf("khipu = %s", kh)
+		t.Errorf("khipu length is %d, should be 10", kh.Length())
 	}
 }
 
