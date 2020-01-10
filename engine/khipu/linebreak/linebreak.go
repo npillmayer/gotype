@@ -36,9 +36,18 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 package linebreak
 
 import (
+	"fmt"
+
+	"github.com/npillmayer/gotype/core/config/gtrace"
+	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/dimen"
 	"github.com/npillmayer/gotype/engine/khipu"
 )
+
+// T traces to the core tracer.
+func T() tracing.Trace {
+	return gtrace.CoreTracer
+}
 
 // WSS (width stretch & shrink) is a type to hold an elastic width (of text).
 type WSS struct {
@@ -60,13 +69,17 @@ func (wss WSS) SetFromKnot(knot khipu.Knot) WSS {
 	return wss
 }
 
-// Add adds dimensions from a given WSS to wss, creating a new WSS.
+// Add adds dimensions from a given WSS to wss, returning a new WSS.
 func (wss WSS) Add(other WSS) WSS {
 	return WSS{
 		W:   wss.W + other.W,
 		Min: wss.Min + other.Min,
 		Max: wss.Max + other.Max,
 	}
+}
+
+func (wss WSS) String() string {
+	return fmt.Sprintf("{%.2f < %.2f < %.2f}", wss.Min.Points(), wss.W.Points(), wss.Max.Points())
 }
 
 // InfinityDemerits is the worst demerit value possible.
@@ -85,26 +98,27 @@ func CapDemerits(d int32) int32 {
 
 // --- Interfaces -------------------------------------------------------
 
-// Parshape is a type to return the line length for a given line number.
-type Parshape interface {
-	LineLength(int) dimen.Dimen
-}
-
 // Cursor is a type to iterate over a khipu.
 type Cursor interface {
 	Next() bool
 	Knot() khipu.Knot
 	Mark() khipu.Mark
+	Khipu() *khipu.Khipu
 }
 
-type rectParshape int
+// Parshape is a type to return the line length for a given line number.
+type Parshape interface {
+	LineLength(int) dimen.Dimen
+}
+
+type rectParshape dimen.Dimen
 
 func (r rectParshape) LineLength(int) dimen.Dimen {
-	return (dimen.PT * dimen.Dimen(r))
+	return dimen.Dimen(r)
 }
 
 // RectangularParshape returns a Parshape for paragraphs of constant line length.
-func RectangularParshape(linelen int) Parshape {
+func RectangularParshape(linelen dimen.Dimen) Parshape {
 	return rectParshape(linelen)
 }
 
