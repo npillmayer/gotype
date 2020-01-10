@@ -78,6 +78,11 @@ func (wss WSS) Add(other WSS) WSS {
 	}
 }
 
+// Copy copies a WSS.
+func (wss WSS) Copy() WSS {
+	return WSS{W: wss.W, Min: wss.Min, Max: wss.Max}
+}
+
 func (wss WSS) String() string {
 	return fmt.Sprintf("{%.2f < %.2f < %.2f}", wss.Min.Points(), wss.W.Points(), wss.Max.Points())
 }

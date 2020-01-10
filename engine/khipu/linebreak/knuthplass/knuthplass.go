@@ -23,6 +23,7 @@ import (
 
 	"github.com/emirpasic/gods/sets/hashset"
 	"github.com/emirpasic/gods/stacks/arraystack"
+	"github.com/npillmayer/gotype/core/dimen"
 	"github.com/npillmayer/gotype/engine/khipu"
 	"github.com/npillmayer/gotype/engine/khipu/linebreak"
 )
@@ -311,26 +312,35 @@ func (fb *feasibleBreakpoint) calculateCostsTo(knot khipu.Knot, parshape linebre
 	map[int]int32, bool) {
 	//
 	T().Infof("### calculateCostsTo(%v)", knot)
-	var costs = make(map[int]int32)             // linecount -> cost
-	var wss = linebreak.WSS{}.SetFromKnot(knot) // dimensions of next knot
-	T().Debugf(" width of %v is %.2f", knot, wss.W.Points())
+	var costs = make(map[int]int32) // linecount => cost, i.e. costs for different line targets
+	//var wss = linebreak.WSS{}.SetFromKnot(knot) // dimensions of next knot
+	T().Debugf(" width of %v is %.2f", knot, knot.W)
 	cannotReachIt := 0
-	for linecnt, bookkeeping := range fb.books {
-		T().Debugf(" ## checking cost at linecnt=%d, total=%v", linecnt, bookkeeping.totalcost)
-		d := linebreak.InfinityDemerits         // pre-set
-		linelen := parshape.LineLength(linecnt) // length of next line
-		T().Debugf("    line length for line %d is %.2f", linecnt, linelen.Points())
-		T().Debugf("    +---%.2f---> in total", (bookkeeping.fragment.W + wss.W).Points())
-		if bookkeeping.fragment.W+wss.W <= linelen {
-			if bookkeeping.fragment.Max+wss.Max >= linelen { // line will stretch
-				d = int32(linelen * 100 / (bookkeeping.fragment.Max - bookkeeping.fragment.W))
-				//fmt.Printf("w < l: demerits = %d\n", d)
+	//for linecnt, bookkeeping := range fb.books {
+	for linecnt := range fb.books {
+		T().Debugf(" ## checking cost at linecnt=%d", linecnt)
+		d := linebreak.InfinityDemerits                   // pre-set result variable
+		linelen := parshape.LineLength(linecnt + 1)       // length of line to fit into
+		segwss := fb.calculateSegmentWidth(knot, linecnt) // widths of segment including knot
+		T().Debugf("    +---%.2f--->    | %.2f", segwss.W.Points(), linelen.Points())
+		if segwss.W <= linelen { // natural width less than line-length
+			if segwss.Max >= linelen { // segment can stretch enough
+				d = calculateDemerits(segwss, linelen-segwss.W, 0)
+			} else { // segment is just too short
+				// try with tolerance
+				tolerance := 3 // TODO from typesetting parameters; 1 = rigid
+				stretchedwss := segwss.Copy()
+				stretchedwss.Max = dimen.Dimen(tolerance) * (segwss.Max - segwss.W)
+				if stretchedwss.Max >= linelen { // now segment can stretch enough
+					d = calculateDemerits(stretchedwss, linelen-segwss.W, tolerance)
+				}
 			}
-		} else if bookkeeping.fragment.W+wss.W >= linelen {
-			if bookkeeping.fragment.Min+wss.Min <= linelen { // line will shrink
-				d = int32(linelen * 100 / (bookkeeping.fragment.W - bookkeeping.fragment.Min))
-				//fmt.Printf("w > l: demerits = %d\n", d)
-			} else { // will not fit any more
+		} else { // natural width larger than line-length
+			if segwss.Min <= linelen { // segment can shrink enough
+				d = calculateDemerits(segwss, segwss.W-linelen, 0)
+			} else { // segment will not fit any more
+				// TeX has no tolerance for shrinking. Good?
+				// TODO introduce overfull-hbox break here? d slightly smaller than infinity?
 				cannotReachIt++
 			}
 		}
@@ -342,6 +352,23 @@ func (fb *feasibleBreakpoint) calculateCostsTo(knot khipu.Knot, parshape linebre
 	return costs, stillreachable
 }
 
+func (fb *feasibleBreakpoint) calculateSegmentWidth(knot khipu.Knot, linecnt int) linebreak.WSS {
+	var segwss linebreak.WSS
+	bookkeeping, ok := fb.Book(linecnt)
+	if !ok {
+		panic(fmt.Errorf("bookkeeping for line %d MUST be present", linecnt))
+	}
+	wss := linebreak.WSS{}.SetFromKnot(knot) // dimensions of next knot
+	segwss = bookkeeping.fragment.Add(wss)
+	return segwss
+}
+
+func calculateDemerits(segwss linebreak.WSS, stretch dimen.Dimen, tolerance int) int32 {
+	tolerancepenalty := 1000 // TODO from typesetting parameters
+	tolerancepenalty *= tolerance
+	return 200 // TODO
+}
+
 func demeritsString(d int32) string {
 	if d >= linebreak.InfinityDemerits {
 		return "\u221e"
@@ -350,6 +377,8 @@ func demeritsString(d int32) string {
 	}
 	return fmt.Sprintf("%d", d)
 }
+
+// --- Main API ---------------------------------------------------------
 
 //func (kp *linebreaker) FindBreakpoints(input *khipu.Khipu, prune bool) (int, []*feasibleBreakpoint) {
 
