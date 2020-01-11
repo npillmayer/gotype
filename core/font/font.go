@@ -25,6 +25,9 @@ Utility to view a character map of a font: http://torinak.com/font/lsfont.html
 Website for fonts:
 https://www.fontsquirrel.com/fonts/list/popular
 
+OpenType explained:
+https://docs.microsoft.com/en-us/typography/opentype/
+
 ----------------------------------------------------------------------
 
 BSD License
