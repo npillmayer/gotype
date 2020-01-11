@@ -327,7 +327,7 @@ func (fb *feasibleBreakpoint) calculateCostsTo(knot khipu.Knot, parshape linebre
 			if segwss.Max >= linelen { // segment can stretch enough
 				d = calculateDemerits(segwss, linelen-segwss.W, 0)
 			} else { // segment is just too short
-				// try with tolerance
+				// try with tolerance - misnomer, used otherweise in TeX
 				tolerance := 3 // TODO from typesetting parameters; 1 = rigid
 				stretchedwss := segwss.Copy()
 				stretchedwss.Max = dimen.Dimen(tolerance) * (segwss.Max - segwss.W)
