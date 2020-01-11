@@ -244,10 +244,10 @@ func (g *fbGraph) RemoveNode(id int) {
 }
 */
 
-// AddSegment adds a weighted edge from one node to another. Endpoints which are
+// AddEdge adds a weighted edge from one node to another. Endpoints which are
 // not yet contained in the graph are added.
 // Does nothing if from=to.
-func (g *fbGraph) AddSegment(from, to *feasibleBreakpoint, cost int32, linecnt int) {
+func (g *fbGraph) AddEdge(from, to *feasibleBreakpoint, cost int32, linecnt int) {
 	if from.mark.Position() == to.mark.Position() {
 		return
 	}
