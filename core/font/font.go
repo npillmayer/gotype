@@ -20,6 +20,11 @@ differently–actually more or less in an opposite manner.
 
 TODO: font collections (*.ttc), e.g., /System/Library/Fonts/Helvetica.ttc
 
+Eigenen Text-Processor schreiben, nur für Latin Script, in pur Go?
+Alternative zu Harfbuzz; also Latin-Harfbuzz für Arme in Go?
+Siehe
+https://docs.microsoft.com/en-us/typography/opentype/spec/ttochap1#text-processing-with-opentype-layout-fonts
+
 Utility to view a character map of a font: http://torinak.com/font/lsfont.html
 
 Website for fonts:
