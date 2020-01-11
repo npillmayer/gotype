@@ -20,6 +20,8 @@ Folio kennt folgende Objekte:
 
 import (
 	"fmt"
+	"io/ioutil"
+	"log"
 
 	"github.com/emirpasic/gods/sets/hashset"
 	"github.com/npillmayer/gotype/core/dimen"
@@ -420,6 +422,12 @@ func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, prune
 			fb = kp.horizon.next()
 		}
 	}
+	tmpfile, err := ioutil.TempFile(".", "knuthplass-*.dot")
+	if err != nil {
+		log.Fatal(err)
+	}
+	c := khipu.NewCursor(cursor.Khipu())
+	kp.toGraphViz(c, tmpfile)
 	return kp.collectFeasibleBreakpoints(last)
 }
 
