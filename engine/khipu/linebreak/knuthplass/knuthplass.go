@@ -325,8 +325,8 @@ func (kp *linebreaker) isCheapestSurvivor(fb *feasibleBreakpoint, totalcost int3
 //
 // Question: Is the box-glue-model part of the central algorithm? Or is it
 // already a strategy (component) ?
-func (fb *feasibleBreakpoint) calculateCostsTo(penalty khipu.Penalty, parshape linebreak.Parshape) (
-	map[int]int32, bool) {
+func (fb *feasibleBreakpoint) calculateCostsTo(penalty khipu.Penalty, parshape linebreak.Parshape,
+	params *linebreak.Parameters) (map[int]int32, bool) {
 	//
 	T().Infof("### calculateCostsTo(%v)", penalty)
 	var costs = make(map[int]int32) // linecount => cost, i.e. costs for different line targets
@@ -339,19 +339,18 @@ func (fb *feasibleBreakpoint) calculateCostsTo(penalty khipu.Penalty, parshape l
 		T().Debugf("    +---%.2f--->    | %.2f", segwss.W.Points(), linelen.Points())
 		if segwss.W <= linelen { // natural width less than line-length
 			if segwss.Max >= linelen { // segment can stretch enough
-				d = calculateDemerits(segwss, linelen-segwss.W, penalty, 0)
+				d = calculateDemerits(segwss, linelen-segwss.W, penalty, params)
 			} else { // segment is just too short
-				// try with tolerance - misnomer, used otherweise in TeX
-				tolerance := 3 // TODO from typesetting parameters; 1 = rigid
-				stretchedwss := segwss.Copy()
-				stretchedwss.Max = dimen.Dimen(tolerance) * (segwss.Max - segwss.W)
-				if stretchedwss.Max >= linelen { // now segment can stretch enough
-					d = calculateDemerits(stretchedwss, linelen-segwss.W, penalty, tolerance)
+				if params.EmergencyStretch > 0 {
+					emStretch := segwss.Max + params.EmergencyStretch
+					if emStretch >= linelen { // now segment can stretch enough
+						d = calculateDemerits(segwss, linelen-segwss.W, penalty, params)
+					}
 				}
 			}
 		} else { // natural width larger than line-length
 			if segwss.Min <= linelen { // segment can shrink enough
-				d = calculateDemerits(segwss, segwss.W-linelen, penalty, 0)
+				d = calculateDemerits(segwss, segwss.W-linelen, penalty, params)
 			} else { // segment will not fit any more
 				// TeX has no tolerance for shrinking. Good?
 				// TODO introduce overfull-hbox break here? d slightly smaller than infinity?
@@ -375,10 +374,25 @@ func (fb *feasibleBreakpoint) segmentWidth(linecnt int) linebreak.WSS {
 	return segw
 }
 
-func calculateDemerits(segwss linebreak.WSS, stretch dimen.Dimen, penalty khipu.Penalty, tolerance int) int32 {
-	tolerancepenalty := 1000 // TODO from typesetting parameters
-	tolerancepenalty *= tolerance - 1
-	return 200 // TODO
+// Currently we try to replicated logic of TeX.
+func calculateDemerits(segwss linebreak.WSS, stretch dimen.Dimen, penalty khipu.Penalty,
+	params *linebreak.Parameters) int32 {
+	//
+	var d int32
+	p := linebreak.CapDemerits(penalty.Demerits())
+	p2 := p * p
+	badness := int32(stretch / segwss.W * 100)
+	b := (params.LinePenalty + badness)
+	b2 := b * b
+	if p > 0 {
+		d = b2 + p2
+	} else if d <= linebreak.InfinityDemerits {
+		d = b2
+	} else {
+		d = b2 - p2
+	}
+	d += penalty.Demerits()
+	return linebreak.CapDemerits(d)
 }
 
 func demeritsString(d int32) string {
@@ -409,7 +423,7 @@ func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, prune
 	kp.root = fb          // remember the start breakpoint
 	kp.horizon.append(fb) // this is the first "active node"
 	var last khipu.Mark   // will hold last position within input khipu
-	for cursor.Next() {   // loop over input
+	for cursor.Next() {   // loop over input knots
 		last = cursor.Mark()
 		T().Infof("_____________________________________________")
 		T().Infof("_______________ %d/%s ___________________", last.Position(), last.Knot())
@@ -426,12 +440,13 @@ func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, prune
 			if cursor.Mark().Knot().Type() == khipu.KTPenalty { // TODO discretionaries
 				penalty := penaltyAt(cursor) // find correct p, if more than one
 				var costs map[int]int32      // we want cost per linecnt-alternative
-				costs, stillreachable = fb.calculateCostsTo(penalty, parshape)
+				costs, stillreachable = fb.calculateCostsTo(penalty, parshape, params)
 				for linecnt, cost := range costs {
 					if cost < linebreak.InfinityDemerits { // new breakpoint is feasible
 						newfb := kp.newFeasibleLine(fb, cursor.Mark(), cost, linecnt+1, prune)
 						kp.horizon.append(newfb) // make new fb member of horizon n+1
 					}
+					// TODO what about under-/overfull hboxes?
 				}
 			}
 			if !stillreachable {
@@ -480,6 +495,8 @@ func penaltyAt(cursor linebreak.Cursor) khipu.Penalty {
 				penalty = p
 			}
 			knot, ok = cursor.Peek() // now check next knot
+		} else {
+			ok = false
 		}
 	}
 	return penalty
