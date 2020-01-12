@@ -314,10 +314,10 @@ func (kp *linebreaker) isCheapestSurvivor(fb *feasibleBreakpoint, totalcost int3
 //
 // Question: Is the box-glue-model part of the central algorithm? Or is it
 // already a strategy (component) ?
-func (fb *feasibleBreakpoint) calculateCostsTo(knot khipu.Knot, parshape linebreak.Parshape) (
+func (fb *feasibleBreakpoint) calculateCostsTo(penalty khipu.Penalty, parshape linebreak.Parshape) (
 	map[int]int32, bool) {
 	//
-	T().Infof("### calculateCostsTo(%v)", knot)
+	T().Infof("### calculateCostsTo(%v)", penalty)
 	var costs = make(map[int]int32) // linecount => cost, i.e. costs for different line targets
 	//var wss = linebreak.WSS{}.SetFromKnot(knot) // dimensions of next knot
 	//T().Debugf(" width of %v is %.2f bp", knot, knot.W().Points())
@@ -358,7 +358,7 @@ func (fb *feasibleBreakpoint) calculateCostsTo(knot khipu.Knot, parshape linebre
 		T().Debugf(" ## cost for line %d would be %s", linecnt+1, demeritsString(costs[linecnt]))
 	}
 	stillreachable := (cannotReachIt < len(fb.books))
-	T().Debugf("### costs to %v is %v, reachable is %v", knot, costs, stillreachable)
+	T().Debugf("### costs to %v is %v, reachable is %v", penalty, costs, stillreachable)
 	return costs, stillreachable
 }
 
@@ -403,7 +403,7 @@ func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, prune
 		fb = kp.horizon.first() // loop over feasible breakpoints of horizon
 		if fb == nil {
 			T().Errorf("no more active breakpoints, but input available")
-			T().Errorf("this should probably have produces an overfull hbox")
+			T().Errorf("this should probably have produced an overfull hbox")
 		}
 		for fb != nil { // while there are active breakpoints in horizon n
 			stillreachable := true
@@ -412,8 +412,9 @@ func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, prune
 			// Breakpoints are only allowed at penalties
 			// TODO collect penalties and use -10000 or max(p...)
 			if cursor.Mark().Knot().Type() == khipu.KTPenalty { // TODO discretionaries
-				var costs map[int]int32 // cost per linecnt-alternative
-				costs, stillreachable = fb.calculateCostsTo(cursor.Knot(), parshape)
+				penalty := penaltyAt(cursor) // find correct p, if more than one
+				var costs map[int]int32      // we want cost per linecnt-alternative
+				costs, stillreachable = fb.calculateCostsTo(penalty, parshape)
 				for linecnt, cost := range costs {
 					if cost < linebreak.InfinityDemerits { // new breakpoint is feasible
 						newfb := kp.newFeasibleLine(fb, cursor.Mark(), cost, linecnt+1, prune)
@@ -435,6 +436,41 @@ func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, prune
 	n, breaks := kp.collectFeasibleBreakpoints(last)
 	kp.toGraphViz(c, breaks, tmpfile)
 	return n, breaks
+}
+
+// penaltyAt iterates over all penalties, starting at the current cursor mark, and
+// collects penalties, searching for the most significant one.
+// Will return
+//
+//        -10000, if present
+//        max(p1, p2, ..., pn) otherwise
+//
+// Returns the most significant penalty. Advances the cursor over all adjacent penalties.
+// After this, the cursor mark may not reflect the position of the significant penalty.
+func penaltyAt(cursor linebreak.Cursor) khipu.Penalty {
+	if cursor.Knot().Type() != khipu.KTPenalty {
+		return khipu.Penalty(linebreak.InfinityDemerits)
+	}
+	penalty := cursor.Knot().(khipu.Penalty)
+	ignore := false // final penalty found, ignore all other penalties
+	knot, ok := cursor.Peek()
+	for ok {
+		if knot.Type() == khipu.KTPenalty {
+			cursor.Next() // advance to next penalty
+			if ignore {
+				break // just skip over adjacent penalties
+			}
+			p := knot.(khipu.Penalty)
+			if p.Demerits() <= linebreak.InfinityMerits { // -10000 must break (like in TeX)
+				penalty = p
+				ignore = true
+			} else if p.Demerits() > penalty.Demerits() {
+				penalty = p
+			}
+			knot, ok = cursor.Peek() // now check next knot
+		}
+	}
+	return penalty
 }
 
 func (kp *linebreaker) collectFeasibleBreakpoints(last khipu.Mark) (int, map[int][]khipu.Mark) {

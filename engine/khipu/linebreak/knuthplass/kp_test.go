@@ -40,7 +40,7 @@ func TestKP1(t *testing.T) {
 	for linecnt, breakpoints := range breaks {
 		t.Logf("# Paragraph with %d lines: %v", linecnt, breakpoints)
 		j := 0
-		for i := 1; i < len(breakpoints); i++ {
+		for i := 1; i < n; i++ {
 			t.Logf(": %s", kh.Text(j, breakpoints[i].Position()))
 			j = breakpoints[i].Position()
 		}

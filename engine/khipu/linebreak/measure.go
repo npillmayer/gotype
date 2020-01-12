@@ -37,6 +37,10 @@ func (fwc FixedWidthCursor) Knot() khipu.Knot {
 	return fwc.cursor.Knot()
 }
 
+func (fwc FixedWidthCursor) Peek() (khipu.Knot, bool) {
+	return fwc.cursor.Peek()
+}
+
 func (fwc FixedWidthCursor) Mark() khipu.Mark {
 	return fwc.cursor.Mark()
 }

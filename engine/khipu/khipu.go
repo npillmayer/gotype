@@ -323,6 +323,12 @@ func (p Penalty) IsDiscardable() bool {
 	return true
 }
 
+// Demerits returns the penalty as demerits.
+// No numeric changes are made.
+func (p Penalty) Demerits() int32 {
+	return int32(p)
+}
+
 // === Khipus ================================================================
 
 // Khipu is a string of knots.

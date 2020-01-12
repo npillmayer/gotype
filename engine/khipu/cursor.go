@@ -69,6 +69,18 @@ func (c *Cursor) Knot() Knot {
 	return k
 }
 
+// Peek is lookahead 1. Does not advance the cursor.
+// Returns true if the lookahead is at a valid position, false otherwise.
+func (c *Cursor) Peek() (Knot, bool) {
+	if c.IsValidPosition() {
+		if c.inx+1 < len(c.khipu.knots) {
+			k := c.khipu.knots[c.inx+1]
+			return k, true
+		}
+	}
+	return nil, false
+}
+
 // Mark returns a mark for the current position/glyph.
 func (c *Cursor) Mark() Mark {
 	return mark{

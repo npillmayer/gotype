@@ -107,6 +107,7 @@ func CapDemerits(d int32) int32 {
 type Cursor interface {
 	Next() bool
 	Knot() khipu.Knot
+	Peek() (khipu.Knot, bool)
 	Mark() khipu.Mark
 	Khipu() *khipu.Khipu
 }
