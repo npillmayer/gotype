@@ -68,7 +68,7 @@ func KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.Type
 	seg := pipeline.segmenter
 	for seg.Next() {
 		fragment := seg.Text()
-		CT().Infof("next segment = '%s'\twith penalties %v", fragment, seg.Penalties())
+		CT().Debugf("next segment = '%s'\twith penalties %v", fragment, seg.Penalties())
 		k := createPartialKhipuFromSegment(seg, pipeline, regs)
 		if regs.N(params.P_MINHYPHENLENGTH) < dimen.Infty {
 			HyphenateTextBoxes(k, pipeline, regs)
@@ -135,12 +135,12 @@ func HyphenateTextBoxes(khipu *Khipu, pipeline *TypesettingPipeline, regs *param
 			k = append(k, iterator.Knot())
 			continue
 		}
-		CT().Infof("knot = %v | %v", iterator.Knot(), iterator.Knot())
+		CT().Debugf("knot = %v | %v", iterator.Knot(), iterator.Knot())
 		text := iterator.AsTextBox().text
 		pipeline.words.Init(strings.NewReader(text))
 		for pipeline.words.Next() {
 			word := pipeline.words.Text()
-			CT().Infof("   word = '%s'", word)
+			CT().Debugf("   word = '%s'", word)
 			var syllables []string
 			isHyphenated := false
 			if len(word) >= regs.N(params.P_MINHYPHENLENGTH) {
@@ -195,12 +195,12 @@ func HyphenateWord(word string, regs *params.TypesettingRegisters) ([]string, bo
 	if dict == nil {
 		panic("TODO not yet implemented: find dictionnary for language")
 	}
-	CT().Infof("   will try to hyphenate word")
+	CT().Debugf("   will try to hyphenate word")
 	splitWord := dict.Hyphenate(word)
 	if len(splitWord) > 1 {
 		ok = true
 	}
-	CT().Infof("   %v", splitWord)
+	CT().Debugf("   %v", splitWord)
 	return splitWord, ok
 }
 

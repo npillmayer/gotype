@@ -16,6 +16,7 @@ import (
 func init() {
 	gconf.Initialize(configtestadapter.New())
 	gtrace.CoreTracer = gotestingadapter.New()
+	//gtrace.CoreTracer = gologadapter.New()
 }
 
 func TestDimen(t *testing.T) {
@@ -44,10 +45,10 @@ func TestBreaking1(t *testing.T) {
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelInfo)
 	regs := parameters.NewTypesettingRegisters()
 	regs.Push(parameters.P_MINHYPHENLENGTH, 3)
-	kh := KnotEncode(strings.NewReader("Hello World!"), nil, regs)
-	if kh.Length() != 9 {
+	kh := KnotEncode(strings.NewReader("Hello World "), nil, regs)
+	if kh.Length() != 10 {
 		t.Logf("khipu = %s", kh)
-		t.Errorf("khipu length is %d, should be 9", kh.Length())
+		t.Errorf("khipu length is %d, should be 10", kh.Length())
 	}
 }
 
