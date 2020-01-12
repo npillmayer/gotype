@@ -26,6 +26,19 @@ func ExampleWordBreaker() {
 	// '🇩🇪'
 	// '!'
 }
+func TestWordBreaks1(t *testing.T) {
+	onWords := uax29.NewWordBreaker()
+	segmenter := segment.NewSegmenter(onWords)
+	segmenter.Init(strings.NewReader("Hello World "))
+	n := 0
+	for segmenter.Next() {
+		t.Logf("'%s'\n", segmenter.Text())
+		n++
+	}
+	if n != 4 {
+		t.Errorf("Expected # of segments to be 4, is %d", n)
+	}
+}
 
 func TestWordBreakTestFile(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
