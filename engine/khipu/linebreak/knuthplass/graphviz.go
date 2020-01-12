@@ -11,15 +11,17 @@ import (
 // Parameters for GraphViz drawing.
 type graphParamsType struct {
 	Fontname string
-	//NodeTmpl       *template.Template
 }
 
-func allBreakpointBoxes(kp *linebreaker, kh *khipu.Khipu, boxT *template.Template,
-	w io.Writer) map[int]*n {
+func allBreakpointBoxes(kp *linebreaker, kh *khipu.Khipu, optimal map[int][]khipu.Mark,
+	boxT *template.Template, w io.Writer) map[int]*n {
 	//
 	breakBoxes := make(map[int]*n)
 	for _, fb := range kp.nodes {
 		box := makeBox(fb, kh)
+		if ok, _ := isOptimal(fb.mark, optimal); ok {
+			box.Color = "darkolivegreen1"
+		}
 		if err := boxT.Execute(w, box); err != nil {
 			panic(err)
 		}
@@ -50,10 +52,29 @@ func allEdges(kp *linebreaker, kh *khipu.Khipu, boxes map[int]*n, edgeT *templat
 	}
 }
 
+func isOptimal(mark khipu.Mark, results map[int][]khipu.Mark) (bool, int) {
+	for l, breaks := range results {
+		if contains(breaks, mark) {
+			return true, l
+		}
+	}
+	return false, 0
+}
+
+func contains(s []khipu.Mark, e khipu.Mark) bool {
+	for _, a := range s {
+		if a.Position() == e.Position() {
+			return true
+		}
+	}
+	return false
+}
+
 func makeBox(fb *feasibleBreakpoint, kh *khipu.Khipu) *n {
 	box := &n{
 		khipu: kh,
 		Mark:  fb.mark,
+		Color: "grey90",
 	}
 	if fb.mark.Position() < 0 {
 		box.Text = "root"
@@ -75,7 +96,7 @@ func (kp *linebreaker) toGraphViz(cursor *khipu.Cursor, results map[int][]khipu.
 	boxT := template.Must(template.New("box").Parse(boxTmpl))
 	edgeT := template.Must(template.New("edge").Parse(edgeTmpl))
 	// cursor.Next()
-	boxes := allBreakpointBoxes(kp, cursor.Khipu(), boxT, w)
+	boxes := allBreakpointBoxes(kp, cursor.Khipu(), results, boxT, w)
 	allEdges(kp, cursor.Khipu(), boxes, edgeT, w)
 	w.Write([]byte("}\n"))
 }
@@ -85,6 +106,7 @@ type n struct {
 	Mark  khipu.Mark
 	Name  string
 	Text  string
+	Color string
 }
 
 type e struct {
@@ -92,20 +114,21 @@ type e struct {
 	Cost, Total int32
 	Line        int
 	Text        string
+	Color       string
 }
 
 const graphHeader = `digraph g {                                                                                                             
-  graph [labelloc="t" label="" splines=true overlap=false];
-  graph [{{ .Fontname }} = "helvetica" fontsize=12] ;
-   node [fontname = "{{ .Fontname }}" fontsize=12] ;
-   edge [fontname = "{{ .Fontname }}" fontsize=9 labelfontsize=9 labeldistance=5.0] ;
+  graph [labelloc="t" label="" splines=true overlap=false, labeljust="c"];
+  graph [{{ .Fontname }} = "helvetica" fontsize=11] ;
+   node [fontname = "Courier" fontsize=11 labeljust="c"] ;
+   edge [fontname = "{{ .Fontname }}" fontsize=8 labelfontsize=9 labeldistance=5.0] ;
 `
 
-const boxTmpl = `{{ .Name }}	[ label="{{ .Text }}" shape=box style=filled fillcolor=grey95 fontname="Courier" fontsize=11.0 ] ;
+const boxTmpl = `{{.Name}}	[ label="{{.Text}}" shape=box style=filled fillcolor={{.Color}} ] ;
 `
 
 //const edgeTmpl = `{{ .N1.Name }} -> {{ .N2.Name }} [weight=1] ;
-const edgeTmpl = `{{.N1.Name}} -> {{.N2.Name}} [weight=1 label="{{.Cost}} of\n{{.Total}}\nl={{.Line}}" tooltip="{{ .Text }}"] ;
+const edgeTmpl = `{{.N1.Name}} -> {{.N2.Name}} [weight=1 label="{{.Cost}} of\n{{.Total}}\nline={{.Line}}" tooltip="“{{ .Text }}”" ] ;
 `
 
 // ----------------------------------------------------------------------
