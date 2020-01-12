@@ -488,13 +488,25 @@ var inhibitBreakBefore = []int{1000, 0}
 // ProceedWithRune is part of interface UnicodeBreaker
 func (swb *SimpleWordBreaker) ProceedWithRune(r rune, cpClass int) {
 	if r == 0 {
-		swb.penalties = immediateBreakBefore // break before end of text
+		if swb.matchLen > 0 { // previous rune(s) is/were whitespace
+			// close a match of length matchLen (= count of whitespace runes)
+			swb.penalties = swb.penaltiesSlice[:0]       // re-set penalties
+			swb.penalties = append(swb.penalties, 1000)  // inhibit break before WS span
+			swb.penalties = append(swb.penalties, -2000) // break point
+			for i := 2; i <= swb.matchLen; i++ {         // inhibit break between WS runes
+				swb.penalties = append(swb.penalties, 1000)
+			}
+			swb.penalties = append(swb.penalties, -900) // break before end of text
+			swb.matchLen = 0
+		} else {
+			swb.penalties = immediateBreakBefore // break before end of text
+		}
 	} else if cpClass == 1 { // rune is whitespace
 		swb.matchLen++
 		swb.penalties = nil
 	} else { // non-whitespace
 		if swb.matchLen > 0 { // previous rune(s) is/were whitespace
-			// close a match of length mathLen (= count of whitespace runes)
+			// close a match of length matchLen (= count of whitespace runes)
 			swb.penalties = swb.penaltiesSlice[:0]      // re-set penalties
 			swb.penalties = append(swb.penalties, 1000) // inhibit break before WS span
 			swb.penalties = append(swb.penalties, -100) // break point

@@ -5,10 +5,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/npillmayer/gotype/core/config/gtrace"
+
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 )
 
 func TestWhitespace1(t *testing.T) {
+	gtrace.CoreTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	seg := NewSegmenter()
@@ -19,12 +22,45 @@ func TestWhitespace1(t *testing.T) {
 }
 
 func TestWhitespace2(t *testing.T) {
+	gtrace.CoreTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	seg := NewSegmenter()
 	seg.Init(strings.NewReader("	for (i=0; i<5; i++)   count += i;"))
 	for seg.Next() {
 		t.Logf("segment = '%s' with p = %d", seg.Text(), seg.Penalties()[0])
+	}
+}
+
+func TestSimpleSegmenter1(t *testing.T) {
+	gtrace.CoreTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	seg := NewSegmenter() // will use a SimpleWordBreaker
+	seg.Init(strings.NewReader("Hello World "))
+	n := 0
+	for seg.Next() {
+		t.Logf("segment: penalty = %5d for breaking after '%s'\n", seg.Penalties()[0], seg.Text())
+		n++
+	}
+	if n != 4 {
+		t.Errorf("Expected 4 segments, have %d", n)
+	}
+}
+
+func TestSimpleSegmenter2(t *testing.T) {
+	gtrace.CoreTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	seg := NewSegmenter() // will use a SimpleWordBreaker
+	seg.Init(strings.NewReader("Hello World, how are you?"))
+	n := 0
+	for seg.Next() {
+		t.Logf("segment: penalty = %5d for breaking after '%s'\n", seg.Penalties()[0], seg.Text())
+		n++
+	}
+	if n != 9 {
+		t.Errorf("Expected 9 segments, have %d", n)
 	}
 }
 
