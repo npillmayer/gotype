@@ -6,15 +6,22 @@ import (
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
+	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 	"github.com/npillmayer/gotype/core/dimen"
 	"github.com/npillmayer/gotype/core/parameters"
 	"github.com/npillmayer/gotype/engine/khipu"
 	"github.com/npillmayer/gotype/engine/khipu/linebreak"
 )
 
-func init() {
-	gtrace.CoreTracer = gotestingadapter.New()
+func TestGraph1(t *testing.T) {
+	gtrace.CoreTracer = gologadapter.New()
+	// teardown := gotestingadapter.RedirectTracing(t)
+	// defer teardown()
+	g := newLinebreaker(nil)
+	g.newBreakpointAtMark(provisionalMark(1))
+	if g.Breakpoint(1) == nil {
+		t.Errorf("Expected to find breakpoint at %d in graph, is nil", 1)
+	}
 }
 
 func setupKhipu(t *testing.T, paragraph string) (*khipu.Khipu, linebreak.Cursor) {
@@ -22,19 +29,20 @@ func setupKhipu(t *testing.T, paragraph string) (*khipu.Khipu, linebreak.Cursor)
 	regs.Push(parameters.P_MINHYPHENLENGTH, 3)
 	kh := khipu.KnotEncode(strings.NewReader(paragraph), nil, regs)
 	if kh == nil {
-		t.Errorf("nokKhipu to test; input is %s", paragraph)
+		t.Errorf("no Khipu to test; input is %s", paragraph)
 	}
+	gtrace.CoreTracer.Infof("khipu=%s", kh.String())
 	kh.AppendKnot(khipu.Penalty(linebreak.InfinityMerits))
-	t.Logf("khipu=%s", kh.String())
 	cursor := linebreak.NewFixedWidthCursor(khipu.NewCursor(kh), 10*dimen.BP)
 	return kh, cursor
 }
 
 func TestKP1(t *testing.T) {
-	gtrace.CoreTracer.SetTraceLevel(tracing.LevelError)
-	teardown := gotestingadapter.RedirectTracing(t)
-	defer teardown()
-	kh, cursor := setupKhipu(t, "The quick ")
+	gtrace.CoreTracer = gologadapter.New()
+	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
+	//teardown := gotestingadapter.RedirectTracing(t)
+	//defer teardown()
+	kh, cursor := setupKhipu(t, "Hello World ")
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
 	parshape := linebreak.RectangularParshape(10 * 10 * dimen.BP)
 	n, breaks, err := FindBreakpoints(cursor, parshape, true, nil)
@@ -52,8 +60,8 @@ func TestKP1(t *testing.T) {
 
 func testKP2(t *testing.T) {
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelError)
-	teardown := gotestingadapter.RedirectTracing(t)
-	defer teardown()
+	//teardown := gotestingadapter.RedirectTracing(t)
+	//defer teardown()
 	_, cursor := setupKhipu(t, "The quick brown fox jumps over the lazy dog!")
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
 	parshape := linebreak.RectangularParshape(10 * 10 * dimen.BP)
