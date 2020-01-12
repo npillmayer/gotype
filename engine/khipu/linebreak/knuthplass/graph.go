@@ -51,6 +51,7 @@ func newFBGraph() *fbGraph {
 type wEdge struct {
 	from, to  int // this is an edge between two text-positions
 	cost      int32
+	total     int32
 	linecount int
 }
 
@@ -65,11 +66,12 @@ func (e wEdge) isNull() bool {
 // newWEdge returns a new weighted edge from one breakpoint to another,
 // given two breakpoints and a label-key.
 // It is not yet inserted into a graph.
-func newWEdge(from, to *feasibleBreakpoint, cost int32, linecnt int) wEdge {
+func newWEdge(from, to *feasibleBreakpoint, cost int32, total int32, linecnt int) wEdge {
 	return wEdge{
 		from:      from.mark.Position(),
 		to:        to.mark.Position(),
 		cost:      cost,
+		total:     total,
 		linecount: linecnt,
 	}
 }
@@ -99,11 +101,25 @@ func (g *fbGraph) Edge(from, to *feasibleBreakpoint, linecnt int) wEdge {
 	return nullEdge
 }
 
-func (g *fbGraph) EdgeFrom(edge wEdge) *feasibleBreakpoint {
+func (g *fbGraph) StartOfEdge(edge wEdge) *feasibleBreakpoint {
 	if from, ok := g.nodes[edge.from]; ok {
 		return from
 	}
 	return nil
+}
+
+func (g *fbGraph) Edges() []wEdge {
+	//edgesTo: map[int]map[int]map[int]wEdge
+	var edges []wEdge
+	for _, from := range g.edgesTo {
+		for _, edgesDict := range from {
+			for _, e := range edgesDict {
+				// edge for line l
+				edges = append(edges, e)
+			}
+		}
+	}
+	return edges
 }
 
 // Edges returns all the edges in the graph.
@@ -247,7 +263,7 @@ func (g *fbGraph) RemoveNode(id int) {
 // AddEdge adds a weighted edge from one node to another. Endpoints which are
 // not yet contained in the graph are added.
 // Does nothing if from=to.
-func (g *fbGraph) AddEdge(from, to *feasibleBreakpoint, cost int32, linecnt int) {
+func (g *fbGraph) AddEdge(from, to *feasibleBreakpoint, cost int32, total int32, linecnt int) {
 	if from.mark.Position() == to.mark.Position() {
 		return
 	}
@@ -258,7 +274,7 @@ func (g *fbGraph) AddEdge(from, to *feasibleBreakpoint, cost int32, linecnt int)
 		g.Add(to)
 	}
 	if g.Edge(from, to, linecnt).isNull() {
-		edge := newWEdge(from, to, cost, linecnt)
+		edge := newWEdge(from, to, cost, total, linecnt)
 		// if f, ok := g.from[from.mark.Position()]; ok {
 		// 	f[to.mark.Position()] = edge
 		// } else {
