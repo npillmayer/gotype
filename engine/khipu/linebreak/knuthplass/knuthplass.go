@@ -96,6 +96,7 @@ func (h *activeFeasibleBreakpoints) next() *feasibleBreakpoint {
 	return fb
 }
 
+/*
 func (h *activeFeasibleBreakpoints) append(fb *feasibleBreakpoint) {
 	h.Add(fb)
 }
@@ -103,6 +104,11 @@ func (h *activeFeasibleBreakpoints) append(fb *feasibleBreakpoint) {
 func (h *activeFeasibleBreakpoints) remove(fb *feasibleBreakpoint) {
 	h.Remove(fb)
 }
+
+func (h *activeFeasibleBreakpoints) empty() bool {
+	return h.Empty()
+}
+*/
 
 // --- Breakpoints -----------------------------------------------------------
 
@@ -347,6 +353,12 @@ func (fb *feasibleBreakpoint) calculateCostsTo(penalty khipu.Penalty, parshape l
 						d = calculateDemerits(segwss, linelen-segwss.W, penalty, params)
 					}
 				}
+				if d == linebreak.InfinityDemerits &&
+					penalty.Demerits() <= linebreak.InfinityMerits {
+					// TODO underfull hbox
+					T().Infof("UNDERFULL HBOX")
+					panic("UNDERFULL HBOX")
+				}
 			}
 		} else { // natural width larger than line-length
 			if segwss.Min <= linelen { // segment can shrink enough
@@ -386,12 +398,11 @@ func calculateDemerits(segwss linebreak.WSS, stretch dimen.Dimen, penalty khipu.
 	b2 := b * b
 	if p > 0 {
 		d = b2 + p2
-	} else if d <= linebreak.InfinityDemerits {
+	} else if d <= linebreak.InfinityMerits {
 		d = b2
 	} else {
 		d = b2 - p2
 	}
-	d += penalty.Demerits()
 	return linebreak.CapDemerits(d)
 }
 
@@ -420,10 +431,10 @@ func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, prune
 	kp.params = params
 	fb := kp.newBreakpointAtMark(provisionalMark(-1)) // start of paragraph
 	fb.books[0] = &bookkeeping{}
-	kp.root = fb          // remember the start breakpoint
-	kp.horizon.append(fb) // this is the first "active node"
-	var last khipu.Mark   // will hold last position within input khipu
-	for cursor.Next() {   // loop over input knots
+	kp.root = fb        // remember the start breakpoint
+	kp.horizon.Add(fb)  // this is the first "active node"
+	var last khipu.Mark // will hold last position within input khipu
+	for cursor.Next() { // loop over input knots
 		last = cursor.Mark()
 		T().Infof("_____________________________________________")
 		T().Infof("_______________ %d/%s ___________________", last.Position(), last.Knot())
@@ -431,26 +442,35 @@ func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, prune
 		if fb == nil {
 			T().Errorf("no more active breakpoints, but input available")
 			T().Errorf("this should probably have produced an overfull hbox")
+			panic("no more active breakpoints, but input available")
 		}
 		for fb != nil { // while there are active breakpoints in horizon n
-			stillreachable := true
 			T().Infof("                %d/%v  (in horizon)", fb.mark.Position(), fb.mark.Knot())
 			fb.UpdateSegmentBookkeeping(cursor.Mark())
 			// Breakpoints are only allowed at penalties
 			if cursor.Mark().Knot().Type() == khipu.KTPenalty { // TODO discretionaries
+				stillreachable := true
 				penalty := penaltyAt(cursor) // find correct p, if more than one
 				var costs map[int]int32      // we want cost per linecnt-alternative
 				costs, stillreachable = fb.calculateCostsTo(penalty, parshape, params)
-				for linecnt, cost := range costs {
-					if cost < linebreak.InfinityDemerits { // new breakpoint is feasible
-						newfb := kp.newFeasibleLine(fb, cursor.Mark(), cost, linecnt+1, prune)
-						kp.horizon.append(newfb) // make new fb member of horizon n+1
+				if stillreachable {
+					for linecnt, cost := range costs {
+						if cost < linebreak.InfinityDemerits { // new breakpoint is feasible
+							newfb := kp.newFeasibleLine(fb, cursor.Mark(), cost, linecnt+1, prune)
+							kp.horizon.Add(newfb) // make new fb member of horizon n+1
+						}
 					}
-					// TODO what about under-/overfull hboxes?
+				} else { // TODO restructure loop above
+					if kp.horizon.Size() <= 1 {
+						T().Debugf("OVERFILL HBOX")
+						for linecnt := range costs {
+							newfb := kp.newFeasibleLine(fb, cursor.Mark(), linebreak.InfinityDemerits,
+								linecnt+1, prune)
+							kp.horizon.Add(newfb) // make new fb member of horizon n+1
+						}
+					}
+					kp.horizon.Remove(fb) // no longer valid in horizon
 				}
-			}
-			if !stillreachable {
-				kp.horizon.remove(fb) // no longer valid in horizon
 			}
 			fb = kp.horizon.next()
 		}
