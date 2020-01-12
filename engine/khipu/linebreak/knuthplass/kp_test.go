@@ -17,26 +17,28 @@ func init() {
 	gtrace.CoreTracer = gotestingadapter.New()
 }
 
+func setupKhipu(t *testing.T, paragraph string) (*khipu.Khipu, linebreak.Cursor) {
+	regs := parameters.NewTypesettingRegisters()
+	regs.Push(parameters.P_MINHYPHENLENGTH, 3)
+	kh := khipu.KnotEncode(strings.NewReader(paragraph), nil, regs)
+	if kh == nil {
+		t.Errorf("nokKhipu to test; input is %s", paragraph)
+	}
+	kh.AppendKnot(khipu.Penalty(linebreak.InfinityMerits))
+	t.Logf("khipu=%s", kh.String())
+	cursor := linebreak.NewFixedWidthCursor(khipu.NewCursor(kh), 10*dimen.BP)
+	return kh, cursor
+}
+
 func TestKP1(t *testing.T) {
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelError)
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
-	regs := parameters.NewTypesettingRegisters()
-	regs.Push(parameters.P_MINHYPHENLENGTH, 3)
-	//kh := khipu.KnotEncode(strings.NewReader("The quick brown fox jumps over the lazy dog!"), nil, regs)
-	kh := khipu.KnotEncode(strings.NewReader("The quick brown "), nil, regs)
-	if kh.Length() < 5 {
-		t.Errorf("Length of khipu is too short; is %d", kh.Length())
-	}
-	kh.AppendKnot(khipu.Penalty(linebreak.InfinityMerits))
-	t.Logf("khipu=%s", kh.String())
+	kh, cursor := setupKhipu(t, "The quick ")
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
-	var cursor linebreak.Cursor
-	cursor = khipu.NewCursor(kh)
-	cursor = linebreak.NewFixedWidthCursor(cursor, 10*dimen.BP)
 	parshape := linebreak.RectangularParshape(10 * 10 * dimen.BP)
-	n, breaks := FindBreakpoints(cursor, parshape, true)
-	t.Logf("%d linebreaking-variants found", n)
+	n, breaks, err := FindBreakpoints(cursor, parshape, true, nil)
+	t.Logf("%d linebreaking-variants found, error = %v", n, err)
 	for linecnt, breakpoints := range breaks {
 		t.Logf("# Paragraph with %d lines: %v", linecnt, breakpoints)
 		j := 0
@@ -46,4 +48,18 @@ func TestKP1(t *testing.T) {
 		}
 	}
 	t.Fail()
+}
+
+func testKP2(t *testing.T) {
+	gtrace.CoreTracer.SetTraceLevel(tracing.LevelError)
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	_, cursor := setupKhipu(t, "The quick brown fox jumps over the lazy dog!")
+	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
+	parshape := linebreak.RectangularParshape(10 * 10 * dimen.BP)
+	n, breaks, err := FindBreakpoints(cursor, parshape, true, nil)
+	t.Logf("%d linebreaking-variants found, error = %v", n, err)
+	if err != nil || n != 2 || len(breaks[3]) != 2 {
+		t.Fail()
+	}
 }

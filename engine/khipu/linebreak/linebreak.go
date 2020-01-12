@@ -49,6 +49,32 @@ func T() tracing.Trace {
 	return gtrace.CoreTracer
 }
 
+// ----------------------------------------------------------------------
+
+// Parameters is a collection of configuration parameters for line-breaking.
+type Parameters struct {
+	Tolerance            int32       // acceptable demerits
+	PreTolerance         int32       // acceptabale demerits for first (rough) pass
+	LinePenalty          int32       // penalty for an additional line
+	DoubleHyphenDemerits int32       // demerits for consecutive hyphens
+	FinalHyphenDemerits  int32       // demerits for hyphen in the last line
+	EmergencyStretch     dimen.Dimen // stretching acceptable when desperate
+}
+
+// DefaultParameters are the standard line-breaking parameters.
+// The promote a tolerant configuration, suitable for almost always finding an
+// acceptable set of linebreaks.
+var DefaultParameters = &Parameters{
+	Tolerance:            5000,
+	PreTolerance:         100,
+	LinePenalty:          10,
+	DoubleHyphenDemerits: 0,
+	FinalHyphenDemerits:  50,
+	EmergencyStretch:     dimen.Dimen(dimen.BP * 50),
+}
+
+// ----------------------------------------------------------------------
+
 // WSS (width stretch & shrink) is a type to hold an elastic width (of text).
 type WSS struct {
 	W   dimen.Dimen
@@ -75,6 +101,15 @@ func (wss WSS) Add(other WSS) WSS {
 		W:   wss.W + other.W,
 		Min: wss.Min + other.Min,
 		Max: wss.Max + other.Max,
+	}
+}
+
+// Subtract subtracts dimensions from a given WSS from wss, returning a new WSS.
+func (wss WSS) Subtract(other WSS) WSS {
+	return WSS{
+		W:   wss.W - other.W,
+		Min: wss.Min - other.Min,
+		Max: wss.Max - other.Max,
 	}
 }
 

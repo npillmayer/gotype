@@ -19,6 +19,7 @@ Folio kennt folgende Objekte:
 */
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -32,12 +33,11 @@ import (
 // linebreaker is an internal entity for K&P-linebreaking.
 type linebreaker struct {
 	*fbGraph
-	//*sg.WeightedDirectedGraph
-	//beading  Beading
-	parshape linebreak.Parshape
-	horizon  *activeFeasibleBreakpoints
-	root     *feasibleBreakpoint // "break" at start of paragraph
-	end      *feasibleBreakpoint // "break" at end of paragraph
+	horizon  *activeFeasibleBreakpoints // horizon of possible linebreaks
+	params   *linebreak.Parameters      // typesetting parameters relevant for line-breaking
+	parshape linebreak.Parshape         // target shape of the paragraph
+	root     *feasibleBreakpoint        // "break" at start of paragraph
+	end      *feasibleBreakpoint        // "break" at end of paragraph
 }
 
 func newLinebreaker(parshape linebreak.Parshape) *linebreaker {
@@ -46,6 +46,17 @@ func newLinebreaker(parshape linebreak.Parshape) *linebreaker {
 	kp.parshape = parshape
 	kp.horizon = newActiveFeasibleBreakpoints()
 	return kp
+}
+
+func newKPDefaultParameters() *linebreak.Parameters {
+	return &linebreak.Parameters{
+		Tolerance:            1000,
+		PreTolerance:         500,
+		LinePenalty:          20,
+		DoubleHyphenDemerits: 200,
+		FinalHyphenDemerits:  500,
+		EmergencyStretch:     dimen.Dimen(dimen.BP * 20),
+	}
 }
 
 // --- Horizon (active Nodes) ------------------------------------------------
@@ -319,35 +330,28 @@ func (fb *feasibleBreakpoint) calculateCostsTo(penalty khipu.Penalty, parshape l
 	//
 	T().Infof("### calculateCostsTo(%v)", penalty)
 	var costs = make(map[int]int32) // linecount => cost, i.e. costs for different line targets
-	//var wss = linebreak.WSS{}.SetFromKnot(knot) // dimensions of next knot
-	//T().Debugf(" width of %v is %.2f bp", knot, knot.W().Points())
 	cannotReachIt := 0
-	//for linecnt, bookkeeping := range fb.books {
 	for linecnt := range fb.books {
 		T().Debugf(" ## checking cost at linecnt=%d", linecnt)
 		d := linebreak.InfinityDemerits             // pre-set result variable
 		linelen := parshape.LineLength(linecnt + 1) // length of line to fit into
-		// wss := linebreak.WSS{}.SetFromKnot(knot)    // dimensions of next knot, should be 0
-		// segwss := fb.Book(linecnt).segment.Add(wss) // widths of segment including knot
-		// TODO: introduce a method which subtracts ...Discard
-		segwss := fb.Book(linecnt).segment // TOOD includes glue => too long
-		//segwss := fb.calculateSegmentWidth(knot, linecnt)
+		segwss := fb.segmentWidth(linecnt)
 		T().Debugf("    +---%.2f--->    | %.2f", segwss.W.Points(), linelen.Points())
 		if segwss.W <= linelen { // natural width less than line-length
 			if segwss.Max >= linelen { // segment can stretch enough
-				d = calculateDemerits(segwss, linelen-segwss.W, 0)
+				d = calculateDemerits(segwss, linelen-segwss.W, penalty, 0)
 			} else { // segment is just too short
 				// try with tolerance - misnomer, used otherweise in TeX
 				tolerance := 3 // TODO from typesetting parameters; 1 = rigid
 				stretchedwss := segwss.Copy()
 				stretchedwss.Max = dimen.Dimen(tolerance) * (segwss.Max - segwss.W)
 				if stretchedwss.Max >= linelen { // now segment can stretch enough
-					d = calculateDemerits(stretchedwss, linelen-segwss.W, tolerance)
+					d = calculateDemerits(stretchedwss, linelen-segwss.W, penalty, tolerance)
 				}
 			}
 		} else { // natural width larger than line-length
 			if segwss.Min <= linelen { // segment can shrink enough
-				d = calculateDemerits(segwss, segwss.W-linelen, 0)
+				d = calculateDemerits(segwss, segwss.W-linelen, penalty, 0)
 			} else { // segment will not fit any more
 				// TeX has no tolerance for shrinking. Good?
 				// TODO introduce overfull-hbox break here? d slightly smaller than infinity?
@@ -362,14 +366,16 @@ func (fb *feasibleBreakpoint) calculateCostsTo(penalty khipu.Penalty, parshape l
 	return costs, stillreachable
 }
 
-// func (fb *feasibleBreakpoint) calculateSegmentWidth(knot khipu.Knot, linecnt int) linebreak.WSS {
-// 	var segwss linebreak.WSS
-// 	wss := linebreak.WSS{}.SetFromKnot(knot) // dimensions of next knot
-// 	segwss = fb.Book(linecnt).segment.Add(wss)
-// 	return segwss
-// }
+// segmentWidth returns the widths of a segment at fb, subtracting discardable
+// items at the start of the segment and at the end (= possible breakpoint).
+func (fb *feasibleBreakpoint) segmentWidth(linecnt int) linebreak.WSS {
+	segw := fb.Book(linecnt).segment
+	segw = segw.Subtract(fb.Book(linecnt).startDiscard)
+	segw = segw.Subtract(fb.Book(linecnt).breakDiscard)
+	return segw
+}
 
-func calculateDemerits(segwss linebreak.WSS, stretch dimen.Dimen, tolerance int) int32 {
+func calculateDemerits(segwss linebreak.WSS, stretch dimen.Dimen, penalty khipu.Penalty, tolerance int) int32 {
 	tolerancepenalty := 1000 // TODO from typesetting parameters
 	tolerancepenalty *= tolerance - 1
 	return 200 // TODO
@@ -387,10 +393,17 @@ func demeritsString(d int32) string {
 // --- Main API ---------------------------------------------------------
 
 // FindBreakpoints is the main client API.
-func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, prune bool) (
-	int, map[int][]khipu.Mark) {
+func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, prune bool, params *linebreak.Parameters) (
+	int, map[int][]khipu.Mark, error) {
 	//
+	if parshape == nil {
+		return 0, nil, errors.New("cannot shape a paragraph without a Parshape")
+	}
 	kp := newLinebreaker(parshape)
+	if params == nil {
+		params = newKPDefaultParameters()
+	}
+	kp.params = params
 	fb := kp.newBreakpointAtMark(provisionalMark(-1)) // start of paragraph
 	fb.books[0] = &bookkeeping{}
 	kp.root = fb          // remember the start breakpoint
@@ -410,7 +423,6 @@ func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, prune
 			T().Infof("                %d/%v  (in horizon)", fb.mark.Position(), fb.mark.Knot())
 			fb.UpdateSegmentBookkeeping(cursor.Mark())
 			// Breakpoints are only allowed at penalties
-			// TODO collect penalties and use -10000 or max(p...)
 			if cursor.Mark().Knot().Type() == khipu.KTPenalty { // TODO discretionaries
 				penalty := penaltyAt(cursor) // find correct p, if more than one
 				var costs map[int]int32      // we want cost per linecnt-alternative
@@ -435,7 +447,7 @@ func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, prune
 	c := khipu.NewCursor(cursor.Khipu())
 	n, breaks := kp.collectFeasibleBreakpoints(last)
 	kp.toGraphViz(c, breaks, tmpfile)
-	return n, breaks
+	return n, breaks, nil
 }
 
 // penaltyAt iterates over all penalties, starting at the current cursor mark, and
