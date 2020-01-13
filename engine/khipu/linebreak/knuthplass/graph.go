@@ -1,5 +1,49 @@
 package knuthplass
 
+/*
+
+Some code in this file is loosely beased on ideas from the great
+Gonum project.
+
+Gonum-License
+
+Copyright ©2014 The Gonum Authors. All rights reserved.
+Use of Gonum source code is governed by a BSD-style
+license that can be found in the LICENSES file.
+
+BSD License
+
+Copyright (c) 2017–20, Norbert Pillmayer
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+3. Neither the name of this software nor the names of its contributors
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
+
 import (
 	"fmt"
 	"sort"
@@ -12,11 +56,6 @@ import (
 // is in some respects too restrictive and in others too much of an overkill
 // for our needs. Moreover, it panics in certain error conditions.
 // We taylor it heavily to fit our specific needs.
-//
-// Gonum-license:
-// Copyright ©2014 The Gonum Authors. All rights reserved.
-// Use of Gonum source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
 //
 // A node in the graph refers to a numeric position within an input text.
 // The text is represented by a khipu (see package khipu), which is something
@@ -35,16 +74,17 @@ import (
 type fbGraph struct {
 	nodes map[int]*feasibleBreakpoint
 	//from    map[int]map[int][]wEdge
-	edgesTo map[int]map[int]map[int]wEdge // edge to, from, with linecount
+	edgesTo     map[int]map[int]map[int]wEdge // edge to, from, with linecount
+	prunedEdges map[int]map[int]map[int]wEdge // we conserve deleted edges
 }
 
 // newFBGraph returns a fbGraph with the specified self and absent
 // edge weight values.
 func newFBGraph() *fbGraph {
 	return &fbGraph{
-		nodes: make(map[int]*feasibleBreakpoint),
-		//from:    make(map[int]map[int][]wEdge),
-		edgesTo: make(map[int]map[int]map[int]wEdge),
+		nodes:       make(map[int]*feasibleBreakpoint),
+		edgesTo:     make(map[int]map[int]map[int]wEdge),
+		prunedEdges: make(map[int]map[int]map[int]wEdge),
 	}
 }
 
@@ -108,7 +148,9 @@ func (g *fbGraph) StartOfEdge(edge wEdge) *feasibleBreakpoint {
 	return nil
 }
 
-func (g *fbGraph) Edges() []wEdge {
+// Edges returns all known edges of a graph. if includePruned is true,
+// deleted edges will be included.
+func (g *fbGraph) Edges(includePrunded bool) []wEdge {
 	//edgesTo: map[int]map[int]map[int]wEdge
 	var edges []wEdge
 	for _, from := range g.edgesTo {
@@ -119,80 +161,18 @@ func (g *fbGraph) Edges() []wEdge {
 			}
 		}
 	}
-	return edges
-}
-
-// Edges returns all the edges in the graph.
-/*
-func (g *fbGraph) Edges() graph.Edges {
-	var edges []graph.Edge
-	for _, u := range g.nodes {
-		for _, e := range g.from[u.ID()] {
-			edges = append(edges, e)
+	if includePrunded {
+		for _, from := range g.prunedEdges {
+			for _, edgesDict := range from {
+				for _, e := range edgesDict {
+					// edge for line l
+					edges = append(edges, e)
+				}
+			}
 		}
 	}
-	if len(edges) == 0 {
-		return graph.Empty
-	}
-	return iterator.NewOrderedEdges(edges)
+	return edges
 }
-*/
-
-// From returns all nodes in g that can be reached directly from n.
-/*
-func (g *fbGraph) From(id int) graph.Nodes {
-	if _, ok := g.from[id]; !ok {
-		return graph.Empty
-	}
-
-	from := make([]graph.Node, len(g.from[id]))
-	i := 0
-	for vid := range g.from[id] {
-		from[i] = g.nodes[vid]
-		i++
-	}
-	if len(from) == 0 {
-		return graph.Empty
-	}
-	return iterator.NewOrderedNodes(from)
-}
-*/
-
-// HasEdgeBetween returns whether an edge exists between nodes x and y without
-// considering direction.
-/*
-func (g *fbGraph) HasEdgeBetween(xid, yid int) bool {
-	if _, ok := g.from[xid][yid]; ok {
-		return true
-	}
-	_, ok := g.from[yid][xid]
-	return ok
-}
-*/
-
-// hasEdge returns true if an edge (from,to) exists in the graph.
-/*
-func (g *fbGraph) hasEdge(from, to int) bool {
-	if _, ok := g.from[from][to]; !ok {
-		return false
-	}
-	return true
-}
-*/
-
-// NewNode returns a new unique Node to be added to g. The Node's ID does
-// not become valid in g until the Node is added to g.
-/*
-func (g *fbGraph) NewNode() graph.Node {
-	if len(g.nodes) == 0 {
-		return Node(0)
-	}
-	if int(len(g.nodes)) == uid.Max {
-		panic("simple: cannot allocate node: no slot")
-	}
-	return Node(g.nodeIDs.NewID())
-}
-*/
 
 // Breakpoint returns the feasible breakpoint at the given position if it exists in the graph,
 // and nil otherwise.
@@ -200,25 +180,11 @@ func (g *fbGraph) Breakpoint(position int) *feasibleBreakpoint {
 	return g.nodes[position]
 }
 
-// Nodes returns all the nodes in the graph.
-/*
-func (g *fbGraph) Nodes() graph.Nodes {
-	if len(g.nodes) == 0 {
-		return graph.Empty
-	}
-	nodes := make([]graph.Node, len(g.nodes))
-	i := 0
-	for _, n := range g.nodes {
-		nodes[i] = n
-		i++
-	}
-	return iterator.NewOrderedNodes(nodes)
-}
-*/
-
 // RemoveEdge removes the edge between two breakpoints for a linecount.
 // The breakpoints are not deleted from the graph.
 // If the edge does not exist, this is a no-op.
+//
+// Deleted edges are conserved and may be collected with g.Edges(true).
 func (g *fbGraph) RemoveEdge(from, to *feasibleBreakpoint, linecnt int) {
 	if _, ok := g.nodes[from.mark.Position()]; !ok {
 		return
@@ -226,9 +192,11 @@ func (g *fbGraph) RemoveEdge(from, to *feasibleBreakpoint, linecnt int) {
 	if _, ok := g.nodes[to.mark.Position()]; !ok {
 		return
 	}
-	//delete(g.from[from.mark.Position()], to.mark.Position())
 	if edgesFrom, ok := g.edgesTo[to.mark.Position()]; ok {
 		if edges, ok := edgesFrom[from.mark.Position()]; ok {
+			if e, ok := edges[linecnt]; ok {
+				g.prunedEdges[to.mark.Position()][from.mark.Position()][linecnt] = e
+			}
 			delete(edges, linecnt)
 			if len(edges) == 0 {
 				delete(edgesFrom, to.mark.Position())
@@ -237,29 +205,6 @@ func (g *fbGraph) RemoveEdge(from, to *feasibleBreakpoint, linecnt int) {
 	}
 }
 
-// RemoveNode removes the node with the given ID from the graph, as well as any edges attached
-// to it. If the node is not in the graph it is a no-op.
-/*
-func (g *fbGraph) RemoveNode(id int) {
-	if _, ok := g.nodes[id]; !ok {
-		return
-	}
-	delete(g.nodes, id)
-
-	for from := range g.from[id] {
-		delete(g.to[from], id)
-	}
-	delete(g.from, id)
-
-	for to := range g.to[id] {
-		delete(g.from[to], id)
-	}
-	delete(g.to, id)
-
-	g.nodeIDs.Release(id)
-}
-*/
-
 // AddEdge adds a weighted edge from one node to another. Endpoints which are
 // not yet contained in the graph are added.
 // Does nothing if from=to.
@@ -267,20 +212,11 @@ func (g *fbGraph) AddEdge(from, to *feasibleBreakpoint, cost int32, total int32,
 	if from.mark.Position() == to.mark.Position() {
 		return
 	}
-	// if g.Breakpoint(from.mark.Position()) == nil {
-	// 	g.Add(from)
-	// }
 	if g.Breakpoint(to.mark.Position()) == nil {
 		g.Add(to)
 	}
 	if g.Edge(from, to, linecnt).isNull() {
 		edge := newWEdge(from, to, cost, total, linecnt)
-		// if f, ok := g.from[from.mark.Position()]; ok {
-		// 	f[to.mark.Position()] = edge
-		// } else {
-		// 	edges := []wEdge{edge}
-		// 	g.from[from.mark.Position()] = map[int][]wEdge{to.mark.Position(): edges}
-		// }
 		if t, ok := g.edgesTo[to.mark.Position()]; ok {
 			edges := t[from.mark.Position()]
 			if edges == nil {
@@ -381,31 +317,3 @@ func (g *fbGraph) Cost(from, to *feasibleBreakpoint, linecnt int) (int32, bool) 
 	}
 	return linebreak.InfinityDemerits, false
 }
-
-// wEdge returns the weighted edge from u to v if such an edge exists and nil otherwise.
-// The node v must be directly reachable from u as defined by the From method.
-/*
-func (g *fbGraph) wEdge(uid, vid int) wEdge {
-	edge, ok := g.from[uid][vid]
-	if !ok {
-		return nil
-	}
-	return edge
-}
-*/
-
-// wEdges returns all the weighted edges in the graph.
-/*
-func (g *fbGraph) wEdges() graph.wEdges {
-	var edges []graph.wEdge
-	for _, u := range g.nodes {
-		for _, e := range g.from[u.ID()] {
-			edges = append(edges, e)
-		}
-	}
-	if len(edges) == 0 {
-		return graph.Empty
-	}
-	return iterator.NewOrderedwEdges(edges)
-}
-*/

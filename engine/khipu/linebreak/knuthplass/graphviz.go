@@ -33,7 +33,7 @@ func allBreakpointBoxes(kp *linebreaker, kh *khipu.Khipu, optimal map[int][]khip
 func allEdges(kp *linebreaker, kh *khipu.Khipu, boxes map[int]*n, edgeT *template.Template,
 	w io.Writer) {
 	//
-	for _, edge := range kp.Edges() {
+	for _, edge := range kp.Edges(true) {
 		T().Debugf("output of edge %v", edge)
 		e := &e{}
 		e.N1 = boxes[edge.from]
