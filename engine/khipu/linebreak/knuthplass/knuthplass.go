@@ -310,7 +310,7 @@ func (fb *feasibleBreakpoint) calculateCostsTo(penalty khipu.Penalty, parshape l
 		T().Debugf(" ## checking cost at linecnt=%d", linecnt)
 		d := linebreak.InfinityDemerits             // pre-set result variable
 		linelen := parshape.LineLength(linecnt + 1) // length of line to fit into
-		segwss := fb.segmentWidth(linecnt)
+		segwss := fb.segmentWidth(linecnt, params)
 		T().Debugf("    +---%.2f--->    | %.2f", segwss.W.Points(), linelen.Points())
 		if segwss.W <= linelen { // natural width less than line-length
 			if segwss.Max >= linelen { // segment can stretch enough
@@ -342,10 +342,14 @@ func (fb *feasibleBreakpoint) calculateCostsTo(penalty khipu.Penalty, parshape l
 // items at the start of the segment and at the end (= possible breakpoint).
 //
 // TODO This is the location to use params.LeftSkip & RightSkip
-func (fb *feasibleBreakpoint) segmentWidth(linecnt int) linebreak.WSS {
+func (fb *feasibleBreakpoint) segmentWidth(linecnt int, params *linebreak.Parameters) linebreak.WSS {
 	segw := fb.Book(linecnt).segment
 	segw = segw.Subtract(fb.Book(linecnt).startDiscard)
 	segw = segw.Subtract(fb.Book(linecnt).breakDiscard)
+	w := linebreak.WSS{}.SetFromKnot(params.LeftSkip)
+	segw = segw.Add(w)
+	w = linebreak.WSS{}.SetFromKnot(params.RightSkip)
+	segw = segw.Add(w)
 	return segw
 }
 

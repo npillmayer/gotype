@@ -93,6 +93,9 @@ func (wss WSS) Spread() (w dimen.Dimen, min dimen.Dimen, max dimen.Dimen) {
 
 // SetFromKnot sets the width's of an elastic WSS from a knot.
 func (wss WSS) SetFromKnot(knot khipu.Knot) WSS {
+	if knot == nil {
+		return wss
+	}
 	wss.W = knot.W()
 	wss.Min = knot.MinW()
 	wss.Max = knot.MaxW()
@@ -167,11 +170,4 @@ func (r rectParshape) LineLength(int) dimen.Dimen {
 // RectangularParshape returns a Parshape for paragraphs of constant line length.
 func RectangularParshape(linelen dimen.Dimen) Parshape {
 	return rectParshape(linelen)
-}
-
-// ----------------------------------------------------------------------
-
-func PrintParagraphBreaks(k *khipu.Khipu, breaks []khipu.Mark) string {
-	//cursor := khipu.NewCursor(k)
-	return ""
 }

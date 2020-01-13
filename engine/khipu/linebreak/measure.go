@@ -5,6 +5,9 @@ import (
 	"github.com/npillmayer/gotype/engine/khipu"
 )
 
+// FixedWidthCursor is a linebreak-cursor for assigning a fixed width to
+// letters and spaces.
+// It is intended to wrap a khipu.Cursor or another linebreak.Cursor.
 type FixedWidthCursor struct {
 	cursor     Cursor
 	glyphWidth dimen.Dimen
@@ -12,6 +15,8 @@ type FixedWidthCursor struct {
 
 var _ Cursor = &FixedWidthCursor{}
 
+// NewFixedWidthCursor creates a FixedWidthCursor, given a width dimension for
+// every glyph it will read.
 func NewFixedWidthCursor(cursor Cursor, glyphWidth dimen.Dimen) FixedWidthCursor {
 	return FixedWidthCursor{
 		cursor:     cursor,
@@ -19,6 +24,7 @@ func NewFixedWidthCursor(cursor Cursor, glyphWidth dimen.Dimen) FixedWidthCursor
 	}
 }
 
+// Next is part of interface Cursor.
 func (fwc FixedWidthCursor) Next() bool {
 	ok := fwc.cursor.Next()
 	if ok {
@@ -33,18 +39,26 @@ func (fwc FixedWidthCursor) Next() bool {
 	return ok
 }
 
+// Knot is part of interface Cursor.
 func (fwc FixedWidthCursor) Knot() khipu.Knot {
 	return fwc.cursor.Knot()
 }
 
+// Peek is part of interface Cursor.
 func (fwc FixedWidthCursor) Peek() (khipu.Knot, bool) {
-	return fwc.cursor.Peek()
+	peek, ok := fwc.cursor.Peek()
+	if ok {
+		peek, _ = setTextDimens(peek, fwc.glyphWidth)
+	}
+	return peek, ok
 }
 
+// Mark is part of interface Cursor.
 func (fwc FixedWidthCursor) Mark() khipu.Mark {
 	return fwc.cursor.Mark()
 }
 
+// Khipu is part of interface Cursor.
 func (fwc FixedWidthCursor) Khipu() *khipu.Khipu {
 	return fwc.cursor.Khipu()
 }
