@@ -132,6 +132,8 @@ const InfinityMerits int32 = -10000
 func CapDemerits(d int32) int32 {
 	if d > InfinityDemerits {
 		d = InfinityDemerits
+	} else if d < InfinityMerits-1000 {
+		d = InfinityMerits - 1000
 	}
 	return d
 }
