@@ -59,17 +59,17 @@ func TestKPUnderfull(t *testing.T) {
 	kh, cursor, dotfile := setupKPTest(t, " ")
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
 	parshape := linebreak.RectangularParshape(10 * 10 * dimen.BP)
-	breaks, err := FindBreakpoints(cursor, parshape, nil, dotfile)
-	t.Logf("%d linebreaking-variants for empty line found, error = %v", len(breaks), err)
+	v, breaks, err := FindBreakpoints(cursor, parshape, nil, dotfile)
+	t.Logf("%d linebreaking-variants for empty line found, error = %v", len(v), err)
 	for linecnt, breakpoints := range breaks {
 		t.Logf("# Paragraph with %d lines: %v", linecnt, breakpoints)
 		j := 0
-		for i := 1; i < len(breaks); i++ {
+		for i := 1; i < len(v); i++ {
 			t.Logf(": %s", kh.Text(j, breakpoints[i].Position()))
 			j = breakpoints[i].Position()
 		}
 	}
-	if err != nil || len(breaks) != 1 || len(breaks[1]) != 2 {
+	if err != nil || len(v) != 1 || len(breaks[1]) != 2 {
 		t.Fail()
 	}
 }
@@ -82,17 +82,17 @@ func TestKPExactFit(t *testing.T) {
 	kh, cursor, dotfile := setupKPTest(t, "The quick.")
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
 	parshape := linebreak.RectangularParshape(10 * 10 * dimen.BP)
-	breaks, err := FindBreakpoints(cursor, parshape, nil, dotfile)
-	t.Logf("%d linebreaking-variants found, error = %v", len(breaks), err)
+	v, breaks, err := FindBreakpoints(cursor, parshape, nil, dotfile)
+	t.Logf("%d linebreaking-variants found, error = %v", len(v), err)
 	for linecnt, breakpoints := range breaks {
 		t.Logf("# Paragraph with %d lines: %v", linecnt, breakpoints)
 		j := 0
-		for i := 1; i < len(breaks); i++ {
+		for i := 1; i < len(v); i++ {
 			t.Logf(": %s", kh.Text(j, breakpoints[i].Position()))
 			j = breakpoints[i].Position()
 		}
 	}
-	if err != nil || len(breaks) != 1 || len(breaks[1]) != 2 {
+	if err != nil || len(v) != 1 || len(breaks[1]) != 2 {
 		t.Fail()
 	}
 }
@@ -108,17 +108,17 @@ func TestKPOverfull(t *testing.T) {
 	params.Tolerance = 400
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
 	parshape := linebreak.RectangularParshape(10 * 10 * dimen.BP)
-	breaks, err := FindBreakpoints(cursor, parshape, params, dotfile)
-	t.Logf("%d linebreaking-variants found, error = %v", len(breaks), err)
+	v, breaks, err := FindBreakpoints(cursor, parshape, params, dotfile)
+	t.Logf("%d linebreaking-variants found, error = %v", len(v), err)
 	for linecnt, breakpoints := range breaks {
 		t.Logf("# Paragraph with %d lines: %v", linecnt, breakpoints)
 		j := 0
-		for i := 1; i < len(breaks); i++ {
+		for i := 1; i < len(v); i++ {
 			t.Logf(": %s", kh.Text(j, breakpoints[i].Position()))
 			j = breakpoints[i].Position()
 		}
 	}
-	if err != nil || len(breaks) != 1 || len(breaks[2]) != 3 {
+	if err != nil || len(v) != 1 || len(breaks[2]) != 3 {
 		t.Fail()
 	}
 }

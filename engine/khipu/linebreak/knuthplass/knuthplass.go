@@ -433,35 +433,36 @@ func penaltyAt(cursor linebreak.Cursor) (khipu.Penalty, khipu.Mark) {
 func BreakParagraph(cursor linebreak.Cursor, parshape linebreak.Parshape,
 	params *linebreak.Parameters) ([]khipu.Mark, error) {
 	//
-	breakpoints, err := FindBreakpoints(cursor, parshape, params, nil)
+	variants, breakpoints, err := FindBreakpoints(cursor, parshape, params, nil)
 	if err != nil {
 		return nil, err
 	}
 	if len(breakpoints) == 0 {
 		return nil, fmt.Errorf("No breakpoints could be found for paragraph")
 	}
-	return breakpoints[0], err // slice is sorted by increasing totalcost, first one is best
+	best := variants[0] // slice is sorted by increasing totalcost, first one is best
+	return breakpoints[best], err
 }
 
 // FindBreakpoints is the main client API.
 func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, params *linebreak.Parameters,
-	dotfile io.Writer) (map[int][]khipu.Mark, error) {
+	dotfile io.Writer) ([]int, map[int][]khipu.Mark, error) {
 	//
 	kp, err := setupLinebreaker(cursor, parshape, params)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	err = kp.constructBreakpointGraph(cursor, parshape, params)
 	if err != nil {
 		T().Errorf(err.Error())
-		return nil, err
+		return nil, nil, err
 	}
-	breaks := kp.collectFeasibleBreakpoints(kp.end)
+	variants, breaks := kp.collectFeasibleBreakpoints(kp.end)
 	c := khipu.NewCursor(cursor.Khipu())
 	if dotfile != nil {
 		kp.toGraphViz(c, breaks, dotfile)
 	}
-	return breaks, nil
+	return variants, breaks, nil
 }
 
 func (kp *linebreaker) constructBreakpointGraph(cursor linebreak.Cursor, parshape linebreak.Parshape,
@@ -527,17 +528,21 @@ func (kp *linebreaker) constructBreakpointGraph(cursor linebreak.Cursor, parshap
 }
 
 // Collecting breakpoints, backwards from last
-func (kp *linebreaker) collectFeasibleBreakpoints(last *feasibleBreakpoint) map[int][]khipu.Mark {
+func (kp *linebreaker) collectFeasibleBreakpoints(last *feasibleBreakpoint) (
+	[]int, map[int][]khipu.Mark) {
 	breakpoints := make(map[int][]khipu.Mark) // list of breakpoints per linecount-variant
 	costDict := make(map[int]int32)           // list of total-costs per linecount-variant
 	lineVariants := make([]int, 0, 3)         // will become sorted list of linecount-variants
 	for linecnt, book := range last.books {
 		costDict[linecnt] = book.totalcost
-		for i, lv := range lineVariants {
+		i := 0
+		for j, lv := range lineVariants {
 			if book.totalcost < costDict[lv] {
-				insert(lineVariants, i, lv)
+				i = j
+				break
 			}
 		}
+		insert(lineVariants, i, linecnt)
 		l := linecnt
 		lines := make([]khipu.Mark, 0, 20)
 		lines = append(lines, last.mark)
@@ -562,7 +567,7 @@ func (kp *linebreaker) collectFeasibleBreakpoints(last *feasibleBreakpoint) map[
 	for l := range costDict {
 		lineVariants = append(lineVariants, l)
 	}
-	return breakpoints
+	return lineVariants, breakpoints
 }
 
 // --- Helpers ----------------------------------------------------------
