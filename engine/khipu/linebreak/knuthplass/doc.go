@@ -7,7 +7,7 @@ Definite source of information is of course
    Computers & Typesetting, Vol. A & C.
    http://www-cs-faculty.stanford.edu/~knuth/abcde.html
 
-A good summary may be found in
+An approachable summary may be found in
 
    http://defoe.sourceforge.net/folio/knuth-plass.html
 
