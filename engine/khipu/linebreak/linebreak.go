@@ -59,6 +59,8 @@ type Parameters struct {
 	DoubleHyphenDemerits int32       // demerits for consecutive hyphens
 	FinalHyphenDemerits  int32       // demerits for hyphen in the last line
 	EmergencyStretch     dimen.Dimen // stretching acceptable when desperate
+	LeftSkip             khipu.Glue  // glue at left edge of paragraphs
+	RightSkip            khipu.Glue  // glue at right edge of paragraphs
 }
 
 // DefaultParameters are the standard line-breaking parameters.
@@ -71,6 +73,8 @@ var DefaultParameters = &Parameters{
 	DoubleHyphenDemerits: 0,
 	FinalHyphenDemerits:  50,
 	EmergencyStretch:     dimen.Dimen(dimen.BP * 50),
+	LeftSkip:             khipu.NewGlue(0, 0, 0),
+	RightSkip:            khipu.NewGlue(0, 0, 0),
 }
 
 // ----------------------------------------------------------------------

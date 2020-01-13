@@ -77,6 +77,8 @@ func NewKPDefaultParameters() *linebreak.Parameters {
 		DoubleHyphenDemerits: 200,
 		FinalHyphenDemerits:  500,
 		EmergencyStretch:     dimen.Dimen(dimen.BP * 20),
+		LeftSkip:             khipu.NewGlue(0, 0, 0),
+		RightSkip:            khipu.NewGlue(0, 0, 0),
 	}
 }
 
@@ -298,14 +300,6 @@ func (kp *linebreaker) isCheapestSurvivor(fb *feasibleBreakpoint, totalcost int3
 // Calculate the cost of a breakpoint. A breakpoint may result either in being
 // infeasible (demerits >= infinity) or having a positive (demerits) or negative
 // (merits) cost/benefit.
-//
-// TODO: the cost/badness function should be deleted to a strategy delegate (or
-// a chain of delegate => Holkner). Maybe refactor: skeleton algorithm in
-// central package, & different strategy delegates in sub-packages. K&P is a
-// special delegate with the TeX strategy formalized.
-//
-// Question: Is the box-glue-model part of the central algorithm? Or is it
-// already a strategy (component) ?
 func (fb *feasibleBreakpoint) calculateCostsTo(penalty khipu.Penalty, parshape linebreak.Parshape,
 	params *linebreak.Parameters) (map[int]int32, bool) {
 	//
@@ -346,6 +340,8 @@ func (fb *feasibleBreakpoint) calculateCostsTo(penalty khipu.Penalty, parshape l
 
 // segmentWidth returns the widths of a segment at fb, subtracting discardable
 // items at the start of the segment and at the end (= possible breakpoint).
+//
+// TODO This is the location to use params.LeftSkip & RightSkip
 func (fb *feasibleBreakpoint) segmentWidth(linecnt int) linebreak.WSS {
 	segw := fb.Book(linecnt).segment
 	segw = segw.Subtract(fb.Book(linecnt).startDiscard)
@@ -429,7 +425,9 @@ func penaltyAt(cursor linebreak.Cursor) (khipu.Penalty, khipu.Mark) {
 // a given set of linebreaking parameters and the desired shape of the paragraph.
 //
 // Paragraphs may be broken with different line counts. Only one of these will be
-// optimal, but Break
+// optimal, and BreakParagraph will return that.
+//
+// For a function to get solutions with different linecounts, see FindBreakpoints.
 func BreakParagraph(cursor linebreak.Cursor, parshape linebreak.Parshape,
 	params *linebreak.Parameters) ([]khipu.Mark, error) {
 	//
@@ -444,7 +442,21 @@ func BreakParagraph(cursor linebreak.Cursor, parshape linebreak.Parshape,
 	return breakpoints[best], err
 }
 
-// FindBreakpoints is the main client API.
+// FindBreakpoints finds all breakpoints for a paragraph for a given paragraph shape.
+// Selecting the breakpoints is governed by a set of linebreak parameters. The paragraph's
+// content is given as a khipu.Khipu, i.e. as a string of knots. Navigating the Khipu is
+// done with a linebreak.Cursor, given as an argument.
+//
+// If dotfile is given, the function outputs the intermediate breakpoint-graph in
+// GraphViz DOT format (useful for debugging and illustrations).
+//
+// Breaking a paragraph might be acceptable in more than one way, resulting in
+// different counts of broken lines. This function returns all of the variants found.
+// The first return value is a slice of integers, denoting the linecount variants, in
+// decreasing order of linebreak quality. The second argument is a list of linebreaks
+// for each linecount variant.
+//
+// For a more convenient API, see BreakParagraph.
 func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, params *linebreak.Parameters,
 	dotfile io.Writer) ([]int, map[int][]khipu.Mark, error) {
 	//
