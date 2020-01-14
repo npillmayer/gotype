@@ -76,4 +76,9 @@ func TestUSPatterns(t *testing.T) {
 		t.Logf("quick should be quick, is %s", h)
 		t.Fail()
 	}
+	h = usDict.HyphenationString("king")
+	if h != "king" {
+		t.Logf("king should be king, is %s", h)
+		t.Fail()
+	}
 }
