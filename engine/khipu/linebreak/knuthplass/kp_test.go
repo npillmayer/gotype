@@ -173,6 +173,7 @@ func TestKPParaPrincess(t *testing.T) {
 	//v, breaks, err := FindBreakpoints(cursor, parshape, params, dotfile)
 	//t.Logf("%d linebreaking-variants found, error = %v", len(v), err)
 	t.Logf("# Paragraph with %d lines: %v", len(breakpoints), breakpoints)
+	t.Logf(" |---------+---------+---------+---------+----|")
 	j := 0
 	for i := 1; i < len(breakpoints); i++ {
 		t.Logf(": %s", kh.Text(j, breakpoints[i].Position()))
