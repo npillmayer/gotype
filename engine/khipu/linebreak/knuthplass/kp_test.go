@@ -39,7 +39,7 @@ func setupKPTest(t *testing.T, paragraph string) (*khipu.Khipu, linebreak.Cursor
 	}
 	kh.AppendKnot(khipu.Penalty(linebreak.InfinityMerits))
 	gtrace.CoreTracer.Infof("input khipu=%s", kh.String())
-	cursor := linebreak.NewFixedWidthCursor(khipu.NewCursor(kh), 10*dimen.BP)
+	cursor := linebreak.NewFixedWidthCursor(khipu.NewCursor(kh), 10*dimen.BP, 0)
 	var dotfile io.Writer
 	var err error
 	if graphviz {
@@ -108,6 +108,32 @@ func TestKPOverfull(t *testing.T) {
 	params.Tolerance = 400
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
 	parshape := linebreak.RectangularParshape(10 * 10 * dimen.BP)
+	v, breaks, err := FindBreakpoints(cursor, parshape, params, dotfile)
+	t.Logf("%d linebreaking-variants found, error = %v", len(v), err)
+	for linecnt, breakpoints := range breaks {
+		t.Logf("# Paragraph with %d lines: %v", linecnt, breakpoints)
+		j := 0
+		for i := 1; i < len(v); i++ {
+			t.Logf(": %s", kh.Text(j, breakpoints[i].Position()))
+			j = breakpoints[i].Position()
+		}
+	}
+	if err != nil || len(v) != 1 || len(breaks[2]) != 3 {
+		t.Fail()
+	}
+}
+
+var princess = `
+`
+
+func TestKPPara1(t *testing.T) {
+	gtrace.CoreTracer = gotestingadapter.New()
+	gtrace.CoreTracer.SetTraceLevel(tracing.LevelInfo)
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	kh, cursor, dotfile := setupKPTest(t, princess)
+	cursor.(linebreak.NewFixedWidthCursor).SetStretch(3)
+	parshape := linebreak.RectangularParshape(60 * 10 * dimen.BP)
 	v, breaks, err := FindBreakpoints(cursor, parshape, params, dotfile)
 	t.Logf("%d linebreaking-variants found, error = %v", len(v), err)
 	for linecnt, breakpoints := range breaks {

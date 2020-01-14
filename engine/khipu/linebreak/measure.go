@@ -11,16 +11,18 @@ import (
 type FixedWidthCursor struct {
 	cursor     Cursor
 	glyphWidth dimen.Dimen
+	stretch    int
 }
 
 var _ Cursor = &FixedWidthCursor{}
 
 // NewFixedWidthCursor creates a FixedWidthCursor, given a width dimension for
 // every glyph it will read.
-func NewFixedWidthCursor(cursor Cursor, glyphWidth dimen.Dimen) FixedWidthCursor {
+func NewFixedWidthCursor(cursor Cursor, glyphWidth dimen.Dimen, stretchFactor int) FixedWidthCursor {
 	return FixedWidthCursor{
 		cursor:     cursor,
 		glyphWidth: glyphWidth,
+		stretch:    stretchFactor,
 	}
 }
 
@@ -30,7 +32,7 @@ func (fwc FixedWidthCursor) Next() bool {
 	if ok {
 		knot := fwc.cursor.Knot()
 		var isChanged bool
-		knot, isChanged = setTextDimens(knot, fwc.glyphWidth)
+		knot, isChanged = fwc.setTextDimens(knot)
 		if isChanged {
 			pos := fwc.cursor.Mark().Position()
 			fwc.cursor.Khipu().ReplaceKnot(pos, knot)
@@ -48,7 +50,7 @@ func (fwc FixedWidthCursor) Knot() khipu.Knot {
 func (fwc FixedWidthCursor) Peek() (khipu.Knot, bool) {
 	peek, ok := fwc.cursor.Peek()
 	if ok {
-		peek, _ = setTextDimens(peek, fwc.glyphWidth)
+		peek, _ = fwc.setTextDimens(peek)
 	}
 	return peek, ok
 }
@@ -63,24 +65,30 @@ func (fwc FixedWidthCursor) Khipu() *khipu.Khipu {
 	return fwc.cursor.Khipu()
 }
 
-func setTextDimens(knot khipu.Knot, glyphWidth dimen.Dimen) (khipu.Knot, bool) {
+// SetStretch sets the stretch factor for interword glue. The final maximum width
+// of glue will be (stretchFactor * glyphWidth).
+func (fwc *FixedWidthCursor) SetStretch(stretchFactor int) {
+	fwc.stretch = stretchFactor
+}
+
+func (fwc FixedWidthCursor) setTextDimens(knot khipu.Knot) (khipu.Knot, bool) {
 	isChanged := false
 	switch knot.Type() {
 	case khipu.KTDiscretionary:
 		d := knot.(khipu.Discretionary)
-		isChanged = (d.Width != glyphWidth)
-		d.Width = glyphWidth
+		isChanged = (d.Width != fwc.glyphWidth)
+		d.Width = fwc.glyphWidth
 	case khipu.KTTextBox:
 		b := knot.(*khipu.TextBox)
-		newW := dimen.Dimen(len(b.Text())) * glyphWidth
-		isChanged = (b.Width != newW || b.Height != glyphWidth)
+		newW := dimen.Dimen(len(b.Text())) * fwc.glyphWidth
+		isChanged = (b.Width != newW || b.Height != fwc.glyphWidth)
 		b.Width = newW
-		b.Height = glyphWidth
+		b.Height = fwc.glyphWidth
 	case khipu.KTGlue:
 		g := knot.(khipu.Glue)
-		g[0] = max(1, glyphWidth)
+		g[0] = max(1, fwc.glyphWidth)
 		g[1] = 0
-		g[2] = 0
+		g[2] = max(1, fwc.glyphWidth*dimen.Dimen(fwc.stretch))
 		return g, true
 	}
 	return knot, isChanged
