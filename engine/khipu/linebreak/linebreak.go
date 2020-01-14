@@ -61,6 +61,7 @@ type Parameters struct {
 	EmergencyStretch     dimen.Dimen // stretching acceptable when desperate
 	LeftSkip             khipu.Glue  // glue at left edge of paragraphs
 	RightSkip            khipu.Glue  // glue at right edge of paragraphs
+	ParFillSkip          khipu.Glue  // glue at the end of a paragraph
 }
 
 // DefaultParameters are the standard line-breaking parameters.
@@ -75,6 +76,7 @@ var DefaultParameters = &Parameters{
 	EmergencyStretch:     dimen.Dimen(dimen.BP * 50),
 	LeftSkip:             khipu.NewGlue(0, 0, 0),
 	RightSkip:            khipu.NewGlue(0, 0, 0),
+	ParFillSkip:          khipu.NewGlue(0, 0, 0),
 }
 
 // ----------------------------------------------------------------------

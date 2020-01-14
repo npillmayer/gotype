@@ -119,7 +119,7 @@ type e struct {
 
 const graphHeader = `digraph g {                                                                                                             
   graph [labelloc="t" label="" splines=true overlap=false, labeljust="c"];
-  graph [{{ .Fontname }} = "helvetica" fontsize=11] ;
+  graph [{{ .Fontname }} = "helvetica" fontsize=10] ;
    node [fontname = "Courier" fontsize=11 labeljust="c"] ;
    edge [fontname = "{{ .Fontname }}" fontsize=8 labelfontsize=9 labeldistance=5.0] ;
 `

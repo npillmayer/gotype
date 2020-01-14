@@ -65,12 +65,6 @@ func (fwc FixedWidthCursor) Khipu() *khipu.Khipu {
 	return fwc.cursor.Khipu()
 }
 
-// SetStretch sets the stretch factor for interword glue. The final maximum width
-// of glue will be (stretchFactor * glyphWidth).
-func (fwc *FixedWidthCursor) SetStretch(stretchFactor int) {
-	fwc.stretch = stretchFactor
-}
-
 func (fwc FixedWidthCursor) setTextDimens(knot khipu.Knot) (khipu.Knot, bool) {
 	isChanged := false
 	switch knot.Type() {

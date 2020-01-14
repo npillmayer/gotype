@@ -107,6 +107,12 @@ func (e wEdge) isNull() bool {
 // given two breakpoints and a label-key.
 // It is not yet inserted into a graph.
 func newWEdge(from, to *feasibleBreakpoint, cost int32, total int32, linecnt int) wEdge {
+	if from.books[linecnt-1] == nil {
+		panic(fmt.Errorf("startpoint of new line %d seems to have incorrent books: %v", linecnt, from))
+	}
+	if to.books[linecnt] == nil {
+		panic(fmt.Errorf("endpoint of new line %d seems to have incorrent books: %v", linecnt, to))
+	}
 	return wEdge{
 		from:      from.mark.Position(),
 		to:        to.mark.Position(),
@@ -194,8 +200,19 @@ func (g *fbGraph) RemoveEdge(from, to *feasibleBreakpoint, linecnt int) {
 	}
 	if edgesFrom, ok := g.edgesTo[to.mark.Position()]; ok {
 		if edges, ok := edgesFrom[from.mark.Position()]; ok {
-			if e, ok := edges[linecnt]; ok {
-				g.prunedEdges[to.mark.Position()][from.mark.Position()][linecnt] = e
+			if e, ok := edges[linecnt]; ok { // edge exists => move it to prunedEdges
+				if t, ok := g.prunedEdges[to.mark.Position()]; ok { // 'to' dict exists
+					edges := t[from.mark.Position()]
+					if edges == nil {
+						edges = make(map[int]wEdge)
+						t[from.mark.Position()] = edges
+					}
+					edges[linecnt] = e
+				} else {
+					edges := map[int]wEdge{linecnt: e}
+					g.prunedEdges[to.mark.Position()] = map[int]map[int]wEdge{from.mark.Position(): edges}
+					//g.prunedEdges[to.mark.Position()][from.mark.Position()][linecnt] = e
+				}
 			}
 			delete(edges, linecnt)
 			if len(edges) == 0 {
