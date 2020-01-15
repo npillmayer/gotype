@@ -295,7 +295,7 @@ func (kp *linebreaker) isCheapestSurvivor(fb *feasibleBreakpoint, totalcost int3
 	// edge, and deleteOthers is set, remove the more expensive edges.
 	T().Debugf("FB is %v, would produce line #%d", fb, linecnt)
 	if pp := kp.findPredecessorsWithLinecount(fb, linecnt); pp != nil {
-		T().Infof("FB already has a predecessor for linecount=%d", linecnt)
+		T().Debugf("FB already has a predecessor for linecount=%d", linecnt)
 		if len(pp) > 1 { // TODO remove this after debugging
 			panic("breakpoint (with pruning) has more than one predecessor[line]")
 		}
