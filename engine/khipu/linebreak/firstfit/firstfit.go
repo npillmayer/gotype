@@ -34,7 +34,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 package firstfit
 
 import (
-	"github.com/npillmayer/gotype/core/dimen"
 	"github.com/npillmayer/gotype/engine/khipu"
 	"github.com/npillmayer/gotype/engine/khipu/linebreak"
 )
@@ -88,7 +87,8 @@ func BreakParagraph(cursor linebreak.Cursor, parshape linebreak.Parshape,
 		if cursor.Mark().Knot().Type() == khipu.KTPenalty { // TODO discretionaries
 			penalty, mark := penaltyAt(cursor)
 			linelen := parshape.LineWidth(lineno)
-			if spaceUsed
+			if spaceUsed.MinW() >= linelen {
+			}
 			if penalty < linebreak.InfinityDemerits {
 				if penalty <= params.Tolerance {
 					// immediate break
