@@ -1,6 +1,7 @@
 package knuthplass
 
 import (
+	"bytes"
 	"io"
 	"io/ioutil"
 	"strings"
@@ -16,7 +17,7 @@ import (
 	"github.com/npillmayer/gotype/engine/khipu/linebreak"
 )
 
-var graphviz = true // globally switches GraphViz output on/off
+var graphviz = false // globally switches GraphViz output on/off
 
 func TestGraph1(t *testing.T) {
 	gtrace.CoreTracer = gotestingadapter.New()
@@ -165,22 +166,76 @@ func TestKPParaPrincess(t *testing.T) {
 	// defer teardown()
 	kh, _, _ := setupKPTest(t, princess, false)
 	// change to cursor with flexible interword-spacing
-	cursor := linebreak.NewFixedWidthCursor(khipu.NewCursor(kh), 10*dimen.BP, 3)
+	cursor := linebreak.NewFixedWidthCursor(khipu.NewCursor(kh), 10*dimen.BP, 2)
 	params := NewKPDefaultParameters()
 	parshape := linebreak.RectangularParshape(45 * 10 * dimen.BP)
 	//gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
 	breakpoints, err := BreakParagraph(cursor, parshape, params)
 	//v, breaks, err := FindBreakpoints(cursor, parshape, params, dotfile)
 	//t.Logf("%d linebreaking-variants found, error = %v", len(v), err)
-	t.Logf("# Paragraph with %d lines: %v", len(breakpoints), breakpoints)
-	t.Logf(" |---------+---------+---------+---------+----|")
+	t.Logf("# Paragraph with %d lines: %v", len(breakpoints)-1, breakpoints)
+	t.Logf("    |---------+---------+---------+---------+-----|")
 	j := 0
 	for i := 1; i < len(breakpoints); i++ {
-		t.Logf(": %s", kh.Text(j, breakpoints[i].Position()))
+		//	t.Logf("%3d: %s", i, kh.Text(j, breakpoints[i].Position()))
+		text := kh.Text(j, breakpoints[i].Position())
+		t.Logf("%3d: %-45s|", i, justify(text, 45, i%2 == 0))
 		j = breakpoints[i].Position()
 	}
 	if err != nil {
 		t.Fail()
 	}
 	t.Fail()
+}
+
+// crude implementation just for testing
+func justify(text string, l int, even bool) string {
+	t := strings.Trim(text, " \t\n")
+	d := l - len(t)
+	if d == 0 {
+		return t // fit
+	} else if d < 0 { // overfull box
+		return text + "\u25ae"
+	}
+	s := strings.Fields(text)
+	if len(s) == 1 {
+		return text
+	}
+	var b bytes.Buffer
+	W := 0 // length of all words
+	for _, w := range s {
+		W += len(w)
+	}
+	d = l - W // amount of WS to distribute
+	ws := d / (len(s) - 1)
+	r := d - ws*(len(s)-1) + 1
+	b.WriteString(s[0])
+	if even {
+		for j := 1; j < r; j++ {
+			for i := 0; i < ws+1; i++ {
+				b.WriteString(" ")
+			}
+			b.WriteString(s[j])
+		}
+		for j := r; j < len(s); j++ {
+			for i := 0; i < ws; i++ {
+				b.WriteString(" ")
+			}
+			b.WriteString(s[j])
+		}
+	} else {
+		for j := 1; j <= len(s)-r; j++ {
+			for i := 0; i < ws; i++ {
+				b.WriteString(" ")
+			}
+			b.WriteString(s[j])
+		}
+		for j := len(s) - r + 1; j < len(s); j++ {
+			for i := 0; i < ws+1; i++ {
+				b.WriteString(" ")
+			}
+			b.WriteString(s[j])
+		}
+	}
+	return b.String()
 }

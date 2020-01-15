@@ -56,6 +56,8 @@ type Parameters struct {
 	Tolerance            int32       // acceptable demerits
 	PreTolerance         int32       // acceptabale demerits for first (rough) pass
 	LinePenalty          int32       // penalty for an additional line
+	HyphenPenalty        int32       // penalty for hyphenating words
+	ExHyphenPenalty      int32       // penalty for explicit words
 	DoubleHyphenDemerits int32       // demerits for consecutive hyphens
 	FinalHyphenDemerits  int32       // demerits for hyphen in the last line
 	EmergencyStretch     dimen.Dimen // stretching acceptable when desperate
@@ -71,6 +73,8 @@ var DefaultParameters = &Parameters{
 	Tolerance:            5000,
 	PreTolerance:         100,
 	LinePenalty:          10,
+	HyphenPenalty:        50,
+	ExHyphenPenalty:      50,
 	DoubleHyphenDemerits: 0,
 	FinalHyphenDemerits:  50,
 	EmergencyStretch:     dimen.Dimen(dimen.BP * 50),
