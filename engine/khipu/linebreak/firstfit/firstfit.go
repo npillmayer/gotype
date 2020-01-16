@@ -158,33 +158,36 @@ func (lb *linebreaker) FindBreakpoints() ([]khipu.Mark, error) {
 				T().Debugf("penalty %v is acceptable", penalty.Demerits())
 				T().Debugf("segm=%v", segm)
 				if segm.Min > linelen { // overshoot
-					if frag := lb.backtrack(); frag != nil {
+					if lb.backtrack() != nil {
 						// start new line
 						T().Infof("backtracked to %v", lb.knot)
 						breakpoints = lb.linebreak(breakpoints)
-						//spaceUsed.reset(frag)
+						spaceUsed.reset()
 						firstInLine = true
 					} else {
 						// overfull hbox
 						T().Infof("Overfull box at line %d", lb.linecount+1)
 						// start new line
 						breakpoints = lb.linebreak(breakpoints)
-						spaceUsed.reset(linebreak.WSS{})
+						spaceUsed.reset()
 						firstInLine = true
 					}
 				} else if segm.Max >= linelen { // can reach EOL
 					if penalty.Demerits() <= lb.params.Tolerance {
+						spaceUsed.track()
 						if !lb.checkpoint() {
 							panic("CANNOT SET CHECKPOINT")
 						}
 					} else {
 						// save for later review, if no other feasible break is found ? How ?
+						spaceUsed.track()
 						if !lb.checkpoint() {
 							panic("CANNOT SET CHECKPOINT")
 						}
 						gtrace.CoreTracer.Infof("setting checkpoint with demerits=%v", penalty.Demerits())
 					}
 				} else {
+					spaceUsed.track()
 					if !lb.checkpoint() {
 						panic("CANNOT SET CHECKPOINT")
 					}
@@ -195,6 +198,7 @@ func (lb *linebreaker) FindBreakpoints() ([]khipu.Mark, error) {
 			}
 		} else if firstInLine {
 			if !knot.IsDiscardable() { // do not add space to front of line
+				spaceUsed.track()
 				spaceUsed.append(knot)
 				firstInLine = false
 			}
@@ -250,12 +254,14 @@ func (lb *linebreaker) penalty() khipu.Penalty {
 type segment struct {
 	length       linebreak.WSS //
 	breakDiscard linebreak.WSS // sum of discardable space while lookinf for next breakpoint
+	tracked      linebreak.WSS
 }
 
 // append the width information of a knot at the end of a segment.
 // if the knot is a discardable item, s.breakDiscard is updated as well.
 func (s *segment) append(knot khipu.Knot) {
 	s.length = s.length.Add(linebreak.WSS{}.SetFromKnot(knot))
+	s.tracked = s.tracked.Add(linebreak.WSS{}.SetFromKnot(knot))
 	if knot.IsDiscardable() {
 		s.breakDiscard = s.breakDiscard.Add(linebreak.WSS{}.SetFromKnot(knot))
 	} else {
@@ -276,9 +282,17 @@ func (s *segment) width(params *linebreak.Parameters) linebreak.WSS {
 	// return segw
 }
 
-func (s *segment) reset(wss linebreak.WSS) {
-	s.length = wss
+func (s *segment) reset() {
+	T().Debugf("reset: length = %v", s.length)
+	T().Debugf("       carrying over %v", s.tracked)
+	s.length = s.tracked
+	s.tracked = linebreak.WSS{}
 	s.breakDiscard = linebreak.WSS{}
+}
+
+func (s *segment) track() {
+	T().Debugf("truncating track")
+	s.tracked = linebreak.WSS{}
 }
 
 func (s *segment) String() string {
