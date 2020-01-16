@@ -183,9 +183,8 @@ func TestKPParaPrincess(t *testing.T) {
 		j = breakpoints[i].Position()
 	}
 	if err != nil {
-		t.Fail()
+		t.Errorf(err.Error())
 	}
-	t.Fail()
 }
 
 // crude implementation just for testing
