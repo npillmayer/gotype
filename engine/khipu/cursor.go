@@ -72,11 +72,14 @@ func (c *Cursor) Knot() Knot {
 // Peek is lookahead 1. Does not advance the cursor.
 // Returns true if the lookahead is at a valid position, false otherwise.
 func (c *Cursor) Peek() (Knot, bool) {
-	if c.IsValidPosition() {
+	if c.inx >= 0 {
 		if c.inx+1 < len(c.khipu.knots) {
 			k := c.khipu.knots[c.inx+1]
 			return k, true
 		}
+		return nil, false
+	} else if c.khipu.Length() > 0 {
+		return c.khipu.knots[0], true
 	}
 	return nil, false
 }
