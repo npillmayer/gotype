@@ -24,7 +24,7 @@ func TestGraph1(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
-	parshape := linebreak.RectangularParshape(10 * 10 * dimen.BP)
+	parshape := linebreak.RectangularParShape(10 * 10 * dimen.BP)
 	g := newLinebreaker(parshape, nil)
 	g.newBreakpointAtMark(provisionalMark(1))
 	if g.Breakpoint(1) == nil {
@@ -64,7 +64,7 @@ func TestKPUnderfull(t *testing.T) {
 	defer teardown()
 	kh, cursor, dotfile := setupKPTest(t, " ", false)
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
-	parshape := linebreak.RectangularParshape(10 * 10 * dimen.BP)
+	parshape := linebreak.RectangularParShape(10 * 10 * dimen.BP)
 	v, breaks, err := FindBreakpoints(cursor, parshape, nil, dotfile)
 	t.Logf("%d linebreaking-variants for empty line found, error = %v", len(v), err)
 	for linecnt, breakpoints := range breaks {
@@ -87,7 +87,7 @@ func TestKPExactFit(t *testing.T) {
 	defer teardown()
 	kh, cursor, dotfile := setupKPTest(t, "The quick.", false)
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
-	parshape := linebreak.RectangularParshape(10 * 10 * dimen.BP)
+	parshape := linebreak.RectangularParShape(10 * 10 * dimen.BP)
 	v, breaks, err := FindBreakpoints(cursor, parshape, nil, dotfile)
 	t.Logf("%d linebreaking-variants found, error = %v", len(v), err)
 	for linecnt, breakpoints := range breaks {
@@ -113,7 +113,7 @@ func TestKPOverfull(t *testing.T) {
 	params.EmergencyStretch = dimen.Dimen(0)
 	params.Tolerance = 400
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
-	parshape := linebreak.RectangularParshape(10 * 10 * dimen.BP)
+	parshape := linebreak.RectangularParShape(10 * 10 * dimen.BP)
 	v, breaks, err := FindBreakpoints(cursor, parshape, params, dotfile)
 	t.Logf("%d linebreaking-variants found, error = %v", len(v), err)
 	for linecnt, breakpoints := range breaks {
@@ -141,7 +141,7 @@ func TestKPParaKing(t *testing.T) {
 	kh, _, dotfile := setupKPTest(t, king, false)
 	cursor := linebreak.NewFixedWidthCursor(khipu.NewCursor(kh), 10*dimen.BP, 3)
 	params := NewKPDefaultParameters()
-	parshape := linebreak.RectangularParshape(45 * 10 * dimen.BP)
+	parshape := linebreak.RectangularParShape(45 * 10 * dimen.BP)
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
 	v, breaks, err := FindBreakpoints(cursor, parshape, params, dotfile)
 	t.Logf("%d linebreaking-variants found, error = %v", len(v), err)
@@ -168,7 +168,7 @@ func TestKPParaPrincess(t *testing.T) {
 	// change to cursor with flexible interword-spacing
 	cursor := linebreak.NewFixedWidthCursor(khipu.NewCursor(kh), 10*dimen.BP, 2)
 	params := NewKPDefaultParameters()
-	parshape := linebreak.RectangularParshape(45 * 10 * dimen.BP)
+	parshape := linebreak.RectangularParShape(45 * 10 * dimen.BP)
 	//gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
 	breakpoints, err := BreakParagraph(cursor, parshape, params)
 	//v, breaks, err := FindBreakpoints(cursor, parshape, params, dotfile)

@@ -51,12 +51,12 @@ type linebreaker struct {
 	*fbGraph
 	horizon  *activeFeasibleBreakpoints // horizon of possible linebreaks
 	params   *linebreak.Parameters      // typesetting parameters relevant for line-breaking
-	parshape linebreak.Parshape         // target shape of the paragraph
+	parshape linebreak.ParShape         // target shape of the paragraph
 	root     *feasibleBreakpoint        // "break" at start of paragraph
 	end      *feasibleBreakpoint        // "break" at end of paragraph
 }
 
-func newLinebreaker(parshape linebreak.Parshape, params *linebreak.Parameters) *linebreaker {
+func newLinebreaker(parshape linebreak.ParShape, params *linebreak.Parameters) *linebreaker {
 	kp := &linebreaker{}
 	kp.fbGraph = newFBGraph()
 	kp.horizon = newActiveFeasibleBreakpoints()
@@ -86,10 +86,10 @@ func NewKPDefaultParameters() *linebreak.Parameters {
 	}
 }
 
-func setupLinebreaker(cursor linebreak.Cursor, parshape linebreak.Parshape,
+func setupLinebreaker(cursor linebreak.Cursor, parshape linebreak.ParShape,
 	params *linebreak.Parameters) (*linebreaker, error) {
 	if parshape == nil {
-		return nil, errors.New("Cannot shape a paragraph without a Parshape")
+		return nil, errors.New("Cannot shape a paragraph without a ParShape")
 	}
 	kp := newLinebreaker(parshape, params)
 	fb := kp.newBreakpointAtMark(provisionalMark(-1)) // start of paragraph
@@ -333,7 +333,7 @@ func (kp *linebreaker) isCheapestSurvivor(fb *feasibleBreakpoint, totalcost int3
 // Calculate the cost of a breakpoint. A breakpoint may result either in being
 // infeasible (demerits >= infinity) or having a positive (demerits) or negative
 // (merits) cost/benefit.
-func (fb *feasibleBreakpoint) calculateCostsTo(penalty khipu.Penalty, parshape linebreak.Parshape,
+func (fb *feasibleBreakpoint) calculateCostsTo(penalty khipu.Penalty, parshape linebreak.ParShape,
 	params *linebreak.Parameters) (map[int]cost, bool) {
 	//
 	T().Debugf("### calculateCostsTo(%v)", penalty)
@@ -481,7 +481,7 @@ func penaltyAt(cursor linebreak.Cursor) (khipu.Penalty, khipu.Mark) {
 // optimal, and BreakParagraph will return that.
 //
 // For a function to get solutions with different linecounts, see FindBreakpoints.
-func BreakParagraph(cursor linebreak.Cursor, parshape linebreak.Parshape,
+func BreakParagraph(cursor linebreak.Cursor, parshape linebreak.ParShape,
 	params *linebreak.Parameters) ([]khipu.Mark, error) {
 	//
 	variants, breakpoints, err := FindBreakpoints(cursor, parshape, params, nil)
@@ -510,7 +510,7 @@ func BreakParagraph(cursor linebreak.Cursor, parshape linebreak.Parshape,
 // for each linecount variant.
 //
 // For a more convenient API, see BreakParagraph.
-func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, params *linebreak.Parameters,
+func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.ParShape, params *linebreak.Parameters,
 	dotfile io.Writer) ([]int, map[int][]khipu.Mark, error) {
 	//
 	kp, err := setupLinebreaker(cursor, parshape, params)
@@ -548,7 +548,7 @@ func FindBreakpoints(cursor linebreak.Cursor, parshape linebreak.Parshape, param
 //
 // The above operations contruct a DAG, starting from a single node representing the
 // start of the paragraph, to a single node representing the end.
-func (kp *linebreaker) constructBreakpointGraph(cursor linebreak.Cursor, parshape linebreak.Parshape,
+func (kp *linebreaker) constructBreakpointGraph(cursor linebreak.Cursor, parshape linebreak.ParShape,
 	params *linebreak.Parameters) error {
 	//
 	var last khipu.Mark        // will hold last position within input khipu

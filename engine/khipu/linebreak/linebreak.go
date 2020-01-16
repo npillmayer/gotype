@@ -162,18 +162,18 @@ type Cursor interface {
 	Khipu() *khipu.Khipu
 }
 
-// Parshape is a type to return the line length for a given line number.
-type Parshape interface {
+// ParShape is a type to return the line length for a given line number.
+type ParShape interface {
 	LineLength(int) dimen.Dimen
 }
 
-type rectParshape dimen.Dimen
+type rectParShape dimen.Dimen
 
-func (r rectParshape) LineLength(int) dimen.Dimen {
+func (r rectParShape) LineLength(int) dimen.Dimen {
 	return dimen.Dimen(r)
 }
 
-// RectangularParshape returns a Parshape for paragraphs of constant line length.
-func RectangularParshape(linelen dimen.Dimen) Parshape {
-	return rectParshape(linelen)
+// RectangularParShape returns a Parshape for paragraphs of constant line length.
+func RectangularParShape(linelen dimen.Dimen) ParShape {
+	return rectParShape(linelen)
 }
