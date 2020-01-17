@@ -7,10 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/npillmayer/gotype/core/config/tracing"
-
 	"github.com/npillmayer/gotype/core/config/gtrace"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/core/dimen"
 	"github.com/npillmayer/gotype/core/parameters"
@@ -28,7 +26,8 @@ func TestBuffer(t *testing.T) {
 	lb, _ := newTestLinebreaker(t, "Hello World!", 20)
 	k, ok := lb.peek()
 	if !ok || k.Type() != khipu.KTTextBox {
-		t.Logf("lb.pos=%d, lb.mark=%d", lb.pos, lb.check)
+		//t.Logf("lb.pos=%d, lb.mark=%d", lb.pos, lb.check)
+		t.Logf("lb.pos=%d", lb.pos)
 		t.Errorf("expected the first knot to be TextBox('Hello'), is %v", k)
 	}
 	if knot := lb.next(); k != knot {
@@ -59,39 +58,44 @@ func TestBacktrack(t *testing.T) {
 	}
 }
 func TestLinebreak(t *testing.T) {
-	gtrace.CoreTracer = gologadapter.New()
-	// gtrace.CoreTracer = gotestingadapter.New()
-	// teardown := gotestingadapter.RedirectTracing(t)
-	// defer teardown()
+	// gtrace.CoreTracer = gologadapter.New()
+	gtrace.CoreTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	lb, kh := newTestLinebreaker(t, "the quick brown fox jumps over the lazy dog.", 30)
 	breakpoints, err := lb.FindBreakpoints()
 	if err != nil {
 		t.Errorf(err.Error())
 	}
+	if len(breakpoints)-1 != 2 {
+		t.Errorf("exptected 'princess' to occupy 2 lines, got %d", len(breakpoints)-1)
+	}
 	t.Logf("# Paragraph with %d lines: %v", len(breakpoints)-1, breakpoints)
-	t.Logf("    |---------+---------+---------+---------+-----|")
+	t.Logf("    |---------+---------+---------+|")
 	j := 0
 	for i := 1; i < len(breakpoints); i++ {
 		//	t.Logf("%3d: %s", i, kh.Text(j, breakpoints[i].Position()))
 		text := kh.Text(j, breakpoints[i].Position())
-		t.Logf("%3d: %-45s|", i, justify(text, 30, i%2 == 0))
+		t.Logf("%3d: %-30s|", i, justify(text, 30, i%2 == 0))
 		j = breakpoints[i].Position()
 	}
-	t.Fail()
 }
 
-//var princess = `In olden times when wishing still helped one, there lived a king whose daughters were all beautiful;`
 var princess = `In olden times when wishing still helped one, there lived a king whose daughters were all beautiful; and the youngest was so beautiful that the sun itself, which has seen so much, was astonished whenever it shone in her face. Close by the king's castle lay a great dark forest, and under an old lime-tree in the forest was a well, and when the day was very warm, the king's child went out into the forest and sat down by the side of the cool fountain; and when she was bored she took a golden ball, and threw it up on high and caught it; and this ball was her favorite plaything.`
 
 func TestPrincess(t *testing.T) {
-	gtrace.CoreTracer = gologadapter.New()
-	// gtrace.CoreTracer = gotestingadapter.New()
-	// teardown := gotestingadapter.RedirectTracing(t)
-	// defer teardown()
+	// gtrace.CoreTracer = gologadapter.New()
+	gtrace.CoreTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	lb, kh := newTestLinebreaker(t, princess, 45)
+	kh.AppendKnot(khipu.Penalty(-10000)) // TODO: add parfillskip
 	breakpoints, err := lb.FindBreakpoints()
 	if err != nil {
 		t.Errorf(err.Error())
+	}
+	if len(breakpoints)-1 != 14 {
+		t.Errorf("exptected 'princess' to occupy 14 lines, got %d", len(breakpoints)-1)
 	}
 	t.Logf("# Paragraph with %d lines: %v", len(breakpoints)-1, breakpoints)
 	t.Logf("     |---------+---------+---------+---------+-----|")
@@ -102,8 +106,9 @@ func TestPrincess(t *testing.T) {
 		t.Logf("%3d: %-45s|", i, justify(text, 45, i%2 == 0))
 		j = breakpoints[i].Position()
 	}
-	t.Fail()
 }
+
+// --- Helpers ----------------------------------------------------------
 
 func newTestLinebreaker(t *testing.T, text string, len int) (*linebreaker, *khipu.Khipu) {
 	kh, cursor, _ := setupFFTest(t, text, false)
