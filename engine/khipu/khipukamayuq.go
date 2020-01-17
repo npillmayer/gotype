@@ -69,15 +69,11 @@ func KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.Type
 	for seg.Next() {
 		fragment := seg.Text()
 		CT().Debugf("next segment = '%s'\twith penalties %v", fragment, seg.Penalties())
-		//CT().Errorf("SEGMENT IS %s  ==========================", fragment)
 		k := createPartialKhipuFromSegment(seg, pipeline, regs)
-		//CT().Errorf("PARTIAL IS %s  ==========================", k)
 		if regs.N(params.P_MINHYPHENLENGTH) < dimen.Infty {
 			HyphenateTextBoxes(k, pipeline, regs)
 		}
 		khipu.AppendKhipu(k)
-		// TODO remove these after debugging
-		//CT().Errorf("NOW KHIPU IS %s  ==========================", khipu)
 	}
 	CT().Infof("resulting khipu = %s", khipu)
 	return khipu
