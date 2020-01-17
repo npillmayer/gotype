@@ -47,8 +47,23 @@ func TestSimpleSegmenter1(t *testing.T) {
 		t.Errorf("Expected 4 segments, have %d", n)
 	}
 }
-
 func TestSimpleSegmenter2(t *testing.T) {
+	gtrace.CoreTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	seg := NewSegmenter() // will use a SimpleWordBreaker
+	seg.Init(strings.NewReader("lime-tree"))
+	n := 0
+	for seg.Next() {
+		t.Logf("segment: penalty = %5d for breaking after '%s'\n", seg.Penalties()[0], seg.Text())
+		n++
+	}
+	if n != 1 {
+		t.Errorf("Expected 1 segment, have %d", n)
+	}
+}
+
+func TestSimpleSegmenter3(t *testing.T) {
 	gtrace.CoreTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()

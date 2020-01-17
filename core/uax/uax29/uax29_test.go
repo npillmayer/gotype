@@ -26,6 +26,7 @@ func ExampleWordBreaker() {
 	// '🇩🇪'
 	// '!'
 }
+
 func TestWordBreaks1(t *testing.T) {
 	onWords := uax29.NewWordBreaker()
 	segmenter := segment.NewSegmenter(onWords)
@@ -37,6 +38,20 @@ func TestWordBreaks1(t *testing.T) {
 	}
 	if n != 4 {
 		t.Errorf("Expected # of segments to be 4, is %d", n)
+	}
+}
+
+func TestWordBreaks2(t *testing.T) {
+	onWords := uax29.NewWordBreaker()
+	segmenter := segment.NewSegmenter(onWords)
+	segmenter.Init(strings.NewReader("lime-tree"))
+	n := 0
+	for segmenter.Next() {
+		t.Logf("'%s'  (p=%v)", segmenter.Text(), segmenter.Penalties())
+		n++
+	}
+	if n != 3 {
+		t.Errorf("Expected # of segments to be 3, is %d", n)
 	}
 }
 

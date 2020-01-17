@@ -79,3 +79,18 @@ func TestText(t *testing.T) {
 		t.Errorf("output text != input text")
 	}
 }
+
+func TestExHyphen(t *testing.T) {
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
+	text := "lime-tree"
+	regs := parameters.NewTypesettingRegisters()
+	regs.Push(parameters.P_MINHYPHENLENGTH, 3)
+	kh := KnotEncode(strings.NewReader(text), nil, regs)
+	out := kh.Text(0, kh.Length())
+	if out != text {
+		t.Logf("Text: %s", out)
+		t.Errorf("output text != input text")
+	}
+}

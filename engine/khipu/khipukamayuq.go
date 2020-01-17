@@ -69,13 +69,17 @@ func KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.Type
 	for seg.Next() {
 		fragment := seg.Text()
 		CT().Debugf("next segment = '%s'\twith penalties %v", fragment, seg.Penalties())
+		//CT().Errorf("SEGMENT IS %s  ==========================", fragment)
 		k := createPartialKhipuFromSegment(seg, pipeline, regs)
+		//CT().Errorf("PARTIAL IS %s  ==========================", k)
 		if regs.N(params.P_MINHYPHENLENGTH) < dimen.Infty {
 			HyphenateTextBoxes(k, pipeline, regs)
 		}
 		khipu.AppendKhipu(k)
+		// TODO remove these after debugging
+		//CT().Errorf("NOW KHIPU IS %s  ==========================", khipu)
 	}
-	CT().Infof("resulting khipu = %s\n", khipu)
+	CT().Infof("resulting khipu = %s", khipu)
 	return khipu
 }
 
@@ -89,6 +93,7 @@ func KnotEncode(text io.Reader, pipeline *TypesettingPipeline, regs *params.Type
 // Returns a khipu consisting of text-boxes, glues and penalties.
 func createPartialKhipuFromSegment(seg *segment.Segmenter, pipeline *TypesettingPipeline, regs *params.TypesettingRegisters) *Khipu {
 	khipu := NewKhipu()
+	CT().Errorf("CREATE PARITAL KHIPU, PENALTIES=%v", seg.Penalties())
 	if seg.Penalties()[0] < 1000 { // broken by primary breaker // TODO: this API is aweful...
 		// fragment is terminated by possible line wrap opportunity
 		if seg.Penalties()[1] < 1000 { // broken by secondary breaker, too
@@ -101,15 +106,22 @@ func createPartialKhipuFromSegment(seg *segment.Segmenter, pipeline *Typesetting
 				p := Penalty(dimen.Infty)
 				khipu.AppendKnot(b).AppendKnot(p)
 			}
+		} else { // identified as a possible line break, but no space
+			// insert explicit discretionary '\-' penalty
+			b := NewTextBox(seg.Text())
+			p := Penalty(regs.N(params.P_HYPHENPENALTY))
+			khipu.AppendKnot(b).AppendKnot(p)
 		}
 	} else { // segments is broken by secondary breaker
 		// fragment is start or end of a span of whitespace
 		if seg.Penalties()[1] == segment.PenaltyBeforeWhitespace {
+			CT().Errorf("BROKEN BY SECONDARY BREAKER: TEXT_BOX")
 			// close a text box which is not a possible line wrap position
 			b := NewTextBox(seg.Text())
 			p := Penalty(dimen.Infty)
 			khipu.AppendKnot(b).AppendKnot(p)
 		} else {
+			CT().Errorf("BROKEN BY SECONDARY BREAKER: WHITESPACE")
 			// close a span of whitespace
 			g := NewGlue(5*dimen.PT, 1*dimen.PT, 2*dimen.PT)
 			p := Penalty(seg.Penalties()[1])
