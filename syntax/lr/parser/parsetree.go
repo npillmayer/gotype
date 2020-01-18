@@ -7,7 +7,7 @@ import "fmt"
 
 BSD License
 
-Copyright (c) 2017–2018, Norbert Pillmayer
+Copyright (c) 2017–2020, Norbert Pillmayer
 
 All rights reserved.
 
@@ -22,7 +22,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer or the names of its contributors
+3. Neither the name of this software or the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -127,8 +127,8 @@ func NewParseTree() *ParseTree {
 	ptree := &ParseTree{}
 	r := ptree.NewNode()
 	ptree.root = r
-	ptree.children = make(map[NodeID]daglinks)
-	ptree.parents = make(map[NodeID]daglinks)
+	ptree.edgesfrom = make(map[NodeID]daglinks)
+	ptree.edgesto = make(map[NodeID]daglinks)
 	return ptree
 }
 
@@ -148,29 +148,29 @@ func (ptree *ParseTree) NewNode() *ParseNode {
 
 // Number of parents for a node.
 func (ptree *ParseTree) ParentCount(nid NodeID) int {
-	return len(ptree.parents[nid])
+	return len(ptree.edgesto[nid])
 }
 
 // Get all parents of a node.
 func (ptree *ParseTree) Parents(nid NodeID) []*ParseNode {
-	plinks := ptree.parents[nid]
+	plinks := ptree.edgesto[nid]
 	return plinks.asNodeList()
 }
 
 func (ptree *ParseTree) ChildCount(nid NodeID) int {
-	return len(ptree.children[nid])
+	return len(ptree.edgesfrom[nid])
 }
 
 // Get all children of a node.
 func (ptree *ParseTree) Children(nid NodeID) []*ParseNode {
-	plinks := ptree.children[nid]
+	plinks := ptree.edgesfrom[nid]
 	return plinks.asNodeList()
 }
 
 // Add a child to a node. The node will be added as a parent to the child.
 func (ptree *ParseTree) AddChild(pnid NodeID, chnid NodeID) {
-	addLink(ptree.children, pnode.ids[0], pnid, chnid)
-	addLink(ptree.parents, ch.ids[0], chnid, pnid) // TODO
+	// addLink(ptree.edgesfrom, pnode.ids[0], pnid, chnid)
+	// addLink(ptree.edgesto, ch.ids[0], chnid, pnid) // TODO
 }
 
 func addLink(m map[NodeID]daglinks, outID NodeID, outnode *ParseNode, target *ParseNode) {
@@ -190,9 +190,9 @@ func addLink(m map[NodeID]daglinks, outID NodeID, outnode *ParseNode, target *Pa
 func (ptree *ParseTree) packNodes(pn1 *ParseNode, pn2 *ParseNode) {
 	pn1.ids = append(pn1.ids, pn2.ids...)
 	for _, id := range pn2.ids {
-		T.Debugf("node %v has id = %v", pn2, id)
+		T().Debugf("node %v has id = %v", pn2, id)
 		for _, pnode := range ptree.edgesto[id] { // all nodes pointing to an ID of pn2
-			T.Debugf("node %v points to %v", pnode, pn2)
+			T().Debugf("node %v points to %v", pnode, pn2)
 			for _, otherid := range pnode.ids {
 				for i := 0; i < len(ptree.edgesfrom[otherid]); i++ {
 					target := ptree.edgesfrom[otherid][i]

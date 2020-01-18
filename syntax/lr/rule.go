@@ -15,7 +15,7 @@ import (
 // of just one symbol. This is due to the fact that I intended to have
 // context sensitive rules, too (not for LR-parsing of course).
 
-// An interface for symbols of grammars, i.e. terminals and non-terminals.
+// Symbol is an interface for symbols of grammars, i.e. terminals and non-terminals.
 type Symbol interface {
 	IsTerminal() bool // is this symbol a terminal?
 	Token() int       // token value of terminals
@@ -29,7 +29,7 @@ func symvalue(A Symbol) int {
 	return A.GetID()
 }
 
-// A type for rules of a grammar. Rules cannot be shared between grammars.
+// A Rule is a type for rules of a grammar. Rules cannot be shared between grammars.
 type Rule struct {
 	no    int           // order number of this rule within a grammar
 	lhs   []Symbol      // symbols of left hand side
@@ -202,7 +202,7 @@ func (g *Grammar) findNonTermRules(sym Symbol, includeEpsRules bool) *itemSet {
 			if !r.isEps() || includeEpsRules {
 				i, _ := r.startItem()
 				if i == nil {
-					T.Errorf("inconsistency? start-item == NIL")
+					T().Errorf("inconsistency? start-item == NIL")
 				}
 				iset.Add(i)
 			}
@@ -286,7 +286,7 @@ func (g *Grammar) resolveOrDefineTerminal(s string, tokval int) Symbol {
 	lrsym.tokval = tokval
 	g.terminals[lrsym.GetID()] = lrsym
 	if g.terminalsByToken[tokval] != nil {
-		T.Errorf("duplicate terminal symbol for token value = %d", tokval)
+		T().Errorf("duplicate terminal symbol for token value = %d", tokval)
 		// proceed with fingers crossed
 	}
 	g.terminalsByToken[tokval] = lrsym
@@ -438,7 +438,7 @@ violated.
 */
 func (rb *RuleBuilder) T(s string, tokval int) *RuleBuilder {
 	if tokval <= nonTermType {
-		T.Errorf("illegal token value parameter (%d), must be > %d", tokval, nonTermType)
+		T().Errorf("illegal token value parameter (%d), must be > %d", tokval, nonTermType)
 		panic(fmt.Sprintf("illegal token value parameter (%d)", tokval))
 	}
 	sym := rb.gb.g.resolveOrDefineTerminal(s, tokval)
@@ -460,7 +460,7 @@ func (rb *RuleBuilder) AppendSymbol(sym Symbol) *RuleBuilder {
 // This must be called directly after rb.LHS(...).
 func (rb *RuleBuilder) Epsilon() *Rule {
 	rb.gb.appendRule(rb.rule)
-	T.Debugf("appending epsilon-rule:  %v", rb.rule)
+	T().Debugf("appending epsilon-rule:  %v", rb.rule)
 	r := rb.rule
 	rb.rule = nil
 	return r
@@ -479,7 +479,7 @@ func (rb *RuleBuilder) EOF() *Rule {
 // for this rule).
 func (rb *RuleBuilder) End() *Rule {
 	rb.gb.appendRule(rb.rule)
-	T.Debugf("appending rule:  %v", rb.rule)
+	T().Debugf("appending rule:  %v", rb.rule)
 	r := rb.rule
 	rb.rule = nil
 	return r

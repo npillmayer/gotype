@@ -87,11 +87,11 @@ func (iset *itemSet) forGraphviz() string {
 // Debugging helper
 func (iset *itemSet) Dump() {
 	items := iset.Values()
-	//T.Debug("--- item set ------------")
+	//T().Debug("--- item set ------------")
 	for k, i := range items {
-		T.Debugf("item %2d = %v", k, i)
+		T().Debugf("item %2d = %v", k, i)
 	}
-	//T.Debug("-------------------------")
+	//T().Debug("-------------------------")
 }
 
 var _ *itemSet = newItemSet() // verify assignability
@@ -109,9 +109,9 @@ func (ga *GrammarAnalysis) closure(i *item, A Symbol) *itemSet {
 		A = i.peekSymbol() // get symbol after dot
 	}
 	if A != nil {
-		//T.Debugf("pre closure(%v) = %v", i, iset)
+		//T().Debugf("pre closure(%v) = %v", i, iset)
 		iset = ga.closureSet(iset)
-		//T.Debugf("    closure(%v) = %v", i, iset)
+		//T().Debugf("    closure(%v) = %v", i, iset)
 		return iset
 	}
 	return iset
@@ -154,7 +154,7 @@ func (ga *GrammarAnalysis) gotoSet(closure *itemSet, A Symbol) (*itemSet, Symbol
 		i := x.(*item)
 		if i.peekSymbol() == A {
 			ii, _ := i.advance()
-			T.Debugf("goto(%s) -%s-> %s", i, A, ii)
+			T().Debugf("goto(%s) -%s-> %s", i, A, ii)
 			gotoset.Add(ii)
 		}
 	}
@@ -164,10 +164,10 @@ func (ga *GrammarAnalysis) gotoSet(closure *itemSet, A Symbol) (*itemSet, Symbol
 
 func (ga *GrammarAnalysis) gotoSetClosure(i *itemSet, A Symbol) (*itemSet, Symbol) {
 	gotoset, _ := ga.gotoSet(i, A)
-	//T.Infof("gotoset  = %v", gotoset)
+	//T().Infof("gotoset  = %v", gotoset)
 	gclosure := ga.closureSet(gotoset)
-	//T.Infof("gclosure = %v", gclosure)
-	T.Debugf("goto(%s) --%s--> %s", i, A, gclosure)
+	//T().Infof("gclosure = %v", gclosure)
+	T().Debugf("goto(%s) --%s--> %s", i, A, gclosure)
 	return gclosure, A
 }
 
@@ -189,9 +189,9 @@ type cfsmEdge struct {
 
 // Debugging helper
 func (s *CFSMState) Dump() {
-	T.Debugf("--- state %03d -----------", s.ID)
+	T().Debugf("--- state %03d -----------", s.ID)
 	s.items.Dump()
-	T.Debugf("-------------------------")
+	T().Debugf("-------------------------")
 }
 
 func (s *CFSMState) isErrorState() bool {
@@ -350,7 +350,7 @@ BuildGotoTable(...).)
 */
 func (lrgen *LRTableGenerator) GotoTable() *sparse.IntMatrix {
 	if lrgen.gototable == nil {
-		T.P("lr", "gen").Errorf("tables not yet initialized")
+		T().P("lr", "gen").Errorf("tables not yet initialized")
 	}
 	return lrgen.gototable
 }
@@ -362,7 +362,7 @@ BuildSLR1ActionTable(...).)
 */
 func (lrgen *LRTableGenerator) ActionTable() *sparse.IntMatrix {
 	if lrgen.actiontable == nil {
-		T.P("lr", "gen").Errorf("tables not yet initialized")
+		T().P("lr", "gen").Errorf("tables not yet initialized")
 	}
 	return lrgen.actiontable
 }
@@ -380,7 +380,7 @@ func (lrgen *LRTableGenerator) CreateTables() {
 // Clients have to call CreateTables() first.
 func (lrgen *LRTableGenerator) AcceptingStates() []int {
 	if lrgen.dfa == nil {
-		T.Errorf("tables not yet generated; call CreateTables() first")
+		T().Errorf("tables not yet generated; call CreateTables() first")
 		return nil
 	}
 	acc := make([]int, 0, 3)
@@ -395,7 +395,7 @@ func (lrgen *LRTableGenerator) AcceptingStates() []int {
 
 // Construct the characteristic finite state machine CFSM for a grammar.
 func (lrgen *LRTableGenerator) buildCFSM() *CFSM {
-	T.Debugf("=== build CFSM ==================================================")
+	T().Debugf("=== build CFSM ==================================================")
 	G := lrgen.g
 	cfsm := emptyCFSM(G)
 	closure0 := lrgen.ga.closure(G.rules[0].startItem())
@@ -407,7 +407,7 @@ func (lrgen *LRTableGenerator) buildCFSM() *CFSM {
 		s := S.Values()[0].(*CFSMState)
 		S.Remove(s)
 		G.EachSymbol(func(A Symbol) interface{} {
-			T.Debugf("checking goto-set for symbol = %v", A)
+			T().Debugf("checking goto-set for symbol = %v", A)
 			gotoset, _ := lrgen.ga.gotoSetClosure(s.items, A)
 			snew := cfsm.findStateByItems(gotoset)
 			if snew == nil {
@@ -425,7 +425,7 @@ func (lrgen *LRTableGenerator) buildCFSM() *CFSM {
 			snew.Dump()
 			return nil
 		})
-		T.Debugf("-----------------------------------------------------------------")
+		T().Debugf("-----------------------------------------------------------------")
 	}
 	return cfsm
 }
@@ -477,15 +477,15 @@ func (lrgen *LRTableGenerator) BuildGotoTable() *sparse.IntMatrix {
 		}
 		return nil
 	})
-	T.Infof("GOTO table of size %d x %d", statescnt, maxtok)
+	T().Infof("GOTO table of size %d x %d", statescnt, maxtok)
 	gototable := sparse.NewIntMatrix(statescnt, maxtok, sparse.DefaultNullValue)
 	states := lrgen.dfa.states.Iterator()
 	for states.Next() {
 		state := states.Value().(*CFSMState)
 		edges := lrgen.dfa.allEdges(state)
 		for _, e := range edges {
-			//T.Debugf("edge %s --%v--> %v", state, e.label, e.to)
-			//T.Debugf("GOTO (%d , %d ) = %d", state.ID, symvalue(e.label), e.to.ID)
+			//T().Debugf("edge %s --%v--> %v", state, e.label, e.to)
+			//T().Debugf("GOTO (%d , %d ) = %d", state.ID, symvalue(e.label), e.to.ID)
 			gototable.Set(state.ID, symvalue(e.label), int32(e.to.ID))
 		}
 	}
@@ -497,7 +497,7 @@ Export the GOTO-table in HTML-format.
 */
 func GotoTableAsHTML(lrgen *LRTableGenerator, w io.Writer) {
 	if lrgen.gototable == nil {
-		T.Errorf("GOTO table not yet created, cannot export to HTML")
+		T().Errorf("GOTO table not yet created, cannot export to HTML")
 		return
 	}
 	parserTableAsHTML(lrgen, "GOTO", lrgen.gototable, w)
@@ -508,7 +508,7 @@ Export the SLR(1) ACTION-table in HTML-format.
 */
 func ActionTableAsHTML(lrgen *LRTableGenerator, w io.Writer) {
 	if lrgen.actiontable == nil {
-		T.Errorf("ACTION table not yet created, cannot export to HTML")
+		T().Errorf("ACTION table not yet created, cannot export to HTML")
 		return
 	}
 	parserTableAsHTML(lrgen, "ACTION", lrgen.actiontable, w)
@@ -561,7 +561,7 @@ lookahead included. This method is provided as an add-on.
 */
 func (lrgen *LRTableGenerator) BuildLR0ActionTable() *sparse.IntMatrix {
 	statescnt := lrgen.dfa.states.Size()
-	T.Infof("ACTION.0 table of size %d x 1", statescnt)
+	T().Infof("ACTION.0 table of size %d x 1", statescnt)
 	actions := sparse.NewIntMatrix(statescnt, 1, sparse.DefaultNullValue)
 	return lrgen.buildActionTable(actions, false)
 }
@@ -580,7 +580,7 @@ func (lrgen *LRTableGenerator) BuildSLR1ActionTable() *sparse.IntMatrix {
 		}
 		return nil
 	})
-	T.Infof("ACTION.1 table of size %d x %d", statescnt, maxtok)
+	T().Infof("ACTION.1 table of size %d x %d", statescnt, maxtok)
 	actions := sparse.NewIntMatrix(statescnt, maxtok, sparse.DefaultNullValue)
 	return lrgen.buildActionTable(actions, true)
 }
@@ -607,20 +607,20 @@ func (lrgen *LRTableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 
 	for states.Next() {
 		state := states.Value().(*CFSMState)
 		for _, v := range state.items.Values() {
-			T.Debugf("item in s%d = %v", state.ID, v)
+			T().Debugf("item in s%d = %v", state.ID, v)
 			i, _ := v.(*item)
 			A := i.peekSymbol()
 			prefix := i.getPrefix()
-			T.Debugf("symbol at dot = %v, prefix = %v", A, prefix)
+			T().Debugf("symbol at dot = %v, prefix = %v", A, prefix)
 			if A != nil && A.IsTerminal() { // create a shift entry
 				if slr1 {
-					T.Debugf("    creating shift action entry --%v-->", A)
+					T().Debugf("    creating shift action entry --%v-->", A)
 					a := actions.Value(state.ID, A.Token())
 					if a != -1 { // already shift present ?
 						actions.Add(state.ID, A.Token(), -1)
 					}
 				} else {
-					T.Debugf("    creating shift action entry")
+					T().Debugf("    creating shift action entry")
 					actions.Add(state.ID, 1, -1) // general shift (no lookahead)
 				}
 			}
@@ -629,16 +629,16 @@ func (lrgen *LRTableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 
 				if inx >= 0 {                                  // found => create a reduce entry
 					if slr1 {
 						lookaheads := lrgen.ga.Follow(rule.lhs[0])
-						T.Debugf("    Follow(%v) = %v", rule.lhs[0], lookaheads)
+						T().Debugf("    Follow(%v) = %v", rule.lhs[0], lookaheads)
 						for _, la := range lookaheads {
 							actions.Add(state.ID, la, int32(inx))  // reduce rule[inx]
 							if rule.no == 0 && la == epsilonType { // start rule reduced
-								T.Debugf("    accepting") // TODO
+								T().Debugf("    accepting") // TODO
 							}
-							T.Debugf("    creating reduce_%d action entry @ %v for %v", inx, la, rule)
+							T().Debugf("    creating reduce_%d action entry @ %v for %v", inx, la, rule)
 						}
 					} else {
-						T.Debugf("    creating reduce_%d action entry for %v", inx, rule)
+						T().Debugf("    creating reduce_%d action entry for %v", inx, rule)
 						actions.Add(state.ID, 1, int32(inx)) // reduce rule[inx]
 					}
 				}

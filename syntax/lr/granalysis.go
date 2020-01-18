@@ -10,9 +10,7 @@ TODO: Replace home-grown int-set by
 https://github.com/golang/tools/blob/master/container/intsets/sparse.go
 */
 
-/*
-Object for grammar analysis (compute FIRST and FOLLOW sets).
-*/
+// GrammarAnalysis is an object for grammar analysis (compute FIRST and FOLLOW sets).
 type GrammarAnalysis struct {
 	g          *Grammar
 	derivesEps map[Symbol]bool
@@ -20,10 +18,8 @@ type GrammarAnalysis struct {
 	followSets *symSetMap
 }
 
-/*
-Create an analyser for a grammar.
-The analyser immediately starts its work and computes FIRST and FOLLOW sets.
-*/
+// NewGrammarAnalysis creates an analyser for a grammar.
+// The analyser immediately starts its work and computes FIRST and FOLLOW sets.
 func NewGrammarAnalysis(g *Grammar) *GrammarAnalysis {
 	ga := makeGrammarAnalysis(g)
 	ga.analyse()

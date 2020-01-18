@@ -13,7 +13,7 @@ import (
 // https://github.com/golang/go/wiki/Performance
 
 func traceOn() {
-	T.SetLevel(tracing.LevelDebug)
+	T().SetTraceLevel(tracing.LevelDebug)
 }
 
 /*
@@ -63,7 +63,7 @@ func TestStackSet1(t *testing.T) {
 	r := dss.NewRoot("G", -999)
 	s1 := dss.NewStack(r)
 	set1 = set1.add(s1)
-	T.Debugf("set = %v", set1)
+	T().Debugf("set = %v", set1)
 	if set1.get() != s1 {
 		t.Fail()
 	}
@@ -93,7 +93,7 @@ func TestParser2(t *testing.T) {
 	/*
 	   lrgen.CFSM().CFSM2GraphViz("/tmp/cfsm-" + "G1" + ".dot")
 	   tmp, _ := ioutil.TempFile("", "lr_")
-	   T.Infof("writing HTML to %s", tmp.Name())
+	   T().Infof("writing HTML to %s", tmp.Name())
 	   lr.ActionTableAsHTML(lrgen, tmp)
 	   lr.GotoTableAsHTML(lrgen, tmp)
 	   tmp.Close()

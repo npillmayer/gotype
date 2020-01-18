@@ -71,7 +71,7 @@ This is experimental software, currently not intended for production use.
 
 BSD License
 
-Copyright (c) 2017, Norbert Pillmayer
+Copyright (c) 2017-20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -86,7 +86,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer or the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -100,10 +100,7 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-----------------------------------------------------------------------
-*/
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 package dss
 
 import (
@@ -113,12 +110,15 @@ import (
 	"strconv"
 
 	ssl "github.com/emirpasic/gods/lists/singlylinkedlist"
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/lr"
 )
 
-// Configurable trace
-var T tracing.Trace = tracing.SyntaxTracer
+// T traces to the SyntaxTracer.
+func T() tracing.Trace {
+	return gtrace.SyntaxTracer
+}
 
 // --- Stack Nodes -----------------------------------------------------------
 
@@ -174,7 +174,7 @@ func (n *DSSNode) prepend(pred *DSSNode) {
 
 // Unlink a node
 func (n *DSSNode) isolate() {
-	T.Debugf("isolating %v", n)
+	T().Debugf("isolating %v", n)
 	for _, p := range n.preds {
 		p.succs, _ = remove(p.succs, n)
 	}
@@ -276,7 +276,7 @@ func (root *DSSRoot) removeStack(stack *Stack) {
 // TODO: create an initial pool of nodes.
 // TODO: migrate this to stdlib's sync/pool.
 func (root *DSSRoot) recycleNode(node *DSSNode) {
-	T.Debugf("recycling node %v", node)
+	T().Debugf("recycling node %v", node)
 	node.State = 0
 	node.Sym = nil
 	node.preds = node.preds[0:0]
@@ -431,16 +431,16 @@ func (stack *Stack) Push(state int, sym lr.Symbol) *Stack {
 	// - find: return existing one
 	// update references / pathcnt
 	if succ := stack.tos.findUplink(sym); succ != nil {
-		T.Debugf("state already present: %v", succ)
+		T().Debugf("state already present: %v", succ)
 		stack.tos = succ // pushed state is already there, upchain
 	} else {
 		succ := stack.root.findTOSofAnyStack(state, sym)
 		if succ == nil { // not found in DSS
 			succ = stack.root.newNode(state, sym)
-			T.Debugf("creating state: %v", succ)
+			T().Debugf("creating state: %v", succ)
 			succ.pathcnt = stack.tos.pathcnt
 		} else {
-			T.Debugf("found state on other stack: %v", succ)
+			T().Debugf("found state on other stack: %v", succ)
 			succ.pathcnt++
 		}
 		succ.prepend(stack.tos)
@@ -469,7 +469,7 @@ Will return nil if no (more) path is found.
 func (stack *Stack) FindHandlePath(handle []lr.Symbol, skip int) NodePath {
 	path, ok := collectHandleBranch(stack.tos, handle, len(handle), &skip)
 	if ok {
-		T.Debugf("found a handle %v", path)
+		T().Debugf("found a handle %v", path)
 	}
 	return path
 }
@@ -482,12 +482,12 @@ func collectHandleBranch(n *DSSNode, handleRest []lr.Symbol, handleLen int, skip
 	l := len(handleRest)
 	if l > 0 {
 		if n.Sym == handleRest[l-1] {
-			T.Debugf("handle symbol match at %d = %v", l-1, n.Sym)
+			T().Debugf("handle symbol match at %d = %v", l-1, n.Sym)
 			for _, pred := range n.preds {
 				branch, found := collectHandleBranch(pred, handleRest[:l-1], handleLen, skip)
 				if found {
 					if *skip == 0 {
-						T.Debugf("partial branch: %v", branch)
+						T().Debugf("partial branch: %v", branch)
 						if branch != nil { // a-ha, deepest node has created collector
 							branch[l-1] = n // collect n in branch
 						}
@@ -515,7 +515,7 @@ func (stack *Stack) splitOff(path NodePath) *Stack {
 		node = path[i]
 		mynode = stack.root.newNode(node.State, node.Sym)
 		//mynode = stack.root.newNode(node.State+100, node.Sym)
-		T.Debugf("split off node %v", mynode)
+		T().Debugf("split off node %v", mynode)
 		if upperNode != nil { // we are not the top-node of the stack
 			mynode.append(upperNode)
 			upperNode.prepend(mynode)
@@ -561,14 +561,14 @@ func (stack *Stack) reduce(path NodePath, destructive bool) (ret []*Stack) {
 	haveDeleted := false
 	for i := len(path) - 1; i >= 0; i-- { // iterate over handle symbols back to front
 		node := path[i]
-		T.Debugf("reducing node %v (now cnt=%d)", node, node.pathcnt)
-		T.Debugf("         node %v has %d succs", node, len(node.succs))
+		T().Debugf("reducing node %v (now cnt=%d)", node, node.pathcnt)
+		T().Debugf("         node %v has %d succs", node, len(node.succs))
 		if node.isInverseJoin() {
-			T.Debugf("is join: %v", node)
+			T().Debugf("is join: %v", node)
 			maydelete = true
 			node.pathcnt--
 		} else if haveDeleted && node.successorCount() > 0 {
-			T.Debugf("is or has been fork: %v", node)
+			T().Debugf("is or has been fork: %v", node)
 			maydelete = false
 		} else {
 			maydelete = true
@@ -696,7 +696,7 @@ func (stack *Stack) Pop() (ret []*Stack) {
 				s := NewStack(stack.root)
 				s.tos = n
 				//s.calculateHeight()
-				//T.Debugf("creating new stack for %v (of height=%d)", n, s.height)
+				//T().Debugf("creating new stack for %v (of height=%d)", n, s.height)
 				ret = append(ret, s)
 			}
 		}
@@ -730,7 +730,7 @@ func (stack *Stack) pop(toNode *DSSNode, deleteNode bool, collectStacks bool) ([
 			}
 		}
 	} else {
-		T.Errorf("unable to pop TOS: stack empty")
+		T().Errorf("unable to pop TOS: stack empty")
 		err = errors.New("unable to pop TOS: stack empty")
 	}
 	return r, err

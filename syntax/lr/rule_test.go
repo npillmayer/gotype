@@ -8,7 +8,7 @@ import (
 )
 
 func traceOn() {
-	T.SetLevel(tracing.LevelDebug)
+	T().SetTraceLevel(tracing.LevelDebug)
 }
 
 func TestBuilder1(t *testing.T) {
@@ -50,13 +50,13 @@ func TestClosure1(t *testing.T) {
 	}
 	item1, _ := r1.startItem()
 	item2, _ := r2.startItem()
-	T.Debug(item1)
-	T.Debug(item2)
+	T().Debugf("item1=%v", item1)
+	T().Debugf("item2=%v", item2)
 	if item1.dot != 0 {
 		t.Fail()
 	}
 	item2, _ = item2.advance()
-	T.Debug(item2)
+	T().Debugf("item2=%v", item2)
 	if item2.dot != 1 {
 		t.Fail()
 	}
@@ -68,8 +68,9 @@ func TestClosure2(t *testing.T) {
 	b.LHS("E").N("E").T("+", 1).T("(", 2).N("E").T(")", 3).End()
 	b.LHS("E").T("a", 4).End()
 	g := b.Grammar()
+	ga := NewGrammarAnalysis(g)
 	//b.Grammar().Dump()
-	closure0 := g.closure(r0.startItem())
+	closure0 := ga.closure(r0.startItem())
 	closure0.Dump()
 }
 
@@ -79,10 +80,11 @@ func TestItemSetEquality(t *testing.T) {
 	b.LHS("E").N("E").T("+", 1).T("(", 2).N("E").T(")", 3).End()
 	b.LHS("E").T("a", 4).End()
 	g := b.Grammar()
+	ga := NewGrammarAnalysis(g)
 	//b.Grammar().Dump()
-	closure0 := g.closure(r0.startItem())
+	closure0 := ga.closure(r0.startItem())
 	//closure0.Dump()
-	closure1 := g.closure(r0.startItem())
+	closure1 := ga.closure(r0.startItem())
 	if !closure0.equals(closure1) {
 		t.Fail()
 	}
@@ -94,11 +96,12 @@ func TestClosure4(t *testing.T) {
 	b.LHS("E").N("E").T("+", 1).T("(", 2).N("E").T(")", 3).End()
 	b.LHS("E").T("a", 4).End()
 	g := b.Grammar()
+	ga := NewGrammarAnalysis(g)
 	//b.Grammar().Dump()
 	i, A := r0.startItem()
-	closure0 := g.closure(i, A)
+	closure0 := ga.closure(i, A)
 	//closure0.Dump()
-	g.gotoSet(closure0, A)
+	ga.gotoSet(closure0, A)
 }
 
 func TestStateRetrieval(t *testing.T) {
@@ -107,12 +110,13 @@ func TestStateRetrieval(t *testing.T) {
 	b.LHS("E").N("E").T("+", 1).T("(", 2).N("E").T(")", 3).End()
 	b.LHS("E").T("a", 4).End()
 	g := b.Grammar()
+	ga := NewGrammarAnalysis(g)
 	cfsm := emptyCFSM(g)
-	closure0 := g.closure(r0.startItem())
+	closure0 := ga.closure(r0.startItem())
 	s0 := cfsm.addState(closure0)
 	//s0.Dump()
 	s1 := cfsm.addState(closure0)
-	if s0.id != s1.id {
+	if s0.ID != s1.ID {
 		t.Fail()
 	}
 }
@@ -141,7 +145,7 @@ func TestDerivesEps(t *testing.T) {
 	ga.markEps()
 	cnt := 0
 	g.EachSymbol(func(A Symbol) interface{} {
-		T.Debugf("%v => eps  : %v", A, ga.derivesEps[A])
+		T().Debugf("%v => eps  : %v", A, ga.derivesEps[A])
 		if ga.derivesEps[A] {
 			cnt++
 		}
@@ -164,7 +168,7 @@ func TestFirstSet(t *testing.T) {
 	ga.markEps()
 	ga.initFirstSets()
 	for key, value := range ga.firstSets.sets {
-		T.Debugf("key = %v     value = %v", key, value)
+		T().Debugf("key = %v     value = %v", key, value)
 	}
 }
 
@@ -185,7 +189,7 @@ func TestFollowSet(t *testing.T) {
 			A := sym.(Symbol)
 			if !A.IsTerminal() {
 				if ga.derivesEps[A] {
-					T.Debugf("%v  => epsilon", A)
+					T().Debugf("%v  => epsilon", A)
 				}
 			}
 		})
@@ -193,14 +197,14 @@ func TestFollowSet(t *testing.T) {
 	ga.initFirstSets()
 	ga.Grammar().EachNonTerminal( // supply a mapper function
 		func(A Symbol) interface{} {
-			T.Debugf("FIRST(%v) = %v", A, ga.First(A))
+			T().Debugf("FIRST(%v) = %v", A, ga.First(A))
 			return nil
 		})
-	T.Debug("-------")
+	T().Debugf("-------")
 	ga.initFollowSets()
 	ga.Grammar().EachNonTerminal(
 		func(A Symbol) interface{} {
-			T.Debugf("FOLLOW(%v) = %v", A, ga.Follow(A))
+			T().Debugf("FOLLOW(%v) = %v", A, ga.Follow(A))
 			return nil
 		})
 }
@@ -218,7 +222,7 @@ func TestGotoTable(t *testing.T) {
 	lrgen.gototable = lrgen.BuildGotoTable()
 	lrgen.CFSM().CFSM2GraphViz("/tmp/cfsm.dot")
 	tmp, _ := ioutil.TempFile("", "lr_")
-	T.Infof("writing HTML to %s", tmp.Name())
+	T().Infof("writing HTML to %s", tmp.Name())
 	GotoTableAsHTML(lrgen, tmp)
 }
 
@@ -233,19 +237,19 @@ func TestActionTable(t *testing.T) {
 	lrgen := NewLRTableGenerator(ga)
 	lrgen.dfa = lrgen.buildCFSM()
 	traceOn()
-	T.Debugln("\n---------- Action 0 -----------------------------------")
+	T().Debugf("\n---------- Action 0 -----------------------------------")
 	lrgen.actiontable = lrgen.BuildLR0ActionTable()
-	T.Debugln("\n---------- Action 1 -----------------------------------")
+	T().Debugf("\n---------- Action 1 -----------------------------------")
 	lrgen.actiontable = lrgen.BuildSLR1ActionTable()
 	/*
 		tmp, _ := ioutil.TempFile("", "lr_")
-		T.Infof("writing HTML to %s", tmp.Name())
+		T().Infof("writing HTML to %s", tmp.Name())
 		ActionTableAsHTML(lrgen, tmp)
 	*/
 }
 
-func TestScannerSimple1(t *testing.T) {
-	scanner := NewScanner(nil)
-	tokval, token := scanner.NextToken(nil)
-	T.Infof("scanned: %d / %v", tokval, token)
-}
+// func TestScannerSimple1(t *testing.T) {
+// 	scanner := NewScanner(nil)
+// 	tokval, token := scanner.NextToken(nil)
+// 	T().Infof("scanned: %d / %v", tokval, token)
+// }

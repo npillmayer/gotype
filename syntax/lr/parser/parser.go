@@ -16,7 +16,7 @@ Note: The API is still very much in flux! Currently it is something like
 
 BSD License
 
-Copyright (c) 2017–2018, Norbert Pillmayer
+Copyright (c) 2017–2020, Norbert Pillmayer
 
 All rights reserved.
 
@@ -31,7 +31,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer or the names of its contributors
+3. Neither the name of this software or the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -45,10 +45,7 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-----------------------------------------------------------------------
-*/
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 package parser
 
 import (
@@ -56,14 +53,17 @@ import (
 	"io"
 	"text/scanner"
 
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/lr"
 	"github.com/npillmayer/gotype/syntax/lr/dss"
 	"github.com/npillmayer/gotype/syntax/lr/sparse"
 )
 
-// Configurable trace
-var T tracing.Trace = tracing.SyntaxTracer
+// T traces to the SyntaxTracer
+func T() tracing.Trace {
+	return gtrace.SyntaxTracer
+}
 
 /*
 --------- scan -----------
@@ -83,7 +83,7 @@ regular expression to DFA
 http://www.cse.unt.edu/~sweany/CSCE3650/HANDOUTS/LRParseAlg.pdf
 */
 
-// A token type, if you want to use it. Tokens of this type are returned
+// A Token type, if you want to use it. Tokens of this type are returned
 // by StdScanner.
 //
 // Clients may provide their own token data type.
@@ -92,7 +92,7 @@ type Token struct {
 	Lexeme []byte
 }
 
-// The scanner interface which the parser relies on.
+// Scanner is an interface the parser relies on.
 type Scanner interface {
 	MoveTo(position uint64)
 	NextToken(expected []int) (tokval int, token interface{})
@@ -107,17 +107,15 @@ func (token *Token) String() string {
 		string(token.Lexeme))
 }
 
-/*
-We provide a default scanner implementation, but clients are free (and
-even encouraged) to provide their own. This implementation is based on
-stdlib's text/scanner.
-*/
+// StdScanner provides a default scanner implementation, but clients are free (and
+// even encouraged) to provide their own. This implementation is based on
+// stdlib's text/scanner.
 type StdScanner struct {
 	reader io.Reader // will be io.ReaderAt in the future
 	scan   scanner.Scanner
 }
 
-// Create a new default scanner from a Reader.
+// NewStdScanner creates a new default scanner from a Reader.
 func NewStdScanner(r io.Reader) *StdScanner {
 	s := &StdScanner{reader: r}
 	s.scan.Init(r)
@@ -125,29 +123,27 @@ func NewStdScanner(r io.Reader) *StdScanner {
 	return s
 }
 
-// This is not functional for default scanners.
+// MoveTo is not functional for default scanners.
 // Default scanners allow sequential processing only.
 func (s *StdScanner) MoveTo(position uint64) {
-	T.Errorf("MoveTo() not yet supported by parser.StdScanner")
+	T().Errorf("MoveTo() not yet supported by parser.StdScanner")
 }
 
-/*
-Get the next token scanned from the input source. Returns the token
-value and a user-defined token type.
-
-Clients may provide an array of token values, one of which is expected
-at the current parse position. For the default scanner, as of now this is
-unused. In the future it will help with error-repair.
-*/
+// NextToken gets the next token scanned from the input source. Returns the token
+// value and a user-defined token type.
+//
+// Clients may provide an array of token values, one of which is expected
+// at the current parse position. For the default scanner, as of now this is
+// unused. In the future it will help with error-repair.
 func (s *StdScanner) NextToken(expected []int) (int, interface{}) {
 	tokval := int(s.scan.Scan())
 	token := &Token{Value: tokval, Lexeme: []byte(s.scan.TokenText())}
-	T.P("token", tokenString(tokval)).Debugf("scanned token at %s = \"%s\"",
+	T().P("token", tokenString(tokval)).Debugf("scanned token at %s = \"%s\"",
 		s.scan.Position, s.scan.TokenText())
 	return tokval, token
 }
 
-// The parser type. Create and initialize one with parser.Create(...)
+// A Parser type. Create and initialize one with parser.Create(...)
 type Parser struct {
 	G         *lr.Grammar
 	dss       *dss.DSSRoot      // stack
@@ -156,11 +152,9 @@ type Parser struct {
 	accepting []int             // slice of accepting states
 }
 
-/*
-Create and initialize a parser object, providing information from an
-lr.LRTableGenerator. Clients have to provide a link to the grammar and the
-parser tables.
-*/
+// Create and initialize a parser object, providing information from an
+// lr.LRTableGenerator. Clients have to provide a link to the grammar and the
+// parser tables.
 func Create(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntMatrix,
 	acceptingStates []int) *Parser {
 	parser := &Parser{
@@ -172,13 +166,11 @@ func Create(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntM
 	return parser
 }
 
-/*
-Start a new parse, given a start state and a scanner tokenizing the input.
-The parser must have been initialized.
-*/
+// Parse startes a new parse, given a start state and a scanner tokenizing the input.
+// The parser must have been initialized.
 func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) {
 	if p.G == nil {
-		T.Errorf("parser not initialized")
+		T().Errorf("parser not initialized")
 		return
 	}
 	p.dss = dss.NewRoot("G", -1)    // forget existing one, if present
@@ -190,14 +182,14 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) {
 		if token == nil {
 			tval = scanner.EOF
 		}
-		T.Debugf("got token %v from scanner", token)
+		T().Debugf("got token %v from scanner", token)
 		activeStacks := p.dss.ActiveStacks()
-		T.P("lr", "parse").Debugf("currently %d active stack(s)", len(activeStacks))
+		T().P("lr", "parse").Debugf("currently %d active stack(s)", len(activeStacks))
 		for _, stack := range activeStacks {
 			p.reducesAndShiftsForToken(stack, tval)
 		}
 		if p.checkAccepted() {
-			T.Errorf("ACCEPT")
+			T().Errorf("ACCEPT")
 		}
 		if tval == scanner.EOF {
 			break
@@ -206,19 +198,17 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) {
 	}
 }
 
-/*
-With a new lookahead (tokval): execute all possible reduces and shifts,
-cascading. The general outline is as follows:
-
-  1. do until no more reduces:
-     1.a if action(s) =
-          | shift: store stack and params in set S
-          | reduce: do reduce and store stack and params in set R
-          | conflict: shift/reduce or reduce/reduce
-             | do reduce(s) and store stack(s) in S or R respectively
-     1.b iterate again with R
-  2. shifts are now collected in S => execute
-*/
+// With a new lookahead (tokval): execute all possible reduces and shifts,
+// cascading. The general outline is as follows:
+//
+//   1. do until no more reduces:
+//      1.a if action(s) =
+//           | shift: store stack and params in set S
+//           | reduce: do reduce and store stack and params in set R
+//           | conflict: shift/reduce or reduce/reduce
+//              | do reduce(s) and store stack(s) in S or R respectively
+//      1.b iterate again with R
+//   2. shifts are now collected in S => execute
 func (p *Parser) reducesAndShiftsForToken(stack *dss.Stack, tokval int) {
 	var heads [2]*dss.Stack
 	var actions [2]int32
@@ -228,17 +218,17 @@ func (p *Parser) reducesAndShiftsForToken(stack *dss.Stack, tokval int) {
 	for !R.empty() {
 		heads[0] = R.get()
 		stateID, sym := heads[0].Peek()
-		T.P("dss", "TOS").Debugf("state = %d, symbol = %v", stateID, sym)
+		T().P("dss", "TOS").Debugf("state = %d, symbol = %v", stateID, sym)
 		actions[0], actions[1] = p.actionT.Values(stateID, tokval)
 		if actions[0] == p.actionT.NullValue() {
-			T.Infof("no entry in ACTION table found, parser dies")
+			T().Infof("no entry in ACTION table found, parser dies")
 			heads[0].Die()
 		} else {
 			headcnt := 1
-			T.Debugf("action 1 = %d, action 2 = %d", actions[0], actions[1])
+			T().Debugf("action 1 = %d, action 2 = %d", actions[0], actions[1])
 			conflict := actions[1] != p.actionT.NullValue()
 			if conflict { // shift/reduce or reduce/reduce conflict
-				T.Infof("conflict, forking stack")
+				T().Infof("conflict, forking stack")
 				heads[1] = stack.Fork() // must happen before action 1 !
 				headcnt = 2
 			}
@@ -251,7 +241,7 @@ func (p *Parser) reducesAndShiftsForToken(stack *dss.Stack, tokval int) {
 				}
 			}
 		}
-		T.Infof("%d shift operations in S", len(S))
+		T().Infof("%d shift operations in S", len(S))
 		for !S.empty() {
 			heads[0] = S.get()
 			p.shift(stateID, tokval, heads[0])
@@ -261,25 +251,25 @@ func (p *Parser) reducesAndShiftsForToken(stack *dss.Stack, tokval int) {
 
 func (p *Parser) shift(stateID int, tokval int, stack *dss.Stack) []*dss.Stack {
 	nextstate := p.gotoT.Value(stateID, tokval)
-	T.Infof("shifting %v to %d", tokenString(tokval), nextstate)
+	T().Infof("shifting %v to %d", tokenString(tokval), nextstate)
 	terminal := p.G.GetTerminalSymbolFor(tokval)
 	head := stack.Push(int(nextstate), terminal)
 	return []*dss.Stack{head}
 }
 
 func (p *Parser) reduce(stateID int, rule *lr.Rule, stack *dss.Stack) []*dss.Stack {
-	T.Infof("reduce %v", rule)
+	T().Infof("reduce %v", rule)
 	handle := rule.GetRHS()
 	heads := stack.Reduce(handle)
 	if heads != nil {
-		T.Debugf("reduce resulted in %d stacks", len(heads))
+		T().Debugf("reduce resulted in %d stacks", len(heads))
 		lhs := rule.GetLHSSymbol()
 		for i, head := range heads {
 			state, _ := head.Peek()
-			T.Debugf("state on stack#%d is %d", i, state)
+			T().Debugf("state on stack#%d is %d", i, state)
 			nextstate := p.gotoT.Value(state, lhs.GetID())
 			newhead := head.Push(int(nextstate), lhs)
-			T.Debugf("new head = %v", newhead)
+			T().Debugf("new head = %v", newhead)
 		}
 	}
 	return heads
