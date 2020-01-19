@@ -45,19 +45,15 @@ func newRule() *Rule {
 	return r
 }
 
-/*
-Get the right hand side of a rule as a shallow copy. Clients should treat
-it as read-only.
-*/
+// GetRHS gets the right hand side of a rule as a shallow copy. Clients should treat
+// it as read-only.
 func (r *Rule) GetRHS() []Symbol {
 	dup := make([]Symbol, len(r.rhs))
 	copy(dup, r.rhs)
 	return dup
 }
 
-/*
-Get the LHS symbol of a rule.
-*/
+// GetLHSSymbol gets the LHS symbol of a rule.
 func (r *Rule) GetLHSSymbol() Symbol {
 	return r.lhs[0]
 }
@@ -94,9 +90,8 @@ func (r *Rule) startItem() (*item, Symbol) {
 	}
 	if r.isEps() {
 		return i, nil
-	} else {
-		return i, r.rhs[0]
 	}
+	return i, r.rhs[0]
 }
 
 func (r *Rule) findOrCreateItem(dot int) (*item, Symbol) {
@@ -127,7 +122,7 @@ type item struct {
 }
 
 func (i *item) String() string {
-	s := fmt.Sprintf("%v ::= %v @ %v", i.rule.lhs, i.rule.rhs[0:i.dot], i.rule.rhs[i.dot:])
+	s := fmt.Sprintf("%v ➞ %v ● %v", i.rule.lhs, i.rule.rhs[0:i.dot], i.rule.rhs[i.dot:])
 	return s
 }
 
@@ -146,15 +141,14 @@ func (i *item) getPrefix() []Symbol {
 func (i *item) advance() (*item, Symbol) {
 	if i.dot >= len(i.rule.rhs) {
 		return nil, nil
-	} else {
-		ii, A := i.rule.findOrCreateItem(i.dot + 1)
-		return ii, A
 	}
+	ii, A := i.rule.findOrCreateItem(i.dot + 1)
+	return ii, A
 }
 
 // --- Grammar ---------------------------------------------------------------
 
-// Type for a grammar. Usually created using a GrammarBuilder.
+// Grammar is a type for a grammar. Usually created using a GrammarBuilder.
 type Grammar struct {
 	Name             string         // a grammar has a name, for documentation only
 	rules            []*Rule        // grammar productions, first one is start rule
@@ -178,12 +172,12 @@ func newLRGrammar(gname string) *Grammar {
 	return g
 }
 
-// Get the symbol representing epsilon for this grammar. Treat as read-only!
+// Epsilon gets the symbol representing epsilon for this grammar. Treat as read-only!
 func (g *Grammar) Epsilon() Symbol {
 	return g.epsilon
 }
 
-// Get the symbol representing epsilon for this grammar. Treat as read-only!
+// Rule gets a grammar rule.
 func (g *Grammar) Rule(no int) *Rule {
 	if no < 0 || no >= len(g.rules) {
 		return nil
@@ -191,6 +185,7 @@ func (g *Grammar) Rule(no int) *Rule {
 	return g.rules[no]
 }
 
+// GetTerminalSymbolFor gets the terminal symbol for a given token value.
 func (g *Grammar) GetTerminalSymbolFor(tokenvalue int) Symbol {
 	return g.terminalsByToken[tokenvalue]
 }
@@ -220,37 +215,31 @@ func (g *Grammar) matchesRHS(handle []Symbol, prefix bool) (*Rule, int) {
 	return nil, -1
 }
 
-/*
-Iterate over all non-terminal symbols of the grammar.
-Return values of the mapper function for all non-terminals are returned as an
-array.
-*/
+// EachNonTerminal iterates over all non-terminal symbols of the grammar.
+// Return values of the mapper function for all non-terminals are returned as an
+// array.
 func (g *Grammar) EachNonTerminal(mapper func(sym Symbol) interface{}) []interface{} {
-	var r []interface{} = make([]interface{}, 0, len(g.nonterminals))
+	var r = make([]interface{}, 0, len(g.nonterminals))
 	for _, A := range g.nonterminals {
 		r = append(r, mapper(A))
 	}
 	return r
 }
 
-/*
-Iterate over all terminals of the grammar.
-Return values of the mapper function for all terminals are returned as an array.
-*/
+// EachTerminal iterates over all terminals of the grammar.
+// Return values of the mapper function for all terminals are returned as an array.
 func (g *Grammar) EachTerminal(mapper func(sym Symbol) interface{}) []interface{} {
-	var r []interface{} = make([]interface{}, 0, len(g.terminals))
+	var r = make([]interface{}, 0, len(g.terminals))
 	for _, B := range g.terminals {
 		r = append(r, mapper(B))
 	}
 	return r
 }
 
-/*
-Iterate over all symbols of the grammar.
-Return values of the mapper function are returned as an array.
-*/
+// EachSymbol iterates over all symbols of the grammar.
+// Return values of the mapper function are returned as an array.
 func (g *Grammar) EachSymbol(mapper func(sym Symbol) interface{}) []interface{} {
-	var r []interface{} = make([]interface{}, 0, len(g.terminals)+len(g.nonterminals))
+	var r = make([]interface{}, 0, len(g.terminals)+len(g.nonterminals))
 	for _, A := range g.nonterminals {
 		r = append(r, mapper(A))
 	}
@@ -293,7 +282,7 @@ func (g *Grammar) resolveOrDefineTerminal(s string, tokval int) Symbol {
 	return lrsym
 }
 
-// Debugging helper: dump symbols and rules to stdout.
+// Dump is a debugging helper: dump symbols and rules to stdout.
 func (g *Grammar) Dump() {
 	fmt.Printf("--- %s --------------------------------------------\n", g.Name)
 	fmt.Printf("epsilon  = %d\n", g.epsilon.GetID())
@@ -318,7 +307,7 @@ const (
 )
 
 // Serial no. for lrSymbol IDs
-var lrSymbolIDSerial int = nonTermType - 1
+var lrSymbolIDSerial = nonTermType - 1
 
 // An internal symbol type used by the grammar builder.
 // Clients may supply their own symbol type, but should be able to
@@ -351,33 +340,32 @@ func newLRSymbol(s string) Symbol {
 
 // === Builder ===============================================================
 
-/*
-Grammars are constructed using a GrammarBuilder.
-
-    b := NewGrammarBuilder("G")
-    b.LHS("S").N("A").T("a", 1).EOF()  // S  ->  A a EOF
-    b.LHS("A").N("B").N("D").End()     // A  ->  B D
-    b.LHS("B").T("b", 2).End()         // B  ->  b
-    b.LHS("B").Epsilon()               // B  ->
-    b.LHS("D").T("d", 3).End()         // D  ->  d
-    b.LHS("D").Epsilon()               // D  ->
-
-This results in the following grammar:  b.Grammar().Dump()
-
-  0: [S] ::= [A a #eof]
-  1: [A] ::= [B D]
-  2: [B] ::= [b]
-  3: [B] ::= []
-  4: [D] ::= [d]
-  5: [D] ::= []
-
-A call to b.Grammar() returns the (completed) grammar.
-*/
+// A GrammarBuilder is used to construct a Grammar.
+//
+//     b := NewGrammarBuilder("G")
+//     b.LHS("S").N("A").T("a", 1).EOF()  // S  ->  A a EOF
+//     b.LHS("A").N("B").N("D").End()     // A  ->  B D
+//     b.LHS("B").T("b", 2).End()         // B  ->  b
+//     b.LHS("B").Epsilon()               // B  ->
+//     b.LHS("D").T("d", 3).End()         // D  ->  d
+//     b.LHS("D").Epsilon()               // D  ->
+//
+// This results in the following grammar:  b.Grammar().Dump()
+//
+//   0: [S] ::= [A a #eof]
+//   1: [A] ::= [B D]
+//   2: [B] ::= [b]
+//   3: [B] ::= []
+//   4: [D] ::= [d]
+//   5: [D] ::= []
+//
+// A call to b.Grammar() returns the (completed) grammar.
+//
 type GrammarBuilder struct {
 	g *Grammar
 }
 
-// Get a new grammar builder, given the name of the grammar to build.
+// NewGrammarBuilder gets a new grammar builder, given the name of the grammar to build.
 func NewGrammarBuilder(gname string) *GrammarBuilder {
 	g := newLRGrammar(gname)
 	gb := &GrammarBuilder{g}
@@ -397,7 +385,7 @@ func (gb *GrammarBuilder) appendRule(r *Rule) {
 	gb.g.rules = append(gb.g.rules, r)
 }
 
-// Start a rule given the left hand side symbol (non-terminal).
+// LHS starts a rule given the left hand side symbol (non-terminal).
 func (gb *GrammarBuilder) LHS(s string) *RuleBuilder {
 	rb := gb.newRuleBuilder()
 	sym := rb.gb.g.resolveOrDefineNonTerminal(s)
@@ -405,18 +393,18 @@ func (gb *GrammarBuilder) LHS(s string) *RuleBuilder {
 	return rb
 }
 
-// Return the (completed) grammar.
+// Grammar returns the (completed) grammar.
 func (gb *GrammarBuilder) Grammar() *Grammar {
 	return gb.g
 }
 
-// A builder type for rules
+// RuleBuilder is a builder type for rules.
 type RuleBuilder struct {
 	gb   *GrammarBuilder
 	rule *Rule
 }
 
-// Append a non-terminal to the builder.
+// N appends a non-terminal to the builder.
 // The internal symbol created for the non-terminal will have an ID
 // less than -1000.
 func (rb *RuleBuilder) N(s string) *RuleBuilder {
@@ -425,17 +413,15 @@ func (rb *RuleBuilder) N(s string) *RuleBuilder {
 	return rb
 }
 
-/*
-Append a terminal to the builder.
-The symbol created for the terminal must not have a token value
-<= -1000 and not have value 0 or -1.
-This is due to the convention of the stdlib-package text/parser, which
-uses token values > 0 for single-rune tokens and token values < 0 for
-common language elements like identifiers, strings, numbers, etc.
-(it is assumed that no symbol set will require more than 1000 of such
-language elements). The method call will panic if this restriction is
-violated.
-*/
+// T appends a terminal to the builder.
+// The symbol created for the terminal must not have a token value
+// <= -1000 and not have value 0 or -1.
+// This is due to the convention of the stdlib-package text/parser, which
+// uses token values > 0 for single-rune tokens and token values < 0 for
+// common language elements like identifiers, strings, numbers, etc.
+// (it is assumed that no symbol set will require more than 1000 of such
+// language elements). The method call will panic if this restriction is
+// violated.
 func (rb *RuleBuilder) T(s string, tokval int) *RuleBuilder {
 	if tokval <= nonTermType {
 		T().Errorf("illegal token value parameter (%d), must be > %d", tokval, nonTermType)
@@ -447,7 +433,7 @@ func (rb *RuleBuilder) T(s string, tokval int) *RuleBuilder {
 	return rb
 }
 
-// Append your own symbol objects to the builder to extend the RHS of a rule.
+// AppendSymbol appends your own symbol objects to the builder to extend the RHS of a rule.
 // Clients will have to make sure no different 2 symbols have the same ID
 // and no symbol ID equals a token value of a non-terminal. This restriction
 // is necessary to help produce correct GOTO tables for LR-parsing.
@@ -456,8 +442,9 @@ func (rb *RuleBuilder) AppendSymbol(sym Symbol) *RuleBuilder {
 	return rb
 }
 
-// Set epsilon as the RHS of a production.
+// Epsilon sets epsilon as the RHS of a production.
 // This must be called directly after rb.LHS(...).
+// It closes the rule, thus no call to End() or EOF() must follow.
 func (rb *RuleBuilder) Epsilon() *Rule {
 	rb.gb.appendRule(rb.rule)
 	T().Debugf("appending epsilon-rule:  %v", rb.rule)
@@ -466,7 +453,7 @@ func (rb *RuleBuilder) Epsilon() *Rule {
 	return r
 }
 
-// Append EOF as a (terminal) symbol to a rule.
+// EOF appends EOF as a (terminal) symbol to a rule.
 // This completes the rule (no other builder calls should be made
 // for this rule).
 func (rb *RuleBuilder) EOF() *Rule {

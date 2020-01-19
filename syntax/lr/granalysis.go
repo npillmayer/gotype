@@ -1,7 +1,9 @@
 package lr
 
 import (
+	"bytes"
 	"fmt"
+	"text/scanner"
 )
 
 /*
@@ -42,18 +44,18 @@ func (ga *GrammarAnalysis) analyse() {
 	ga.initFollowSets()
 }
 
-// Return the grammer this analyser operates on.
+// Grammar retunrns the grammer this analyser operates on.
 func (ga *GrammarAnalysis) Grammar() *Grammar {
 	return ga.g
 }
 
-// Return the FIRST set for a non-terminal.
+// First returns the FIRST set for a non-terminal.
 // Returns a list of tokens.
 func (ga *GrammarAnalysis) First(sym Symbol) []int {
 	return ga.firstSets.getSetFor(sym).syms
 }
 
-// Return the FOLLOW set for a non-terminal.
+// Follow returns the FOLLOW set for a non-terminal.
 // Returns a list of tokens.
 func (ga *GrammarAnalysis) Follow(sym Symbol) []int {
 	return ga.followSets.getSetFor(sym).syms
@@ -180,8 +182,19 @@ func (symset *symSet) union(set2 *symSet) (*symSet, bool) {
 }
 
 func (symset *symSet) String() string {
-	s := fmt.Sprintf("%v", symset.syms)
-	return s
+	var b bytes.Buffer
+	first := true
+	b.WriteString("{")
+	for _, v := range symset.syms {
+		if !first {
+			b.WriteString(", ")
+		} else {
+			first = false
+		}
+		b.WriteString(fmt.Sprintf("%d", v))
+	}
+	b.WriteString("}")
+	return b.String()
 }
 
 // --- FIRST and FOLLOW ------------------------------------------------------
@@ -193,10 +206,10 @@ func (ga *GrammarAnalysis) computeFirst(syms []Symbol) *symSet {
 		return epsset
 	}
 	first := ga.firstSets.getSetFor(syms[0])
-	var result *symSet = newSymbolSet()
+	var result = newSymbolSet()
 	result.union(first)
 	result = result.withoutEps()
-	var k int = 1
+	k := 1
 	//T.Infof(". c_first  : first(%v) = %v", syms, first)
 	for ; k < len(syms); k++ {
 		if first.containsEps() { // prev one did contain epsilon
@@ -250,8 +263,20 @@ func (ga *GrammarAnalysis) initFirstSets() {
 	}
 }
 
+// 1) FOLLOW(S) = { $ }   // where S is the starting Non-Terminal
+//
+// 2) If A -> pBq is a production, where p, B and q are any grammar symbols,
+//    then everything in FIRST(q)  except Є is in FOLLOW(B).
+//
+// 3) If A->pB is a production, then everything in FOLLOW(A) is in FOLLOW(B).
+//
+// 4) If A->pBq is a production and FIRST(q) contains Є,
+//    then FOLLOW(B) contains { FIRST(q) – Є } U FOLLOW(A)
+//
 func (ga *GrammarAnalysis) initFollowSets() {
-	ga.followSets.addSymFor(ga.g.rules[0].lhs[0], ga.g.epsilon) // start symbol
+	eof := ga.g.resolveOrDefineTerminal("#eof", scanner.EOF)
+	ga.followSets.addSymFor(ga.g.rules[0].lhs[0], eof) // start symbol
+	//ga.followSets.addSymFor(ga.g.rules[0].lhs[0], ga.g.epsilon) // start symbol
 	for changed := true; changed; {
 		changed = false
 		for _, r := range ga.g.rules {

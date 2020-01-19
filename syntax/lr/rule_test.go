@@ -2,9 +2,13 @@ package lr
 
 import (
 	"io/ioutil"
+	"log"
 	"testing"
+	"text/scanner"
 
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 )
 
 func traceOn() {
@@ -128,7 +132,7 @@ func TestBuildCFSM(t *testing.T) {
 	b.LHS("E").T("a", 4).End()
 	g := b.Grammar()
 	ga := makeGrammarAnalysis(g)
-	lrgen := NewLRTableGenerator(ga)
+	lrgen := NewTableGenerator(ga)
 	c := lrgen.buildCFSM()
 	c.CFSM2GraphViz("/tmp/cfsm-" + "G1" + ".dot")
 }
@@ -217,7 +221,7 @@ func TestGotoTable(t *testing.T) {
 	g := b.Grammar()
 	g.Dump()
 	ga := NewGrammarAnalysis(g)
-	lrgen := NewLRTableGenerator(ga)
+	lrgen := NewTableGenerator(ga)
 	lrgen.dfa = lrgen.buildCFSM()
 	lrgen.gototable = lrgen.BuildGotoTable()
 	lrgen.CFSM().CFSM2GraphViz("/tmp/cfsm.dot")
@@ -234,7 +238,7 @@ func TestActionTable(t *testing.T) {
 	g := b.Grammar()
 	g.Dump()
 	ga := NewGrammarAnalysis(g)
-	lrgen := NewLRTableGenerator(ga)
+	lrgen := NewTableGenerator(ga)
 	lrgen.dfa = lrgen.buildCFSM()
 	traceOn()
 	T().Debugf("\n---------- Action 0 -----------------------------------")
@@ -253,3 +257,75 @@ func TestActionTable(t *testing.T) {
 // 	tokval, token := scanner.NextToken(nil)
 // 	T().Infof("scanned: %d / %v", tokval, token)
 // }
+
+func TestCraftingG2(t *testing.T) {
+	gtrace.SyntaxTracer = gologadapter.New()
+	b := NewGrammarBuilder("G2")
+	b.LHS("S").N("A").EOF()
+	b.LHS("A").T("a", scanner.Ident).End()
+	b.LHS("A").Epsilon()
+	g := b.Grammar()
+	g.Dump()
+	ga := NewGrammarAnalysis(g)
+	lrgen := NewTableGenerator(ga)
+	lrgen.CreateTables()
+	tmpfile, err := ioutil.TempFile(".", "G2_*.html")
+	if err != nil {
+		log.Fatal(err)
+	}
+	GotoTableAsHTML(lrgen, tmpfile)
+}
+
+func TestTerminals1(t *testing.T) {
+	gtrace.SyntaxTracer = gologadapter.New()
+	b := NewGrammarBuilder("G6")
+	b.LHS("S").T("(", '(').N("A").T(")", ')').EOF()
+	b.LHS("A").T("a", scanner.Ident).End()
+	g := b.Grammar()
+	g.Dump()
+	ga := NewGrammarAnalysis(g)
+	lrgen := NewTableGenerator(ga)
+	lrgen.CreateTables()
+	tmpfile, err := ioutil.TempFile(".", "G6_*.html")
+	if err != nil {
+		log.Fatal(err)
+	}
+	GotoTableAsHTML(lrgen, tmpfile)
+	lrgen.dfa = lrgen.buildCFSM()
+	lrgen.CFSM().CFSM2GraphViz("./G6_cfsm.dot")
+}
+
+func TestExercise1(t *testing.T) {
+	gtrace.SyntaxTracer = gologadapter.New()
+	b := NewGrammarBuilder("E6")
+	b.LHS("S").N("A").T("a", scanner.Ident).EOF()
+	b.LHS("A").N("B").N("D").End()
+	b.LHS("B").T("b", scanner.Ident-1).EOF()
+	b.LHS("B").Epsilon()
+	b.LHS("D").T("d", scanner.Ident-2).EOF()
+	b.LHS("D").Epsilon()
+	g := b.Grammar()
+	g.Dump()
+	ga := NewGrammarAnalysis(g)
+	for sym, firstSet := range ga.firstSets.sets {
+		t.Logf("First(%s) = %v", sym, firstSet)
+	}
+	for sym, followSet := range ga.followSets.sets {
+		t.Logf("Follow(%s) = %v", sym, followSet)
+		if sym.GetID() == -1002 {
+			if len(followSet.syms) != 1 || followSet.syms[0] != -1 {
+				t.Errorf("Expected Follow(S) to be {#eof}")
+			}
+		}
+	}
+	lrgen := NewTableGenerator(ga)
+	lrgen.CreateTables()
+	// tmpfile, err := ioutil.TempFile(".", "E6_*.html")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	//GotoTableAsHTML(lrgen, tmpfile)
+	lrgen.dfa = lrgen.buildCFSM()
+	lrgen.CFSM().CFSM2GraphViz("./E6_cfsm.dot")
+	t.Fail()
+}

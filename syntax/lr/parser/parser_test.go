@@ -5,6 +5,9 @@ import (
 	"testing"
 	"text/scanner"
 
+	"github.com/npillmayer/gotype/core/config/gtrace"
+	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/lr"
 	"github.com/npillmayer/gotype/syntax/lr/dss"
@@ -111,4 +114,39 @@ func TestParser3(t *testing.T) {
 	scanner := NewStdScanner(r)
 	//traceOn()
 	parser.Parse(lrgen.CFSM().S0, scanner)
+}
+
+func TestParser4(t *testing.T) {
+	gtrace.SyntaxTracer = gologadapter.New()
+	b := lr.NewGrammarBuilder("G4")
+	b.LHS("S").N("A").EOF()
+	b.LHS("A").T("a", scanner.Ident).End()
+	b.LHS("A").Epsilon()
+	g := b.Grammar()
+	g.Dump()
+	ga := lr.NewGrammarAnalysis(g)
+	lrgen := lr.NewLRTableGenerator(ga)
+	lrgen.CreateTables()
+	lrgen.CFSM().CFSM2GraphViz("cfsm-" + "G4" + ".dot")
+	// parser := Create(g, lrgen.GotoTable(), lrgen.ActionTable(), lrgen.AcceptingStates())
+	// r := strings.NewReader("+ +")
+	// scanner := NewStdScanner(r)
+	// traceOn()
+	// parser.Parse(lrgen.CFSM().S0, scanner)
+}
+
+func TestParser5(t *testing.T) {
+	gtrace.SyntaxTracer = gologadapter.New()
+	b := lr.NewGrammarBuilder("G5")
+	b.LHS("S").N("E").EOF()
+	b.LHS("E").N("E").T("+", '+').N("T").End()
+	b.LHS("E").N("T").End()
+	b.LHS("T").T("a", scanner.Ident).End()
+	b.LHS("T").T("(", '(').N("E").T(")", ')').End()
+	g := b.Grammar()
+	g.Dump()
+	ga := lr.NewGrammarAnalysis(g)
+	lrgen := lr.NewLRTableGenerator(ga)
+	lrgen.CreateTables()
+	lrgen.CFSM().CFSM2GraphViz("cfsm-" + "G5" + ".dot")
 }

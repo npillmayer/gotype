@@ -60,14 +60,13 @@ func (iset *itemSet) String() string {
 	items := iset.Values()
 	if len(items) == 0 {
 		return "{ }"
-	} else {
-		s := "{\n"
-		for _, i := range items {
-			s = s + fmt.Sprintf("\t%v\n", i)
-		}
-		s += "}"
-		return s
 	}
+	s := "{\n"
+	for _, i := range items {
+		s = s + fmt.Sprintf("\t%v\n", i)
+	}
+	s += "}"
+	return s
 }
 
 // Prepare an item set for export to Graphviz.
@@ -75,13 +74,12 @@ func (iset *itemSet) forGraphviz() string {
 	items := iset.Values()
 	if len(items) == 0 {
 		return "err\\n"
-	} else {
-		s := ""
-		for _, i := range items {
-			s = s + fmt.Sprintf("%v\\l", i)
-		}
-		return s
 	}
+	s := ""
+	for _, i := range items {
+		s = s + fmt.Sprintf("%v\\l", i)
+	}
+	return s
 }
 
 // Debugging helper
@@ -173,21 +171,21 @@ func (ga *GrammarAnalysis) gotoSetClosure(i *itemSet, A Symbol) (*itemSet, Symbo
 
 // === CFSM Construction =====================================================
 
-// CFSM state
+// CFSMState is a state within the CFSM for a grammar.
 type CFSMState struct {
 	ID     int      // serial ID of this state
 	items  *itemSet // configuration items within this state
 	Accept bool     // is this an accepting state?
 }
 
-// CFSM edge between 2 states, directed and labeled with a terminal
+// CFSM edge between 2 states, directed and with a terminal
 type cfsmEdge struct {
 	from  *CFSMState
 	to    *CFSMState
 	label Symbol
 }
 
-// Debugging helper
+// Dump is a debugging helper
 func (s *CFSMState) Dump() {
 	T().Debugf("--- state %03d -----------", s.ID)
 	s.items.Dump()
@@ -285,8 +283,8 @@ func (c *CFSM) allEdges(s *CFSMState) []*cfsmEdge {
 	return r
 }
 
-// LR(0) state diagram for a grammar, i.e. the characteristic finite
-// state automata CFSM. Will be constructed by a LRTableGenerator.
+// CFSM is the characteristic finite state machine for a LR grammar, i.e. the
+// LR(0) state diagram. Will be constructed by a TableGenerator.
 // Clients normally do not use it directly. Nevertheless, there are some methods
 // defined on it, e.g, for debugging purposes, or even to
 // compute your own tables from it.
@@ -306,13 +304,11 @@ func emptyCFSM(g *Grammar) *CFSM {
 	return c
 }
 
-/*
-Generator object to construct LR parser tables.
-Clients usually create a Grammar G, then a GrammarAnalysis-object for G,
-and then a table generator. LRTableGenerator.CreateTables() constructs
-the CFSM and parser tables for an LR-parser recognizing grammar G.
-*/
-type LRTableGenerator struct {
+// TableGenerator is a generator object to construct LR parser tables.
+// Clients usually create a Grammar G, then a GrammarAnalysis-object for G,
+// and then a table generator. TableGenerator.CreateTables() constructs
+// the CFSM and parser tables for an LR-parser recognizing grammar G.
+type TableGenerator struct {
 	g           *Grammar
 	ga          *GrammarAnalysis
 	dfa         *CFSM
@@ -320,65 +316,55 @@ type LRTableGenerator struct {
 	actiontable *sparse.IntMatrix
 }
 
-/*
-Create a new LRTableGenerator for a (previously analysed) grammar.
-*/
-func NewLRTableGenerator(ga *GrammarAnalysis) *LRTableGenerator {
-	lrgen := &LRTableGenerator{}
+// NewTableGenerator creates a new TableGenerator for a (previously analysed) grammar.
+func NewTableGenerator(ga *GrammarAnalysis) *TableGenerator {
+	lrgen := &TableGenerator{}
 	lrgen.g = ga.Grammar()
 	lrgen.ga = ga
 	return lrgen
 }
 
-/*
-Return the characteristic finite state machine (CFSM) for a grammar.
-Usually clients call lrgen.CreateTables() beforehand, but it is possible
-to call lrgen.CFSM() directly. The CFSM will be created, if it has not
-been constructed previously.
-*/
-func (lrgen *LRTableGenerator) CFSM() *CFSM {
+// CFSM returns the characteristic finite state machine (CFSM) for a grammar.
+// Usually clients call lrgen.CreateTables() beforehand, but it is possible
+// to call lrgen.CFSM() directly. The CFSM will be created, if it has not
+// been constructed previously.
+func (lrgen *TableGenerator) CFSM() *CFSM {
 	if lrgen.dfa == nil {
 		lrgen.dfa = lrgen.buildCFSM()
 	}
 	return lrgen.dfa
 }
 
-/*
-Return the GOTO table for LR-parsing a grammar. The tables have to be
-built by calling CreateTables() previously (or a separate call to
-BuildGotoTable(...).)
-*/
-func (lrgen *LRTableGenerator) GotoTable() *sparse.IntMatrix {
+// GotoTable returns the GOTO table for LR-parsing a grammar. The tables have to be
+// built by calling CreateTables() previously (or a separate call to
+// BuildGotoTable(...).)
+func (lrgen *TableGenerator) GotoTable() *sparse.IntMatrix {
 	if lrgen.gototable == nil {
 		T().P("lr", "gen").Errorf("tables not yet initialized")
 	}
 	return lrgen.gototable
 }
 
-/*
-Return the ACTION table for LR-parsing a grammar. The tables have to be
-built by calling CreateTables() previously (or a separate call to
-BuildSLR1ActionTable(...).)
-*/
-func (lrgen *LRTableGenerator) ActionTable() *sparse.IntMatrix {
+// ActionTable returns the ACTION table for LR-parsing a grammar. The tables have to be
+// built by calling CreateTables() previously (or a separate call to
+// BuildSLR1ActionTable(...).)
+func (lrgen *TableGenerator) ActionTable() *sparse.IntMatrix {
 	if lrgen.actiontable == nil {
 		T().P("lr", "gen").Errorf("tables not yet initialized")
 	}
 	return lrgen.actiontable
 }
 
-/*
-Create the necessary data structures for an SLR parser.
-*/
-func (lrgen *LRTableGenerator) CreateTables() {
+// CreateTables creates the necessary data structures for an SLR parser.
+func (lrgen *TableGenerator) CreateTables() {
 	lrgen.dfa = lrgen.buildCFSM()
 	lrgen.gototable = lrgen.BuildGotoTable()
 	lrgen.actiontable = lrgen.BuildSLR1ActionTable()
 }
 
-// Return all states of the CFSM which represent an accept action.
+// AcceptingStates returns all states of the CFSM which represent an accept action.
 // Clients have to call CreateTables() first.
-func (lrgen *LRTableGenerator) AcceptingStates() []int {
+func (lrgen *TableGenerator) AcceptingStates() []int {
 	if lrgen.dfa == nil {
 		T().Errorf("tables not yet generated; call CreateTables() first")
 		return nil
@@ -394,7 +380,7 @@ func (lrgen *LRTableGenerator) AcceptingStates() []int {
 }
 
 // Construct the characteristic finite state machine CFSM for a grammar.
-func (lrgen *LRTableGenerator) buildCFSM() *CFSM {
+func (lrgen *TableGenerator) buildCFSM() *CFSM {
 	T().Debugf("=== build CFSM ==================================================")
 	G := lrgen.g
 	cfsm := emptyCFSM(G)
@@ -430,23 +416,25 @@ func (lrgen *LRTableGenerator) buildCFSM() *CFSM {
 	return cfsm
 }
 
-// Export an CFSM to the Graphviz Dot format, given a filename.
-func (cfsm *CFSM) CFSM2GraphViz(filename string) {
+// CFSM2GraphViz exports a CFSM to the Graphviz Dot format, given a filename.
+func (c *CFSM) CFSM2GraphViz(filename string) {
 	f, err := os.Create(filename)
 	if err != nil {
 		panic(fmt.Sprintf("file open error: %v", err.Error()))
 	}
 	defer f.Close()
 	f.WriteString(`digraph {
-node [shape=Mrecord style=filled];
+graph [splines=true, fontname=Helvetica, fontsize=10];
+node [shape=Mrecord, style=filled, fontname=Helvetica, fontsize=10];
+edge [fontname=Helvetica, fontsize=10];
 
 `)
-	for _, x := range cfsm.states.Values() {
+	for _, x := range c.states.Values() {
 		s := x.(*CFSMState)
 		f.WriteString(fmt.Sprintf("s%03d [fillcolor=%s label=\"{%03d | %s}\"]\n",
 			s.ID, nodecolor(s), s.ID, s.items.forGraphviz()))
 	}
-	it := cfsm.edges.Iterator()
+	it := c.edges.Iterator()
 	for it.Next() {
 		x := it.Value()
 		edge := x.(*cfsmEdge)
@@ -464,11 +452,9 @@ func nodecolor(state *CFSMState) string {
 
 // ===========================================================================
 
-/*
-Build the GOTO table. This is normally not called directly, but rather
-via CreateTables().
-*/
-func (lrgen *LRTableGenerator) BuildGotoTable() *sparse.IntMatrix {
+// BuildGotoTable builds the GOTO table. This is normally not called directly, but rather
+// via CreateTables().
+func (lrgen *TableGenerator) BuildGotoTable() *sparse.IntMatrix {
 	statescnt := lrgen.dfa.states.Size()
 	maxtok := 0
 	lrgen.g.EachSymbol(func(A Symbol) interface{} {
@@ -492,10 +478,8 @@ func (lrgen *LRTableGenerator) BuildGotoTable() *sparse.IntMatrix {
 	return gototable
 }
 
-/*
-Export the GOTO-table in HTML-format.
-*/
-func GotoTableAsHTML(lrgen *LRTableGenerator, w io.Writer) {
+// GotoTableAsHTML exports a GOTO-table in HTML-format.
+func GotoTableAsHTML(lrgen *TableGenerator, w io.Writer) {
 	if lrgen.gototable == nil {
 		T().Errorf("GOTO table not yet created, cannot export to HTML")
 		return
@@ -503,10 +487,8 @@ func GotoTableAsHTML(lrgen *LRTableGenerator, w io.Writer) {
 	parserTableAsHTML(lrgen, "GOTO", lrgen.gototable, w)
 }
 
-/*
-Export the SLR(1) ACTION-table in HTML-format.
-*/
-func ActionTableAsHTML(lrgen *LRTableGenerator, w io.Writer) {
+// ActionTableAsHTML exports the SLR(1) ACTION-table in HTML-format.
+func ActionTableAsHTML(lrgen *TableGenerator, w io.Writer) {
 	if lrgen.actiontable == nil {
 		T().Errorf("ACTION table not yet created, cannot export to HTML")
 		return
@@ -514,8 +496,8 @@ func ActionTableAsHTML(lrgen *LRTableGenerator, w io.Writer) {
 	parserTableAsHTML(lrgen, "ACTION", lrgen.actiontable, w)
 }
 
-func parserTableAsHTML(lrgen *LRTableGenerator, tname string, table *sparse.IntMatrix, w io.Writer) {
-	var symvec []Symbol = make([]Symbol, len(lrgen.g.terminals)+len(lrgen.g.nonterminals))
+func parserTableAsHTML(lrgen *TableGenerator, tname string, table *sparse.IntMatrix, w io.Writer) {
+	var symvec = make([]Symbol, len(lrgen.g.terminals)+len(lrgen.g.nonterminals))
 	io.WriteString(w, "<html><body>\n")
 	io.WriteString(w, "<img src=\"cfsm.png\"/><p>")
 	io.WriteString(w, fmt.Sprintf("%s table of size = %d<p>", tname, table.ValueCount()))
@@ -554,24 +536,20 @@ func parserTableAsHTML(lrgen *LRTableGenerator, tname string, table *sparse.IntM
 
 // ===========================================================================
 
-/*
-Build the LR(0) Action table. This method is not called by CreateTables(),
-as we normally use an SLR(1) parser and therefore an action table with
-lookahead included. This method is provided as an add-on.
-*/
-func (lrgen *LRTableGenerator) BuildLR0ActionTable() *sparse.IntMatrix {
+// BuildLR0ActionTable contructs the LR(0) Action table. This method is not called by
+// CreateTables(), as we normally use an SLR(1) parser and therefore an action table with
+// lookahead included. This method is provided as an add-on.
+func (lrgen *TableGenerator) BuildLR0ActionTable() *sparse.IntMatrix {
 	statescnt := lrgen.dfa.states.Size()
 	T().Infof("ACTION.0 table of size %d x 1", statescnt)
 	actions := sparse.NewIntMatrix(statescnt, 1, sparse.DefaultNullValue)
 	return lrgen.buildActionTable(actions, false)
 }
 
-/*
-Build the SLR(1) Action table. This method is normally not called by
-clients, but rather via CreateTables(). It builds an action table including
-lookahead (using the FOLLOW-set created by the grammar analyzer).
-*/
-func (lrgen *LRTableGenerator) BuildSLR1ActionTable() *sparse.IntMatrix {
+// BuildSLR1ActionTable constructs the SLR(1) Action table. This method is normally not called
+// by clients, but rather via CreateTables(). It builds an action table including
+// lookahead (using the FOLLOW-set created by the grammar analyzer).
+func (lrgen *TableGenerator) BuildSLR1ActionTable() *sparse.IntMatrix {
 	statescnt := lrgen.dfa.states.Size()
 	maxtok := 0
 	lrgen.g.EachSymbol(func(A Symbol) interface{} {
@@ -585,24 +563,22 @@ func (lrgen *LRTableGenerator) BuildSLR1ActionTable() *sparse.IntMatrix {
 	return lrgen.buildActionTable(actions, true)
 }
 
-/*
-For building an ACTION table we iterate over all the states of the CFSM.
-An inner loop iterates over alle the Earley items within a CFSM-state.
-If an item has a non-terminal immediately after the dot, we produce a shift
-entry. If an item's dot is behind the complete (non-epsilon) RHS of a rule,
-then
-- for the LR(0) case: we produce a reduce-entry for the rule
-- for the SLR case: we produce a reduce-entry for for the rule for each
-  terminal from FOLLOW(LHS).
-
-The table is returned as a sparse matrix, where every entry may consist of up
-to 2 entries, thus allowing for shift/reduce- or reduce/reduce-conflicts.
-
-Shift entries are represented as -1.  Reduce entries are encoded as the
-ordinal no. of the grammar rule to reduce. 0 means reducing the start rule,
-i.e., accept.
-*/
-func (lrgen *LRTableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bool) *sparse.IntMatrix {
+// For building an ACTION table we iterate over all the states of the CFSM.
+// An inner loop iterates over alle the Earley items within a CFSM-state.
+// If an item has a non-terminal immediately after the dot, we produce a shift
+// entry. If an item's dot is behind the complete (non-epsilon) RHS of a rule,
+// then
+// - for the LR(0) case: we produce a reduce-entry for the rule
+// - for the SLR case: we produce a reduce-entry for for the rule for each
+//   terminal from FOLLOW(LHS).
+//
+// The table is returned as a sparse matrix, where every entry may consist of up
+// to 2 entries, thus allowing for shift/reduce- or reduce/reduce-conflicts.
+//
+// Shift entries are represented as -1.  Reduce entries are encoded as the
+// ordinal no. of the grammar rule to reduce. 0 means reducing the start rule,
+// i.e., accept.
+func (lrgen *TableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bool) *sparse.IntMatrix {
 	states := lrgen.dfa.states.Iterator()
 	for states.Next() {
 		state := states.Value().(*CFSMState)
