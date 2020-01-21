@@ -62,8 +62,7 @@ func TestSLR3(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	//parse(t, g, false, "a", "+a", "-a")
-	parse(t, g, true, "+a")
+	parse(t, g, false, "a", "+a", "-a")
 }
 
 // ----------------------------------------------------------------------

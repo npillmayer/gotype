@@ -198,6 +198,7 @@ func (g *Grammar) findNonTermRules(sym Symbol, includeEpsRules bool) *itemSet {
 				i, _ := r.startItem()
 				if i == nil {
 					T().Errorf("inconsistency? start-item == NIL")
+					panic("inconsistency? start-item of rule == NIL")
 				}
 				iset.Add(i)
 			}

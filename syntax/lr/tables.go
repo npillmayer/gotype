@@ -105,12 +105,23 @@ var _ *itemSet = newItemSet() // verify assignability
 func (ga *GrammarAnalysis) closure(i *item, A Symbol) *itemSet {
 	iset := newItemSet()
 	iset.Add(i)
-	if A == nil {
-		A = i.peekSymbol() // get symbol after dot
-	}
-	if A != nil && !A.IsTerminal() { // if A is non-term
-		iiset := ga.g.findNonTermRules(A, true) // without eps-productions
-		iset.union(iiset)
+	// if A == nil {
+	// 	A = i.peekSymbol() // get symbol after dot
+	// }
+	changed := true
+	for changed {
+		changed = false
+		for _, v := range iset.Values() {
+			i := v.(*item)
+			A = i.peekSymbol()               // get symbol A after dot
+			if A != nil && !A.IsTerminal() { // A is non-terminal
+				iiset := ga.g.findNonTermRules(A, true)
+				if iiset := iset.difference(iiset); !iiset.Empty() {
+					iset.union(iiset)
+					changed = true
+				}
+			}
+		}
 	}
 	// if A != nil {
 	// 	//T().Debugf("pre closure(%v) = %v", i, iset)
