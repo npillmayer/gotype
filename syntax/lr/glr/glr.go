@@ -29,7 +29,7 @@ Warning
 The API is still very much in flux! Currently it is something like:
 
 	scanner := glr.NewStdScanner(strings.NewReader("some input text"))
-	p := glr.Create(grammar, gotoTable, actionTable)
+	p := glr.NewParser(grammar, gotoTable, actionTable)
 	p.Parse(startState, scanner)
 
 
@@ -106,6 +106,31 @@ func NewParser(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.I
 	return parser
 }
 
+// From https://people.eecs.berkeley.edu/~necula/Papers/elkhound_cc04.pdf
+//
+// As with LR-parsing, the GLR algorithm uses a parse stack and a finite control.
+// The finite control dictates what parse action (shift or reduce)to take,
+// based on what the next token is, and the stack summarizes the leftcontext as
+// a sequence of finite control state numbers. But unlike LR, GLR’s parse “stack”
+// is not a stack at all: it is a graph which encodes all of the possible
+// stack configurations that an LR parser could have. Each encoded stack is treated
+// like a separate potential LR parser, and all stacks are processed in parallel, kept
+// synchronized by always shifting a given token together.
+//
+// [..]
+//
+// The GLR algorithm proceeds as follows: On each token, for each stack top,
+// every enabled LR action is performed. There may be more than one enabled
+// action, corresponding to a shift/reduce or reduce/reduce conflict in ordinary
+// LR. A shift adds a new node at the top of some stack node. A reduce also adds
+// a new node, but depending on the length of the production’s right-hand side, it
+// might point to the top or into the middle of a stack. The latter case corresponds
+// to the situation where LR would pop nodes off the stack; but the GLR algorithm
+// cannot in general pop reduced nodes because it might also be possible to shift.
+// If there is more than one path of the required length from the origin node, the
+// algorithm reduces along all such paths. If two stacks shift or reduce into the
+// same state, then the stack tops are merged into one node.
+
 // Parse startes a new parse, given a start state and a scanner tokenizing the input.
 // The parser must have been initialized.
 //
@@ -121,25 +146,23 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 	start.Push(S.ID, p.G.Epsilon()) // push the start state onto the stack
 	accepting := false
 	done := false
-	tval, token := scan.NextToken(nil)
-	for !done {
+	tokval, token := scan.NextToken(nil)
+	for !done && !accepting {
 		if token == nil {
-			tval = scanner.EOF
+			tokval = scanner.EOF
 		}
 		T().Debugf("got token %v from scanner", token)
 		activeStacks := p.dss.ActiveStacks()
 		T().P("glr", "parse").Debugf("currently %d active stack(s)", len(activeStacks))
 		for _, stack := range activeStacks {
-			p.reducesAndShiftsForToken(stack, tval)
-		}
-		if p.checkAccepted() {
-			T().Errorf("ACCEPT")
-			accepting, done = true, true
-		}
-		if tval == scanner.EOF {
-			done = true
+			accepting = accepting || p.reducesAndShiftsForToken(stack, tokval)
 		}
 		T().Debugf("~~~~~ processed token %v ~~~~~~~~~~~~~~~~~~~~", token)
+		if tokval == scanner.EOF {
+			done = true
+		} else {
+			tokval, token = scan.NextToken(nil)
+		}
 	}
 	return accepting, nil
 }
@@ -155,9 +178,10 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 //              | do reduce(s) and store stack(s) in S or R respectively
 //      1.b iterate again with R
 //   2. shifts are now collected in S => execute
-func (p *Parser) reducesAndShiftsForToken(stack *dss.Stack, tokval int) {
+func (p *Parser) reducesAndShiftsForToken(stack *dss.Stack, tokval int) bool {
 	var heads [2]*dss.Stack
 	var actions [2]int32
+	accepting := false
 	S := newStackSet() // will collect shift actions
 	R := newStackSet() // re-consider stack/action for reduce
 	R = R.add(stack)   // start with this active stack
@@ -166,12 +190,16 @@ func (p *Parser) reducesAndShiftsForToken(stack *dss.Stack, tokval int) {
 		stateID, sym := heads[0].Peek()
 		T().P("dss", "TOS").Debugf("state = %d, symbol = %v", stateID, sym)
 		actions[0], actions[1] = p.actionT.Values(stateID, tokval)
+		if actions[0] == lr.AcceptAction {
+			accepting = true
+		}
 		if actions[0] == p.actionT.NullValue() {
 			T().Infof("no entry in ACTION table found, parser dies")
 			heads[0].Die()
 		} else {
 			headcnt := 1
-			T().Debugf("action 1 = %d, action 2 = %d", actions[0], actions[1])
+			T().Debugf("action 1 = %s, action 2 = %s",
+				valstring(actions[0], p.actionT), valstring(actions[1], p.actionT))
 			conflict := actions[1] != p.actionT.NullValue()
 			if conflict { // shift/reduce or reduce/reduce conflict
 				T().Infof("conflict, forking stack")
@@ -193,6 +221,7 @@ func (p *Parser) reducesAndShiftsForToken(stack *dss.Stack, tokval int) {
 			p.shift(stateID, tokval, heads[0])
 		}
 	}
+	return accepting
 }
 
 func (p *Parser) shift(stateID int, tokval int, stack *dss.Stack) []*dss.Stack {
@@ -336,4 +365,18 @@ func (s *StdScanner) NextToken(expected []int) (int, interface{}) {
 	T().P("token", tokenString(tokval)).Debugf("scanned token at %s = \"%s\"",
 		s.scan.Position, s.scan.TokenText())
 	return tokval, token
+}
+
+// --- Helpers ----------------------------------------------------------
+
+// valstring is a short helper to stringify an action table entry.
+func valstring(v int32, m *sparse.IntMatrix) string {
+	if v == m.NullValue() {
+		return "<none>"
+	} else if v == lr.AcceptAction {
+		return "<accept>"
+	} else if v == lr.ShiftAction {
+		return "<shift>"
+	}
+	return fmt.Sprintf("%d", v)
 }

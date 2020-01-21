@@ -626,6 +626,7 @@ func (lrgen *TableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bo
 	states := lrgen.dfa.states.Iterator()
 	for states.Next() {
 		state := states.Value().(*CFSMState)
+		T().Debugf("--- state %d --------------------------------", state.ID)
 		for _, v := range state.items.Values() {
 			T().Debugf("item in s%d = %v", state.ID, v)
 			i, _ := v.(*item)
@@ -636,18 +637,23 @@ func (lrgen *TableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bo
 				P := pT(state, A)
 				T().Debugf("    creating action entry --%v--> %d", A, P)
 				if slr1 {
-					_, a2 := actions.Values(state.ID, A.Token())
-					// if a != -1 { // already shift present ?
-					// 	actions.Add(state.ID, A.Token(), -1)
-					// }
-					actions.Set(state.ID, A.Token(), int32(P))
-					actions.Add(state.ID, A.Token(), a2)
+					if a1 := actions.Value(state.ID, A.Token()); a1 != actions.NullValue() {
+						T().Debugf("    %s is 2nd action", valstring(int32(P), actions))
+						if a1 == ShiftAction {
+							T().Debugf("    relax, double shift")
+						} else {
+							hasConflicts = true
+							actions.Add(state.ID, A.Token(), int32(P))
+						}
+					} else {
+						actions.Add(state.ID, A.Token(), int32(P))
+					}
+					T().Debugf(actionEntry(state.ID, A.Token(), actions))
 				} else {
-					actions.Add(state.ID, 1, -1) // general shift (no lookahead)
+					actions.Add(state.ID, 1, int32(P))
 				}
 			}
-			//if len(prefix) > 0 && A == nil { // we are at the end of a non-eps rule
-			if A == nil { // we are at the end of a non-eps rule
+			if A == nil { // we are at the end of a rule
 				lhs := i.rule.lhs
 				rule, inx := lrgen.g.matchesRHS(lhs[0], prefix) // find the rule
 				if inx >= 0 {                                   // found => create a reduce entry
@@ -656,11 +662,13 @@ func (lrgen *TableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bo
 						T().Debugf("    Follow(%v) = %v", rule.lhs[0], lookaheads)
 						for _, la := range lookaheads {
 							a1, a2 := actions.Values(state.ID, la)
-							if a1 == int32(inx) || a2 == int32(inx) {
+							if a1 != actions.NullValue() || a2 != actions.NullValue() {
+								T().Debugf("    %s is 2nd action", valstring(int32(inx), actions))
 								hasConflicts = true
 							}
 							actions.Add(state.ID, la, int32(inx)) // reduce rule[inx]
 							T().Debugf("    creating reduce_%d action entry @ %v for %v", inx, la, rule)
+							T().Debugf(actionEntry(state.ID, la, actions))
 						}
 					} else {
 						T().Debugf("    creating reduce_%d action entry for %v", inx, rule)
@@ -675,17 +683,14 @@ func (lrgen *TableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bo
 
 func pT(state *CFSMState, terminal Symbol) int {
 	if terminal.Token() == scanner.EOF {
-		//actions.Add(state.ID, A.Token(), -1)
-		T().Infof("ACCEPT action")
-		return -2
+		return AcceptAction
 	}
-	//T().Debugf("    creating shift action entry --%v-->", terminal)
-	return -1
+	return ShiftAction
 }
 
 // ----------------------------------------------------------------------
 
-func unique(in []int) []int {
+func unique(in []int) []int { // from slice tricks
 	sort.Ints(in)
 	j := 0
 	for i := 1; i < len(in); i++ {
@@ -698,4 +703,21 @@ func unique(in []int) []int {
 	}
 	result := in[:j+1]
 	return result
+}
+
+func actionEntry(stateID int, la int, aT *sparse.IntMatrix) string {
+	a1, a2 := aT.Values(stateID, la)
+	return fmt.Sprintf("Action(%s,%s)", valstring(a1, aT), valstring(a2, aT))
+}
+
+// valstring is a short helper to stringify an action table entry.
+func valstring(v int32, m *sparse.IntMatrix) string {
+	if v == m.NullValue() {
+		return "<none>"
+	} else if v == AcceptAction {
+		return "<accept>"
+	} else if v == ShiftAction {
+		return "<shift>"
+	}
+	return fmt.Sprintf("<reduce %d>", v)
 }

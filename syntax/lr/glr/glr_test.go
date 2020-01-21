@@ -16,6 +16,7 @@ import (
 
 /*
 https://cs.au.dk/~amoeller/papers/ambiguity/ambiguity.pdf  -> Example 4
+http://citeseerx.ist.psu.edu/viewdoc/download;jsessionid=A6FB43374BBE6D3041EF573C2A65C2C6?doi=10.1.1.36.4448&rep=rep1&type=pdf
 
   1: S  ::= [A -]
   2: S  ::= [+ B]
@@ -37,7 +38,7 @@ func TestGLR1(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	parse(t, g, false, "a")
+	parse(t, g, false, "+a-")
 }
 
 // ----------------------------------------------------------------------
@@ -48,7 +49,7 @@ func parse(t *testing.T, g *lr.Grammar, doDump bool, input ...string) bool {
 	lrgen := lr.NewTableGenerator(ga)
 	lrgen.CreateTables()
 	if lrgen.HasConflicts {
-		t.Errorf("Grammar %s has conflicts", g.Name)
+		t.Logf("Grammar %s has conflicts", g.Name)
 	}
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	if doDump {
