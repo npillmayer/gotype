@@ -250,21 +250,7 @@ func (p *Parser) reduce(stateID int, rule *lr.Rule, stack *dss.Stack) []*dss.Sta
 	return heads
 }
 
-// TODO
-func (p *Parser) checkAccepted() bool {
-	return false
-	// for _, stack := range p.dss.ActiveStacks() {
-	// 	state, _ := stack.Peek()
-	// 	for _, accstate := range p.accepting {
-	// 		if state == accstate {
-	// 			return true
-	// 		}
-	// 	}
-	// }
-	// return false
-}
-
-// ---------------------------------------------------------------------------
+// --- Sets of Stacks --------------------------------------------------------
 
 // helper: set of stacks
 type stackSet []*dss.Stack
