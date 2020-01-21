@@ -19,6 +19,12 @@ import (
 // = optimization
 // https://www.cs.bgu.ac.il/~comp151/wiki.files/ps6.html#sec-2-7-3
 
+// Actions for parser action tables.
+const (
+	ShiftAction  = -1
+	AcceptAction = -2
+)
+
 // === Items and Item Sets ===================================================
 
 // A set of Earley items ( A -> B *C D ).

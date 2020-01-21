@@ -1,6 +1,38 @@
 /*
-Package slr provides a SLR(1)-parser.
-*/
+Package slr provides an SLR(1)-parser.
+
+BSD License
+
+Copyright (c) 2017–20, Norbert Pillmayer
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+3. Neither the name of this software nor the names of its contributors
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 package slr
 
 import (
@@ -24,18 +56,12 @@ func T() tracing.Trace {
 // by StdScanner.
 //
 // Clients may provide their own token data type.
-type Token struct {
-	Value  int
-	Lexeme []byte
-}
+// type Token struct {
+// 	Value  int
+// 	Lexeme []byte
+// }
 
-// Scanner is an interface the parser relies on.
-type Scanner interface {
-	MoveTo(position uint64)
-	NextToken(expected []int) (tokval int, token interface{})
-}
-
-// A Parser type. Create and initialize one with slr.Parser(...)
+// Parser is an SLR(1)-parser type. Create and initialize one with slr.NewParser(...)
 type Parser struct {
 	G       *lr.Grammar
 	stack   *stack            // parser stack
@@ -44,7 +70,7 @@ type Parser struct {
 	//accepting []int             // slice of accepting states
 }
 
-// NewParser creates a SLR(1) parser.
+// NewParser creates an SLR(1) parser.
 func NewParser(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntMatrix) *Parser {
 	//func NewParser(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntMatrix,
 	//	acceptingStates []int) *Parser {
@@ -58,16 +84,21 @@ func NewParser(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.I
 	return parser
 }
 
+// Scanner is a scanner-interface the parser relies on to receive the next input token.
+type Scanner interface {
+	MoveTo(position uint64)
+	NextToken(expected []int) (tokval int, token interface{})
+}
+
 // Parse startes a new parse, given a start state and a scanner tokenizing the input.
 // The parser must have been initialized.
 //
 // The parser returns true if the input string has been accepted.
 func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 	T().Debugf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-	//T().Debugf("accepting states=%v", p.accepting)
-	if p.G == nil {
-		T().Errorf("parser not initialized")
-		return false, fmt.Errorf("Parser not initialized")
+	if p.G == nil || p.gotoT == nil {
+		T().Errorf("SLR(1)-parser not initialized")
+		return false, fmt.Errorf("SLR(1)-parser not initialized")
 	}
 	var accepting bool
 	p.stack.Push(S) // push the start state onto the stack
@@ -80,16 +111,17 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 		}
 		T().Debugf("got token %s/%d from scanner", token, tokval)
 		state := p.stack.Peek()
-		// if tokval == scanner.EOF {
-		// 	done = true
-		// }
-		T().Debugf("looking for ACTION(%d, %d)", state.ID, tokval)
 		action := p.actionT.Value(state.ID, tokval)
-		T().Debugf("action = %s", valstring(action, p.actionT))
+		T().Debugf("action(%d,%d)=%s", state.ID, tokval, valstring(action, p.actionT))
 		if action == p.actionT.NullValue() {
 			return false, fmt.Errorf("Syntax error at %d/%v", tokval, token)
 		}
-		if action == -1 { // shift action
+		if action == lr.AcceptAction {
+			//if contains(p.stack.Peek().ID, p.accepting) {
+			T().Infof("ACCEPT")
+			accepting = true
+			done = true
+		} else if action == lr.ShiftAction {
 			nextstate := int(p.gotoT.Value(state.ID, tokval))
 			T().Debugf("shifting, next state = %d", nextstate)
 			//p.stack.Push(&lr.CFSMState{ID: nextstate, Accept: contains(nextstate, p.accepting)})
@@ -100,12 +132,7 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 			T().Debugf("next state = %d", nextstate)
 			//p.stack.Push(&lr.CFSMState{ID: nextstate, Accept: contains(nextstate, p.accepting)})
 			p.stack.Push(&lr.CFSMState{ID: nextstate})
-		} else if action == -2 {
-			//if contains(p.stack.Peek().ID, p.accepting) {
-			T().Infof("ACCEPT")
-			accepting = true
-			done = true
-		} else {
+		} else { // no action found
 			done = true
 		}
 		T().Debugf("~~~ token %v processed ~~~~~~~~~~~~~~~~~~~~~~", token)
@@ -128,7 +155,7 @@ func (p *Parser) reduce(stateID int, rule *lr.Rule) int {
 	return int(nextstate)
 }
 
-// ----------------------------------------------------------------------
+// --- Stack ------------------------------------------------------------
 
 type stack struct {
 	arrstack *arraystack.Stack
@@ -163,6 +190,8 @@ func (s *stack) Pop() *lr.CFSMState {
 	return state.(*lr.CFSMState)
 }
 
+// ----------------------------------------------------------------------
+
 func reverse(syms []lr.Symbol) []lr.Symbol {
 	r := append([]lr.Symbol(nil), syms...) // make copy first
 	for i := len(syms)/2 - 1; i >= 0; i-- {
@@ -171,8 +200,6 @@ func reverse(syms []lr.Symbol) []lr.Symbol {
 	}
 	return r
 }
-
-// ----------------------------------------------------------------------
 
 func contains(el int, a []int) bool {
 	for _, e := range a {
