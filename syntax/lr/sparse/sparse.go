@@ -8,11 +8,10 @@ This implementation uses the COO algorithm (a.k.a. triplet-encoding).
    https://medium.com/@jmaxg3/101-ways-to-store-a-sparse-matrix-c7f2bf15a229
    https://www.coin-or.org/Ipopt/documentation/node38.html
 
-----------------------------------------------------------------------
 
 BSD License
 
-Copyright (c) 2017, Norbert Pillmayer
+Copyright (c) 2017-20, Norbert Pillmayer
 
 All rights reserved.
 
@@ -41,30 +40,27 @@ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-----------------------------------------------------------------------
-*/
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 package sparse
 
-import "fmt"
+import (
+	"fmt"
+)
 
-/*
-Type for a spare matrix of integer values. Construct with
-
-    M := NewIntMatrix(10, 10, -1)  // last parameter is M's null-value
-
-Now
-
-    M.Set(2, 3, 4711)              // set a value
-    v := M.Value(2, 3)             // returns 4711
-    M.Add(2, 3, 123)               // add a second value
-    cnt := M.ValueCount()          // still returns 1 (one position set)
-    v = M.Value(10, 10)            // returns -1, i.e. the null-value
-
-Values cannot be deleted, but may be overwritten with the null-value. Space for
-null-values is not re-claimed.
-*/
+// IntMatrix is a type for a spare matrix of integer values. Construct with
+//
+//     M := NewIntMatrix(10, 10, -1)  // last parameter is M's null-value
+//
+// Now
+//
+//     M.Set(2, 3, 4711)              // set a value
+//     v := M.Value(2, 3)             // returns 4711
+//     M.Add(2, 3, 123)               // add a second value
+//     cnt := M.ValueCount()          // still returns 1 (one position set)
+//     v = M.Value(10, 10)            // returns -1, i.e. the null-value
+//
+// Values cannot be deleted, but may be overwritten with the null-value. Space for
+// null-values is not re-claimed.
 type IntMatrix struct {
 	values  []triplet
 	rowcnt  int
@@ -78,11 +74,9 @@ type triplet struct {
 	value    intPair
 }
 
-/*
-Create a new matrix for int, size m x n. The 3rd argument is a null-value,
-indicating empty entries (use DefaultNullValue if you haven't any specific
-requirements).
-*/
+// NewIntMatrix creates a new matrix for int, size m x n. The 3rd argument is a null-value,
+// indicating empty entries (use DefaultNullValue if you haven't any specific
+// requirements).
 func NewIntMatrix(m, n int, nullValue int32) *IntMatrix {
 	return &IntMatrix{
 		values:  []triplet{},
@@ -92,30 +86,30 @@ func NewIntMatrix(m, n int, nullValue int32) *IntMatrix {
 	}
 }
 
-// Default null-value for matrices (min int32)
+// DefaultNullValue is the default empty-value for matrices (min int32).
 const DefaultNullValue = -2147483648
 
-// Return row count.
+// M returns the row count.
 func (m *IntMatrix) M() int {
 	return m.rowcnt
 }
 
-// Return column count.
+// N returns the column count.
 func (m *IntMatrix) N() int {
 	return m.colcnt
 }
 
-// Return this matrix' null value
+// NullValue returns this matrix' null value
 func (m *IntMatrix) NullValue() int32 {
 	return m.nullval
 }
 
-// Return the number of values in the matrix.
+// ValueCount returns the number of values in the matrix.
 func (m *IntMatrix) ValueCount() int {
 	return len(m.values)
 }
 
-// Return the primary value at position (i,j), or NullValue
+// Value returns the primary value at position (i,j), or NullValue
 func (m *IntMatrix) Value(i, j int) int32 {
 	for _, t := range m.values {
 		if !t.storedLeftOf(i, j) { // have skipped all lesser indices
@@ -128,7 +122,7 @@ func (m *IntMatrix) Value(i, j int) int32 {
 	return m.nullval
 }
 
-// Return the pair of values at position (i,j), or (NullValue, NullValue)
+// Values returns the pair of values at position (i,j), or (NullValue, NullValue)
 func (m *IntMatrix) Values(i, j int) (int32, int32) {
 	for _, t := range m.values {
 		if !t.storedLeftOf(i, j) { // have skipped all lesser indices
@@ -146,6 +140,7 @@ func (m *IntMatrix) Set(i, j int, value int32) *IntMatrix {
 	return m.setOrAdd(i, j, value, false)
 }
 
+// Add a value in the matrix at position (i,j).
 func (m *IntMatrix) Add(i, j int, value int32) *IntMatrix {
 	return m.setOrAdd(i, j, value, true)
 }
