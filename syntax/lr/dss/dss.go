@@ -519,7 +519,7 @@ func (stack *Stack) splitOff(path NodePath) *Stack {
 /*
 Pop nodes corresponding to a handle from a stack.
 
-The handle path nodes must exist in the DSS (not checked again).
+The handle path nodes must exist in the DSS (to be checked beforhand by client).
 
 The decision wether to delete the nodes on the way down is not trivial.
 If the destructive-flag is unset, we do not delete anything. If it is set
