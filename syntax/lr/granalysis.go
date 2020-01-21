@@ -3,7 +3,6 @@ package lr
 import (
 	"bytes"
 	"fmt"
-	"text/scanner"
 )
 
 /*
@@ -264,6 +263,7 @@ func (ga *GrammarAnalysis) initFirstSets() {
 }
 
 // 1) FOLLOW(S) = { $ }   // where S is the starting Non-Terminal
+//    better: FOLLOW(S) = { Є }
 //
 // 2) If A -> pBq is a production, where p, B and q are any grammar symbols,
 //    then everything in FIRST(q)  except Є is in FOLLOW(B).
@@ -274,9 +274,9 @@ func (ga *GrammarAnalysis) initFirstSets() {
 //    then FOLLOW(B) contains { FIRST(q) – Є } U FOLLOW(A)
 //
 func (ga *GrammarAnalysis) initFollowSets() {
-	eof := ga.g.resolveOrDefineTerminal("#eof", scanner.EOF)
-	ga.followSets.addSymFor(ga.g.rules[0].lhs[0], eof) // start symbol
-	//ga.followSets.addSymFor(ga.g.rules[0].lhs[0], ga.g.epsilon) // start symbol
+	//eof := ga.g.resolveOrDefineTerminal("#eof", scanner.EOF)
+	//ga.followSets.addSymFor(ga.g.rules[0].lhs[0], eof) // start symbol
+	ga.followSets.addSymFor(ga.g.rules[0].lhs[0], ga.g.epsilon) // start symbol
 	for changed := true; changed; {
 		changed = false
 		for _, r := range ga.g.rules {

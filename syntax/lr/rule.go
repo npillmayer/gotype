@@ -206,10 +206,13 @@ func (g *Grammar) findNonTermRules(sym Symbol, includeEpsRules bool) *itemSet {
 	return iset
 }
 
-func (g *Grammar) matchesRHS(handle []Symbol, prefix bool) (*Rule, int) {
+func (g *Grammar) matchesRHS(lhs Symbol, handle []Symbol) (*Rule, int) {
+	//func (g *Grammar) matchesRHS(lhs Symbol, handle []Symbol, prefix bool) (*Rule, int) {
 	for i, r := range g.rules {
-		if r.eqRHS(handle, prefix) {
-			return r, i
+		if r.lhs[0] == lhs {
+			if r.eqRHS(handle, false) {
+				return r, i
+			}
 		}
 	}
 	return nil, -1
@@ -284,18 +287,18 @@ func (g *Grammar) resolveOrDefineTerminal(s string, tokval int) Symbol {
 
 // Dump is a debugging helper: dump symbols and rules to stdout.
 func (g *Grammar) Dump() {
-	fmt.Printf("--- %s --------------------------------------------\n", g.Name)
-	fmt.Printf("epsilon  = %d\n", g.epsilon.GetID())
+	T().Debugf("--- %s --------------------------------------------\n", g.Name)
+	T().Debugf("epsilon  = %d\n", g.epsilon.GetID())
 	for _, A := range g.nonterminals {
-		fmt.Printf("N  %v = %d\n", A, A.GetID())
+		T().Debugf("N  %v = %d\n", A, A.GetID())
 	}
 	for _, A := range g.terminals {
-		fmt.Printf("T  %v = %d\n", A, A.Token())
+		T().Debugf("T  %v = %d\n", A, A.Token())
 	}
 	for _, r := range g.rules {
-		fmt.Printf("%3d: %s\n", r.no, r.String())
+		T().Debugf("%3d: %s\n", r.no, r.String())
 	}
-	fmt.Println("-------------------------------------------------------")
+	T().Debugf("-------------------------------------------------------")
 }
 
 // ---------------------------------------------------------------------------
@@ -343,7 +346,7 @@ func newLRSymbol(s string) Symbol {
 // A GrammarBuilder is used to construct a Grammar.
 //
 //     b := NewGrammarBuilder("G")
-//     b.LHS("S").N("A").T("a", 1).EOF()  // S  ->  A a EOF
+//     b.LHS("S").N("A").T("a", 1).End()  // S  ->  A a
 //     b.LHS("A").N("B").N("D").End()     // A  ->  B D
 //     b.LHS("B").T("b", 2).End()         // B  ->  b
 //     b.LHS("B").Epsilon()               // B  ->
@@ -352,23 +355,28 @@ func newLRSymbol(s string) Symbol {
 //
 // This results in the following grammar:  b.Grammar().Dump()
 //
-//   0: [S] ::= [A a #eof]
-//   1: [A] ::= [B D]
-//   2: [B] ::= [b]
-//   3: [B] ::= []
-//   4: [D] ::= [d]
-//   5: [D] ::= []
+//   0: [S']::= [S]
+//   1: [S] ::= [A a]
+//   2: [A] ::= [B D]
+//   3: [B] ::= [b]
+//   4: [B] ::= []
+//   5: [D] ::= [d]
+//   6: [D] ::= []
 //
 // A call to b.Grammar() returns the (completed) grammar.
 //
 type GrammarBuilder struct {
-	g *Grammar
+	g       *Grammar // the grammar to build
+	initial *Rule    // the top-level rule we will wrap around the user's first rule
 }
 
 // NewGrammarBuilder gets a new grammar builder, given the name of the grammar to build.
 func NewGrammarBuilder(gname string) *GrammarBuilder {
 	g := newLRGrammar(gname)
-	gb := &GrammarBuilder{g}
+	gb := &GrammarBuilder{g: g, initial: newRule()}
+	sym := g.resolveOrDefineNonTerminal("S'")
+	gb.initial.lhs = append(gb.initial.lhs, sym) // insert LHS of wrapper rule S' -> S #eof
+	gb.g.rules = append(gb.g.rules, gb.initial)  // RHS to be added later
 	return gb
 }
 
@@ -394,8 +402,15 @@ func (gb *GrammarBuilder) LHS(s string) *RuleBuilder {
 }
 
 // Grammar returns the (completed) grammar.
-func (gb *GrammarBuilder) Grammar() *Grammar {
-	return gb.g
+func (gb *GrammarBuilder) Grammar() (*Grammar, error) {
+	if len(gb.g.rules) <= 1 {
+		T().Errorf("Grammar does not contain any rules")
+		return nil, fmt.Errorf("Grammar does not contain any rules")
+	}
+	gb.initial.rhs = append(gb.initial.rhs, gb.g.rules[1].lhs[0])
+	eof := gb.g.resolveOrDefineTerminal("#eof", scanner.EOF)
+	gb.initial.rhs = append(gb.initial.rhs, eof)
+	return gb.g, nil
 }
 
 // RuleBuilder is a builder type for rules.
@@ -454,6 +469,9 @@ func (rb *RuleBuilder) Epsilon() *Rule {
 }
 
 // EOF appends EOF as a (terminal) symbol to a rule.
+// This is usually not called by clients, but rather internally by the grammar
+// builder. If you know what you're doing, be careful.
+//
 // This completes the rule (no other builder calls should be made
 // for this rule).
 func (rb *RuleBuilder) EOF() *Rule {

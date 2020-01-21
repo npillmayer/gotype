@@ -300,9 +300,9 @@ func TestExercise1(t *testing.T) {
 	b := NewGrammarBuilder("E6")
 	b.LHS("S").N("A").T("a", scanner.Ident).EOF()
 	b.LHS("A").N("B").N("D").End()
-	b.LHS("B").T("b", scanner.Ident-1).EOF()
+	b.LHS("B").T("b", scanner.Ident-1).End()
 	b.LHS("B").Epsilon()
-	b.LHS("D").T("d", scanner.Ident-2).EOF()
+	b.LHS("D").T("d", scanner.Ident-2).End()
 	b.LHS("D").Epsilon()
 	g := b.Grammar()
 	g.Dump()
@@ -319,13 +319,37 @@ func TestExercise1(t *testing.T) {
 		}
 	}
 	lrgen := NewTableGenerator(ga)
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	lrgen.CreateTables()
 	// tmpfile, err := ioutil.TempFile(".", "E6_*.html")
 	// if err != nil {
 	// 	log.Fatal(err)
 	// }
 	//GotoTableAsHTML(lrgen, tmpfile)
-	lrgen.dfa = lrgen.buildCFSM()
+	//lrgen.dfa = lrgen.buildCFSM()
 	lrgen.CFSM().CFSM2GraphViz("./E6_cfsm.dot")
 	t.Fail()
+}
+
+func TestGrammar7(t *testing.T) {
+	gtrace.SyntaxTracer = gologadapter.New()
+	b := NewGrammarBuilder("G7")
+	b.LHS("S'").N("S").EOF()
+	b.LHS("S").N("A").T("a", scanner.Ident).End()
+	b.LHS("A").T("+", '+').End()
+	b.LHS("A").T("-", '-').End()
+	b.LHS("A").Epsilon()
+	g := b.Grammar()
+	g.Dump()
+	ga := NewGrammarAnalysis(g)
+	lrgen := NewTableGenerator(ga)
+	lrgen.CreateTables()
+	tmpfile, err := ioutil.TempFile(".", "G7_action_*.html")
+	if err != nil {
+		log.Fatal(err)
+	}
+	//GotoTableAsHTML(lrgen, tmpfile)
+	ActionTableAsHTML(lrgen, tmpfile)
+	//lrgen.dfa = lrgen.buildCFSM()
+	//lrgen.CFSM().CFSM2GraphViz("./G7_cfsm.dot")
 }

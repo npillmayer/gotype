@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
+	"text/scanner"
 
 	"github.com/emirpasic/gods/lists/arraylist"
 	"github.com/emirpasic/gods/sets/hashset"
@@ -106,12 +108,16 @@ func (ga *GrammarAnalysis) closure(i *item, A Symbol) *itemSet {
 	if A == nil {
 		A = i.peekSymbol() // get symbol after dot
 	}
-	if A != nil {
-		//T().Debugf("pre closure(%v) = %v", i, iset)
-		iset = ga.closureSet(iset)
-		//T().Debugf("    closure(%v) = %v", i, iset)
-		return iset
+	if A != nil && !A.IsTerminal() { // if A is non-term
+		iiset := ga.g.findNonTermRules(A, true) // without eps-productions
+		iset.union(iiset)
 	}
+	// if A != nil {
+	// 	//T().Debugf("pre closure(%v) = %v", i, iset)
+	// 	iset = ga.closureSet(iset)
+	// 	//T().Debugf("    closure(%v) = %v", i, iset)
+	// 	return iset
+	// }
 	return iset
 }
 
@@ -123,21 +129,25 @@ func (ga *GrammarAnalysis) closureSet(iset *itemSet) *itemSet {
 	tmpset := newItemSet() // this will collect derived items for the next iteration
 	for !iset.Empty() {
 		for _, x := range iset.Values() {
-			i := x.(*item)                                        // LHS -> X *A Y
-			if A := i.peekSymbol(); A != nil && !A.IsTerminal() { // if A is non-term
-				iiset := ga.g.findNonTermRules(A, false) // without eps-productions
-				cset.union(iiset)                        // add { A -> *... } to closure
-				tmpset.union(iiset)                      // prepare for next iteration
-				if ga.derivesEps[A] {                    // then we have to look past A
-					j, B := i.advance() // move dot 1 position
-					if B != nil {       // if not at end of RHS
-						cset.Add(j)   // add to closure
-						tmpset.Add(j) // prepare for next iteration
+			i := x.(*item) // LHS -> X *A Y
+			ii := ga.closure(i, nil)
+			cset.union(ii)
+			/*
+				if A := i.peekSymbol(); A != nil && !A.IsTerminal() { // if A is non-term
+					iiset := ga.g.findNonTermRules(A, false) // without eps-productions
+					cset.union(iiset)                        // add { A -> *... } to closure
+					tmpset.union(iiset)                      // prepare for next iteration
+					if ga.derivesEps[A] {                    // then we have to look past A
+						j, B := i.advance() // move dot 1 position
+						if B != nil {       // if not at end of RHS
+							cset.Add(j)   // add to closure
+							tmpset.Add(j) // prepare for next iteration
+						}
 					}
 				}
-			}
+			*/
 		}
-		tmpset, iset = iset, iset.difference(tmpset) // swap; this is correct!
+		tmpset, iset = iset, iset.difference(tmpset) // swap
 		tmpset.Clear()
 	}
 	return cset
@@ -309,11 +319,12 @@ func emptyCFSM(g *Grammar) *CFSM {
 // and then a table generator. TableGenerator.CreateTables() constructs
 // the CFSM and parser tables for an LR-parser recognizing grammar G.
 type TableGenerator struct {
-	g           *Grammar
-	ga          *GrammarAnalysis
-	dfa         *CFSM
-	gototable   *sparse.IntMatrix
-	actiontable *sparse.IntMatrix
+	g            *Grammar
+	ga           *GrammarAnalysis
+	dfa          *CFSM
+	gototable    *sparse.IntMatrix
+	actiontable  *sparse.IntMatrix
+	HasConflicts bool
 }
 
 // NewTableGenerator creates a new TableGenerator for a (previously analysed) grammar.
@@ -359,7 +370,7 @@ func (lrgen *TableGenerator) ActionTable() *sparse.IntMatrix {
 func (lrgen *TableGenerator) CreateTables() {
 	lrgen.dfa = lrgen.buildCFSM()
 	lrgen.gototable = lrgen.BuildGotoTable()
-	lrgen.actiontable = lrgen.BuildSLR1ActionTable()
+	lrgen.actiontable, lrgen.HasConflicts = lrgen.BuildSLR1ActionTable()
 }
 
 // AcceptingStates returns all states of the CFSM which represent an accept action.
@@ -373,9 +384,17 @@ func (lrgen *TableGenerator) AcceptingStates() []int {
 	for _, x := range lrgen.dfa.states.Values() {
 		state := x.(*CFSMState)
 		if state.Accept {
-			acc = append(acc, state.ID)
+			//acc = append(acc, state.ID)
+			it := lrgen.dfa.edges.Iterator()
+			for it.Next() {
+				e := it.Value().(*cfsmEdge)
+				if e.to.ID == state.ID {
+					acc = append(acc, e.from.ID)
+				}
+			}
 		}
 	}
+	unique(acc)
 	return acc
 }
 
@@ -385,6 +404,11 @@ func (lrgen *TableGenerator) buildCFSM() *CFSM {
 	G := lrgen.g
 	cfsm := emptyCFSM(G)
 	closure0 := lrgen.ga.closure(G.rules[0].startItem())
+	item, sym := G.rules[0].startItem()
+	T().Debugf("Start item=%v/%v", item, sym)
+	T().Debugf("----------")
+	closure0.Dump()
+	T().Debugf("----------")
 	cfsm.S0 = cfsm.addState(closure0)
 	cfsm.S0.Dump()
 	S := treeset.NewWith(stateComparator)
@@ -539,7 +563,7 @@ func parserTableAsHTML(lrgen *TableGenerator, tname string, table *sparse.IntMat
 // BuildLR0ActionTable contructs the LR(0) Action table. This method is not called by
 // CreateTables(), as we normally use an SLR(1) parser and therefore an action table with
 // lookahead included. This method is provided as an add-on.
-func (lrgen *TableGenerator) BuildLR0ActionTable() *sparse.IntMatrix {
+func (lrgen *TableGenerator) BuildLR0ActionTable() (*sparse.IntMatrix, bool) {
 	statescnt := lrgen.dfa.states.Size()
 	T().Infof("ACTION.0 table of size %d x 1", statescnt)
 	actions := sparse.NewIntMatrix(statescnt, 1, sparse.DefaultNullValue)
@@ -549,7 +573,7 @@ func (lrgen *TableGenerator) BuildLR0ActionTable() *sparse.IntMatrix {
 // BuildSLR1ActionTable constructs the SLR(1) Action table. This method is normally not called
 // by clients, but rather via CreateTables(). It builds an action table including
 // lookahead (using the FOLLOW-set created by the grammar analyzer).
-func (lrgen *TableGenerator) BuildSLR1ActionTable() *sparse.IntMatrix {
+func (lrgen *TableGenerator) BuildSLR1ActionTable() (*sparse.IntMatrix, bool) {
 	statescnt := lrgen.dfa.states.Size()
 	maxtok := 0
 	lrgen.g.EachSymbol(func(A Symbol) interface{} {
@@ -578,7 +602,10 @@ func (lrgen *TableGenerator) BuildSLR1ActionTable() *sparse.IntMatrix {
 // Shift entries are represented as -1.  Reduce entries are encoded as the
 // ordinal no. of the grammar rule to reduce. 0 means reducing the start rule,
 // i.e., accept.
-func (lrgen *TableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bool) *sparse.IntMatrix {
+func (lrgen *TableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bool) (
+	*sparse.IntMatrix, bool) {
+	//
+	hasConflicts := false
 	states := lrgen.dfa.states.Iterator()
 	for states.Next() {
 		state := states.Value().(*CFSMState)
@@ -589,28 +616,33 @@ func (lrgen *TableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bo
 			prefix := i.getPrefix()
 			T().Debugf("symbol at dot = %v, prefix = %v", A, prefix)
 			if A != nil && A.IsTerminal() { // create a shift entry
+				P := pT(state, A)
+				T().Debugf("    creating action entry --%v--> %d", A, P)
 				if slr1 {
-					T().Debugf("    creating shift action entry --%v-->", A)
-					a := actions.Value(state.ID, A.Token())
-					if a != -1 { // already shift present ?
-						actions.Add(state.ID, A.Token(), -1)
-					}
+					_, a2 := actions.Values(state.ID, A.Token())
+					// if a != -1 { // already shift present ?
+					// 	actions.Add(state.ID, A.Token(), -1)
+					// }
+					actions.Set(state.ID, A.Token(), int32(P))
+					actions.Add(state.ID, A.Token(), a2)
 				} else {
-					T().Debugf("    creating shift action entry")
 					actions.Add(state.ID, 1, -1) // general shift (no lookahead)
 				}
 			}
-			if len(prefix) > 0 && A == nil { // we are at the end of a non-eps rule
-				rule, inx := lrgen.g.matchesRHS(prefix, false) // find the rule
-				if inx >= 0 {                                  // found => create a reduce entry
+			//if len(prefix) > 0 && A == nil { // we are at the end of a non-eps rule
+			if A == nil { // we are at the end of a non-eps rule
+				lhs := i.rule.lhs
+				rule, inx := lrgen.g.matchesRHS(lhs[0], prefix) // find the rule
+				if inx >= 0 {                                   // found => create a reduce entry
 					if slr1 {
 						lookaheads := lrgen.ga.Follow(rule.lhs[0])
 						T().Debugf("    Follow(%v) = %v", rule.lhs[0], lookaheads)
 						for _, la := range lookaheads {
-							actions.Add(state.ID, la, int32(inx))  // reduce rule[inx]
-							if rule.no == 0 && la == epsilonType { // start rule reduced
-								T().Debugf("    accepting") // TODO
+							a1, a2 := actions.Values(state.ID, la)
+							if a1 == int32(inx) || a2 == int32(inx) {
+								hasConflicts = true
 							}
+							actions.Add(state.ID, la, int32(inx)) // reduce rule[inx]
 							T().Debugf("    creating reduce_%d action entry @ %v for %v", inx, la, rule)
 						}
 					} else {
@@ -621,5 +653,32 @@ func (lrgen *TableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bo
 			}
 		}
 	}
-	return actions
+	return actions, hasConflicts
+}
+
+func pT(state *CFSMState, terminal Symbol) int {
+	if terminal.Token() == scanner.EOF {
+		//actions.Add(state.ID, A.Token(), -1)
+		T().Infof("ACCEPT action")
+		return -2
+	}
+	//T().Debugf("    creating shift action entry --%v-->", terminal)
+	return -1
+}
+
+// ----------------------------------------------------------------------
+
+func unique(in []int) []int {
+	sort.Ints(in)
+	j := 0
+	for i := 1; i < len(in); i++ {
+		if in[j] == in[i] {
+			continue
+		}
+		j++
+		// in[i], in[j] = in[j], in[i] // preserve the original data
+		in[j] = in[i] // only set what is required
+	}
+	result := in[:j+1]
+	return result
 }
