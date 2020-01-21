@@ -17,7 +17,7 @@ can create a grammar from user input and use a parser for it in a couple of
 lines of code.
 
 Package slr can only handle SLR(1) grammars. All SLR-grammars are deterministic
-(but not vice versa). For parsing non-deterministic grammars, see package glr.
+(but not vice versa). For parsing ambiguous grammars, see package glr.
 
 Usage
 

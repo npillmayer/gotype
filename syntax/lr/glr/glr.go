@@ -3,16 +3,35 @@ Package glr implements a small-scale GLR(1)-parser.
 It is mainly intended for Markdown parsing, but may be of use for
 other purposes, too.
 
-The parser relies on tables built from an lr.Grammar object (see
-package documentation there).
+Clients have to use the tools
+of package lr to prepare the necessary parse tables. The GLR parser
+utilizes these tables to create a right derivation for a given input,
+provided through a scanner interface.
 
-Note: The API is still very much in flux! Currently it is something like
+This parser is intended for small to moderate grammars, e.g. for configuration
+input or small domain-specific languages. It is *not* intended for full-fledged
+programming languages (there are superb other tools around for these kinds of
+usages, usually creating LL(k)- or LALR(1)-parsers, or in the case of Bison,
+even a GLR(1)-parser).
 
-	scanner := parser.NewStdScanner(strings.NewReader("some input text"))
+The main focus for this implementation is adaptability and on-the-fly usage.
+Clients are able to construct the parse tables from a grammar and use the
+parser directly, without a code-generation or compile step. If you want, you
+can create a grammar from user input and use a parser for it in a couple of
+lines of code.
+
+Package glr can handle ambiguous grammars, i.e. grammars which will
+have shift/reduce- or reduce/reduce-conflicts in their parse tables.
+For simpler parsing of deterministic SLR grammars, see package slr.
+
+Warning
+
+The API is still very much in flux! Currently it is something like:
+
+	scanner := glr.NewStdScanner(strings.NewReader("some input text"))
 	p := glr.Create(grammar, gotoTable, actionTable)
 	p.Parse(startState, scanner)
 
-----------------------------------------------------------------------
 
 BSD License
 
@@ -65,19 +84,20 @@ func T() tracing.Trace {
 	return gtrace.SyntaxTracer
 }
 
-// A Parser type. Create and initialize one with parser.Create(...)
+// A Parser type for GLR parsing.
+// Create and initialize one with glr.NewParser(...)
 type Parser struct {
-	G         *lr.Grammar
-	dss       *dss.DSSRoot      // stack
-	gotoT     *sparse.IntMatrix // GOTO table
-	actionT   *sparse.IntMatrix // ACTION table
-	accepting []int             // slice of accepting states
+	G       *lr.Grammar       // grammar to use; do not alter after initialization
+	dss     *dss.DSSRoot      // DSS stack, i.e. multiple parse stacks
+	gotoT   *sparse.IntMatrix // GOTO table
+	actionT *sparse.IntMatrix // ACTION table
+	//accepting []int             // slice of accepting states
 }
 
-// Create and initialize a parser object, providing information from an
+// NewParser creates and initializes a parser object, given information from an
 // lr.LRTableGenerator. Clients have to provide a link to the grammar and the
 // parser tables.
-func Create(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntMatrix) *Parser {
+func NewParser(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntMatrix) *Parser {
 	parser := &Parser{
 		G:       g,
 		gotoT:   gotoTable,
@@ -88,12 +108,15 @@ func Create(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntM
 
 // Parse startes a new parse, given a start state and a scanner tokenizing the input.
 // The parser must have been initialized.
+//
+// Parse returns true, if the input was successfully recognized by the parse, false
+// otherwise.
 func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 	if p.G == nil || p.gotoT == nil {
 		T().Errorf("GLR parser not initialized")
 		return false, fmt.Errorf("GLR parser not initialized")
 	}
-	p.dss = dss.NewRoot("G", -1)    // forget existing one, if present
+	p.dss = dss.NewRoot("G", -1)    // drops existing stacks for new run
 	start := dss.NewStack(p.dss)    // create first stack instance in DSS
 	start.Push(S.ID, p.G.Epsilon()) // push the start state onto the stack
 	accepting := false
@@ -198,16 +221,18 @@ func (p *Parser) reduce(stateID int, rule *lr.Rule, stack *dss.Stack) []*dss.Sta
 	return heads
 }
 
+// TODO
 func (p *Parser) checkAccepted() bool {
-	for _, stack := range p.dss.ActiveStacks() {
-		state, _ := stack.Peek()
-		for _, accstate := range p.accepting {
-			if state == accstate {
-				return true
-			}
-		}
-	}
 	return false
+	// for _, stack := range p.dss.ActiveStacks() {
+	// 	state, _ := stack.Peek()
+	// 	for _, accstate := range p.accepting {
+	// 		if state == accstate {
+	// 			return true
+	// 		}
+	// 	}
+	// }
+	// return false
 }
 
 // ---------------------------------------------------------------------------
