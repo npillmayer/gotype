@@ -1,5 +1,56 @@
 /*
-Package slr provides an SLR(1)-parser.
+Package slr provides an SLR(1)-parser. Clients have to use the tools
+of package lr to prepare the necessary parse tables. The SLR parser
+utilizes these tables to create a right derivation for a given input,
+provided through a scanner interface.
+
+This parser is intended for small to moderate grammars, e.g. for configuration
+input or small domain-specific languages. It is *not* intended for full-fledged
+programming languages (there are superb other tools around for these kinds of
+usages, usually creating LALR(1)-parsers, which are able to recognize a super-set
+of SLR-languages).
+
+The main focus for this implementation is adaptability and on-the-fly usage.
+Clients are able to construct the parse tables from a grammar and use the
+parser directly, without a code-generation or compile step. If you want, you
+can create a grammar from user input and use a parser for it in a couple of
+lines of code.
+
+Package slr can only handle SLR(1) grammars. All SLR-grammars are deterministic
+(but not vice versa). For parsing non-deterministic grammars, see package glr.
+
+Usage
+
+Clients construct a grammar, usually by using a grammar builder:
+
+	b := lr.NewGrammarBuilder("Signed Variables Grammar")
+	b.LHS("Var").N("Sign").T("a", scanner.Ident).End()  // Var  --> Sign Id
+	b.LHS("Sign").T("+", '+').End()                     // Sign --> +
+	b.LHS("Sign").T("-", '-').End()                     // Sign --> -
+	b.LHS("Sign").Epsilon()                             // Sign -->
+	g, err := b.Grammar()
+
+This grammar is subjected to grammar analysis and table generation.
+
+	ga := lr.NewGrammarAnalysis(g)
+	lrgen := lr.NewTableGenerator(ga)
+	lrgen.CreateTables()
+	if lrgen.HasConflicts { ... }  // cannot use an SLR parser
+
+Finally parse some input:
+
+	p := slr.NewParser(g, lrgen.GotoTable(), lrgen.ActionTable())
+	scanner := slr.NewStdScanner(string.NewReader("+a")
+	accepted, err := p.Parse(lrgen.CFSM().S0, scanner)
+
+Clients may instrument the grammar with semantic operations or let the
+parser create a parse tree. See the examples below.
+
+Warning
+
+This is a very early implementation. Currently you should use it for study purposes
+only. The API may change significantly without prior notice.
+
 
 BSD License
 
@@ -37,12 +88,12 @@ package slr
 
 import (
 	"fmt"
+	"io"
 	"text/scanner"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 
-	"github.com/emirpasic/gods/stacks/arraystack"
 	"github.com/npillmayer/gotype/syntax/lr"
 	"github.com/npillmayer/gotype/syntax/lr/sparse"
 )
@@ -52,22 +103,20 @@ func T() tracing.Trace {
 	return gtrace.SyntaxTracer
 }
 
-// A Token type, if you want to use it. Tokens of this type are returned
-// by StdScanner.
-//
-// Clients may provide their own token data type.
-// type Token struct {
-// 	Value  int
-// 	Lexeme []byte
-// }
-
 // Parser is an SLR(1)-parser type. Create and initialize one with slr.NewParser(...)
 type Parser struct {
-	G       *lr.Grammar
-	stack   *stack            // parser stack
+	G *lr.Grammar
+	//stack   *stack            // parser stack
+	stack   []stackitem       // parser stack
 	gotoT   *sparse.IntMatrix // GOTO table
 	actionT *sparse.IntMatrix // ACTION table
 	//accepting []int             // slice of accepting states
+}
+
+// We store pairs of state-IDs and symbol-IDs on the parse stack.
+type stackitem struct {
+	ID    int
+	symID int
 }
 
 // NewParser creates an SLR(1) parser.
@@ -75,8 +124,9 @@ func NewParser(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.I
 	//func NewParser(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntMatrix,
 	//	acceptingStates []int) *Parser {
 	parser := &Parser{
-		G:       g,
-		stack:   newstack(),
+		G: g,
+		//stack:   newstack(),
+		stack:   make([]stackitem, 0, 512),
 		gotoT:   gotoTable,
 		actionT: actionTable,
 		//accepting: acceptingStates,
@@ -101,7 +151,8 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 		return false, fmt.Errorf("SLR(1)-parser not initialized")
 	}
 	var accepting bool
-	p.stack.Push(S) // push the start state onto the stack
+	//p.stack.Push(S) // push the start state onto the stack
+	p.stack = append(p.stack, stackitem{S.ID, 0}) // push S
 	// http://www.cse.unt.edu/~sweany/CSCE3650/HANDOUTS/LRParseAlg.pdf
 	tokval, token := scan.NextToken(nil)
 	done := false
@@ -110,7 +161,8 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 			tokval = scanner.EOF
 		}
 		T().Debugf("got token %s/%d from scanner", token, tokval)
-		state := p.stack.Peek()
+		//state := p.stack.Peek()
+		state := p.stack[len(p.stack)-1] // TOS
 		action := p.actionT.Value(state.ID, tokval)
 		T().Debugf("action(%d,%d)=%s", state.ID, tokval, valstring(action, p.actionT))
 		if action == p.actionT.NullValue() {
@@ -125,13 +177,16 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 			nextstate := int(p.gotoT.Value(state.ID, tokval))
 			T().Debugf("shifting, next state = %d", nextstate)
 			//p.stack.Push(&lr.CFSMState{ID: nextstate, Accept: contains(nextstate, p.accepting)})
-			p.stack.Push(&lr.CFSMState{ID: nextstate})
+			//p.stack.Push(&lr.CFSMState{ID: nextstate})
+			p.stack = append(p.stack, stackitem{nextstate, tokval}) // push
 			tokval, token = scan.NextToken(nil)
 		} else if action > 0 { // reduce action
-			nextstate := p.reduce(state.ID, p.G.Rule(int(action)))
+			rule := p.G.Rule(int(action))
+			nextstate := p.reduce(state.ID, rule)
 			T().Debugf("next state = %d", nextstate)
 			//p.stack.Push(&lr.CFSMState{ID: nextstate, Accept: contains(nextstate, p.accepting)})
-			p.stack.Push(&lr.CFSMState{ID: nextstate})
+			//p.stack.Push(&lr.CFSMState{ID: nextstate})
+			p.stack = append(p.stack, stackitem{nextstate, rule.GetLHSSymbol().GetID()}) // push
 		} else { // no action found
 			done = true
 		}
@@ -143,20 +198,93 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 func (p *Parser) reduce(stateID int, rule *lr.Rule) int {
 	T().Infof("reduce %v", rule)
 	handle := reverse(rule.GetRHS())
-	for range handle {
-		p.stack.Pop()
-		// if tos := p.stack.Pop(); sym.GetID() != tos.ID {
-		// 	T().Errorf("Expected %v on top of stack, got %d", sym, tos)
-		// }
+	for _, sym := range handle {
+		//p.stack.Pop()
+		p.stack = p.stack[:len(p.stack)-1] // pop TOS
+		tos := p.stack[len(p.stack)-1]
+		if tos.symID != sym.GetID() {
+			// if tos := p.stack.Pop(); sym.GetID() != tos.ID {
+			T().Errorf("Expected %v on top of stack, got %d", sym, tos.symID)
+			// }
+		}
 	}
 	lhs := rule.GetLHSSymbol()
-	state := p.stack.Peek()
+	//state := p.stack.Peek()
+	state := p.stack[len(p.stack)-1] // TOS
 	nextstate := p.gotoT.Value(state.ID, lhs.GetID())
 	return int(nextstate)
 }
 
-// --- Stack ------------------------------------------------------------
+// --- Scanner ----------------------------------------------------------
 
+// A Token type, if you want to use it. Tokens of this type are returned
+// by StdScanner.
+//
+// Clients may provide their own token data type.
+type Token struct {
+	Value  int
+	Lexeme []byte
+}
+
+// StdScanner provides a default scanner implementation, but clients are free (and
+// even encouraged) to provide their own. This implementation is based on
+// stdlib's text/scanner.
+type StdScanner struct {
+	reader io.Reader // will be io.ReaderAt in the future
+	scan   scanner.Scanner
+}
+
+// NewStdScanner creates a new default scanner from a Reader.
+func NewStdScanner(r io.Reader) *StdScanner {
+	s := &StdScanner{reader: r}
+	s.scan.Init(r)
+	s.scan.Filename = "Go symbols"
+	return s
+}
+
+// MoveTo is not functional for default scanners.
+// Default scanners allow sequential processing only.
+func (s *StdScanner) MoveTo(position uint64) {
+	T().Errorf("MoveTo() not yet supported by parser.StdScanner")
+}
+
+// NextToken gets the next token scanned from the input source. Returns the token
+// value and a user-defined token type.
+//
+// Clients may provide an array of token values, one of which is expected
+// at the current parse position. For the default scanner, as of now this is
+// unused. In the future it will help with error-repair.
+func (s *StdScanner) NextToken(expected []int) (int, interface{}) {
+	tokval := int(s.scan.Scan())
+	token := &Token{Value: tokval, Lexeme: []byte(s.scan.TokenText())}
+	T().P("token", tokenString(tokval)).Debugf("scanned token at %s = \"%s\"",
+		s.scan.Position, s.scan.TokenText())
+	return tokval, token
+}
+
+func tokenString(tok int) string {
+	return scanner.TokenString(rune(tok))
+}
+
+/*
+var stack []string
+
+stack = append(stack, "world!") // Push
+stack = append(stack, "Hello ")
+
+for len(stack) > 0 {
+    n := len(stack) - 1 // Top element
+    fmt.Print(stack[n])
+
+    stack = stack[:n] // Pop
+}
+
+// Pop
+stack[n] = "" // Erase element (write zero value)
+stack = stack[:n]
+*/
+
+/*
 type stack struct {
 	arrstack *arraystack.Stack
 }
@@ -189,9 +317,11 @@ func (s *stack) Pop() *lr.CFSMState {
 	}
 	return state.(*lr.CFSMState)
 }
+*/
 
 // ----------------------------------------------------------------------
 
+// reverse reverses the symbols of a RHS of a rule (i.e., a handle)
 func reverse(syms []lr.Symbol) []lr.Symbol {
 	r := append([]lr.Symbol(nil), syms...) // make copy first
 	for i := len(syms)/2 - 1; i >= 0; i-- {
@@ -201,6 +331,15 @@ func reverse(syms []lr.Symbol) []lr.Symbol {
 	return r
 }
 
+// valstring is a short helper to stringify an action table entry.
+func valstring(v int32, m *sparse.IntMatrix) string {
+	if v == m.NullValue() {
+		return "<none>"
+	}
+	return fmt.Sprintf("%d", v)
+}
+
+/*
 func contains(el int, a []int) bool {
 	for _, e := range a {
 		if el == e {
@@ -209,10 +348,4 @@ func contains(el int, a []int) bool {
 	}
 	return false
 }
-
-func valstring(v int32, m *sparse.IntMatrix) string {
-	if v == m.NullValue() {
-		return "<none>"
-	}
-	return fmt.Sprintf("%d", v)
-}
+*/

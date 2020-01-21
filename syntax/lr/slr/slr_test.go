@@ -13,7 +13,6 @@ import (
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/syntax/lr"
-	"github.com/npillmayer/gotype/syntax/lr/parser"
 )
 
 func TestSLR1(t *testing.T) {
@@ -84,7 +83,7 @@ func parse(t *testing.T, g *lr.Grammar, doDump bool, input ...string) bool {
 		//p := NewParser(g, lrgen.GotoTable(), lrgen.ActionTable(), lrgen.AcceptingStates())
 		p := NewParser(g, lrgen.GotoTable(), lrgen.ActionTable())
 		r := strings.NewReader(inp)
-		scanner := parser.NewStdScanner(r)
+		scanner := NewStdScanner(r)
 		ok, err := p.Parse(lrgen.CFSM().S0, scanner)
 		if err != nil {
 			t.Errorf("parser returned error: %v", err)
