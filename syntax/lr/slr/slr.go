@@ -110,7 +110,6 @@ type Parser struct {
 	stack   []stackitem       // parser stack
 	gotoT   *sparse.IntMatrix // GOTO table
 	actionT *sparse.IntMatrix // ACTION table
-	//accepting []int             // slice of accepting states
 }
 
 // We store pairs of state-IDs and symbol-IDs on the parse stack.
@@ -121,15 +120,11 @@ type stackitem struct {
 
 // NewParser creates an SLR(1) parser.
 func NewParser(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntMatrix) *Parser {
-	//func NewParser(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntMatrix,
-	//	acceptingStates []int) *Parser {
 	parser := &Parser{
-		G: g,
-		//stack:   newstack(),
+		G:       g,
 		stack:   make([]stackitem, 0, 512),
 		gotoT:   gotoTable,
 		actionT: actionTable,
-		//accepting: acceptingStates,
 	}
 	return parser
 }
@@ -151,7 +146,6 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 		return false, fmt.Errorf("SLR(1)-parser not initialized")
 	}
 	var accepting bool
-	//p.stack.Push(S) // push the start state onto the stack
 	p.stack = append(p.stack, stackitem{S.ID, 0}) // push S
 	// http://www.cse.unt.edu/~sweany/CSCE3650/HANDOUTS/LRParseAlg.pdf
 	tokval, token := scan.NextToken(nil)
@@ -161,7 +155,6 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 			tokval = scanner.EOF
 		}
 		T().Debugf("got token %s/%d from scanner", token, tokval)
-		//state := p.stack.Peek()
 		state := p.stack[len(p.stack)-1] // TOS
 		action := p.actionT.Value(state.ID, tokval)
 		T().Debugf("action(%d,%d)=%s", state.ID, tokval, valstring(action, p.actionT))
@@ -169,28 +162,22 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 			return false, fmt.Errorf("Syntax error at %d/%v", tokval, token)
 		}
 		if action == lr.AcceptAction {
-			//if contains(p.stack.Peek().ID, p.accepting) {
 			T().Infof("ACCEPT")
 			accepting = true
 			done = true
 		} else if action == lr.ShiftAction {
 			nextstate := int(p.gotoT.Value(state.ID, tokval))
 			T().Debugf("shifting, next state = %d", nextstate)
-			//p.stack.Push(&lr.CFSMState{ID: nextstate, Accept: contains(nextstate, p.accepting)})
-			//p.stack.Push(&lr.CFSMState{ID: nextstate})
 			p.stack = append(p.stack, stackitem{nextstate, tokval}) // push
 			tokval, token = scan.NextToken(nil)
 		} else if action > 0 { // reduce action
 			rule := p.G.Rule(int(action))
 			nextstate := p.reduce(state.ID, rule)
 			T().Debugf("next state = %d", nextstate)
-			//p.stack.Push(&lr.CFSMState{ID: nextstate, Accept: contains(nextstate, p.accepting)})
-			//p.stack.Push(&lr.CFSMState{ID: nextstate})
 			p.stack = append(p.stack, stackitem{nextstate, rule.GetLHSSymbol().GetID()}) // push
 		} else { // no action found
 			done = true
 		}
-		T().Debugf("~~~ token %v processed ~~~~~~~~~~~~~~~~~~~~~~", token)
 	}
 	return accepting, nil
 }
@@ -199,7 +186,6 @@ func (p *Parser) reduce(stateID int, rule *lr.Rule) int {
 	T().Infof("reduce %v", rule)
 	handle := reverse(rule.GetRHS())
 	for _, sym := range handle {
-		//p.stack.Pop()
 		p.stack = p.stack[:len(p.stack)-1] // pop TOS
 		tos := p.stack[len(p.stack)-1]
 		if tos.symID != sym.GetID() {
@@ -209,7 +195,6 @@ func (p *Parser) reduce(stateID int, rule *lr.Rule) int {
 		}
 	}
 	lhs := rule.GetLHSSymbol()
-	//state := p.stack.Peek()
 	state := p.stack[len(p.stack)-1] // TOS
 	nextstate := p.gotoT.Value(state.ID, lhs.GetID())
 	return int(nextstate)
@@ -266,62 +251,9 @@ func tokenString(tok int) string {
 	return scanner.TokenString(rune(tok))
 }
 
-/*
-var stack []string
+// --- Helpers ----------------------------------------------------------
 
-stack = append(stack, "world!") // Push
-stack = append(stack, "Hello ")
-
-for len(stack) > 0 {
-    n := len(stack) - 1 // Top element
-    fmt.Print(stack[n])
-
-    stack = stack[:n] // Pop
-}
-
-// Pop
-stack[n] = "" // Erase element (write zero value)
-stack = stack[:n]
-*/
-
-/*
-type stack struct {
-	arrstack *arraystack.Stack
-}
-
-func newstack() *stack {
-	return &stack{
-		arrstack: arraystack.New(),
-	}
-}
-
-func (s *stack) Peek() *lr.CFSMState {
-	state, ok := s.arrstack.Peek()
-	if !ok {
-		panic("Peek() on empty parser stack")
-	}
-	return state.(*lr.CFSMState)
-}
-
-func (s *stack) Push(state *lr.CFSMState) {
-	s.arrstack.Push(state)
-	for i, v := range s.arrstack.Values() {
-		T().Debugf("[%2d] %d", i, v.(*lr.CFSMState).ID)
-	}
-}
-
-func (s *stack) Pop() *lr.CFSMState {
-	state, ok := s.arrstack.Pop()
-	if !ok {
-		panic("Pop() on empty parser stack")
-	}
-	return state.(*lr.CFSMState)
-}
-*/
-
-// ----------------------------------------------------------------------
-
-// reverse reverses the symbols of a RHS of a rule (i.e., a handle)
+// reverse the symbols of a RHS of a rule (i.e., a handle)
 func reverse(syms []lr.Symbol) []lr.Symbol {
 	r := append([]lr.Symbol(nil), syms...) // make copy first
 	for i := len(syms)/2 - 1; i >= 0; i-- {
@@ -338,14 +270,3 @@ func valstring(v int32, m *sparse.IntMatrix) string {
 	}
 	return fmt.Sprintf("%d", v)
 }
-
-/*
-func contains(el int, a []int) bool {
-	for _, e := range a {
-		if el == e {
-			return true
-		}
-	}
-	return false
-}
-*/
