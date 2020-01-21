@@ -121,8 +121,8 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 	start.Push(S.ID, p.G.Epsilon()) // push the start state onto the stack
 	accepting := false
 	done := false
+	tval, token := scan.NextToken(nil)
 	for !done {
-		tval, token := scan.NextToken(nil)
 		if token == nil {
 			tval = scanner.EOF
 		}
@@ -139,7 +139,7 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 		if tval == scanner.EOF {
 			done = true
 		}
-		fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~~")
+		T().Debugf("~~~~~ processed token %v ~~~~~~~~~~~~~~~~~~~~", token)
 	}
 	return accepting, nil
 }

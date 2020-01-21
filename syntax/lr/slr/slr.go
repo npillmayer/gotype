@@ -161,9 +161,7 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 			return false, fmt.Errorf("Syntax error at %d/%v", tokval, token)
 		}
 		if action == lr.AcceptAction {
-			T().Infof("ACCEPT")
-			accepting = true
-			done = true
+			accepting, done = true, true
 		} else if action == lr.ShiftAction {
 			nextstate := int(p.gotoT.Value(state.ID, tokval))
 			T().Debugf("shifting, next state = %d", nextstate)
@@ -172,7 +170,7 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 		} else if action > 0 { // reduce action
 			rule := p.G.Rule(int(action))
 			nextstate := p.reduce(state.ID, rule)
-			T().Debugf("next state = %d", nextstate)
+			T().Debugf("reduced to next state = %d", nextstate)
 			p.stack = append(p.stack, stackitem{nextstate, rule.GetLHSSymbol().GetID()}) // push
 		} else { // no action found
 			done = true
@@ -264,6 +262,10 @@ func reverse(syms []lr.Symbol) []lr.Symbol {
 func valstring(v int32, m *sparse.IntMatrix) string {
 	if v == m.NullValue() {
 		return "<none>"
+	} else if v == lr.AcceptAction {
+		return "<accept>"
+	} else if v == lr.ShiftAction {
+		return "<shift>"
 	}
 	return fmt.Sprintf("%d", v)
 }

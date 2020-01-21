@@ -8,60 +8,36 @@ import (
 	"testing"
 	"text/scanner"
 
+	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
-
-	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/syntax/lr"
 )
 
-func TestSLR1(t *testing.T) {
+/*
+https://cs.au.dk/~amoeller/papers/ambiguity/ambiguity.pdf  -> Example 4
+
+  1: S  ::= [A -]
+  2: S  ::= [+ B]
+  3: A  ::= [+ a]
+  4: B  ::= [a -]
+*/
+func TestGLR1(t *testing.T) {
 	//gtrace.SyntaxTracer = gologadapter.New()
 	gtrace.SyntaxTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	b := lr.NewGrammarBuilder("G1")
-	b.LHS("S").T("a", scanner.Ident).End()
+	b.LHS("S").N("A").T("-", '-').End()
+	b.LHS("S").T("+", '+').N("B").End()
+	b.LHS("A").T("+", '+').T("a", scanner.Ident).End()
+	b.LHS("B").T("a", scanner.Ident).T("-", '-').End()
 	g, err := b.Grammar()
 	if err != nil {
 		t.Error(err)
 	}
 	parse(t, g, false, "a")
-}
-
-func TestSLR2(t *testing.T) {
-	//gtrace.SyntaxTracer = gologadapter.New()
-	gtrace.SyntaxTracer = gotestingadapter.New()
-	teardown := gotestingadapter.RedirectTracing(t)
-	defer teardown()
-	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
-	b := lr.NewGrammarBuilder("G2")
-	b.LHS("S").T("a", scanner.Ident).End()
-	b.LHS("S").Epsilon()
-	g, err := b.Grammar()
-	if err != nil {
-		t.Error(err)
-	}
-	parse(t, g, false, "a", "")
-}
-
-func TestSLR3(t *testing.T) {
-	//gtrace.SyntaxTracer = gologadapter.New()
-	gtrace.SyntaxTracer = gotestingadapter.New()
-	teardown := gotestingadapter.RedirectTracing(t)
-	defer teardown()
-	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
-	b := lr.NewGrammarBuilder("G3")
-	b.LHS("S").N("A").T("a", scanner.Ident).End()
-	b.LHS("A").T("+", '+').End()
-	b.LHS("A").T("-", '-').End()
-	b.LHS("A").Epsilon()
-	g, err := b.Grammar()
-	if err != nil {
-		t.Error(err)
-	}
-	parse(t, g, false, "a", "+a", "-a")
 }
 
 // ----------------------------------------------------------------------
