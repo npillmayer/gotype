@@ -35,7 +35,7 @@ The main API of this DSS consists of
 Additionally, there are some low-level methods, which may help debugging or
 implementing your own add-on functionality.
 
-	nodes = stack.FindHandlePath(handle, 0)    // find a string of symbols down the stack
+	nodes = stack.FindHandlePath(handle, 0)      // find a string of symbols down the stack
 	DSS2Dot(root, path, writer)                  // output to Graphviz DOT format
 	WalkDAG(root, worker, arg)                   // execute a function on each DSS node
 
@@ -49,7 +49,7 @@ GLR Parsing
 
 A GLR parser forks a stack whenever an ambiguous state on top of the
 parse stack is processed.
-In a GLR-parser shift/reduce- and reduce/reduce-conflicts are
+In a GLR-parser, shift/reduce- and reduce/reduce-conflicts are
 not uncommon, as potentially ambiguous grammars are used.
 
 Assume that a shift/reduce-conflict is signalled by the TOS.
@@ -67,7 +67,6 @@ Status
 
 This is experimental software, currently not intended for production use.
 
-----------------------------------------------------------------------
 
 BSD License
 
@@ -122,7 +121,7 @@ func T() tracing.Trace {
 
 // --- Stack Nodes -----------------------------------------------------------
 
-// Type for a node in a DSS stack
+// DSSNode is a type for a node in a DSS stack.
 type DSSNode struct {
 	State   int        // identifier of a parse state
 	Sym     lr.Symbol  // symbol on the stack (between states)
@@ -219,15 +218,13 @@ func (n *DSSNode) findDownlink(state int) *DSSNode {
 	return s
 }
 
-// We often will have to deal with fragments of a stack
+// NodePath is a run within a stack. We often will have to deal with fragments of a stack
 type NodePath []*DSSNode
 
 // === DSS Data Structure ====================================================
 
-/*
-Root for a DSS-stack. All stacks of a DSS stack structure share a common
-root. Clients have to create a root before stacks can be created.
-*/
+// DSSRoot is the root of a DSS-stack. All stacks of a DSS stack structure share a common
+// root. Clients have to create a root before stacks can be created.
 type DSSRoot struct {
 	Name      string    // identifier for the DSS
 	bottom    *DSSNode  // stopper
@@ -235,12 +232,10 @@ type DSSRoot struct {
 	reservoir *ssl.List // list of nodes to be re-used
 }
 
-/*
-Create a named root for a DSS-stack, given a name.
-The second parameter is an implementation detail: clients have to supply
-a state the root will use as a stopper. It should be an "impossible" state
-for normal execution, to avoid confusion.
-*/
+// NewRoot creates a named root for a DSS-stack, given a name.
+// The second parameter is an implementation detail: clients have to supply
+// a state the root will use as a stopper. It should be an "impossible" state
+// for normal execution, to avoid confusion.
 func NewRoot(name string, invalidState int) *DSSRoot {
 	root := &DSSRoot{Name: name}
 	root.bottom = newDSSNode(invalidState, &pseudo{"bottom"})
@@ -250,10 +245,8 @@ func NewRoot(name string, invalidState int) *DSSRoot {
 	return root
 }
 
-/*
-Get the stacks heads currently active in the DSS.
-No order is guaranteed.
-*/
+// ActiveStacks gets the stack-heads currently active in the DSS.
+// No order is guaranteed.
 func (root *DSSRoot) ActiveStacks() []*Stack {
 	dup := make([]*Stack, len(root.stacks))
 	copy(dup, root.stacks)
@@ -320,12 +313,10 @@ func (root *DSSRoot) findTOSofAnyStack(state int, sym lr.Symbol) *DSSNode {
 	return nil
 }
 
-/*
-Check if a stack may safely delete nodes for a reduce operation. There are
-exactly two cases when deletion is not permitted: (1) One or more other stacks
-are sitting on the same node as this one (2) There are nodes present further
-up the stack (presumably operated on by other stacks).
-*/
+// IsAlone checks if a stack may safely delete nodes for a reduce operation. There are
+// exactly two cases when deletion is not permitted: (1) One or more other stacks
+// are sitting on the same node as this one (2) There are nodes present further
+// up the stack (presumably operated on by other stacks).
 func (root *DSSRoot) IsAlone(stack *Stack) bool {
 	if stack.tos.successorCount() > 0 {
 		return false
@@ -338,21 +329,17 @@ func (root *DSSRoot) IsAlone(stack *Stack) bool {
 	return true
 }
 
-/*
-A data structure for a linear stack within a DSS (DAG structured stack = DSS).
-All stacks together form a DSS, i.e. they
-may share portions of stacks. Each client carries its own stack, without
-noticing the other stacks. The data structure hides the fact that stack-
-fragments may be shared.
-*/
+// Stack is a data structure for a linear stack within a DSS (DAG structured stack = DSS).
+// All stacks together form a DSS, i.e. they
+// may share portions of stacks. Each client carries its own stack, without
+// noticing the other stacks. The data structure hides the fact that stack-
+// fragments may be shared.
 type Stack struct {
 	root *DSSRoot // common root for a set of sub-stacks
 	tos  *DSSNode // top of stack
 }
 
-/*
-Create a new linear stack within a DSS.
-*/
+// NewStack creates a new linear stack within a DSS.
 func NewStack(root *DSSRoot) *Stack {
 	s := &Stack{root: root, tos: root.bottom}
 	s.root.stacks = append(s.root.stacks, s)
@@ -384,20 +371,16 @@ func (node *DSSNode) height(stopper *DSSNode) int {
 }
 */
 
-/*
-Check if a stack may safely delete nodes for a reduce operation. There are
-exactly two cases when deletion is not permitted: (1) One or more other stacks
-are sitting on the same node as this one (2) There are nodes present further
-up the stack (presumably operated on by other stacks).
-*/
+// IsAlone checks if a stack may safely delete nodes for a reduce operation. There are
+// exactly two cases when deletion is not permitted: (1) One or more other stacks
+// are sitting on the same node as this one (2) There are nodes present further
+// up the stack (presumably operated on by other stacks).
 func (stack *Stack) IsAlone() bool {
 	return stack.root.IsAlone(stack)
 }
 
-/*
-Duplicate the head of a stack, resulting in a new stack.
-The new stack is implicitely registered with the (common) root.
-*/
+// Fork duplicates the head of a stack, resulting in a new stack.
+// The new stack is implicitely registered with the (common) root.
 func (stack *Stack) Fork() *Stack {
 	s := NewStack(stack.root)
 	//s.height = stack.height
@@ -406,9 +389,7 @@ func (stack *Stack) Fork() *Stack {
 	return s
 }
 
-/*
-Return TOS.Symbol and TOS.State without popping it.
-*/
+// Peek returns TOS.Symbol and TOS.State without popping it.
 func (stack *Stack) Peek() (int, lr.Symbol) {
 	return stack.tos.State, stack.tos.Sym
 }
@@ -450,22 +431,23 @@ func (stack *Stack) Push(state int, sym lr.Symbol) *Stack {
 	return stack
 }
 
-/*
-For reduce operations on a stack it is necessary to identify the
-nodes which correspond to the symbols of the RHS of the production
-to reduce. The nodes (some or all) may overlap with other stacks of
-the DSS.
-
-For a RHS there may be more than one path downwards the stack marked
-with the symbols of RHS. It is not deterministic which one this method
-will find and return.
-Clients may call this method multiple times. If a clients wants to find
-all simultaneously existing paths, it should increment the parameter skip
-every time. This determines the number of branches have been found
-previously and should be skipped now.
-
-Will return nil if no (more) path is found.
-*/
+// FindHandlePath finds a run within a stack corresponding to a handle, i.e.,
+// a list of parse symbols.
+//
+// For reduce operations on a stack it is necessary to identify the
+// nodes which correspond to the symbols of the RHS of the production
+// to reduce. The nodes (some or all) may overlap with other stacks of
+// the DSS.
+//
+// For a RHS there may be more than one path downwards the stack marked
+// with the symbols of RHS. It is not deterministic which one this method
+// will find and return.
+// Clients may call this method multiple times. If a clients wants to find
+// all simultaneously existing paths, it should increment the parameter skip
+// every time. This determines the number of branches have been found
+// previously and should be skipped now.
+//
+// Will return nil if no (more) path is found.
 func (stack *Stack) FindHandlePath(handle []lr.Symbol, skip int) NodePath {
 	path, ok := collectHandleBranch(stack.tos, handle, len(handle), &skip)
 	if ok {
@@ -588,44 +570,43 @@ func (stack *Stack) reduce(path NodePath, destructive bool) (ret []*Stack) {
 	return
 }
 
-/*
-Perform a reduce operation, given a handle, i.e. a right hand side of a
-grammar rule. Strictly speaking, it performs not a complete reduce operation,
-but just the first part: popping the RHS symbols off the stack.
-Clients will have to push the LHS symbol separately.
-
-With a DSS, reduce may result in a multitude of new stack configurations.
-Whenever there is a reduce/reduce conflict or a shift/reduce-conflict, a GLR
-parser will perform both reduce-operations. To this end each possible operation
-(i.e, parser) will (conceptually) use its own stack.
-Thus multiple return values of a reduce operation correspond to (temporary
-or real) ambiguity of a grammar.
-
-Example:  X ::= A + A  (grammar rule)
-
-	Stack 1:  ... a A + A
-	Stack 2:  ... A + A + A
-
-	as a DSS: -[a]------
-	                    [A] [+]-[A]     // now reduce this: A + A  to  X
-	          -[A]-[+]--
-
-This will result in 2 new stack heads:
-
-	as a DSS: -[a]                // return stack #1 of Reduce()
-	          -[A]-[+]            // return stack #2 of Reduce()
-
-After pushing X onto the stack, the 2 stacks may be merged (on 'X'), thus
-resulting in a single stack head again.
-
-	as a DSS: -[a]-----
-	                   [X]
-	          -[A]-[+]-
-
-The stack triggering the reduce will be the first stack within the returning
-array of stacks, i.e. the Reduce() return the stack itself plus possibly
-other stacks created during the reduce operation.
-*/
+// Reduce performs a reduce operation, given a handle, i.e. a right hand side of a
+// grammar rule. Strictly speaking, it performs not a complete reduce operation,
+// but just the first part: popping the RHS symbols off the stack.
+// Clients will have to push the LHS symbol separately.
+//
+// With a DSS, reduce may result in a multitude of new stack configurations.
+// Whenever there is a reduce/reduce conflict or a shift/reduce-conflict, a GLR
+// parser will perform both reduce-operations. To this end each possible operation
+// (i.e, parser) will (conceptually) use its own stack.
+// Thus multiple return values of a reduce operation correspond to (temporary
+// or real) ambiguity of a grammar.
+//
+// Example:  X ::= A + A  (grammar rule)
+//
+// 	   Stack 1:  ... a A + A
+// 	   Stack 2:  ... A + A + A
+//
+// 	   as a DSS: -[a]------
+// 	                      [A] [+]-[A]     // now reduce this: A + A  to  X
+// 	             -[A]-[+]--
+//
+// This will result in 2 new stack heads:
+//
+//    	as a DSS: -[a]                // return stack #1 of Reduce()
+// 	              -[A]-[+]            // return stack #2 of Reduce()
+//
+// After pushing X onto the stack, the 2 stacks may be merged (on 'X'), thus
+// resulting in a single stack head again.
+//
+//    	as a DSS: -[a]-----
+// 	                      [X]
+// 	              -[A]-[+]-
+//
+// The stack triggering the reduce will be the first stack within the returning
+// array of stacks, i.e. the Reduce() return the stack itself plus possibly
+// other stacks created during the reduce operation.
+//
 func (stack *Stack) Reduce(handle []lr.Symbol) (ret []*Stack) {
 	if len(handle) == 0 {
 		return
@@ -669,24 +650,22 @@ func (stack *Stack) reduceHandle(handle []lr.Symbol, destructive bool) (ret []*S
 	return
 }
 
-/*
-Pop the TOS of a stack. This is straigtforward for (non-empty) linear stacks
-without shared nodes. For stacks with common suffixes, i.e. with inverse joins,
-it is more tricky. The popping may result in multiple new stacks, one for
-each predecessor.
-
-For parsers Pop() may not be very useful. It is included here for
-conformance with the general contract of a stack. With parsing, popping of
-states happens during reductions, and the API offers more convenient
-functions for this.
-*/
+// Pop the TOS of a stack. This is straigtforward for (non-empty) linear stacks
+// without shared nodes. For stacks with common suffixes, i.e. with inverse joins,
+// it is more tricky. The popping may result in multiple new stacks, one for
+// each predecessor.
+//
+// For parsers Pop may not be very useful. It is included here for
+// conformance with the general contract of a stack. With parsing, popping of
+// states happens during reductions, and the API offers more convenient
+// functions for this.
 func (stack *Stack) Pop() (ret []*Stack) {
 	if stack.tos != stack.root.bottom { // ensure stack not empty
 		// If tos is part of another chain: return node and go down one node
 		// If shared by another stack: return node and go down one node
 		// If not shared: remove node
 		// Increase pathcnt at new TOS
-		var oldTOS *DSSNode = stack.tos
+		var oldTOS = stack.tos
 		//var r []*Stack
 		for i, n := range stack.tos.preds { // at least 1 predecessor
 			if i == 0 { // 1st one: keep this stack
@@ -713,7 +692,7 @@ func (stack *Stack) pop(toNode *DSSNode, deleteNode bool, collectStacks bool) ([
 	var r []*Stack                      // return value
 	var err error                       // return value
 	if stack.tos != stack.root.bottom { // ensure stack not empty
-		var oldTOS *DSSNode = stack.tos
+		var oldTOS = stack.tos
 		var found bool
 		stack.tos.preds, found = remove(stack.tos.preds, toNode)
 		if !found {
@@ -738,11 +717,9 @@ func (stack *Stack) pop(toNode *DSSNode, deleteNode bool, collectStacks bool) ([
 
 // --- Debugging -------------------------------------------------------------
 
-/*
-Output a DSS in Graphviz DOT format (for debugging purposes).
-
-If parameter path is given, it will be highlighted in the output.
-*/
+// DSS2Dot outputs a DSS in Graphviz DOT format (for debugging purposes).
+//
+// If parameter path is given, it will be highlighted in the output.
 func DSS2Dot(root *DSSRoot, path []*DSSNode, w io.Writer) {
 	istos := map[*DSSNode]bool{}
 	for _, stack := range root.stacks {
@@ -787,7 +764,7 @@ var hexhlcolors = [...]string{"#FFEEDD", "#FFDDCC", "#FFCCAA", "#FFBB88", "#FFAA
 var hexcolors = [...]string{"white", "#CCDDFF", "#AACCFF", "#88BBFF", "#66AAFF",
 	"#4499FF", "#2288FF", "#0077FF", "#0066FF"}
 
-// Debugging
+// PrintDSS is for debugging.
 func PrintDSS(root *DSSRoot) {
 	WalkDAG(root, func(node *DSSNode, arg interface{}) {
 		predList := " "
@@ -798,10 +775,8 @@ func PrintDSS(root *DSSRoot) {
 	}, nil)
 }
 
-/*
-Walk all nodes of a DSS and execute a worker function on each.
-parameter arg is presented as a second argument to each worker execution.
-*/
+// WalkDAG walks all nodes of a DSS and execute a worker function on each.
+// parameter arg is presented as a second argument to each worker execution.
 func WalkDAG(root *DSSRoot, worker func(*DSSNode, interface{}), arg interface{}) {
 	visited := map[*DSSNode]bool{}
 	var walk func(*DSSNode, func(*DSSNode, interface{}), interface{})
@@ -820,10 +795,8 @@ func WalkDAG(root *DSSRoot, worker func(*DSSNode, interface{}), arg interface{})
 	}
 }
 
-/*
-End of lfe for this stack.
-It will be detached from the DSS root and will let go of its TOS.
-*/
+// Die signals end of lfe for this stack.
+// The stack will be detached from the DSS root and will let go of its TOS.
 func (stack *Stack) Die() {
 	stack.root.removeStack(stack)
 	stack.tos = nil
