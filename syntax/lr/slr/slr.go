@@ -105,8 +105,7 @@ func T() tracing.Trace {
 
 // Parser is an SLR(1)-parser type. Create and initialize one with slr.NewParser(...)
 type Parser struct {
-	G *lr.Grammar
-	//stack   *stack            // parser stack
+	G       *lr.Grammar
 	stack   []stackitem       // parser stack
 	gotoT   *sparse.IntMatrix // GOTO table
 	actionT *sparse.IntMatrix // ACTION table
@@ -189,9 +188,7 @@ func (p *Parser) reduce(stateID int, rule *lr.Rule) int {
 		p.stack = p.stack[:len(p.stack)-1] // pop TOS
 		tos := p.stack[len(p.stack)-1]
 		if tos.symID != sym.GetID() {
-			// if tos := p.stack.Pop(); sym.GetID() != tos.ID {
 			T().Errorf("Expected %v on top of stack, got %d", sym, tos.symID)
-			// }
 		}
 	}
 	lhs := rule.GetLHSSymbol()
