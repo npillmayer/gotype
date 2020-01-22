@@ -2,7 +2,7 @@ package sppf
 
 /*
 
-Some code in this file is loosely beased on ideas from the great
+Some code in this file is very loosely based on ideas from the great
 Gonum project.
 
 Gonum-License
@@ -49,59 +49,185 @@ import (
 	"sort"
 
 	"github.com/npillmayer/gotype/engine/khipu/linebreak"
+	"github.com/npillmayer/gotype/syntax/lr"
 )
 
-// fbGraph is a directed weighted graph of feasible breakpoints.
-// Its implementation is inspired by the great Gonum packages. However, Gonum
-// is in some respects too restrictive and in others too much of an overkill
-// for our needs. Moreover, it panics in certain error conditions.
-// We taylor it heavily to fit our specific needs.
+// Forest implements a Shared Packed Parse Forest (SPPF).
+// A packed parse forest re-uses existing parse tree nodes between different
+// parse trees. For a conventional non-ambiguous parse, a parse forest consists
+// of a single tree. Ambiguous grammars, on the other hand, may result in parse
+// runs where more than one parse tree is created. To save space these parse
+// trees will share common nodes.
 //
-// A node in the graph refers to a numeric position within an input text.
-// The text is represented by a khipu (see package khipu), which is something
-// like a TeX hlist, i.e. a list of boxes, glue, penalties etc.  These kind
-// of list-items are called knots. Positions are indices of knots.
-//
-// A single position can be reached optimally by exactly one segment (path
-// through breakpoints). However, for reasons explained by Knuth/Plass it is
-// advantageous in some situations to permit for more than one segment, if
-// they result in different line-counts. This allows in effect to defer the
-// optimality-decision until the target for the last line is known.
-//
-// We implement this feed-forward by labelling the edges with a tuple
-// (cost, linecount). A breakpoint may be reached by more than one edge
-// if either cost or linecount differ.
-type fbGraph struct {
-	nodes map[int]*feasibleBreakpoint
-	//from    map[int]map[int][]wEdge
-	edgesTo     map[int]map[int]map[int]wEdge // edge to, from, with linecount
-	prunedEdges map[int]map[int]map[int]wEdge // we conserve deleted edges
+// In our implementation there are two kinds of nodes: Symbol nodes and RHS-nodes.
+// Symbol nodes reflect LHSs of rules, which are the results of a reduce action.
+// RHS-nodes reflect RHSs of rules, which have been used to reduce to a Symbol node.
+type Forest struct {
+	symNodes map[int]SymNode
+	rhsNodes map[int]RHSNode
+	orEdges  map[int]orEdges  // or-edges from symbols to RHSs, indexed by symbol
+	andEdges map[int]andEdges // and-edges
 }
 
-// newFBGraph returns a fbGraph with the specified self and absent
+// NewForest returns a Forest with the specified self and absent
 // edge weight values.
-func newFBGraph() *fbGraph {
-	return &fbGraph{
-		nodes:       make(map[int]*feasibleBreakpoint),
-		edgesTo:     make(map[int]map[int]map[int]wEdge),
-		prunedEdges: make(map[int]map[int]map[int]wEdge),
+func NewForest() *Forest {
+	return &Forest{
+		symNodes: make(map[int]SymNode),
+		rhsNodes: make(map[int]RHSNode),
+		orEdges:  make(map[int]orEdge),
+		andEdges: make(map[int]andEdge),
 	}
 }
 
-type wEdge struct {
-	from, to  int // this is an edge between two text-positions
-	cost      int32
-	total     int32
-	linecount int
+type span [2]uint64
+
+func (s *span) from() uint64 {
+	return s[0]
 }
 
-// nullEdge denotes an edge that is not present in a graph.
-var nullEdge = wEdge{}
+func (s *span) to() uint64 {
+	return s[1]
+}
+
+func (sn symNode) spanning(from, to uint64) symNode {
+	return symNode{
+		symbols: sn.symbol,
+		span:    span{from, to},
+	}
+}
+
+func (rhs rhsNode) spanning(from, to uint64) rhsNode {
+	return rhsNode{
+		rule: rhs.rule,
+		span: span{from, to},
+	}
+}
+
+func sym(symbol lr.Symbol) symNode {
+	return symNode{symbol: symbol}
+}
+
+func rhs(rule int) rhsNode {
+	return rhsNode{rule: rule}
+}
+
+type symNode struct {
+	symbol lr.Symbol
+	span   uint64 // positions in the input covered by this symbol
+}
+
+type rhsNode struct {
+	rule int    // rule number this RHS is from
+	span uint64 // positions in the input covered by this symbol
+}
+
+// addSymNode adds a symbol node to the forest. Returns a position in the nodes-table
+// (which may already have been occupied beforehand,
+// as it may already have been present in the SPPF.)
+func (f *Forest) addSymNode(sym lr.Symbol, start, end uint64) int {
+	if pos, found := f.findSymNode(sym.ID, start, end); found {
+		return pos
+	}
+	sn = sym(sym).spanning(start, end)
+	f.symNodes = append(f.symNodes, sn)
+	return len(f.symNodes) - 1
+}
+
+// for now, just brute force. 1st optimization should be: search from back to front.
+// If necessary, introduce a map.
+func (f *Forest) findSymNode(ID int, start, end uint64) (int, bool) {
+	for i, sn := range f.symNodes {
+		if sn.symbol.GetID() == ID && sn.span.from() == start && sn.span.to() == end {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+// for now, just brute force. 1st optimization should be: search from back to front.
+// If necessary, introduce a map.
+func (f *Forest) findRHSNode(rule int, start, end uint64) (int, bool) {
+	for i, rhs := range f.RHSNodes {
+		if rhs.rule == rule && sn.span.from() == start && sn.span.to() == end {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+type orEdge struct {
+	fromSym int // index of symNode
+	toRHS   int // index of RHSNode
+}
+
+// collection of edges. Made a struct to make it hashable.
+type orEdges struct {
+	edges []orEdge
+}
+
+// We introduce a small space optimization: and-edges may occur between
+// sym-->sym or rhs-->sym. If the origin is a RHS, we store the negative positional
+// index of the rhsNode, if it is a symbol, we simply store the index positive.
+// This helps avoid storing an index and a <none>.
+type andEdge struct {
+	from     int // index of symNode or -index of rhsNode
+	toSym    int // index of symNode
+	sequence int // sequence number 0..n, used for ordering children
+}
+
+// collection of edges. Made a struct to make it hashable.
+type andEdges struct {
+	edges []andEdge
+}
+
+// nullOrEdge denotes an or-edge that is not present in a graph.
+var nullOrEdge = orEdge{}
 
 // isNull checks if an edge is null, i.e. non-existent.
-func (e wEdge) isNull() bool {
-	return e == nullEdge
+func (e orEdge) isNull() bool {
+	return e == nullOrEdge
 }
+
+// nullAndEdge denotes an and-edge that is not present in a graph.
+var nullAndOrEdge = orEdge{}
+
+// isNull checks if an edge is null, i.e. non-existent.
+func (e andEdge) isNull() bool {
+	return e == nullAndEdge
+}
+
+func (f *Forest) addOrEdge(sym lr.Symbol, rule int, start, end uint64) {
+	sn := f.addSymNode(sym, start, end)
+	rhs := f.addRHSNode(rule, start, end)
+	insertOrEdge(sn, rhs)
+}
+
+func (f *Forest) insertOrEdge(snpos, rhspos int) *orEdge {
+	if e := f.findOrEdge(snpos, rhspos); e != nil {
+		return e
+	}
+	e := orEdge{fromSym: snpos, toRHS: rhspos}
+	if edges, ok := f.orEdges[snpos]; ok {
+		edges.edges = append(edges.edges, e)
+		return &edges.edges[len(edges.edges)-1]
+	}
+	f.orEdges[snpos] = make(map[int]orEdges{snpos: e})
+	return &f.orEdges[snpos][0]
+}
+
+func (f *Forest) findOrEdge(snpos, rhspos int) *orEdge {
+	if edges, ok := f.orEdges[snpos]; ok {
+		for i, e := range edges.edges {
+			if e.toRHS == rhspos {
+				return &edges.edges[i]
+			}
+		}
+	}
+	return nil
+}
+
+// --------------------------------------------------------------------------------
 
 // newWEdge returns a new weighted edge from one breakpoint to another,
 // given two breakpoints and a label-key.
@@ -120,17 +246,6 @@ func newWEdge(from, to *feasibleBreakpoint, cost int32, total int32, linecnt int
 		total:     total,
 		linecount: linecnt,
 	}
-}
-
-// Add adds a feasible breakpoint to the graph.
-// It returns an error if the breakpoint is already present.
-func (g *fbGraph) Add(fb *feasibleBreakpoint) error {
-	T().Debugf("Added new breakpoint at %d/%v", fb.mark.Position(), fb.mark.Knot())
-	if _, exists := g.nodes[fb.mark.Position()]; exists {
-		return fmt.Errorf("Breakpoint at position %d already known", fb.mark.Position())
-	}
-	g.nodes[fb.mark.Position()] = fb
-	return nil
 }
 
 // Edge returns the edge (from,to), if such an edge exists,
