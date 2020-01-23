@@ -45,7 +45,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/npillmayer/gotype/engine/khipu/linebreak"
@@ -166,35 +165,12 @@ type orEdges struct {
 	edges []orEdge
 }
 
-// We introduce a small space optimization: and-edges may occur between
-// sym-->sym or rhs-->sym. If the origin is a RHS, we store the negative positional
-// index of the rhsNode, if it is a symbol, we simply store the index positive.
-// This helps avoid storing an index and a <none>.
-type andEdge struct {
-	from     int // index of symNode or -index of rhsNode
-	toSym    int // index of symNode
-	sequence int // sequence number 0..n, used for ordering children
-}
-
-// collection of edges. Made a struct to make it hashable.
-type andEdges struct {
-	edges []andEdge
-}
-
 // nullOrEdge denotes an or-edge that is not present in a graph.
 var nullOrEdge = orEdge{}
 
 // isNull checks if an edge is null, i.e. non-existent.
 func (e orEdge) isNull() bool {
 	return e == nullOrEdge
-}
-
-// nullAndEdge denotes an and-edge that is not present in a graph.
-var nullAndOrEdge = orEdge{}
-
-// isNull checks if an edge is null, i.e. non-existent.
-func (e andEdge) isNull() bool {
-	return e == nullAndEdge
 }
 
 func (f *Forest) addOrEdge(sym lr.Symbol, rule int, start, end uint64) {
@@ -227,40 +203,82 @@ func (f *Forest) findOrEdge(snpos, rhspos int) *orEdge {
 	return nil
 }
 
+// We introduce a small space optimization: and-edges may occur between
+// sym-->sym or rhs-->sym. If the origin is a RHS, we store the negative positional
+// index of the rhsNode, if it is a symbol, we simply store the index positive.
+// This helps avoid storing an index and a <none>.
+type andEdge struct {
+	from     int // index of symNode or -index of rhsNode
+	toSym    int // index of symNode
+	sequence int // sequence number 0..n, used for ordering children
+}
+
+// collection of edges. Made a struct to make it hashable.
+type andEdges struct {
+	edges []andEdge
+}
+
+// nullAndEdge denotes an and-edge that is not present in a graph.
+var nullAndEdge = andEdge{}
+
+// isNull checks if an edge is null, i.e. non-existent.
+func (e andEdge) isNull() bool {
+	return e == nullAndEdge
+}
+
+func (f *Forest) addAndEdge(sym lr.Symbol, rhs int, toSym lr.Symbol, start, end uint64, seq int) {
+	var from int
+	if sym != nil {
+		from = f.addSymNode(sym, start, end)
+	} else {
+		from = f.addRHSNode(rhs, start, end)
+	}
+	to = f.addSymNode(toSym, start, end)
+	insertAndEdge(from, to, seq)
+}
+
+func (f *Forest) insertAndEdge(pos, snpos int, sequence int) *orEdge {
+	if e := f.findAndEdge(pos, snpos); e != nil {
+		return e
+	}
+	e := andEdge{from: pos, toSym: snpos, sequence: sequence}
+	if edges, ok := f.andEdges[from]; ok {
+		edges.edges = append(edges.edges, e)
+		return &edges.edges[len(edges.edges)-1]
+	}
+	f.andEdges[from] = make(map[int]andEdges{from: e})
+	return &f.andEdges[from][0]
+}
+
+func (f *Forest) findAndEdge(from, snpos int) *andEdge {
+	if edges, ok := f.andEdges[from]; ok {
+		for i, e := range edges.edges {
+			if e.toSym == snpos {
+				return &edges.edges[i]
+			}
+		}
+	}
+	return nil
+}
+
+type edge interface {
+	From() int
+	To() int
+}
+
+func (f *Forest) endpoints(e Edge) (int, int) {
+	f, t := e.From(), e.To()
+	if f < 0 {
+		f = -f
+	}
+	return f, t
+}
+
+func (f *Forest) orEndpoints(e Edge) (lr.Symbol, *lr.Rule) {
+	return nil, nil // TODO
+}
+
 // --------------------------------------------------------------------------------
-
-// newWEdge returns a new weighted edge from one breakpoint to another,
-// given two breakpoints and a label-key.
-// It is not yet inserted into a graph.
-func newWEdge(from, to *feasibleBreakpoint, cost int32, total int32, linecnt int) wEdge {
-	if from.books[linecnt-1] == nil {
-		panic(fmt.Errorf("startpoint of new line %d seems to have incorrent books: %v", linecnt, from))
-	}
-	if to.books[linecnt] == nil {
-		panic(fmt.Errorf("endpoint of new line %d seems to have incorrent books: %v", linecnt, to))
-	}
-	return wEdge{
-		from:      from.mark.Position(),
-		to:        to.mark.Position(),
-		cost:      cost,
-		total:     total,
-		linecount: linecnt,
-	}
-}
-
-// Edge returns the edge (from,to), if such an edge exists,
-// otherwise it returns nullEdge.
-// The to-node must be directly reachable from the from-node.
-func (g *fbGraph) Edge(from, to *feasibleBreakpoint, linecnt int) wEdge {
-	edges, ok := g.edgesTo[to.mark.Position()][from.mark.Position()]
-	if !ok {
-		return nullEdge
-	}
-	if edge, ok := edges[linecnt]; ok {
-		return edge
-	}
-	return nullEdge
-}
 
 func (g *fbGraph) StartOfEdge(edge wEdge) *feasibleBreakpoint {
 	if from, ok := g.nodes[edge.from]; ok {
