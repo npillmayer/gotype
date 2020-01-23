@@ -41,6 +41,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ----------------------------------------------------------------------
 */
 
+// https://web.archive.org/web/20130508170633/http://thor.info.uaic.ro/~grigoras/diplome/5.pdf
+
 /*
 Wir brauchen einen gerichteten Multigraph (DAG mit mehreren geordneten Kanten
 zwischen denselben Knoten).

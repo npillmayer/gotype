@@ -32,7 +32,6 @@ The API is still very much in flux! Currently it is something like:
 	p := glr.NewParser(grammar, gotoTable, actionTable)
 	p.Parse(startState, scanner)
 
-
 BSD License
 
 Copyright (c) 2017–2020, Norbert Pillmayer
