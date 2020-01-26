@@ -62,8 +62,8 @@ import (
 // Symbol nodes reflect LHSs of rules, which are the results of a reduce action.
 // RHS-nodes reflect RHSs of rules, which have been used to reduce to a Symbol node.
 type Forest struct {
-	symNodes map[int]SymNode
-	rhsNodes map[int]RHSNode
+	symNodes map[int]symNode
+	rhsNodes map[int]rhsNode
 	orEdges  map[int]orEdges  // or-edges from symbols to RHSs, indexed by symbol
 	andEdges map[int]andEdges // and-edges
 }
@@ -79,6 +79,9 @@ func NewForest() *Forest {
 	}
 }
 
+// span is a small type for capturing a length of input token run. For every
+// terminal and non-terminal, a parse tree/forest will track which input positions
+// this symbol covers.
 type span [2]uint64
 
 func (s *span) from() uint64 {
@@ -266,7 +269,7 @@ type edge interface {
 	To() int
 }
 
-func (f *Forest) endpoints(e Edge) (int, int) {
+func (f *Forest) endpoints(e edge) (int, int) {
 	f, t := e.From(), e.To()
 	if f < 0 {
 		f = -f
@@ -274,7 +277,7 @@ func (f *Forest) endpoints(e Edge) (int, int) {
 	return f, t
 }
 
-func (f *Forest) orEndpoints(e Edge) (lr.Symbol, *lr.Rule) {
+func (f *Forest) orEndpoints(e edge) (lr.Symbol, *lr.Rule) {
 	return nil, nil // TODO
 }
 
