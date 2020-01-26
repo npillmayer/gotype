@@ -113,9 +113,16 @@ type Parser struct {
 
 // We store pairs of state-IDs and symbol-IDs on the parse stack.
 type stackitem struct {
-	ID    int
-	symID int
+	stateID int  // ID of a CFSM state
+	symID   int  // ID of a grammar symbol (terminal or non-terminal)
+	span    span // input span over which this symbol reaches
 }
+
+// span is a small type for capturing a length of input token run. For every
+// terminal and non-terminal, a parse tree/forest will track which input positions
+// this symbol covers.
+// Some useful operations on spans are to be found further down in this file.
+type span [2]uint64 // start and end positions in the input string
 
 // NewParser creates an SLR(1) parser.
 func NewParser(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.IntMatrix) *Parser {
@@ -131,7 +138,7 @@ func NewParser(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.I
 // Scanner is a scanner-interface the parser relies on to receive the next input token.
 type Scanner interface {
 	MoveTo(position uint64)
-	NextToken(expected []int) (tokval int, token interface{})
+	NextToken(expected []int) (tokval int, token interface{}, start, len uint64)
 }
 
 // Parse startes a new parse, given a start state and a scanner tokenizing the input.
@@ -145,9 +152,9 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 		return false, fmt.Errorf("SLR(1)-parser not initialized")
 	}
 	var accepting bool
-	p.stack = append(p.stack, stackitem{S.ID, 0}) // push S
+	p.stack = append(p.stack, stackitem{S.ID, 0, span{0, 0}}) // push S
 	// http://www.cse.unt.edu/~sweany/CSCE3650/HANDOUTS/LRParseAlg.pdf
-	tokval, token := scan.NextToken(nil)
+	tokval, token, pos, length := scan.NextToken(nil)
 	done := false
 	for !done {
 		if token == nil {
@@ -155,23 +162,29 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 		}
 		T().Debugf("got token %s/%d from scanner", token, tokval)
 		state := p.stack[len(p.stack)-1] // TOS
-		action := p.actionT.Value(state.ID, tokval)
-		T().Debugf("action(%d,%d)=%s", state.ID, tokval, valstring(action, p.actionT))
+		action := p.actionT.Value(state.stateID, tokval)
+		T().Debugf("action(%d,%d)=%s", state.stateID, tokval, valstring(action, p.actionT))
 		if action == p.actionT.NullValue() {
 			return false, fmt.Errorf("Syntax error at %d/%v", tokval, token)
 		}
 		if action == lr.AcceptAction {
 			accepting, done = true, true
+			// TODO patch start symbol to have span(0,pos)
 		} else if action == lr.ShiftAction {
-			nextstate := int(p.gotoT.Value(state.ID, tokval))
+			nextstate := int(p.gotoT.Value(state.stateID, tokval))
 			T().Debugf("shifting, next state = %d", nextstate)
-			p.stack = append(p.stack, stackitem{nextstate, tokval}) // push
-			tokval, token = scan.NextToken(nil)
+			p.stack = append(p.stack, // push a terminal state onto stack
+				stackitem{nextstate, tokval, span{pos, pos + length - 1}})
+			tokval, token, pos, length = scan.NextToken(nil)
 		} else if action > 0 { // reduce action
 			rule := p.G.Rule(int(action))
-			nextstate := p.reduce(state.ID, rule)
+			nextstate, handlespan := p.reduce(state.stateID, rule)
+			if handlespan.isNull() { // resulted from an epsilon production
+				handlespan = span{pos - 1, pos - 1} // epsilon was just before lookahead
+			}
 			T().Debugf("reduced to next state = %d", nextstate)
-			p.stack = append(p.stack, stackitem{nextstate, rule.GetLHSSymbol().GetID()}) // push
+			p.stack = append(p.stack, // push a non-terminal state onto stack
+				stackitem{nextstate, rule.GetLHSSymbol().GetID(), handlespan})
 		} else { // no action found
 			done = true
 		}
@@ -179,20 +192,33 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 	return accepting, nil
 }
 
-func (p *Parser) reduce(stateID int, rule *lr.Rule) int {
+// reduce performs a reduce action for a rule
+//
+//    LHS --> X1 ... Xn   (with X being terminals or non-terminals)
+//
+// Symbols X1 to Xn should be represented on the stack as states
+//
+//    [TOS]  Sn(Xn, span_n) ... S1(X1, span1)  ...
+//
+// TODO: perform semantic action on reduce, either by calling a user-provided
+// function from the grammar, or by constructing a node in a parse tree/forest.
+func (p *Parser) reduce(stateID int, rule *lr.Rule) (int, span) {
 	T().Infof("reduce %v", rule)
 	handle := reverse(rule.GetRHS())
+	var handlespan span
 	for _, sym := range handle {
 		p.stack = p.stack[:len(p.stack)-1] // pop TOS
 		tos := p.stack[len(p.stack)-1]
 		if tos.symID != sym.GetID() {
 			T().Errorf("Expected %v on top of stack, got %d", sym, tos.symID)
 		}
+		handlespan = handlespan.extendFrom(tos.span)
 	}
 	lhs := rule.GetLHSSymbol()
+	// TODO: now perform sematic action or parse-tree build
 	state := p.stack[len(p.stack)-1] // TOS
-	nextstate := p.gotoT.Value(state.ID, lhs.GetID())
-	return int(nextstate)
+	nextstate := p.gotoT.Value(state.stateID, lhs.GetID())
+	return int(nextstate), handlespan
 }
 
 // --- Scanner ----------------------------------------------------------
@@ -226,6 +252,7 @@ func NewStdScanner(r io.Reader) *StdScanner {
 // Default scanners allow sequential processing only.
 func (s *StdScanner) MoveTo(position uint64) {
 	T().Errorf("MoveTo() not yet supported by parser.StdScanner")
+	panic("MoveTo() not yet supported by parser.StdScanner")
 }
 
 // NextToken gets the next token scanned from the input source. Returns the token
@@ -234,16 +261,41 @@ func (s *StdScanner) MoveTo(position uint64) {
 // Clients may provide an array of token values, one of which is expected
 // at the current parse position. For the default scanner, as of now this is
 // unused. In the future it will help with error-repair.
-func (s *StdScanner) NextToken(expected []int) (int, interface{}) {
+func (s *StdScanner) NextToken(expected []int) (int, interface{}, uint64, uint64) {
 	tokval := int(s.scan.Scan())
 	token := &Token{Value: tokval, Lexeme: []byte(s.scan.TokenText())}
 	T().P("token", tokenString(tokval)).Debugf("scanned token at %s = \"%s\"",
 		s.scan.Position, s.scan.TokenText())
-	return tokval, token
+	return tokval, token, uint64(s.scan.Position.Offset),
+		uint64(s.scan.Pos().Offset - s.scan.Position.Offset)
 }
 
 func tokenString(tok int) string {
 	return scanner.TokenString(rune(tok))
+}
+
+// --- spans ----------------------------------------
+
+func (s span) from() uint64 {
+	return s[0]
+}
+
+func (s span) to() uint64 {
+	return s[1]
+}
+
+func (s span) isNull() bool {
+	return s == span{}
+}
+
+func (s span) extendFrom(other span) span {
+	if other.from() < s.from() {
+		s[0] = other[0]
+	}
+	if other.to() > s.to() {
+		s[1] = other[1]
+	}
+	return s
 }
 
 // --- Helpers ----------------------------------------------------------
