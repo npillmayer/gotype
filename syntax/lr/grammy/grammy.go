@@ -92,11 +92,25 @@ func parseDirective(directive string) string {
 	return grammarname
 }
 
-// --- Code generation --------------------------------------------------
+// --- Grammar Generation -----------------------------------------------
 
 type generator struct {
-	buf bytes.Buffer
-	g   *EBNFGrammar
+	buf     bytes.Buffer
+	g       *EBNFGrammar
+	rules   map[string][]rule
+	counter int
+}
+
+type rule struct {
+	lhs     string
+	symbols []string
+}
+
+func newRule(lhs string) *rule {
+	return &rule{
+		lhs:     lhs,
+		symbols: make([]string, 0, 10),
+	}
 }
 
 // GenerateBuilder generates Go source code for a grammar builder.
@@ -128,55 +142,62 @@ func (gen *generator) GenerateRules() {
 			gen.Printf("    b.LHS(\"%s\")", prod.Name.String)
 			gen.Printf(".Epsilon()\n")
 		case *ebnf.Name:
-			gen.Printf(".T(\"%s\").End()\n", expr.String)
+			gen.Printf("    b.LHS(\"%s\")", prod.Name.String)
+			gen.Printf(".N(\"%s\").End()\n", expr.String)
+		case *ebnf.Token:
+			gen.Printf("    b.LHS(\"%s\")", prod.Name.String)
+			gen.Printf(".T(\"%s\").End()\n", expr)
 		case ebnf.Alternative:
 			for _, alt := range expr {
-				gen.Alternative(prod.Name.String, alt)
+				gen.RHS(prod.Name.String, alt)
 			}
-		case ebnf.Sequence:
-			gen.Printf("    b.LHS(\"%s\")", prod.Name.String)
-			gen.Sequence(expr)
-		case *ebnf.Token:
-			gen.Printf(".T(\"%s\").End()\n", expr)
-		// 	switch s := x.String; len(s) {
-		// 	case 1:
-		// 		return strconv.QuoteRune(rune(s[0]))
-		// 	default:
-		// 		hint := ""
-		// 		if _, ok := j.rep.Literals[s]; ok && toAscii(s) == "" {
-		// 			hint = fmt.Sprintf(" /* %q */", s)
-		// 		}
-		// 		return fmt.Sprintf("%s%s", j.term2name[s], hint)
-		// 	}
 		default:
-			gen.Printf("unknown: %v\n", expr)
-			//panic(fmt.Sprintf("Not yet implemented: %v", prod.Expr))
-			//panic("unreachable")
+			gen.RHS(prod.Name.String, expr)
 		}
 	}
 }
 
-func (gen *generator) Alternative(lhs string, rhs ebnf.Expression) {
-	gen.Printf("    b.LHS(\"%s\")", lhs)
-	switch alt := rhs.(type) {
-	case nil:
-		gen.Printf(".Epsilon()\n")
-	case *ebnf.Name:
-		gen.Printf(".N(\"%s\")", alt.String)
+func (gen *generator) RHS(lhs string, rhs ebnf.Expression) {
+	switch e := rhs.(type) {
 	case ebnf.Sequence:
-		gen.Sequence(alt)
+		gen.Sequence(lhs, e)
+	case *ebnf.Option:
+		gen.Option(e)
+	default:
+		gen.Printf("repetition and group not supported\n")
 	}
-	gen.Printf(".End()\n")
 }
 
-func (gen *generator) Sequence(seq ebnf.Sequence) {
+// func (gen *generator) Alternative(lhs string, rhs ebnf.Expression) {
+// 	gen.Printf("    b.LHS(\"%s\")", lhs)
+// 	switch alt := rhs.(type) {
+// 	case nil:
+// 		gen.Printf(".Epsilon()\n")
+// 	case *ebnf.Name:
+// 		gen.Printf(".N(\"%s\")", alt.String)
+// 	case ebnf.Sequence:
+// 		gen.Sequence(alt)
+// 	}
+// 	gen.Printf(".End()\n")
+// }
+
+func (gen *generator) Sequence(lhs string, seq ebnf.Sequence) {
+	gen.Printf("    b.LHS(\"%s\")", lhs)
 	for _, expr := range seq {
 		switch e := expr.(type) {
 		case *ebnf.Name:
 			gen.Printf(".N(\"%s\")", e.String)
 		case *ebnf.Token:
 			gen.Printf(".T(\"%s\")", e.String)
+		case *ebnf.Option:
+			gen.Option(e)
 		}
+	}
+	gen.Printf(".End()\n")
+}
+
+func (gen *generator) Option(opt *ebnf.Option) {
+	switch o := opt.Body.(type) {
 	}
 }
 
