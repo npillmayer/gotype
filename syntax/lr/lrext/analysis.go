@@ -154,7 +154,10 @@ func (ga *LRAnalysis) initFirstSets() {
 			A := r.LHS
 			first := ga.computeFirst(r.rhs)
 			//T.Infof("c_first(%v) = %v", r, first)
-			ch := ga.firstSets.SetFor(A).UnionWith(first)
+			//ch := ga.firstSets.SetFor(A).UnionWith(first) // must w/around bug in UnionWith()
+			l := ga.firstSets.SetFor(A).Len()
+			ga.firstSets.SetFor(A).UnionWith(first)
+			ch := l < ga.firstSets.SetFor(A).Len()
 			//T.Infof("(ch)anged = %v", ch)
 			//T.Infof("new first(%v) = %v", A, ga.firstSets.getSetFor(A))
 			changed = changed || ch
@@ -165,31 +168,37 @@ func (ga *LRAnalysis) initFirstSets() {
 // 1) FOLLOW(S) = { $ }   // where S is the starting Non-Terminal
 //    better: FOLLOW(S) = { Є }
 //
-// 2) If A -> pBq is a production, where p, B and q are any grammar symbols,
-//    then everything in FIRST(q)  except Є is in FOLLOW(B).
+// 2) If A -> xBy is a production, where p, B and q are any grammar symbols,
+//    then everything in FIRST(y)  except Є is in FOLLOW(B).
 //
-// 3) If A->pB is a production, then everything in FOLLOW(A) is in FOLLOW(B).
+// 3) If A->xB is a production, then everything in FOLLOW(A) is in FOLLOW(B).
 //
-// 4) If A->pBq is a production and FIRST(q) contains Є,
-//    then FOLLOW(B) contains { FIRST(q) – Є } U FOLLOW(A)
+// 4) If A->xBy is a production and FIRST(y) contains Є,
+//    then FOLLOW(B) contains { FIRST(y) – Є } U FOLLOW(A)
 //
 func (ga *LRAnalysis) initFollowSets() {
 	ga.followSets.addSymFor(ga.g.rules[0].LHS, ga.g.Epsilon) // start symbol
-	for changed := true; changed; {
+	changed := true
+	for changed {
 		changed = false
 		for _, r := range ga.g.rules {
-			//T.Infof("rule  %v", r)
+			T().Debugf("rule  %v", r)
 			A := r.LHS                // look for A -> ... B y
 			for k, B := range r.rhs { // look for non-terms in RHS of r
 				if !B.IsTerminal() {
 					y := r.rhs[k+1:]
-					//T.Infof("      %v in RHS(%v),  y = %v", B, A, y)
-					//T.Infof("      y = %v", y)
+					T().Debugf("      %v in RHS(%v),  y = %v", B, A, y)
+					T().Debugf("      y = %v", y)
 					yfirst := ga.computeFirst(y)
-					ch := ga.followSets.SetFor(B).UnionWith(withoutEps(yfirst))
+					//ch := ga.followSets.SetFor(B).UnionWith(withoutEps(yfirst)) // bug in intesets.UnionWith()
+					l := ga.followSets.SetFor(B).Len()
+					ga.followSets.SetFor(B).UnionWith(withoutEps(yfirst))
+					ch := l < ga.followSets.SetFor(B).Len()
 					if yfirst.Has(EpsilonType) {
 						followA := ga.followSets.SetFor(A)
-						ch = ga.followSets.SetFor(B).UnionWith(followA)
+						l = ga.followSets.SetFor(B).Len()
+						ga.followSets.SetFor(B).UnionWith(followA)
+						ch = l < ga.followSets.SetFor(B).Len()
 					}
 					changed = changed || ch
 				}
