@@ -1,6 +1,8 @@
 package iteratable
 
-import "testing"
+import (
+	"testing"
+)
 
 type T interface {
 	Value() int
@@ -206,5 +208,22 @@ func TestSetIteration4(t *testing.T) {
 	}
 	if out != "5297" {
 		t.Errorf("output after iteration should be '5297', is %s", out)
+	}
+}
+
+type x struct {
+	A int
+	B int
+}
+
+func TestItemSet(t *testing.T) {
+	S := NewSet(-1)
+	S.Add(x{1, 3})
+	S.Add(x{2, 3})
+	S.Add(x{2, 4})
+	S.Add(x{1, 3})
+	if S.Size() != 3 {
+		t.Logf("S=%v", S)
+		t.Errorf("S expected to be of size 3, is %d", S.Size())
 	}
 }
