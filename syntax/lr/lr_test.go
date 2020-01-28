@@ -59,7 +59,7 @@ func TestClosure1(t *testing.T) {
 	if item1.dot != 0 {
 		t.Errorf("Start items must have dot at position 0")
 	}
-	item2, _ = item2.Advance()
+	item2 = item2.Advance()
 	t.Logf("item2=%v", item2)
 	if item2.dot != 1 {
 		t.Errorf("Item expected to have dot at position 1, is %d", item2.dot)

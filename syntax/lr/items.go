@@ -43,12 +43,12 @@ func (i Item) Prefix() []*Symbol {
 }
 
 // Advance advances the dot of an item over the next symbol.
-func (i Item) Advance() (Item, *Symbol) {
+func (i Item) Advance() Item {
 	if i.dot >= len(i.rule.rhs) {
-		return NullItem, nil
+		return NullItem
 	}
 	ii := Item{i.rule, i.dot + 1, i.Origin}
-	return ii, ii.PeekSymbol()
+	return ii
 }
 
 // --- Item sets --------------------------------------------------------

@@ -80,7 +80,7 @@ func (ga *LRAnalysis) gotoSet(closure *iteratable.Set, A *Symbol) (*iteratable.S
 	for _, x := range closure.Values() {
 		i := asItem(x)
 		if i.PeekSymbol() == A {
-			ii, _ := i.Advance()
+			ii := i.Advance()
 			T().Debugf("goto(%s) -%s-> %s", i, A, ii)
 			gotoset.Add(ii)
 		}
