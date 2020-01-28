@@ -41,7 +41,7 @@ func (ga *LRAnalysis) closure(i Item, A *Symbol) *iteratable.Set {
 			item := asItem(v)
 			A = item.PeekSymbol()            // get symbol A after dot
 			if A != nil && !A.IsTerminal() { // A is non-terminal
-				iiset := ga.g.FindNonTermRules(A, true)
+				iiset := ga.g.findNonTermRules(A, true)
 				// TODO Difference may have different semantics as before
 				if iiset := iset.Difference(iiset); !iiset.Empty() {
 					iset.Union(iiset)
