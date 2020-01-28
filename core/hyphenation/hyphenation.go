@@ -56,6 +56,7 @@ structure, carrying an array of positions at every 'leaf'.
 The trie package I'm using here is a very naive implementation and should
 be replaced by a more sophisticated one
 (e.g., https://github.com/siongui/go-succinct-data-structure-trie).
+https://hackthology.com/ternary-search-tries-for-fast-flexible-string-search-part-1.html
 Resulting from the API of the trie, the implementation of the pattern
 application algorithm is bad. TODO: improve time complexity of pattern
 application.
