@@ -74,7 +74,6 @@ func (p *Parser) Parse(scan Scanner) (bool, error) {
 // 	T().Debugf("Scanner delivered '%v' @ %d (%d)", token, start, len)
 // }
 
-// http://citeseerx.ist.psu.edu/viewdoc/download
 // http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.12.4254&rep=rep1&type=pdf
 // From "Practical Earley Parsing" by John Aycock and R. Nigel Horspool, 2002:
 //
