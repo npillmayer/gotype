@@ -8,9 +8,9 @@ import (
 	"text/scanner"
 
 	"github.com/emirpasic/gods/lists/arraylist"
-	"github.com/emirpasic/gods/sets/hashset"
 	"github.com/emirpasic/gods/sets/treeset"
 	"github.com/emirpasic/gods/utils"
+	"github.com/npillmayer/gotype/syntax/lr/iteratable"
 	"github.com/npillmayer/gotype/syntax/lr/sparse"
 )
 
@@ -25,160 +25,62 @@ const (
 	AcceptAction = -2
 )
 
-// === Items and Item Sets ===================================================
-
-// A set of Earley items ( A -> B *C D ).
-type itemSet struct {
-	*hashset.Set
-}
-
-func newItemSet() *itemSet {
-	s := hashset.New()
-	iset := &itemSet{s}
-	return iset
-}
-
-func (iset *itemSet) union(iset2 *itemSet) {
-	iset.Add(iset2.Values()...)
-}
-
-func (iset *itemSet) equals(iset2 *itemSet) bool {
-	if iset.Size() == iset2.Size() {
-		for _, i := range iset.Values() {
-			if !iset2.Contains(i) {
-				return false
-			}
-		}
-		return true
-	}
-	return false
-}
-
-// iset2 ist input and output (destructive)
-func (iset *itemSet) difference(iset2 *itemSet) *itemSet {
-	for _, i := range iset2.Values() {
-		if iset.Contains(i) {
-			iset2.Remove(i)
-		}
-	}
-	return iset2
-}
-
-func (iset *itemSet) String() string {
-	items := iset.Values()
-	if len(items) == 0 {
-		return "{ }"
-	}
-	s := "{\n"
-	for _, i := range items {
-		s = s + fmt.Sprintf("\t%v\n", i)
-	}
-	s += "}"
-	return s
-}
-
-// Prepare an item set for export to Graphviz.
-func (iset *itemSet) forGraphviz() string {
-	items := iset.Values()
-	if len(items) == 0 {
-		return "err\\n"
-	}
-	s := ""
-	for _, i := range items {
-		s = s + fmt.Sprintf("%v\\l", i)
-	}
-	return s
-}
-
-// Debugging helper
-func (iset *itemSet) Dump() {
-	items := iset.Values()
-	//T().Debug("--- item set ------------")
-	for k, i := range items {
-		T().Debugf("item %2d = %v", k, i)
-	}
-	//T().Debug("-------------------------")
-}
-
-var _ *itemSet = newItemSet() // verify assignability
-
 // === Closure and Goto-Set Operations =======================================
 
 // Refer to "Crafting A Compiler" by Charles N. Fisher & Richard J. LeBlanc, Jr.
 // Section 6.2.1 LR(0) Parsing
 
 // Compute the closure of an Earley item.
-func (ga *GrammarAnalysis) closure(i *item, A Symbol) *itemSet {
+func (ga *LRAnalysis) closure(i Item, A *Symbol) *iteratable.Set {
 	iset := newItemSet()
 	iset.Add(i)
-	// if A == nil {
-	// 	A = i.peekSymbol() // get symbol after dot
-	// }
 	changed := true
 	for changed {
 		changed = false
 		for _, v := range iset.Values() {
-			i := v.(*item)
-			A = i.peekSymbol()               // get symbol A after dot
+			item := asItem(v)
+			A = item.PeekSymbol()            // get symbol A after dot
 			if A != nil && !A.IsTerminal() { // A is non-terminal
 				iiset := ga.g.findNonTermRules(A, true)
-				if iiset := iset.difference(iiset); !iiset.Empty() {
-					iset.union(iiset)
+				// TODO Difference may have different semantics as before
+				if iiset := iset.Difference(iiset); !iiset.Empty() {
+					iset.Union(iiset)
 					changed = true
 				}
 			}
 		}
 	}
-	// if A != nil {
-	// 	//T().Debugf("pre closure(%v) = %v", i, iset)
-	// 	iset = ga.closureSet(iset)
-	// 	//T().Debugf("    closure(%v) = %v", i, iset)
-	// 	return iset
-	// }
 	return iset
 }
 
 // Compute the closure of an Earley item.
 // https://www.cs.bgu.ac.il/~comp151/wiki.files/ps6.html#sec-2-7-3
-func (ga *GrammarAnalysis) closureSet(iset *itemSet) *itemSet {
-	cset := newItemSet()   // will be our closure result set
-	cset.union(iset)       // add start item to closure
-	tmpset := newItemSet() // this will collect derived items for the next iteration
+func (ga *LRAnalysis) closureSet(iset *iteratable.Set) *iteratable.Set {
+	cset := newItemSet()           // will be our closure result set
+	cset.Union(iset)               // add start item to closure
+	tmpset := iteratable.NewSet(0) // this will collect derived items for the next iteration
 	for !iset.Empty() {
 		for _, x := range iset.Values() {
-			i := x.(*item) // LHS -> X *A Y
+			i := asItem(x) // LHS -> X *A Y
 			ii := ga.closure(i, nil)
-			cset.union(ii)
-			/*
-				if A := i.peekSymbol(); A != nil && !A.IsTerminal() { // if A is non-term
-					iiset := ga.g.findNonTermRules(A, false) // without eps-productions
-					cset.union(iiset)                        // add { A -> *... } to closure
-					tmpset.union(iiset)                      // prepare for next iteration
-					if ga.derivesEps[A] {                    // then we have to look past A
-						j, B := i.advance() // move dot 1 position
-						if B != nil {       // if not at end of RHS
-							cset.Add(j)   // add to closure
-							tmpset.Add(j) // prepare for next iteration
-						}
-					}
-				}
-			*/
+			cset.Union(ii)
 		}
-		tmpset, iset = iset, iset.difference(tmpset) // swap
-		tmpset.Clear()
+		tmpset, iset = iset, iset.Difference(tmpset) // swap
+		//tmpset.Clear()
+		tmpset = iteratable.NewSet(0) // TODO obviously a bug: tmpset it never filled
 	}
 	return cset
 }
 
-func (ga *GrammarAnalysis) gotoSet(closure *itemSet, A Symbol) (*itemSet, Symbol) {
+func (ga *LRAnalysis) gotoSet(closure *iteratable.Set, A *Symbol) (*iteratable.Set, *Symbol) {
 	// for every item in closure C
 	// if item in C:  N -> ... *A ...
 	//     advance N -> ... A * ...
 	gotoset := newItemSet()
 	for _, x := range closure.Values() {
-		i := x.(*item)
-		if i.peekSymbol() == A {
-			ii, _ := i.advance()
+		i := asItem(x)
+		if i.PeekSymbol() == A {
+			ii, _ := i.Advance()
 			T().Debugf("goto(%s) -%s-> %s", i, A, ii)
 			gotoset.Add(ii)
 		}
@@ -187,7 +89,7 @@ func (ga *GrammarAnalysis) gotoSet(closure *itemSet, A Symbol) (*itemSet, Symbol
 	return gotoset, A
 }
 
-func (ga *GrammarAnalysis) gotoSetClosure(i *itemSet, A Symbol) (*itemSet, Symbol) {
+func (ga *LRAnalysis) gotoSetClosure(i *iteratable.Set, A *Symbol) (*iteratable.Set, *Symbol) {
 	gotoset, _ := ga.gotoSet(i, A)
 	//T().Infof("gotoset  = %v", gotoset)
 	gclosure := ga.closureSet(gotoset)
@@ -200,22 +102,22 @@ func (ga *GrammarAnalysis) gotoSetClosure(i *itemSet, A Symbol) (*itemSet, Symbo
 
 // CFSMState is a state within the CFSM for a grammar.
 type CFSMState struct {
-	ID     int      // serial ID of this state
-	items  *itemSet // configuration items within this state
-	Accept bool     // is this an accepting state?
+	ID     int             // serial ID of this state
+	items  *iteratable.Set // configuration items within this state
+	Accept bool            // is this an accepting state?
 }
 
 // CFSM edge between 2 states, directed and with a terminal
 type cfsmEdge struct {
 	from  *CFSMState
 	to    *CFSMState
-	label Symbol
+	label *Symbol
 }
 
 // Dump is a debugging helper
 func (s *CFSMState) Dump() {
 	T().Debugf("--- state %03d -----------", s.ID)
-	s.items.Dump()
+	Dump(s.items)
 	T().Debugf("-------------------------")
 }
 
@@ -224,7 +126,7 @@ func (s *CFSMState) isErrorState() bool {
 }
 
 // Create a state from an item set
-func state(id int, iset *itemSet) *CFSMState {
+func state(id int, iset *iteratable.Set) *CFSMState {
 	s := &CFSMState{ID: id}
 	if iset == nil {
 		s.items = newItemSet()
@@ -245,8 +147,8 @@ func (s *CFSMState) String() string {
 
 func (s *CFSMState) containsCompletedStartRule() bool {
 	for _, x := range s.items.Values() {
-		i := x.(*item)
-		if i.rule.no == 0 && i.peekSymbol() == nil {
+		i := asItem(x)
+		if i.rule.Serial == 0 && i.PeekSymbol() == nil {
 			return true
 		}
 	}
@@ -254,7 +156,7 @@ func (s *CFSMState) containsCompletedStartRule() bool {
 }
 
 // Create an edge
-func edge(from, to *CFSMState, label Symbol) *cfsmEdge {
+func edge(from, to *CFSMState, label *Symbol) *cfsmEdge {
 	return &cfsmEdge{
 		from:  from,
 		to:    to,
@@ -270,7 +172,7 @@ func stateComparator(s1, s2 interface{}) int {
 }
 
 // Add a state to the CFSM. Checks first if state is present.
-func (c *CFSM) addState(iset *itemSet) *CFSMState {
+func (c *CFSM) addState(iset *iteratable.Set) *CFSMState {
 	s := c.findStateByItems(iset)
 	if s == nil {
 		s = state(c.cfsmIds, iset)
@@ -281,18 +183,18 @@ func (c *CFSM) addState(iset *itemSet) *CFSMState {
 }
 
 // Find a CFSM state by the contained item set.
-func (c *CFSM) findStateByItems(iset *itemSet) *CFSMState {
+func (c *CFSM) findStateByItems(iset *iteratable.Set) *CFSMState {
 	it := c.states.Iterator()
 	for it.Next() {
 		s := it.Value().(*CFSMState)
-		if s.items.equals(iset) {
+		if s.items.Equals(iset) {
 			return s
 		}
 	}
 	return nil
 }
 
-func (c *CFSM) addEdge(s0, s1 *CFSMState, sym Symbol) *cfsmEdge {
+func (c *CFSM) addEdge(s0, s1 *CFSMState, sym *Symbol) *cfsmEdge {
 	e := edge(s0, s1, sym)
 	c.edges.Add(e)
 	return e
@@ -332,12 +234,12 @@ func emptyCFSM(g *Grammar) *CFSM {
 }
 
 // TableGenerator is a generator object to construct LR parser tables.
-// Clients usually create a Grammar G, then a GrammarAnalysis-object for G,
+// Clients usually create a Grammar G, then a LRAnalysis-object for G,
 // and then a table generator. TableGenerator.CreateTables() constructs
 // the CFSM and parser tables for an LR-parser recognizing grammar G.
 type TableGenerator struct {
 	g            *Grammar
-	ga           *GrammarAnalysis
+	ga           *LRAnalysis
 	dfa          *CFSM
 	gototable    *sparse.IntMatrix
 	actiontable  *sparse.IntMatrix
@@ -345,7 +247,7 @@ type TableGenerator struct {
 }
 
 // NewTableGenerator creates a new TableGenerator for a (previously analysed) grammar.
-func NewTableGenerator(ga *GrammarAnalysis) *TableGenerator {
+func NewTableGenerator(ga *LRAnalysis) *TableGenerator {
 	lrgen := &TableGenerator{}
 	lrgen.g = ga.Grammar()
 	lrgen.ga = ga
@@ -420,11 +322,11 @@ func (lrgen *TableGenerator) buildCFSM() *CFSM {
 	T().Debugf("=== build CFSM ==================================================")
 	G := lrgen.g
 	cfsm := emptyCFSM(G)
-	closure0 := lrgen.ga.closure(G.rules[0].startItem())
-	item, sym := G.rules[0].startItem()
+	closure0 := lrgen.ga.closure(startItem(G.rules[0]))
+	item, sym := startItem(G.rules[0])
 	T().Debugf("Start item=%v/%v", item, sym)
 	T().Debugf("----------")
-	closure0.Dump()
+	Dump(closure0)
 	T().Debugf("----------")
 	cfsm.S0 = cfsm.addState(closure0)
 	cfsm.S0.Dump()
@@ -433,7 +335,7 @@ func (lrgen *TableGenerator) buildCFSM() *CFSM {
 	for S.Size() > 0 {
 		s := S.Values()[0].(*CFSMState)
 		S.Remove(s)
-		G.EachSymbol(func(A Symbol) interface{} {
+		G.EachSymbol(func(A *Symbol) interface{} {
 			T().Debugf("checking goto-set for symbol = %v", A)
 			gotoset, _ := lrgen.ga.gotoSetClosure(s.items, A)
 			snew := cfsm.findStateByItems(gotoset)
@@ -473,7 +375,7 @@ edge [fontname=Helvetica, fontsize=10];
 	for _, x := range c.states.Values() {
 		s := x.(*CFSMState)
 		f.WriteString(fmt.Sprintf("s%03d [fillcolor=%s label=\"{%03d | %s}\"]\n",
-			s.ID, nodecolor(s), s.ID, s.items.forGraphviz()))
+			s.ID, nodecolor(s), s.ID, forGraphviz(s.items)))
 	}
 	it := c.edges.Iterator()
 	for it.Next() {
@@ -498,7 +400,7 @@ func nodecolor(state *CFSMState) string {
 func (lrgen *TableGenerator) BuildGotoTable() *sparse.IntMatrix {
 	statescnt := lrgen.dfa.states.Size()
 	maxtok := 0
-	lrgen.g.EachSymbol(func(A Symbol) interface{} {
+	lrgen.g.EachSymbol(func(A *Symbol) interface{} {
 		if A.Token() > maxtok { // find maximum token value
 			maxtok = A.Token()
 		}
@@ -513,7 +415,7 @@ func (lrgen *TableGenerator) BuildGotoTable() *sparse.IntMatrix {
 		for _, e := range edges {
 			//T().Debugf("edge %s --%v--> %v", state, e.label, e.to)
 			//T().Debugf("GOTO (%d , %d ) = %d", state.ID, symvalue(e.label), e.to.ID)
-			gototable.Set(state.ID, symvalue(e.label), int32(e.to.ID))
+			gototable.Set(state.ID, e.label.Value, int32(e.to.ID))
 		}
 	}
 	return gototable
@@ -538,14 +440,14 @@ func ActionTableAsHTML(lrgen *TableGenerator, w io.Writer) {
 }
 
 func parserTableAsHTML(lrgen *TableGenerator, tname string, table *sparse.IntMatrix, w io.Writer) {
-	var symvec = make([]Symbol, len(lrgen.g.terminals)+len(lrgen.g.nonterminals))
+	var symvec = make([]*Symbol, len(lrgen.g.terminals)+len(lrgen.g.nonterminals))
 	io.WriteString(w, "<html><body>\n")
 	io.WriteString(w, "<img src=\"cfsm.png\"/><p>")
 	io.WriteString(w, fmt.Sprintf("%s table of size = %d<p>", tname, table.ValueCount()))
 	io.WriteString(w, "<table border=1 cellspacing=0 cellpadding=5>\n")
 	io.WriteString(w, "<tr bgcolor=#cccccc><td></td>\n")
 	j := 0
-	lrgen.g.EachSymbol(func(A Symbol) interface{} {
+	lrgen.g.EachSymbol(func(A *Symbol) interface{} {
 		io.WriteString(w, fmt.Sprintf("<td>%s</td>", A))
 		symvec[j] = A
 		j++
@@ -558,7 +460,7 @@ func parserTableAsHTML(lrgen *TableGenerator, tname string, table *sparse.IntMat
 		state := states.Value().(*CFSMState)
 		io.WriteString(w, fmt.Sprintf("<tr><td>state %d</td>\n", state.ID))
 		for _, A := range symvec {
-			v1, v2 := table.Values(state.ID, symvalue(A))
+			v1, v2 := table.Values(state.ID, A.Value)
 			if v1 == table.NullValue() {
 				td = "&nbsp;"
 			} else if v2 == table.NullValue() {
@@ -593,7 +495,7 @@ func (lrgen *TableGenerator) BuildLR0ActionTable() (*sparse.IntMatrix, bool) {
 func (lrgen *TableGenerator) BuildSLR1ActionTable() (*sparse.IntMatrix, bool) {
 	statescnt := lrgen.dfa.states.Size()
 	maxtok := 0
-	lrgen.g.EachSymbol(func(A Symbol) interface{} {
+	lrgen.g.EachSymbol(func(A *Symbol) interface{} {
 		if A.Token() > maxtok { // find maximum token value
 			maxtok = A.Token()
 		}
@@ -629,9 +531,9 @@ func (lrgen *TableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bo
 		T().Debugf("--- state %d --------------------------------", state.ID)
 		for _, v := range state.items.Values() {
 			T().Debugf("item in s%d = %v", state.ID, v)
-			i, _ := v.(*item)
-			A := i.peekSymbol()
-			prefix := i.getPrefix()
+			i := asItem(v)
+			A := i.PeekSymbol()
+			prefix := i.Prefix()
 			T().Debugf("symbol at dot = %v, prefix = %v", A, prefix)
 			if A != nil && A.IsTerminal() { // create a shift entry
 				P := pT(state, A)
@@ -654,13 +556,14 @@ func (lrgen *TableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bo
 				}
 			}
 			if A == nil { // we are at the end of a rule
-				lhs := i.rule.lhs
-				rule, inx := lrgen.g.matchesRHS(lhs[0], prefix) // find the rule
-				if inx >= 0 {                                   // found => create a reduce entry
+				rule, inx := lrgen.g.matchesRHS(i.rule.LHS, prefix) // find the rule
+				if inx >= 0 {                                       // found => create a reduce entry
 					if slr1 {
-						lookaheads := lrgen.ga.Follow(rule.lhs[0])
-						T().Debugf("    Follow(%v) = %v", rule.lhs[0], lookaheads)
-						for _, la := range lookaheads {
+						lookaheads := lrgen.ga.Follow(rule.LHS)
+						T().Debugf("    Follow(%v) = %v", rule.LHS, lookaheads)
+						laslice := lookaheads.AppendTo(nil)
+						//for _, la := range lookaheads {
+						for _, la := range laslice {
 							a1, a2 := actions.Values(state.ID, la)
 							if a1 != actions.NullValue() || a2 != actions.NullValue() {
 								T().Debugf("    %s is 2nd action", valstring(int32(inx), actions))
@@ -681,7 +584,7 @@ func (lrgen *TableGenerator) buildActionTable(actions *sparse.IntMatrix, slr1 bo
 	return actions, hasConflicts
 }
 
-func pT(state *CFSMState, terminal Symbol) int {
+func pT(state *CFSMState, terminal *Symbol) int {
 	if terminal.Token() == scanner.EOF {
 		return AcceptAction
 	}

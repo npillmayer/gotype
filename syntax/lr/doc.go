@@ -1,5 +1,5 @@
 /*
-Package lr implements a simple SLR(1) parser generator.
+Package lr implements prerequisites for LR parsing.
 It is mainly intended for Markdown parsing, but may be of use for
 other purposes, too.
 
@@ -69,11 +69,9 @@ Example:
     lrgen.CreateTables()              // construct LR parser tables
 
 
-----------------------------------------------------------------------
-
 BSD License
 
-Copyright (c) 2017–2018, Norbert Pillmayer
+Copyright (c) 2017–2020, Norbert Pillmayer
 
 All rights reserved.
 
@@ -88,7 +86,7 @@ notice, this list of conditions and the following disclaimer.
 notice, this list of conditions and the following disclaimer in the
 documentation and/or other materials provided with the distribution.
 
-3. Neither the name of Norbert Pillmayer or the names of its contributors
+3. Neither the name of this software nor the names of its contributors
 may be used to endorse or promote products derived from this software
 without specific prior written permission.
 
@@ -110,7 +108,7 @@ import (
 	"github.com/npillmayer/gotype/core/config/tracing"
 )
 
-// T traces to the SyntaxTracer
+// T traces to the global syntax tracer.
 func T() tracing.Trace {
 	return gtrace.SyntaxTracer
 }
