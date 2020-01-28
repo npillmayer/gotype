@@ -74,6 +74,8 @@ func (p *Parser) Parse(scan Scanner) (bool, error) {
 // 	T().Debugf("Scanner delivered '%v' @ %d (%d)", token, start, len)
 // }
 
+// http://citeseerx.ist.psu.edu/viewdoc/download
+// http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.12.4254&rep=rep1&type=pdf
 // From "Practical Earley Parsing" by John Aycock and R. Nigel Horspool, 2002:
 //
 // Earley parsers operate by constructing a sequence of sets, sometimes called
@@ -111,6 +113,7 @@ func (p *Parser) scan(tokval int, pos uint64) {
 
 // Predictor:
 // If [A→…•B…, j] is in Si, add [B→•α, i] to Si for all rules B→α.
+// If B is nullable, also add [A→…B•…, j] to Si.
 func (p *Parser) predict(tokval int, pos uint64) {
 	S := p.states[p.SC]
 	S.Iterate(false) // iterate over each item once
@@ -123,7 +126,7 @@ func (p *Parser) predict(tokval int, pos uint64) {
 			i.Origin = pos
 		})
 		if p.GA.DerivesEpsilon(B) {
-			// TODO inlude items with dot over B
+			S.Add(item.Advance())
 		}
 	}
 }
