@@ -139,6 +139,16 @@ func (s *Set) Empty() bool {
 	return s.Size() == 0
 }
 
+// Equals returns true if both sets contain the same elements.
+func (s *Set) Equals(other *Set) bool {
+	for _, m := range other.items {
+		if !s.Contains(m) {
+			return false
+		}
+	}
+	return s.Size() == other.Size()
+}
+
 // Union merges the elements of two sets.
 func (s *Set) Union(other *Set) *Set {
 	if other == nil {
@@ -165,6 +175,19 @@ func (s *Set) Intersection(other *Set) *Set {
 	}
 	for _, item := range s.items {
 		if !other.Contains(item) {
+			s.Remove(item)
+		}
+	}
+	return nil
+}
+
+// Difference returns s without the elements contained in other, too.
+func (s *Set) Difference(other *Set) *Set {
+	if s == nil || other == nil {
+		return s
+	}
+	for _, item := range s.items {
+		if other.Contains(item) {
 			s.Remove(item)
 		}
 	}

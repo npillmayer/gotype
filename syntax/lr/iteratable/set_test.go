@@ -25,6 +25,22 @@ func TestSetCreation(t *testing.T) {
 	}
 }
 
+func TestSetEquals(t *testing.T) {
+	S := NewSet(-1)
+	S.Add("1")
+	S.Add("5")
+	R := NewSet(-1)
+	R.Add("1")
+	R.Add("5")
+	if !S.Equals(R) {
+		t.Errorf("S and R expected to be equal")
+	}
+	R.Add("9")
+	if S.Equals(R) {
+		t.Errorf("S and modified R expected to be not equal")
+	}
+}
+
 func TestSetAddAndRemove(t *testing.T) {
 	S := NewSet(-1)
 	S.Add("1")
