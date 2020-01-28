@@ -12,9 +12,7 @@ import (
 	"golang.org/x/tools/container/intsets"
 )
 
-func traceOn() {
-	T().SetTraceLevel(tracing.LevelDebug)
-}
+var graphviz bool
 
 func TestBuilder1(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
@@ -288,10 +286,12 @@ func TestGotoTable(t *testing.T) {
 	lrgen := NewTableGenerator(ga)
 	lrgen.dfa = lrgen.buildCFSM()
 	lrgen.gototable = lrgen.BuildGotoTable()
-	lrgen.CFSM().CFSM2GraphViz("/tmp/cfsm.dot")
-	tmp, _ := ioutil.TempFile("", "lr_")
-	T().Infof("writing HTML to %s", tmp.Name())
-	GotoTableAsHTML(lrgen, tmp)
+	if graphviz {
+		lrgen.CFSM().CFSM2GraphViz("/tmp/cfsm.dot")
+		tmp, _ := ioutil.TempFile("", "lr_")
+		T().Infof("writing HTML to %s", tmp.Name())
+		GotoTableAsHTML(lrgen, tmp)
+	}
 }
 
 func TestActionTable(t *testing.T) {
@@ -308,7 +308,6 @@ func TestActionTable(t *testing.T) {
 	ga := Analysis(g)
 	lrgen := NewTableGenerator(ga)
 	lrgen.dfa = lrgen.buildCFSM()
-	traceOn()
 	T().Debugf("\n---------- Action 0 -----------------------------------")
 	lrgen.actiontable, _ = lrgen.BuildLR0ActionTable()
 	T().Debugf("\n---------- Action 1 -----------------------------------")
@@ -340,11 +339,13 @@ func TestCraftingG2(t *testing.T) {
 	ga := Analysis(g)
 	lrgen := NewTableGenerator(ga)
 	lrgen.CreateTables()
-	tmpfile, err := ioutil.TempFile(".", "G2_*.html")
-	if err != nil {
-		log.Fatal(err)
+	if graphviz {
+		tmpfile, err := ioutil.TempFile(".", "G2_*.html")
+		if err != nil {
+			log.Fatal(err)
+		}
+		GotoTableAsHTML(lrgen, tmpfile)
 	}
-	GotoTableAsHTML(lrgen, tmpfile)
 }
 
 func TestTerminals1(t *testing.T) {
@@ -360,13 +361,15 @@ func TestTerminals1(t *testing.T) {
 	ga := Analysis(g)
 	lrgen := NewTableGenerator(ga)
 	lrgen.CreateTables()
-	tmpfile, err := ioutil.TempFile(".", "G6_*.html")
-	if err != nil {
-		log.Fatal(err)
+	if graphviz {
+		tmpfile, err := ioutil.TempFile(".", "G6_*.html")
+		if err != nil {
+			log.Fatal(err)
+		}
+		GotoTableAsHTML(lrgen, tmpfile)
+		lrgen.dfa = lrgen.buildCFSM()
+		lrgen.CFSM().CFSM2GraphViz("./G6_cfsm.dot")
 	}
-	GotoTableAsHTML(lrgen, tmpfile)
-	lrgen.dfa = lrgen.buildCFSM()
-	lrgen.CFSM().CFSM2GraphViz("./G6_cfsm.dot")
 }
 
 func TestExercise1(t *testing.T) {
@@ -404,7 +407,9 @@ func TestExercise1(t *testing.T) {
 	// }
 	//GotoTableAsHTML(lrgen, tmpfile)
 	//lrgen.dfa = lrgen.buildCFSM()
-	lrgen.CFSM().CFSM2GraphViz("./E6_cfsm.dot")
+	if graphviz {
+		lrgen.CFSM().CFSM2GraphViz("./E6_cfsm.dot")
+	}
 }
 
 func TestGrammar7(t *testing.T) {
@@ -423,12 +428,14 @@ func TestGrammar7(t *testing.T) {
 	ga := Analysis(g)
 	lrgen := NewTableGenerator(ga)
 	lrgen.CreateTables()
-	tmpfile, err := ioutil.TempFile(".", "G7_action_*.html")
-	if err != nil {
-		log.Fatal(err)
+	if graphviz {
+		tmpfile, err := ioutil.TempFile(".", "G7_action_*.html")
+		if err != nil {
+			log.Fatal(err)
+		}
+		//GotoTableAsHTML(lrgen, tmpfile)
+		ActionTableAsHTML(lrgen, tmpfile)
+		//lrgen.dfa = lrgen.buildCFSM()
+		//lrgen.CFSM().CFSM2GraphViz("./G7_cfsm.dot")
 	}
-	//GotoTableAsHTML(lrgen, tmpfile)
-	ActionTableAsHTML(lrgen, tmpfile)
-	//lrgen.dfa = lrgen.buildCFSM()
-	//lrgen.CFSM().CFSM2GraphViz("./G7_cfsm.dot")
 }
