@@ -41,7 +41,7 @@ func (ga *LRAnalysis) closure(i Item, A *Symbol) *iteratable.Set {
 			item := asItem(v)
 			A = item.PeekSymbol()            // get symbol A after dot
 			if A != nil && !A.IsTerminal() { // A is non-terminal
-				iiset := ga.g.findNonTermRules(A, true)
+				iiset := ga.g.FindNonTermRules(A, true)
 				// TODO Difference may have different semantics as before
 				if iiset := iset.Difference(iiset); !iiset.Empty() {
 					iset.Union(iiset)
@@ -322,8 +322,8 @@ func (lrgen *TableGenerator) buildCFSM() *CFSM {
 	T().Debugf("=== build CFSM ==================================================")
 	G := lrgen.g
 	cfsm := emptyCFSM(G)
-	closure0 := lrgen.ga.closure(startItem(G.rules[0]))
-	item, sym := startItem(G.rules[0])
+	closure0 := lrgen.ga.closure(StartItem(G.rules[0]))
+	item, sym := StartItem(G.rules[0])
 	T().Debugf("Start item=%v/%v", item, sym)
 	T().Debugf("----------")
 	Dump(closure0)

@@ -102,6 +102,12 @@ func (ga *LRAnalysis) Follow(sym *Symbol) *intsets.Sparse {
 	return ga.followSets.SetFor(sym)
 }
 
+// DerivesEpsilon returns true if there are rules in the grammar which let
+// a given symbol sym be derived to epsilon.
+func (ga *LRAnalysis) DerivesEpsilon(sym *Symbol) bool {
+	return ga.derivesEps[sym]
+}
+
 func (ga *LRAnalysis) computeFirst(syms []*Symbol) *intsets.Sparse {
 	if len(syms) == 0 {
 		epsset := &intsets.Sparse{}

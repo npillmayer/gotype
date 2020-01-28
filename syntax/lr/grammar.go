@@ -127,6 +127,11 @@ func newLRGrammar(gname string) *Grammar {
 	return g
 }
 
+// Size returns the number of rules in the grammar.
+func (g *Grammar) Size() int {
+	return len(g.rules)
+}
+
 // Rule gets a grammar rule.
 func (g *Grammar) Rule(no int) *Rule {
 	if no < 0 || no >= len(g.rules) {
@@ -142,12 +147,12 @@ func (g *Grammar) Rule(no int) *Rule {
 
 // FindNonTermRules returns a set of Earley-items, where each item stems from
 // a rule with a given LHS and the dot is at position 0.
-func (g *Grammar) findNonTermRules(sym *Symbol, includeEpsRules bool) *iteratable.Set {
+func (g *Grammar) FindNonTermRules(sym *Symbol, includeEpsRules bool) *iteratable.Set {
 	iset := iteratable.NewSet(0)
 	for _, r := range g.rules {
 		if r.LHS == sym {
 			if !r.IsEps() || includeEpsRules {
-				item, _ := startItem(r)
+				item, _ := StartItem(r)
 				iset.Add(item)
 			}
 		}

@@ -222,6 +222,28 @@ func (s *Set) Values() []interface{} {
 	return r
 }
 
+// Each applies a mapper function to each element in the set.
+func (s *Set) Each(mapper func(interface{})) {
+	if s == nil || len(s.items) == 0 {
+		return
+	}
+	for _, m := range s.items {
+		mapper(m)
+	}
+}
+
+// Copy makes a copy of a set.
+func (s *Set) Copy() *Set {
+	if s == nil {
+		return nil
+	}
+	r := NewSet(len(s.items))
+	if len(r.items) > 0 {
+		copy(r.items, s.items)
+	}
+	return r
+}
+
 // --- Iteration --------------------------------------------------------
 
 // Iterate sets up a set for iteration.

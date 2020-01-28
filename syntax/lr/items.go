@@ -20,8 +20,13 @@ func (i Item) String() string {
 	return fmt.Sprintf("%v ➞ %v ● %v", i.rule.LHS, i.rule.rhs[0:i.dot], i.rule.rhs[i.dot:])
 }
 
-// startItem returns an Earley item from a rule with the dot at position 0.
-func startItem(r *Rule) (Item, *Symbol) {
+// Rule returns the grammar rule of this item.
+func (i Item) Rule() *Rule {
+	return i.rule
+}
+
+// StartItem returns an Earley item from a rule with the dot at position 0.
+func StartItem(r *Rule) (Item, *Symbol) {
 	if r.IsEps() {
 		return Item{r, 0, 0}, nil
 	}
@@ -43,6 +48,7 @@ func (i Item) Prefix() []*Symbol {
 }
 
 // Advance advances the dot of an item over the next symbol.
+// Returns NullItem if the dot is already past the last symbol.
 func (i Item) Advance() Item {
 	if i.dot >= len(i.rule.rhs) {
 		return NullItem

@@ -52,8 +52,8 @@ func TestClosure1(t *testing.T) {
 	b := NewGrammarBuilder("G")
 	r1 := b.LHS("S").N("E").End()
 	r2 := b.LHS("E").N("E").T("+", 1).N("E").End()
-	item1, _ := startItem(r1)
-	item2, _ := startItem(r2)
+	item1, _ := StartItem(r1)
+	item2, _ := StartItem(r2)
 	t.Logf("item2=%v", item1)
 	t.Logf("item2=%v", item2)
 	if item1.dot != 0 {
@@ -103,7 +103,7 @@ func TestClosure2(t *testing.T) {
 	g, _ := b.Grammar()
 	g.Dump()
 	ga := Analysis(g)
-	closure0 := ga.closure(startItem(r0))
+	closure0 := ga.closure(StartItem(r0))
 	Dump(closure0)
 }
 
@@ -119,9 +119,9 @@ func TestItemSetEquality(t *testing.T) {
 	g, _ := b.Grammar()
 	ga := Analysis(g)
 	//b.Grammar().Dump()
-	closure0 := ga.closure(startItem(r0))
+	closure0 := ga.closure(StartItem(r0))
 	//closure0.Dump()
-	closure1 := ga.closure(startItem(r0))
+	closure1 := ga.closure(StartItem(r0))
 	if !closure0.Equals(closure1) {
 		t.Errorf("closure0 expected to equal closure1")
 	}
@@ -139,7 +139,7 @@ func TestClosure4(t *testing.T) {
 	g, _ := b.Grammar()
 	ga := Analysis(g)
 	//b.Grammar().Dump()
-	i, A := startItem(r0)
+	i, A := StartItem(r0)
 	closure0 := ga.closure(i, A)
 	//closure0.Dump()
 	ga.gotoSet(closure0, A)
@@ -157,7 +157,7 @@ func TestStateRetrieval(t *testing.T) {
 	g, _ := b.Grammar()
 	ga := Analysis(g)
 	cfsm := emptyCFSM(g)
-	closure0 := ga.closure(startItem(r0))
+	closure0 := ga.closure(StartItem(r0))
 	s0 := cfsm.addState(closure0)
 	//s0.Dump()
 	s1 := cfsm.addState(closure0)
