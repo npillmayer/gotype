@@ -62,7 +62,7 @@ func LoadEBNFFromComment(grammarname string, pkgname string) (*EBNFGrammar, erro
 // findEBNF scans through a comment for an EBNF section.
 func findEBNF(cg *ast.CommentGroup) (string, string, bool) {
 	directive := cg.List[0].Text
-	if strings.HasPrefix(directive, "//grammy ") {
+	if strings.HasPrefix(directive, "//go:generate grammy ") {
 		cg.List[0].Text = "//" // purge the directive from EBNF code
 		fmt.Printf("EBNF found:\n%s\n", cg.Text())
 		return cg.Text(), parseDirective(directive), true
@@ -90,7 +90,7 @@ func parseDirective(directive string) string {
 // This is a test comment for the accompanying test cases.
 // Please to not edit!
 
-//grammy -grammar G -parser -package github.com/npillmayer/gotype/syntax/lr/ebnfcom
+//go:generate grammy -grammar G -parser -package github.com/npillmayer/gotype/syntax/lr/ebnfcom
 // Production  = name "=" [ Expression ] "." .
 // Expression  = Alternative { "|" Alternative } .
 // Alternative = Term { Term } .
