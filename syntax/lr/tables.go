@@ -1,6 +1,7 @@
 package lr
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -32,44 +33,27 @@ const (
 
 // Compute the closure of an Earley item.
 func (ga *LRAnalysis) closure(i Item, A *Symbol) *iteratable.Set {
-	iset := newItemSet()
-	iset.Add(i)
-	changed := true
-	for changed {
-		changed = false
-		for _, v := range iset.Values() {
-			item := asItem(v)
-			A = item.PeekSymbol()            // get symbol A after dot
-			if A != nil && !A.IsTerminal() { // A is non-terminal
-				iiset := ga.g.FindNonTermRules(A, true)
-				// TODO Difference may have different semantics as before
-				if iiset := iset.Difference(iiset); !iiset.Empty() {
-					iset.Union(iiset)
-					changed = true
-				}
-			}
-		}
-	}
-	return iset
+	S := newItemSet()
+	S.Add(i)
+	return ga.closureSet(S)
 }
 
 // Compute the closure of an Earley item.
 // https://www.cs.bgu.ac.il/~comp151/wiki.files/ps6.html#sec-2-7-3
-func (ga *LRAnalysis) closureSet(iset *iteratable.Set) *iteratable.Set {
-	cset := newItemSet()           // will be our closure result set
-	cset.Union(iset)               // add start item to closure
-	tmpset := iteratable.NewSet(0) // this will collect derived items for the next iteration
-	for !iset.Empty() {
-		for _, x := range iset.Values() {
-			i := asItem(x) // LHS -> X *A Y
-			ii := ga.closure(i, nil)
-			cset.Union(ii)
+func (ga *LRAnalysis) closureSet(S *iteratable.Set) *iteratable.Set {
+	C := S.Copy() // add start items to closure
+	C.IterateOnce()
+	for C.Next() {
+		item := asItem(C.Item())
+		A := item.PeekSymbol()           // get symbol A after dot
+		if A != nil && !A.IsTerminal() { // A is non-terminal
+			R := ga.g.FindNonTermRules(A, true)
+			if New := R.Difference(C); !New.Empty() {
+				C.Union(New)
+			}
 		}
-		tmpset, iset = iset, iset.Difference(tmpset) // swap
-		//tmpset.Clear()
-		tmpset = iteratable.NewSet(0) // TODO obviously a bug: tmpset it never filled
 	}
-	return cset
+	return C
 }
 
 func (ga *LRAnalysis) gotoSet(closure *iteratable.Set, A *Symbol) (*iteratable.Set, *Symbol) {
@@ -94,7 +78,7 @@ func (ga *LRAnalysis) gotoSetClosure(i *iteratable.Set, A *Symbol) (*iteratable.
 	//T().Infof("gotoset  = %v", gotoset)
 	gclosure := ga.closureSet(gotoset)
 	//T().Infof("gclosure = %v", gclosure)
-	T().Debugf("goto(%s) --%s--> %s", i, A, gclosure)
+	T().Debugf("goto(%s) --%s--> %s", itemSetString(i), A, itemSetString(gclosure))
 	return gclosure, A
 }
 
@@ -623,4 +607,23 @@ func valstring(v int32, m *sparse.IntMatrix) string {
 		return "<shift>"
 	}
 	return fmt.Sprintf("<reduce %d>", v)
+}
+
+func itemSetString(S *iteratable.Set) string {
+	var b bytes.Buffer
+	b.WriteString("{")
+	S.IterateOnce()
+	first := true
+	for S.Next() {
+		item := S.Item().(Item)
+		if first {
+			b.WriteString(" ")
+			first = false
+		} else {
+			b.WriteString(", ")
+		}
+		b.WriteString(item.String())
+	}
+	b.WriteString(" }")
+	return b.String()
 }

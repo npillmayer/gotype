@@ -9,6 +9,7 @@ import (
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
+	"github.com/npillmayer/gotype/syntax/lr/iteratable"
 	"golang.org/x/tools/container/intsets"
 )
 
@@ -93,18 +94,31 @@ func TestSet1(t *testing.T) {
 
 func TestClosure2(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
-	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	b := NewGrammarBuilder("G")
-	r0 := b.LHS("S").N("E").End()
-	b.LHS("E").N("E").T("+", 1).T("(", 2).N("E").T(")", 3).End()
-	b.LHS("E").T("a", 4).End()
+	b.LHS("E").N("E").T("+", '+').N("E").End()
+	b.LHS("E").N("T").End()
+	b.LHS("T").T("a", 4).End()
+	b.LHS("T").T("(", '(').N("E").T(")", ')').End()
 	g, _ := b.Grammar()
 	g.Dump()
 	ga := Analysis(g)
-	closure0 := ga.closure(StartItem(r0))
-	Dump(closure0)
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	closure0 := ga.closure(StartItem(g.Rule(0)))
+	if closure0.Size() != 5 {
+		Dump(closure0)
+		t.Errorf("closure0 expected to be of size 5, is %d", closure0.Size())
+	}
+	S := &iteratable.Set{}
+	item, _ := StartItem(g.Rule(0))
+	S.Add(item)
+	closureSet0 := ga.closureSet(S)
+	if closure0.Size() != 5 {
+		Dump(closure0)
+		t.Errorf("closureSet0 expected to be of size 5, is %d", closureSet0.Size())
+	}
 }
 
 func TestItemSetEquality(t *testing.T) {
