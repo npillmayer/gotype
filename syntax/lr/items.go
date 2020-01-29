@@ -17,7 +17,8 @@ type Item struct {
 var NullItem = Item{nil, 0, 0}
 
 func (i Item) String() string {
-	return fmt.Sprintf("%v ➞ %v ● %v", i.rule.LHS, i.rule.rhs[0:i.dot], i.rule.rhs[i.dot:])
+	return fmt.Sprintf("%v ➞ %v ● %v  (%d)", i.rule.LHS, i.rule.rhs[0:i.dot],
+		i.rule.rhs[i.dot:], i.Origin)
 }
 
 // Rule returns the grammar rule of this item.
