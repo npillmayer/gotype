@@ -10,8 +10,17 @@ import (
 var AnyToken []int = nil
 
 // EOF is identical to text/scanner.EOF.
-// It is replicated here for practical reasons.
-var EOF = scanner.EOF
+// Token types are replicated here for practical reasons.
+const (
+	EOF       = scanner.EOF
+	Ident     = scanner.Ident
+	Int       = scanner.Int
+	Float     = scanner.Float
+	Char      = scanner.Char
+	String    = scanner.String
+	RawString = scanner.RawString
+	Comment   = scanner.Comment
+)
 
 // Tokenizer is a scanner interface.
 type Tokenizer interface {
