@@ -244,6 +244,14 @@ func (s *Set) Copy() *Set {
 	return r
 }
 
+// First returns the first (random) element of a set, or nil.
+func (s *Set) First() interface{} {
+	if s == nil || len(s.items) == 0 {
+		return nil
+	}
+	return s.items[0]
+}
+
 // --- Iteration --------------------------------------------------------
 
 // Iterate sets up a set for iteration.
