@@ -305,7 +305,7 @@ func reverse(syms []lr.Symbol) []lr.Symbol {
 	r := append([]lr.Symbol(nil), syms...) // make copy first
 	for i := len(syms)/2 - 1; i >= 0; i-- {
 		opp := len(syms) - 1 - i
-		syms[i], syms[opp] = syms[opp], syms[i]
+		r[i], r[opp] = r[opp], r[i]
 	}
 	return r
 }
