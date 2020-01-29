@@ -286,6 +286,18 @@ func (s *Set) Iterate(exhaust bool) {
 	}
 }
 
+// IterateOnce is a shortcut for Iterate(false).
+// Will iterate over each item once.
+func (s *Set) IterateOnce() {
+	s.Iterate(false)
+}
+
+// Exhaust is a shortcut for Iterate(true).
+// The iteration will return items until no more items are in the set.
+func (s *Set) Exhaust() {
+	s.Iterate(true)
+}
+
 // If a set is set up for exhaustion, the iteration will return items until no more items are
 // in the set, otherwise it will iterate over each item once.
 const (
