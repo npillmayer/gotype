@@ -88,13 +88,12 @@ package slr
 
 import (
 	"fmt"
-	"io"
-	"text/scanner"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 
 	"github.com/npillmayer/gotype/syntax/lr"
+	"github.com/npillmayer/gotype/syntax/lr/scanner"
 	"github.com/npillmayer/gotype/syntax/lr/sparse"
 )
 
@@ -136,16 +135,16 @@ func NewParser(g *lr.Grammar, gotoTable *sparse.IntMatrix, actionTable *sparse.I
 }
 
 // Scanner is a scanner-interface the parser relies on to receive the next input token.
-type Scanner interface {
-	MoveTo(position uint64)
-	NextToken(expected []int) (tokval int, token interface{}, start, len uint64)
-}
+// type Scanner interface {
+// 	MoveTo(position uint64)
+// 	NextToken(expected []int) (tokval int, token interface{}, start, len uint64)
+// }
 
 // Parse startes a new parse, given a start state and a scanner tokenizing the input.
 // The parser must have been initialized.
 //
 // The parser returns true if the input string has been accepted.
-func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
+func (p *Parser) Parse(S *lr.CFSMState, scan scanner.Tokenizer) (bool, error) {
 	T().Debugf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 	if p.G == nil || p.gotoT == nil {
 		T().Errorf("SLR(1)-parser not initialized")
@@ -184,7 +183,7 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 			}
 			T().Debugf("reduced to next state = %d", nextstate)
 			p.stack = append(p.stack, // push a non-terminal state onto stack
-				stackitem{nextstate, rule.GetLHSSymbol().GetID(), handlespan})
+				stackitem{nextstate, rule.LHS.Value, handlespan})
 		} else { // no action found
 			done = true
 		}
@@ -204,20 +203,20 @@ func (p *Parser) Parse(S *lr.CFSMState, scan Scanner) (bool, error) {
 // function from the grammar, or by constructing a node in a parse tree/forest.
 func (p *Parser) reduce(stateID int, rule *lr.Rule) (int, span) {
 	T().Infof("reduce %v", rule)
-	handle := reverse(rule.GetRHS())
+	handle := reverse(rule.RHS())
 	var handlespan span
 	for _, sym := range handle {
 		p.stack = p.stack[:len(p.stack)-1] // pop TOS
 		tos := p.stack[len(p.stack)-1]
-		if tos.symID != sym.GetID() {
+		if tos.symID != sym.Value {
 			T().Errorf("Expected %v on top of stack, got %d", sym, tos.symID)
 		}
 		handlespan = handlespan.extendFrom(tos.span)
 	}
-	lhs := rule.GetLHSSymbol()
+	lhs := rule.LHS
 	// TODO: now perform sematic action or parse-tree build
 	state := p.stack[len(p.stack)-1] // TOS
-	nextstate := p.gotoT.Value(state.stateID, lhs.GetID())
+	nextstate := p.gotoT.Value(state.stateID, lhs.Value)
 	return int(nextstate), handlespan
 }
 
@@ -227,33 +226,41 @@ func (p *Parser) reduce(stateID int, rule *lr.Rule) (int, span) {
 // by StdScanner.
 //
 // Clients may provide their own token data type.
+/*
 type Token struct {
 	Value  int
 	Lexeme []byte
 }
+*/
 
 // StdScanner provides a default scanner implementation, but clients are free (and
 // even encouraged) to provide their own. This implementation is based on
 // stdlib's text/scanner.
+/*
 type StdScanner struct {
 	reader io.Reader // will be io.ReaderAt in the future
-	scan   scanner.Scanner
+	scan   scanner.Tokenizer
 }
+*/
 
 // NewStdScanner creates a new default scanner from a Reader.
+/*
 func NewStdScanner(r io.Reader) *StdScanner {
 	s := &StdScanner{reader: r}
 	s.scan.Init(r)
 	s.scan.Filename = "Go symbols"
 	return s
 }
+*/
 
 // MoveTo is not functional for default scanners.
 // Default scanners allow sequential processing only.
+/*
 func (s *StdScanner) MoveTo(position uint64) {
 	T().Errorf("MoveTo() not yet supported by parser.StdScanner")
 	panic("MoveTo() not yet supported by parser.StdScanner")
 }
+*/
 
 // NextToken gets the next token scanned from the input source. Returns the token
 // value and a user-defined token type.
@@ -261,6 +268,7 @@ func (s *StdScanner) MoveTo(position uint64) {
 // Clients may provide an array of token values, one of which is expected
 // at the current parse position. For the default scanner, as of now this is
 // unused. In the future it will help with error-repair.
+/*
 func (s *StdScanner) NextToken(expected []int) (int, interface{}, uint64, uint64) {
 	tokval := int(s.scan.Scan())
 	token := &Token{Value: tokval, Lexeme: []byte(s.scan.TokenText())}
@@ -273,6 +281,7 @@ func (s *StdScanner) NextToken(expected []int) (int, interface{}, uint64, uint64
 func tokenString(tok int) string {
 	return scanner.TokenString(rune(tok))
 }
+*/
 
 // --- spans ----------------------------------------
 
@@ -301,8 +310,8 @@ func (s span) extendFrom(other span) span {
 // --- Helpers ----------------------------------------------------------
 
 // reverse the symbols of a RHS of a rule (i.e., a handle)
-func reverse(syms []lr.Symbol) []lr.Symbol {
-	r := append([]lr.Symbol(nil), syms...) // make copy first
+func reverse(syms []*lr.Symbol) []*lr.Symbol {
+	r := append([]*lr.Symbol(nil), syms...) // make copy first
 	for i := len(syms)/2 - 1; i >= 0; i-- {
 		opp := len(syms) - 1 - i
 		r[i], r[opp] = r[opp], r[i]

@@ -6,13 +6,12 @@ import (
 	"log"
 	"strings"
 	"testing"
-	"text/scanner"
-
-	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
+	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/syntax/lr"
+	"github.com/npillmayer/gotype/syntax/lr/scanner"
 )
 
 func TestSLR1(t *testing.T) {
@@ -67,8 +66,8 @@ func TestSLR3(t *testing.T) {
 // ----------------------------------------------------------------------
 
 func parse(t *testing.T, g *lr.Grammar, doDump bool, input ...string) bool {
-	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
-	ga := lr.NewGrammarAnalysis(g)
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	ga := lr.Analysis(g)
 	lrgen := lr.NewTableGenerator(ga)
 	lrgen.CreateTables()
 	if lrgen.HasConflicts {
@@ -83,7 +82,7 @@ func parse(t *testing.T, g *lr.Grammar, doDump bool, input ...string) bool {
 		//p := NewParser(g, lrgen.GotoTable(), lrgen.ActionTable(), lrgen.AcceptingStates())
 		p := NewParser(g, lrgen.GotoTable(), lrgen.ActionTable())
 		r := strings.NewReader(inp)
-		scanner := NewStdScanner(r)
+		scanner := scanner.GoTokenizer("test", r)
 		ok, err := p.Parse(lrgen.CFSM().S0, scanner)
 		if err != nil {
 			t.Errorf("parser returned error: %v", err)

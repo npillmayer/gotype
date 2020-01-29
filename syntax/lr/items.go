@@ -81,7 +81,8 @@ func forGraphviz(iset *iteratable.Set) string {
 	}
 	s := ""
 	for _, i := range items {
-		s = s + fmt.Sprintf("%v\\l", i)
+		item := i.(Item)
+		s = s + fmt.Sprintf("%v\\n", item)
 	}
 	return s
 }

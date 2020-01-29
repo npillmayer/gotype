@@ -26,7 +26,8 @@ type Symbol struct {
 }
 
 func (lrsym *Symbol) String() string {
-	return fmt.Sprintf("<%s|%d>", lrsym.Name, lrsym.Value)
+	//return fmt.Sprintf("<%s|%d>", lrsym.Name, lrsym.Value)
+	return fmt.Sprintf("%s", lrsym.Name)
 }
 
 // IsTerminal returns true if this symbol represents a terminal.
