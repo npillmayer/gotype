@@ -64,12 +64,24 @@ func T() tracing.Trace {
 	return gtrace.SyntaxTracer
 }
 
+// The parser may be controlled in some ways by setting mode flags.
+// Set them with Parser.Mode
+//
+// If StoreTokens is not set, listeners will not be able to access the tokens.
+const (
+	StoreTokens  uint = 1 << 1 // store all input tokens, defaults to true
+	GenerateTree uint = 1 << 2 // if parse was successful, generate a parse forest (default false)
+)
+
 // Parser is an Earley-parser type. Create and initialize one with earley.NewParser(...)
 type Parser struct {
 	GA      *lr.LRAnalysis    // the analyzed grammar we operate on
 	scanner scanner.Tokenizer // scanner deliveres tokens
 	states  []*iteratable.Set // list of states, each a set of Earley-items
+	tokens  []interface{}     // we remember all input tokens, if requested
 	SC      uint64            // state counter
+	Mode    uint              // flags controlling some behaviour of the parser
+	mode    uint              // private copy of Mode during parse
 }
 
 // NewParser creates and initializes an Earley parser.
@@ -78,7 +90,10 @@ func NewParser(ga *lr.LRAnalysis) *Parser {
 		GA:      ga,
 		scanner: nil,
 		states:  make([]*iteratable.Set, 1, 512),
+		tokens:  make([]interface{}, 1, 512),
 		SC:      0,
+		Mode:    StoreTokens,
+		mode:    StoreTokens,
 	}
 }
 
@@ -96,6 +111,7 @@ func (p *Parser) Parse(scan scanner.Tokenizer) (bool, error) {
 	if p.scanner = scan; scan == nil {
 		return false, fmt.Errorf("Earley-parser needs a valid scanner, is void")
 	}
+	p.mode = p.Mode // do not let client change during parse
 	startItem, _ := lr.StartItem(p.GA.Grammar().Rule(0))
 	p.states[0] = iteratable.NewSet(0) // S0
 	p.states[0].Add(startItem)         // S0 = { [S′→•S, 0] }
@@ -103,7 +119,7 @@ func (p *Parser) Parse(scan scanner.Tokenizer) (bool, error) {
 	for { // outer loop over Si per input token xi
 		T().Debugf("Scanner read '%v|%d' @ %d", token, tokval, start)
 		x := inputSymbol{tokval, token, span{start, start + len - 1}}
-		i := p.setupNextState()
+		i := p.setupNextState(token)
 		p.innerLoop(i, x)
 		if tokval == scanner.EOF {
 			break
@@ -135,9 +151,13 @@ func (p *Parser) Parse(scan scanner.Tokenizer) (bool, error) {
 // items are examined in order, applying Scanner, Predictor and Completer as
 // necessary; items added to the set are appended onto the end of the list.
 
-func (p *Parser) setupNextState() uint64 {
+// Invariant: we're in set Si and prepare Si+1
+func (p *Parser) setupNextState(token interface{}) uint64 {
 	// first one has already been created before outer loop
 	p.states = append(p.states, iteratable.NewSet(0))
+	if p.hasmode(StoreTokens) {
+		p.tokens = append(p.tokens, token)
+	}
 	i := p.SC
 	p.SC++
 	return i // ready to operate on set Si
@@ -155,7 +175,7 @@ func (p *Parser) innerLoop(i uint64, x inputSymbol) {
 		p.predict(S, S1, item, i)     // may add items to S
 		p.complete(S, S1, item)       // may add items to S
 	}
-	dumpState(p, i)
+	dumpState(p.states, i)
 }
 
 // Scanner:
@@ -212,8 +232,12 @@ func (p *Parser) complete(S, S1 *iteratable.Set, item lr.Item) {
 	}
 }
 
+// checkAccepts searches the final state for items with a dot after #eof
+// and a LHS of the start rule.
+// It returns true if an accepting item has been found, indicating that the
+// input has been recognized.
 func (p *Parser) checkAccept() bool {
-	dumpState(p, p.SC)
+	dumpState(p.states, p.SC)
 	S := p.states[p.SC] // last state should contain accept item
 	S.IterateOnce()
 	acc := false
@@ -225,6 +249,10 @@ func (p *Parser) checkAccept() bool {
 		}
 	}
 	return acc
+}
+
+func (p *Parser) hasmode(m uint) bool {
+	return p.mode&m > 0
 }
 
 // ----------------------------------------------------------------------

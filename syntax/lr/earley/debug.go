@@ -7,9 +7,9 @@ import (
 	"github.com/npillmayer/gotype/syntax/lr/iteratable"
 )
 
-func dumpState(p *Parser, stateno uint64) {
+func dumpState(states []*iteratable.Set, stateno uint64) {
 	T().Debugf("--- State %04d ------------------------------------", stateno)
-	S := p.states[stateno]
+	S := states[stateno]
 	n := 1
 	S.IterateOnce()
 	for S.Next() {
