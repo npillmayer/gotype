@@ -191,7 +191,7 @@ func (s *Set) Difference(other *Set) *Set {
 			s.Remove(item)
 		}
 	}
-	return nil
+	return s
 }
 
 // func (s *Set) Difference(other *Set) *Set {
