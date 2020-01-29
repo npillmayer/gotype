@@ -238,8 +238,8 @@ func (s *Set) Copy() *Set {
 		return nil
 	}
 	r := NewSet(len(s.items))
-	if len(r.items) > 0 {
-		copy(r.items, s.items)
+	if len(s.items) > 0 {
+		r.items = append(r.items, s.items...)
 	}
 	return r
 }
