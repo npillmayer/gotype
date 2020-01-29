@@ -100,14 +100,17 @@ func (p *Parser) Parse(scan scanner.Tokenizer) (bool, error) {
 	p.states[0] = iteratable.NewSet(0) // S0
 	p.states[0].Add(startItem)         // S0 = { [S′→•S, 0] }
 	tokval, token, start, len := p.scanner.NextToken(scanner.AnyToken)
-	for tokval != scanner.EOF { // outer loop
-		T().Debugf("Scanner read '%v|%d' @ %d (%d)", token, tokval, start, len)
+	for { // outer loop over Si per input token xi
+		T().Debugf("Scanner read '%v|%d' @ %d", token, tokval, start)
 		x := inputSymbol{tokval, token, span{start, start + len - 1}}
 		i := p.setupNextState()
 		p.innerLoop(i, x)
+		if tokval == scanner.EOF {
+			break
+		}
 		tokval, token, start, len = p.scanner.NextToken(scanner.AnyToken)
 	}
-	return false, nil
+	return p.checkAccept(), nil
 }
 
 // http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.12.4254&rep=rep1&type=pdf
@@ -133,7 +136,7 @@ func (p *Parser) Parse(scan scanner.Tokenizer) (bool, error) {
 // necessary; items added to the set are appended onto the end of the list.
 
 func (p *Parser) setupNextState() uint64 {
-	// first one has already been created beforehand
+	// first one has already been created before outer loop
 	p.states = append(p.states, iteratable.NewSet(0))
 	i := p.SC
 	p.SC++
@@ -152,13 +155,16 @@ func (p *Parser) innerLoop(i uint64, x inputSymbol) {
 		p.predict(S, S1, item, i)     // may add items to S
 		p.complete(S, S1, item)       // may add items to S
 	}
+	dumpState(p, i)
 }
 
 // Scanner:
 // If [A→…•a…, j] is in Si and a=xi+1, add [A→…a•…, j] to Si+1
 func (p *Parser) scan(S, S1 *iteratable.Set, item lr.Item, tokval int) {
-	if item.PeekSymbol().Value == tokval {
-		S1.Add(item.Advance())
+	if a := item.PeekSymbol(); a != nil {
+		if a.Value == tokval {
+			S1.Add(item.Advance())
+		}
 	}
 }
 
@@ -171,8 +177,11 @@ func (p *Parser) predict(S, S1 *iteratable.Set, item lr.Item, i uint64) {
 	startitemsForB.Each(func(e interface{}) { // e is a start item
 		startitem := e.(lr.Item)
 		startitem.Origin = i
+		S.Add(startitem)
 	})
+	//T().Debugf("start items from B=%s: %v", B, itemSetString(startitemsForB))
 	if p.GA.DerivesEpsilon(B) { // B is nullable?
+		//T().Debugf("%s is nullable", B)
 		S.Add(item.Advance())
 	}
 }
@@ -182,11 +191,18 @@ func (p *Parser) predict(S, S1 *iteratable.Set, item lr.Item, i uint64) {
 func (p *Parser) complete(S, S1 *iteratable.Set, item lr.Item) {
 	if item.PeekSymbol() == nil { // dot is behind RHS
 		A, j := item.Rule().LHS, item.Origin
+		//T().Debugf("Completing rule for %s: %s", A, item)
 		Sj := p.states[j]
+		//R := Sj.Copy()
+		//T().Debugf("   search predecessors: %s", itemSetString(R))
 		R := Sj.Copy().Subset(func(e interface{}) bool { // find all [B→…•A…, k]
 			jtem := e.(lr.Item)
+			// if jtem.PeekSymbol() == A {
+			// 	T().Debugf("    => %s", jtem)
+			// }
 			return jtem.PeekSymbol() == A
 		})
+		//T().Debugf("   found predecessors: %s", itemSetString(R))
 		R.Each(func(e interface{}) { // now add [B→…A•…, k]
 			jtem := e.(lr.Item)
 			if jadv := jtem.Advance(); jadv != lr.NullItem {
@@ -194,6 +210,21 @@ func (p *Parser) complete(S, S1 *iteratable.Set, item lr.Item) {
 			}
 		})
 	}
+}
+
+func (p *Parser) checkAccept() bool {
+	dumpState(p, p.SC)
+	S := p.states[p.SC] // last state should contain accept item
+	S.IterateOnce()
+	acc := false
+	for S.Next() {
+		item := S.Item().(lr.Item)
+		if item.PeekSymbol() == nil && item.Rule().LHS == p.GA.Grammar().Rule(0).LHS {
+			T().Debugf("ACCEPT: %s", item)
+			acc = true
+		}
+	}
+	return acc
 }
 
 // ----------------------------------------------------------------------
