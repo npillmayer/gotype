@@ -1,6 +1,9 @@
 /*
 Package earley will some day implement an Earley-Parser.
 
+	TODO error handling: provide an error function, like scanner.Scanner
+	TODO semantic actions
+
 There already exists a solution in
 
 	https://github.com/jakub-m/gearley
@@ -14,12 +17,12 @@ package earley
 
 import (
 	"fmt"
-	"text/scanner"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/lr"
 	"github.com/npillmayer/gotype/syntax/lr/iteratable"
+	"github.com/npillmayer/gotype/syntax/lr/scanner"
 )
 
 // T traces to the global syntax tracer.
@@ -27,19 +30,10 @@ func T() tracing.Trace {
 	return gtrace.SyntaxTracer
 }
 
-// Scanner is a scanner-interface the parser relies on to receive the next input token.
-type Scanner interface {
-	//MoveTo(position uint64) // is this necessary?
-	//NextToken(expected []int) (tokval int, token interface{}, start, len uint64)
-	NextToken(expected []int) (tokval int, token []byte, start, len uint64)
-}
-
-var any []int = nil // helper flag: expect any token from the scanner
-
 // Parser is an Earley-parser type. Create and initialize one with earley.NewParser(...)
 type Parser struct {
 	GA      *lr.LRAnalysis    // the analyzed grammar we operate on
-	scanner Scanner           // scanner deliveres tokens
+	scanner scanner.Tokenizer // scanner deliveres tokens
 	states  []*iteratable.Set // list of states, each a set of Earley-items
 	SC      uint64            // state counter
 }
@@ -56,28 +50,28 @@ func NewParser(ga *lr.LRAnalysis) *Parser {
 
 // The parser consumes input symbols until the token value is EOF.
 type inputSymbol struct {
-	tokval int    // token value
-	lexeme []byte // character representation of the symbol, if any
-	span   span   // position and extent in the input stream
+	tokval int         // token value
+	lexeme interface{} // visual representation of the symbol, if any
+	span   span        // position and extent in the input stream
 }
 
 // Parse startes a new parse, given a scanner tokenizing the input.
 // The parser must have been initialized with an analyzed grammar.
 // It returns true if the input string has been accepted.
-func (p *Parser) Parse(scan Scanner) (bool, error) {
+func (p *Parser) Parse(scan scanner.Tokenizer) (bool, error) {
 	if p.scanner = scan; scan == nil {
 		return false, fmt.Errorf("Earley-parser needs a valid scanner, is void")
 	}
 	startItem, _ := lr.StartItem(p.GA.Grammar().Rule(0))
 	p.states[0] = iteratable.NewSet(0) // S0
 	p.states[0].Add(startItem)         // S0 = { [S′→•S, 0] }
-	tokval, token, start, len := p.scanner.NextToken(any)
+	tokval, token, start, len := p.scanner.NextToken(scanner.AnyToken)
 	for tokval != scanner.EOF { // outer loop
 		T().Debugf("Scanner read '%v|%d' @ %d (%d)", token, tokval, start, len)
 		x := inputSymbol{tokval, token, span{start, start + len - 1}}
 		i := p.setupNextState()
 		p.innerLoop(i, x)
-		tokval, token, start, len = p.scanner.NextToken(any)
+		tokval, token, start, len = p.scanner.NextToken(scanner.AnyToken)
 	}
 	return false, nil
 }
