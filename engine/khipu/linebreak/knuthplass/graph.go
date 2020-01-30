@@ -156,7 +156,7 @@ func (g *fbGraph) StartOfEdge(edge wEdge) *feasibleBreakpoint {
 
 // Edges returns all known edges of a graph. if includePruned is true,
 // deleted edges will be included.
-func (g *fbGraph) Edges(includePrunded bool) []wEdge {
+func (g *fbGraph) Edges(includePruned bool) []wEdge {
 	//edgesTo: map[int]map[int]map[int]wEdge
 	var edges []wEdge
 	for _, from := range g.edgesTo {
@@ -167,7 +167,7 @@ func (g *fbGraph) Edges(includePrunded bool) []wEdge {
 			}
 		}
 	}
-	if includePrunded {
+	if includePruned {
 		for _, from := range g.prunedEdges {
 			for _, edgesDict := range from {
 				for _, e := range edgesDict {
