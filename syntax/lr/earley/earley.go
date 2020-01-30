@@ -1,18 +1,51 @@
 /*
-Package earley will some day implement an Earley-Parser.
+Package earley provides an Earley-Parser.
 
-	TODO error handling: provide an error function, like scanner.Scanner
-	TODO semantic actions
+Earleys algorithm for parsing ambiguous grammars has been known since 1968.
+Despite its benefits, until recently it has lead a reclusive life outside
+the mainstream discussion about parsers. Many textbooks on parsing do not even
+discuss it (the "Dragon book" only mentions it in the appendix).
 
-There already exists a solution in
+A very accessible and practical discussion has been done by Loup Vaillant
+in a superb blog series (http://loup-vaillant.fr/tutorials/earley-parsing/),
+and it even boasts an implementation in Lua/OcaML. (A port of Loup's ideas
+in Go is available at https://github.com/jakub-m/gearley.)
 
-	https://github.com/jakub-m/gearley (unfortunately not usable for me)
+I can do no better than Loup to explain the advantages of Earley-parsing:
 
-which is based on the nice Earley-introduction from
+----------------------------------------------------------------------
 
-	http://loup-vaillant.fr/tutorials/earley-parsing/
+The biggest advantage of Earley Parsing is its accessibility. Most other tools such as
+parser generators, parsing expression grammars, or combinator libraries feature
+restrictions that often make them hard to use. Use the wrong kind of grammar, and your
+PEG will enter an infinite loop. Use another wrong kind of grammar, and most parser
+generators will fail. To a beginner, these restrictions feel most arbitrary: it looks
+like it should work, but it doesn't. There are workarounds of course, but they make
+these tools more complex.
 
-(which boasts an implementation in Lua and OcaML)
+Earley parsing Just Works™.
+
+On the flip side, to get this generality we must sacrifice some speed. Earley parsing cannot
+compete with speed demons such as Flex/Bison in terms of raw speed.
+
+----------------------------------------------------------------------
+
+If speed (or the lack thereof) is critical to your project, you should probably grab ANTLR or
+Bison. I used both a lot in my programming life. However, there are many scenarios where
+I wished I had a more lightweight alternative at hand. Oftentimes I found myself writing
+recursive-descent parsers for small ad-hoc languages by hand, sometimes mixing them with
+the lexer-part of one of the big players. My hope is that an Earley parser will prove
+to be handy in these kinds of situations.
+
+A thorough introduction to Earley-parsing may be found in
+"Parsing Techniques" by  Dick Grune and Ceriel J.H. Jacobs
+(https://dickgrune.com/Books/PTAPG_2nd_Edition/).
+A recent evaluation has been done by Mark Fulbright in
+"An Evaluation of Two Approaches to Parsing"
+(https://apps.cs.utexas.edu/tech_reports/reports/tr/TR-2199.pdf). It references
+an interesting approach to view parsing as path-finding in graphs,
+by Keshav Pingali and Gianfranco Bilardi
+(https://apps.cs.utexas.edu/tech_reports/reports/tr/TR-2102.pdf).
 
 
 BSD License
@@ -64,37 +97,31 @@ func T() tracing.Trace {
 	return gtrace.SyntaxTracer
 }
 
-// The parser may be controlled in some ways by setting mode flags.
-// Set them with Parser.Mode
-//
-// If StoreTokens is not set, listeners will not be able to access the tokens.
-const (
-	StoreTokens  uint = 1 << 1 // store all input tokens, defaults to true
-	GenerateTree uint = 1 << 2 // if parse was successful, generate a parse forest (default false)
-)
-
 // Parser is an Earley-parser type. Create and initialize one with earley.NewParser(...)
 type Parser struct {
-	GA      *lr.LRAnalysis    // the analyzed grammar we operate on
-	scanner scanner.Tokenizer // scanner deliveres tokens
-	states  []*iteratable.Set // list of states, each a set of Earley-items
-	tokens  []interface{}     // we remember all input tokens, if requested
-	SC      uint64            // state counter
-	Mode    uint              // flags controlling some behaviour of the parser
-	mode    uint              // private copy of Mode during parse
+	ga      *lr.LRAnalysis              // the analyzed grammar we operate on
+	scanner scanner.Tokenizer           // scanner deliveres tokens
+	states  []*iteratable.Set           // list of states, each a set of Earley-items
+	tokens  []interface{}               // we remember all input tokens, if requested
+	sc      uint64                      // state counter
+	mode    uint                        // flags controlling some behaviour of the parser
+	Error   func(p *Parser, msg string) // Error is called for each error encountered
 }
 
 // NewParser creates and initializes an Earley parser.
-func NewParser(ga *lr.LRAnalysis) *Parser {
-	return &Parser{
-		GA:      ga,
+func NewParser(ga *lr.LRAnalysis, opts ...Option) *Parser {
+	p := &Parser{
+		ga:      ga,
 		scanner: nil,
-		states:  make([]*iteratable.Set, 1, 512),
-		tokens:  make([]interface{}, 1, 512),
-		SC:      0,
-		Mode:    StoreTokens,
-		mode:    StoreTokens,
+		states:  make([]*iteratable.Set, 1, 512), // pre-alloc first state
+		tokens:  make([]interface{}, 1, 512),     // pre-alloc first slot
+		sc:      0,
+		mode:    optionStoreTokens,
 	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
 }
 
 // The parser consumes input symbols until the token value is EOF.
@@ -102,31 +129,6 @@ type inputSymbol struct {
 	tokval int         // token value
 	lexeme interface{} // visual representation of the symbol, if any
 	span   span        // position and extent in the input stream
-}
-
-// Parse startes a new parse, given a scanner tokenizing the input.
-// The parser must have been initialized with an analyzed grammar.
-// It returns true if the input string has been accepted.
-func (p *Parser) Parse(scan scanner.Tokenizer) (bool, error) {
-	if p.scanner = scan; scan == nil {
-		return false, fmt.Errorf("Earley-parser needs a valid scanner, is void")
-	}
-	p.mode = p.Mode // do not let client change during parse
-	startItem, _ := lr.StartItem(p.GA.Grammar().Rule(0))
-	p.states[0] = iteratable.NewSet(0) // S0
-	p.states[0].Add(startItem)         // S0 = { [S′→•S, 0] }
-	tokval, token, start, len := p.scanner.NextToken(scanner.AnyToken)
-	for { // outer loop over Si per input token xi
-		T().Debugf("Scanner read '%v|%d' @ %d", token, tokval, start)
-		x := inputSymbol{tokval, token, span{start, start + len - 1}}
-		i := p.setupNextState(token)
-		p.innerLoop(i, x)
-		if tokval == scanner.EOF {
-			break
-		}
-		tokval, token, start, len = p.scanner.NextToken(scanner.AnyToken)
-	}
-	return p.checkAccept(), nil
 }
 
 // http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.12.4254&rep=rep1&type=pdf
@@ -151,15 +153,41 @@ func (p *Parser) Parse(scan scanner.Tokenizer) (bool, error) {
 // items are examined in order, applying Scanner, Predictor and Completer as
 // necessary; items added to the set are appended onto the end of the list.
 
+// Parse starts a new parse, given a scanner tokenizing the input.
+// The parser must have been initialized with an analyzed grammar.
+// It returns true if the input string has been accepted.
+//
+// Clients may provide a Listener to perform semantic actions.
+func (p *Parser) Parse(scan scanner.Tokenizer, listener Listener) (bool, error) {
+	if p.scanner = scan; scan == nil {
+		return false, fmt.Errorf("Earley-parser needs a valid scanner, is void")
+	}
+	startItem, _ := lr.StartItem(p.ga.Grammar().Rule(0))
+	p.states[0] = iteratable.NewSet(0) // S0
+	p.states[0].Add(startItem)         // S0 = { [S′→•S, 0] }
+	tokval, token, start, len := p.scanner.NextToken(scanner.AnyToken)
+	for { // outer loop over Si per input token xi
+		T().Debugf("Scanner read '%v|%d' @ %d", token, tokval, start)
+		x := inputSymbol{tokval, token, span{start, start + len - 1}}
+		i := p.setupNextState(token)
+		p.innerLoop(i, x)
+		if tokval == scanner.EOF {
+			break
+		}
+		tokval, token, start, len = p.scanner.NextToken(scanner.AnyToken)
+	}
+	return p.checkAccept(), nil
+}
+
 // Invariant: we're in set Si and prepare Si+1
 func (p *Parser) setupNextState(token interface{}) uint64 {
 	// first one has already been created before outer loop
 	p.states = append(p.states, iteratable.NewSet(0))
-	if p.hasmode(StoreTokens) {
+	if p.hasmode(optionStoreTokens) {
 		p.tokens = append(p.tokens, token)
 	}
-	i := p.SC
-	p.SC++
+	i := p.sc
+	p.sc++
 	return i // ready to operate on set Si
 }
 
@@ -193,14 +221,14 @@ func (p *Parser) scan(S, S1 *iteratable.Set, item lr.Item, tokval int) {
 // If B is nullable, also add [A→…B•…, j] to Si.
 func (p *Parser) predict(S, S1 *iteratable.Set, item lr.Item, i uint64) {
 	B := item.PeekSymbol()
-	startitemsForB := p.GA.Grammar().FindNonTermRules(B, true)
+	startitemsForB := p.ga.Grammar().FindNonTermRules(B, true)
 	startitemsForB.Each(func(e interface{}) { // e is a start item
 		startitem := e.(lr.Item)
 		startitem.Origin = i
 		S.Add(startitem)
 	})
 	//T().Debugf("start items from B=%s: %v", B, itemSetString(startitemsForB))
-	if p.GA.DerivesEpsilon(B) { // B is nullable?
+	if p.ga.DerivesEpsilon(B) { // B is nullable?
 		//T().Debugf("%s is nullable", B)
 		S.Add(item.Advance())
 	}
@@ -237,18 +265,60 @@ func (p *Parser) complete(S, S1 *iteratable.Set, item lr.Item) {
 // It returns true if an accepting item has been found, indicating that the
 // input has been recognized.
 func (p *Parser) checkAccept() bool {
-	dumpState(p.states, p.SC)
-	S := p.states[p.SC] // last state should contain accept item
+	dumpState(p.states, p.sc)
+	S := p.states[p.sc] // last state should contain accept item
 	S.IterateOnce()
 	acc := false
 	for S.Next() {
 		item := S.Item().(lr.Item)
-		if item.PeekSymbol() == nil && item.Rule().LHS == p.GA.Grammar().Rule(0).LHS {
+		if item.PeekSymbol() == nil && item.Rule().LHS == p.ga.Grammar().Rule(0).LHS {
 			T().Debugf("ACCEPT: %s", item)
 			acc = true
 		}
 	}
 	return acc
+}
+
+// Remark about possible optimizations:  Once again take a look at
+// http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.12.4254&rep=rep1&type=pdf
+// "Practical Earley Parsing" by John Aycock and R. Nigel Horspool, 2002:
+//
+// Aycock and Horspool describe a state machine, the split 𝜖-DFA, which guides
+// the parse and boosts performance for practical purposes. It stems from an LR(0)
+// CFSM, which for LR-parsing we (kind of) calculate anyway (see package lr). Coding
+// the split 𝜖-DFA and adapting the parse algorithm certainly seems doable.
+//
+// However, currently I do not plan to implement any of this. Constructing the
+// parse tree would get more complicated and I'm not sure I fully comprehend the paper
+// of Aycock and Horspool in this regard (actually I *am* sure: I don't). I'd certainly
+// had to experiment a lot to make practical use of it. Thus I am investing my time
+// elsewhere, for now.
+
+// --- Option handling --------------------------------------------------
+
+// Option configures a parser.
+type Option func(p *Parser)
+
+const (
+	optionStoreTokens  uint = 1 << 1 // store all input tokens, defaults to true
+	optionGenerateTree uint = 1 << 2 // if parse was successful, generate a parse forest (default false)
+)
+
+// StoreTokens configures the parser to remember all input tokens. This is
+// necessary for listeners during tree walks to have access to the values/tokens
+// of non-terminals.
+func StoreTokens() Option {
+	return func(p *Parser) {
+		p.mode |= optionStoreTokens
+	}
+}
+
+// GenerateTree configures the parser to create a parse tree/forest for
+// a successful parse.
+func GenerateTree() Option {
+	return func(p *Parser) {
+		p.mode |= optionGenerateTree
+	}
 }
 
 func (p *Parser) hasmode(m uint) bool {

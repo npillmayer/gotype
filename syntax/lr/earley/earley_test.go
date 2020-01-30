@@ -71,7 +71,7 @@ func TestParser1(t *testing.T) {
 		T().Infof("=== '%s' ========================", input)
 		parser, scanner := makeParser(t, 1, input)
 		gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
-		accept, err := parser.Parse(scanner)
+		accept, err := parser.Parse(scanner, nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -88,7 +88,7 @@ func TestTree1(t *testing.T) {
 	input := "1+2*3"
 	parser, scanner := makeParser(t, 1, input)
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
-	accept, err := parser.Parse(scanner)
+	accept, err := parser.Parse(scanner, nil)
 	if err != nil {
 		t.Error(err)
 	}

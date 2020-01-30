@@ -32,12 +32,12 @@ func (rnode *RuleNode) Symbol() *lr.Symbol {
 func (p *Parser) TreeWalk(listener Listener) *RuleNode {
 	T().Debugf("=== Walk ===============================")
 	var root *RuleNode
-	S := p.states[p.SC]
+	S := p.states[p.sc]
 	S.IterateOnce()
 	for S.Next() {
 		item := S.Item().(lr.Item)
-		if item.PeekSymbol() == nil && item.Rule().LHS == p.GA.Grammar().Rule(0).LHS {
-			root = p.walk(item, p.SC, listener, 0)
+		if item.PeekSymbol() == nil && item.Rule().LHS == p.ga.Grammar().Rule(0).LHS {
+			root = p.walk(item, p.sc, listener, 0)
 		}
 	}
 	return root
