@@ -101,13 +101,9 @@ func Dump(iset *iteratable.Set) {
 
 // Span is a small type for capturing a length of input token run. For every
 // terminal and non-terminal, a parse tree/forest will track which input positions
-// this symbol covers.
+// this symbol covers. A span denotes a start position and the position just
+// behind the end.
 type Span [2]uint64 // (x…y)
-
-// Valid checks for x≤y.
-func (s *Span) Valid() bool {
-	return s[0] <= s[1]
-}
 
 // From returns the start value of a span.
 func (s *Span) From() uint64 {
@@ -121,7 +117,7 @@ func (s *Span) To() uint64 {
 
 // Len returns the length of (x…y)
 func (s *Span) Len() uint64 {
-	return s[1] - s[0] + 1
+	return s[1] - s[0]
 }
 
 func (s *Span) String() string {
