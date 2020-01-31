@@ -212,3 +212,13 @@ func (ga *LRAnalysis) initFollowSets() {
 		}
 	}
 }
+
+// CleanUp cleans a context free grammar by removing unproductive non-terminals
+// and rules, and by removing unreachable non-terminals.
+//
+// If the returned error is of kind ProductionsRemovedError, sub-errors are
+// giving details about the removals. Check with errors.Is(…).
+func (ga *LRAnalysis) CleanUp() error {
+	// TODO Grune et al, 2.9.5
+	return nil
+}
