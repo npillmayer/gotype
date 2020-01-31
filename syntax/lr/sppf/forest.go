@@ -90,73 +90,109 @@ import (
 // For ambiguous parses, subtrees can be shared if [δ (x…y)] is already found in
 // the forest, meaning that there is another derivation of this input span present.
 //
+// Currently we carry the span in both types of nodes. This is redundant, and we
+// will omit one of them in the future. For now, we use it to keep some operations
+// simpler.
+
 // How can we quickly identify nodes [A (x…y)] or [δ (x…y)] to find out if they
 // are already present in the forest, and thus can be re-used?
 // Nodes will be searched by span (x…y), followed by a check of either A or δ.
 // This is implemented as a tree of height 2, with the edges labelled by input position
 // and the leafs being sets of nodes. The tree is implemented by a map of maps of sets.
 // We introduce a small helper type for it.
-//
-// Currently we carry the span in both types of nodes. This is redundant, and we
-// will omit one of them in the future. For now, we use it to keep some operations
-// simpler.
-
 type searchTree map[uint64]map[uint64]*iteratable.Set // methods below
 
 // Forest is a data structure for a "shared packed parse forest" (SPPF).
 type Forest struct {
-	symNodes searchTree                   // search tree for [A (x…y)]
-	rhsNodes searchTree                   // search tree for [δ (x…y)]
-	orEdges  map[*symNode]*iteratable.Set // or-edges from symbols to RHSs, indexed by symbol
-	andEdges map[*rhsNode]*iteratable.Set // and-edges
+	SymbolNodes searchTree                      // search tree for [A (x…y)]
+	rhsNodes    searchTree                      // search tree for [δ (x…y)]
+	orEdges     map[*SymbolNode]*iteratable.Set // or-edges from symbols to RHSs, indexed by symbol
+	andEdges    map[*rhsNode]*iteratable.Set    // and-edges
 }
 
 // NewForest returns an empty forest.
 func NewForest() *Forest {
 	return &Forest{
-		symNodes: make(map[uint64]map[uint64]*iteratable.Set),
-		rhsNodes: make(map[uint64]map[uint64]*iteratable.Set),
-		orEdges:  make(map[*symNode]*iteratable.Set),
-		andEdges: make(map[*rhsNode]*iteratable.Set),
+		SymbolNodes: make(map[uint64]map[uint64]*iteratable.Set),
+		rhsNodes:    make(map[uint64]map[uint64]*iteratable.Set),
+		orEdges:     make(map[*SymbolNode]*iteratable.Set),
+		andEdges:    make(map[*rhsNode]*iteratable.Set),
 	}
+}
+
+// --- Exported Functions ----------------------------------------------------
+
+// AddReduction adds a node for a reduced grammar rule into the forest.
+// The extent of the reduction is derived from the RHS-nodes.
+//
+// If the RHS is void, nil is returned. Clients should use
+// AddEpsilonReduction instead.
+func (f *Forest) AddReduction(sym *lr.Symbol, rule int, rhs []*SymbolNode) *SymbolNode {
+	if len(rhs) == 0 {
+		return nil
+	}
+	start := rhs[0].Extent.From()
+	end := rhs[len(rhs)-1].Extent.To()
+	f.addOrEdge(sym, rule, start, end)
+	for seq, d := range rhs {
+		f.addAndEdge(rule, d.Symbol, uint(seq), start, end)
+	}
+	return f.findSymNode(sym, start, end)
+}
+
+// AddEpsilonReduction adds a node for a reduced 𝜀-production.
+func (f *Forest) AddEpsilonReduction(sym *lr.Symbol, rule int, pos uint64) *SymbolNode {
+	f.addOrEdge(sym, rule, pos, pos)
+	return f.findSymNode(sym, pos, pos)
+}
+
+// AddTerminal adds a node for a recognized terminal into the forest.
+func (f *Forest) AddTerminal(t *lr.Symbol, pos uint64) *SymbolNode {
+	return f.addSymNode(t, pos, pos+1)
 }
 
 // --- Nodes -----------------------------------------------------------------
 
-// Nodes [A (x…y)] in the parse forest.
-type symNode struct {
-	symbol *lr.Symbol // A
-	span   lr.Span    // positions in the input covered by this symbol
+// SymbolNode represents a node in the parse forest, referencing a
+// grammar symbol, which has been reduced (Earley: completed).
+type SymbolNode struct {
+	// this is [A (x…y)]
+	Symbol *lr.Symbol // A
+	Extent lr.Span    // positions in the input covered by this symbol
 }
 
 // Nodes [δ (x…y)] in the parse forest.
 type rhsNode struct {
-	rule int     // rule number this RHS δ is from
-	span lr.Span // positions in the input covered by this RHS
+	rule   int     // rule number this RHS δ is from
+	extent lr.Span // positions in the input covered by this RHS
 }
 
-func makeSym(symbol *lr.Symbol) *symNode {
-	return &symNode{symbol: symbol}
+func makeSym(symbol *lr.Symbol) *SymbolNode {
+	return &SymbolNode{Symbol: symbol}
 }
 
 // Use as makeSym(A).spanning(x, y), resulting in [A (x…y)]
-func (sn *symNode) spanning(from, to uint64) *symNode {
-	sn.span = lr.Span{from, to}
+func (sn *SymbolNode) spanning(from, to uint64) *SymbolNode {
+	sn.Extent = lr.Span{from, to}
 	return sn
 }
 
-// FindSymNode finds a (shared) node for a symbol node in the forest.
-func (f *Forest) findSymNode(sym *lr.Symbol, start, end uint64) *symNode {
-	return f.symNodes.findSymbol(start, end, sym)
+func (sn *SymbolNode) String() string {
+	return fmt.Sprintf("(%s %s)", sn.Symbol, sn.Extent.String())
 }
 
-// addSymNode adds a symbol node to the forest. Returns a reference to a symNode,
+// FindSymNode finds a (shared) node for a symbol node in the forest.
+func (f *Forest) findSymNode(sym *lr.Symbol, start, end uint64) *SymbolNode {
+	return f.SymbolNodes.findSymbol(start, end, sym)
+}
+
+// addSymNode adds a symbol node to the forest. Returns a reference to a SymbolNode,
 // which may already have been in the SPPF beforehand.
-func (f *Forest) addSymNode(sym *lr.Symbol, start, end uint64) *symNode {
+func (f *Forest) addSymNode(sym *lr.Symbol, start, end uint64) *SymbolNode {
 	sn := f.findSymNode(sym, start, end)
 	if sn == nil {
-		sn := makeSym(sym).spanning(start, end)
-		f.symNodes.Add(start, end, sn)
+		sn = makeSym(sym).spanning(start, end)
+		f.SymbolNodes.Add(start, end, sn)
 	}
 	return sn
 }
@@ -167,7 +203,7 @@ func makeRHS(rule int) *rhsNode {
 
 // Use as makeRHS(δ).spanning(x, y), resulting in [δ (x…y)]
 func (rhs *rhsNode) spanning(from, to uint64) *rhsNode {
-	rhs.span = lr.Span{from, to}
+	rhs.extent = lr.Span{from, to}
 	return rhs
 }
 
@@ -181,8 +217,8 @@ func (f *Forest) findRHSNode(rule int, start, end uint64) *rhsNode {
 func (f *Forest) addRHSNode(rule int, start, end uint64) *rhsNode {
 	rhs := f.findRHSNode(rule, start, end)
 	if rhs == nil {
-		rhs := makeRHS(rule).spanning(start, end)
-		f.symNodes.Add(start, end, rhs)
+		rhs = makeRHS(rule).spanning(start, end)
+		f.rhsNodes.Add(start, end, rhs)
 	}
 	return rhs
 }
@@ -191,7 +227,7 @@ func (f *Forest) addRHSNode(rule int, start, end uint64) *rhsNode {
 
 // orEdges are ambiguity forks in the parse forest.
 type orEdge struct {
-	fromSym *symNode
+	fromSym *SymbolNode
 	toRHS   *rhsNode
 }
 
@@ -200,6 +236,7 @@ type orEdge struct {
 //
 // If the edge already exists, nothing is done.
 func (f *Forest) addOrEdge(sym *lr.Symbol, rule int, start, end uint64) {
+	T().Debugf("Add edge %v ----> %v", sym, rule)
 	sn := f.addSymNode(sym, start, end)
 	rhs := f.addRHSNode(rule, start, end)
 	if e := f.findOrEdge(sn, rhs); e.isVoid() {
@@ -213,7 +250,7 @@ func (f *Forest) addOrEdge(sym *lr.Symbol, rule int, start, end uint64) {
 
 // findOrEdge finds an or-edge starting from a symbol and pointing to an
 // RHS-node. If none is found, nullOrEdge is returned.
-func (f *Forest) findOrEdge(sn *symNode, rhs *rhsNode) orEdge {
+func (f *Forest) findOrEdge(sn *SymbolNode, rhs *rhsNode) orEdge {
 	if edges := f.orEdges[sn]; edges != nil {
 		v := edges.FirstMatch(func(el interface{}) bool {
 			e := el.(orEdge)
@@ -234,9 +271,9 @@ func (e orEdge) isVoid() bool {
 
 // An andEdge connects a RHS to the symbols it consists of.
 type andEdge struct {
-	fromRHS  *rhsNode // RHS node starts the edge
-	toSym    *symNode // symbol node this edge points to
-	sequence uint     // sequence number 0…n, used for ordering children
+	fromRHS  *rhsNode    // RHS node starts the edge
+	toSym    *SymbolNode // symbol node this edge points to
+	sequence uint        // sequence number 0…n, used for ordering children
 }
 
 // addAndEdge inserts an edge between a RHS and a symbol, labelled with a seqence
@@ -247,6 +284,7 @@ type andEdge struct {
 //
 // If the edge already exists, nothing is done.
 func (f *Forest) addAndEdge(rule int, sym *lr.Symbol, seq uint, start, end uint64) {
+	T().Debugf("Add edge %v --(%d)--> %v", rule, seq, sym)
 	rhs := f.addRHSNode(rule, start, end)
 	sn := f.addSymNode(sym, start, end)
 	if e := f.findAndEdge(rhs, sn); e.isVoid() {
@@ -262,7 +300,7 @@ func (f *Forest) addAndEdge(rule int, sym *lr.Symbol, seq uint, start, end uint6
 
 // findAndEdge finds an and-edge starting from an RHS node and pointing to a
 // symbol-node. If none is found, nullAndEdge is returned.
-func (f *Forest) findAndEdge(rhs *rhsNode, sn *symNode) andEdge {
+func (f *Forest) findAndEdge(rhs *rhsNode, sn *SymbolNode) andEdge {
 	if edges := f.andEdges[rhs]; edges != nil {
 		v := edges.FirstMatch(func(el interface{}) bool {
 			e := el.(andEdge)
@@ -281,8 +319,6 @@ func (e andEdge) isVoid() bool {
 	return e == nullAndEdge
 }
 
-// --- Exported Functions ----------------------------------------------------
-
 // --- searchTree -----------------------------------------------------------------
 
 func (t searchTree) find(from, to uint64, predicate func(el interface{}) bool) interface{} {
@@ -294,12 +330,15 @@ func (t searchTree) find(from, to uint64, predicate func(el interface{}) bool) i
 	return nil
 }
 
-func (t searchTree) findSymbol(from, to uint64, sym *lr.Symbol) *symNode {
+func (t searchTree) findSymbol(from, to uint64, sym *lr.Symbol) *SymbolNode {
 	node := t.find(from, to, func(el interface{}) bool {
-		s := el.(*symNode)
-		return s.symbol == sym
+		s := el.(*SymbolNode)
+		return s.Symbol == sym
 	})
-	return node.(*symNode)
+	if node == nil {
+		return nil
+	}
+	return node.(*SymbolNode)
 }
 
 func (t searchTree) findRHS(from, to uint64, rule int) *rhsNode {
@@ -307,6 +346,9 @@ func (t searchTree) findRHS(from, to uint64, rule int) *rhsNode {
 		rhs := el.(*rhsNode)
 		return rhs.rule == rule
 	})
+	if node == nil {
+		return nil
+	}
 	return node.(*rhsNode)
 }
 
