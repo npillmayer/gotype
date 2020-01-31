@@ -196,16 +196,29 @@ func (s *Set) Difference(other *Set) *Set {
 
 // Subset removes all elements of a set not fulfilling a condition.
 // The condition is given as a boolean function.
+// If it is nil, s is returned unchanged.
 func (s *Set) Subset(predicate func(interface{}) bool) *Set {
 	if s == nil || len(s.items) == 0 {
 		return NewSet(-1)
 	}
-	for _, item := range s.Values() {
-		if !predicate(item) {
-			s.Remove(item)
+	if predicate != nil {
+		for _, item := range s.Values() {
+			if !predicate(item) {
+				s.Remove(item)
+			}
 		}
 	}
 	return s
+}
+
+// Each applies a mapper function to each element in the set.
+func (s *Set) Each(mapper func(interface{})) {
+	if s == nil || len(s.items) == 0 || mapper == nil {
+		return
+	}
+	for _, m := range s.items {
+		mapper(m)
+	}
 }
 
 // Values returns all items of a set.
@@ -216,16 +229,6 @@ func (s *Set) Values() []interface{} {
 	r := make([]interface{}, len(s.items))
 	copy(r, s.items)
 	return r
-}
-
-// Each applies a mapper function to each element in the set.
-func (s *Set) Each(mapper func(interface{})) {
-	if s == nil || len(s.items) == 0 {
-		return
-	}
-	for _, m := range s.items {
-		mapper(m)
-	}
 }
 
 // Copy makes a copy of a set.
@@ -246,6 +249,22 @@ func (s *Set) First() interface{} {
 		return nil
 	}
 	return s.items[0]
+}
+
+// FirstMatch is a more efficient shortcut for S.Copy().Subset(...).First(),
+// i.e. it finds a random element in S with a given condition.
+// The condition is given as a boolean function.
+// If it is nil, it is treated as "any".
+func (s *Set) FirstMatch(predicate func(interface{}) bool) interface{} {
+	if s == nil || len(s.items) == 0 {
+		return nil
+	}
+	for _, item := range s.items {
+		if predicate == nil || predicate(item) {
+			return item
+		}
+	}
+	return nil
 }
 
 // --- Iteration --------------------------------------------------------
