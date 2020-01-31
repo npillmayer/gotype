@@ -194,10 +194,6 @@ func (s *Set) Difference(other *Set) *Set {
 	return s
 }
 
-// func (s *Set) Difference(other *Set) *Set {
-// 	return nil
-//}
-
 // Subset removes all elements of a set not fulfilling a condition.
 // The condition is given as a boolean function.
 func (s *Set) Subset(predicate func(interface{}) bool) *Set {

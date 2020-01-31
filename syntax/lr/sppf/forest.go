@@ -1,15 +1,34 @@
 package sppf
 
 /*
+Code for SPPFs are rare, mostly found in academic papers. One of them
+is "SPPF-Style Parsing From Earley Recognisers" by Elizabeth Scott
+(https://reader.elsevier.com/reader/sd/pii/S1571066108001497?token=11DA10F6D3F3B941B251F0A0FB5CEFAE7CE954EEEFF5066D98928CFB16E01B8840108BA73F9D1DE7644B0CFD11F9DBC6).
+It describes a binarised variant of an SPPF, which we will not follow.
+A more accessible discussion of parse SPPFs may be found in
+"Parsing Techniques" by  Dick Grune and Ceriel J.H. Jacobs
+(https://dickgrune.com/Books/PTAPG_2nd_Edition/), Section 3.7.3.
+Scott explains the downside of this simpler approach:
+"We could [create] separate instances of the items for different substring matches,
+so if [B→δ●,k], [B→σ●,k'] ∈ Ei where k≠k' then we create two copies of [D→τB●μ,h], one
+pointing to each of the two items. In the above example we would create two items [S→SS●,0]
+in E3, one in which the second S points to [S→b●,2] and the other in which the second S
+points to [S→SS●,1]. This would cause correct derivations to be generated, but it also
+effectively embeds all the derivation trees in the construction and, as reported by Johnson,
+the size cannot be bounded by O(n^p) for any fixed integer p.
+[...]
+Grune has described a parser which exploits an Unger style parser to construct the
+derivations of a string from the sets produced by Earley’s recogniser. However,
+as noted by Grune, in the case where the number of derivations is exponential
+the resulting parser will be of at least unbounded polynomial order in worst case."
+(Notation slightly modified by me to conform to notations elsewhere in these
+parser packages).
 
-Some code in this file is very loosely based on ideas from the great
-Gonum project.
+Despite the shortcomings of the forest described by Grune & Jacobs, I won't
+implement Scott's improvements. For practical use, the worst case spatial complexity
+seems never to materialize. However, gaining more insights in the future when using the SPPF
+for more complex real word scenarios I'm prepared to reconsider.
 
-Gonum-License
-
-Copyright ©2014 The Gonum Authors. All rights reserved.
-Use of Gonum source code is governed by a BSD-style
-license that can be found in the LICENSES file.
 
 BSD License
 
@@ -45,10 +64,8 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 
 import (
-	"sort"
-
-	"github.com/npillmayer/gotype/engine/khipu/linebreak"
 	"github.com/npillmayer/gotype/syntax/lr"
+	"github.com/npillmayer/gotype/syntax/lr/iteratable"
 )
 
 // Forest implements a Shared Packed Parse Forest (SPPF).
@@ -58,89 +75,95 @@ import (
 // runs where more than one parse tree is created. To save space these parse
 // trees will share common nodes.
 //
-// In our implementation there are two kinds of nodes: Symbol nodes and RHS-nodes.
-// Symbol nodes reflect LHSs of rules, which are the results of a reduce action.
-// RHS-nodes reflect RHSs of rules, which have been used to reduce to a Symbol node.
+// Our task is to store nodes representing recognition of a substring of the input, i.e.,
+// [A→δ,(x…y)], where A is a grammar symbol and δ denotes the right hand side (RHS)
+// of a production. (x…y) is the position interval within the input covered by A.
+//
+// We split up these nodes in two parts: A symbol node for A, and a RHS-node for δ.
+// Symbol nodes fan out via or-edges to RHS-nodes. RHS-nodes fan out to the symbols
+// of the RHS in order of their appearance in the corresponding grammar rule.
+// If a tree segment is unambiguous, our node
+// [A→δ,(x…y)] would be split into [A (x…y)]⟶[δ (x…y)], i.e. connected by an
+// or-edge without alternatives (fan-out of A is 1).
+// For ambiguous parses, subtrees can be shared if [δ (x…y)] is already found in
+// the forest, meaning that there is another derivation of this input span present.
+//
+// How can we quickly identify nodes [A (x…y)] or [δ (x…y)] to find out if they
+// are already present in the forest, and thus can be re-used?
+// Nodes will be searched by span (x…y), followed by a check of either A or δ.
+// This is implemented as a tree of height 2, with the edges labelled by input position
+// and the leafs being sets of nodes. The tree is implemented by a map of maps of sets.
+// We introduce a small helper type for it.
+//
+// Currently we carry the span in both types of nodes. This is redundant, and we
+// will omit one of them in the future. For now, we use it to keep some operations
+// simpler.
+
+type searchTree map[uint64]map[uint64]*iteratable.Set // methods below
+
+// Forest is a data structure for a "shared packed parse forest" (SPPF).
 type Forest struct {
-	symNodes map[int]symNode
-	rhsNodes map[int]rhsNode
-	orEdges  map[int]orEdges  // or-edges from symbols to RHSs, indexed by symbol
-	andEdges map[int]andEdges // and-edges
+	symNodes searchTree                   // search tree for [A (x…y)]
+	rhsNodes searchTree                   // search tree for [δ (x…y)]
+	orEdges  map[*symNode]*iteratable.Set // or-edges from symbols to RHSs, indexed by symbol
+	andEdges map[*rhsNode]*iteratable.Set // and-edges
 }
 
-// NewForest returns a Forest with the specified self and absent
-// edge weight values.
+// NewForest returns an empty forest.
 func NewForest() *Forest {
 	return &Forest{
-		symNodes: make(map[int]SymNode),
-		rhsNodes: make(map[int]RHSNode),
-		orEdges:  make(map[int]orEdge),
-		andEdges: make(map[int]andEdge),
+		symNodes: make(map[uint64]map[uint64]*iteratable.Set),
+		rhsNodes: make(map[uint64]map[uint64]*iteratable.Set),
+		orEdges:  make(map[*symNode]*iteratable.Set),
+		andEdges: make(map[*rhsNode]*iteratable.Set),
 	}
-}
-
-// span is a small type for capturing a length of input token run. For every
-// terminal and non-terminal, a parse tree/forest will track which input positions
-// this symbol covers.
-type span [2]uint64
-
-func (s *span) from() uint64 {
-	return s[0]
-}
-
-func (s *span) to() uint64 {
-	return s[1]
-}
-
-func (sn symNode) spanning(from, to uint64) symNode {
-	return symNode{
-		symbols: sn.symbol,
-		span:    span{from, to},
-	}
-}
-
-func (rhs rhsNode) spanning(from, to uint64) rhsNode {
-	return rhsNode{
-		rule: rhs.rule,
-		span: span{from, to},
-	}
-}
-
-func sym(symbol lr.Symbol) symNode {
-	return symNode{symbol: symbol}
-}
-
-func rhs(rule int) rhsNode {
-	return rhsNode{rule: rule}
 }
 
 type symNode struct {
-	symbol lr.Symbol
-	span   uint64 // positions in the input covered by this symbol
+	symbol *lr.Symbol
+	span   lr.Span // positions in the input covered by this symbol
 }
 
 type rhsNode struct {
-	rule int    // rule number this RHS is from
-	span uint64 // positions in the input covered by this symbol
+	rule int     // rule number this RHS is from
+	span lr.Span // positions in the input covered by this RHS
 }
 
-// addSymNode adds a symbol node to the forest. Returns a position in the nodes-table
-// (which may already have been occupied beforehand,
-// as it may already have been present in the SPPF.)
-func (f *Forest) addSymNode(sym lr.Symbol, start, end uint64) int {
-	if pos, found := f.findSymNode(sym.ID, start, end); found {
+func makeSym(symbol *lr.Symbol) symNode {
+	return symNode{symbol: symbol}
+}
+
+// Use as makeSym(A).spanning(x, y), resulting in [A (x…y)]
+func (sn *symNode) spanning(from, to uint64) *symNode {
+	sn.span = lr.Span{from, to}
+	return sn
+}
+
+func makeRHS(rule int) rhsNode {
+	return rhsNode{rule: rule}
+}
+
+// Use as makeRHS(δ).spanning(x, y), resulting in [δ (x…y)]
+func (rhs *rhsNode) spanning(from, to uint64) *rhsNode {
+	rhs.span = lr.Span{from, to}
+	return rhs
+}
+
+// addSymNode adds a symbol node to the forest. Returns a reference to a symNode,
+// which may already have been in the SPPF beforehand.
+func (f *Forest) addSymNode(sym *lr.Symbol, start, end uint64) *symNode {
+	if pos, found := f.findSymNode(sym.Value, start, end); found {
 		return pos
 	}
-	sn = sym(sym).spanning(start, end)
-	f.symNodes = append(f.symNodes, sn)
+	sn := makesym(sym).spanning(start, end)
+	f.symNodes[sym.Value] = sn
 	return len(f.symNodes) - 1
 }
 
-// for now, just brute force. 1st optimization should be: search from back to front.
-// If necessary, introduce a map.
-func (f *Forest) findSymNode(ID int, start, end uint64) (int, bool) {
+func (f *Forest) findSymNode(ID int, start, end uint64) (*symNode, bool) {
+	f.symNodes[start][end].FirstMatch()
 	for i, sn := range f.symNodes {
-		if sn.symbol.GetID() == ID && sn.span.from() == start && sn.span.to() == end {
+		if sn.symbol.Value == ID && sn.span.From() == start && sn.span.To() == end {
 			return i, true
 		}
 	}
@@ -150,8 +173,8 @@ func (f *Forest) findSymNode(ID int, start, end uint64) (int, bool) {
 // for now, just brute force. 1st optimization should be: search from back to front.
 // If necessary, introduce a map.
 func (f *Forest) findRHSNode(rule int, start, end uint64) (int, bool) {
-	for i, rhs := range f.RHSNodes {
-		if rhs.rule == rule && sn.span.from() == start && sn.span.to() == end {
+	for i, rhs := range f.rhsNodes {
+		if rhs.rule == rule && rhs.span.From() == start && rhs.span.To() == end {
 			return i, true
 		}
 	}
@@ -163,10 +186,10 @@ type orEdge struct {
 	toRHS   int // index of RHSNode
 }
 
-// collection of edges. Made a struct to make it hashable.
-type orEdges struct {
-	edges []orEdge
-}
+// // collection of edges. Made a struct to make it hashable.
+// type orEdges struct {
+// 	e []orEdge
+// }
 
 // nullOrEdge denotes an or-edge that is not present in a graph.
 var nullOrEdge = orEdge{}
@@ -176,44 +199,47 @@ func (e orEdge) isNull() bool {
 	return e == nullOrEdge
 }
 
-func (f *Forest) addOrEdge(sym lr.Symbol, rule int, start, end uint64) {
+func (f *Forest) addOrEdge(sym *lr.Symbol, rule int, start, end uint64) {
 	sn := f.addSymNode(sym, start, end)
 	rhs := f.addRHSNode(rule, start, end)
-	insertOrEdge(sn, rhs)
+	f.insertOrEdge(sn, rhs)
 }
 
 func (f *Forest) insertOrEdge(snpos, rhspos int) *orEdge {
 	if e := f.findOrEdge(snpos, rhspos); e != nil {
 		return e
 	}
-	e := orEdge{fromSym: snpos, toRHS: rhspos}
-	if edges, ok := f.orEdges[snpos]; ok {
-		edges.edges = append(edges.edges, e)
-		return &edges.edges[len(edges.edges)-1]
+	e := &orEdge{fromSym: snpos, toRHS: rhspos}
+	if _, ok := f.orEdges[snpos]; !ok {
+		f.orEdges[snpos] = iteratable.NewSet(0)
 	}
-	f.orEdges[snpos] = make(map[int]orEdges{snpos: e})
-	return &f.orEdges[snpos][0]
+	f.orEdges[snpos].Add(e)
+	return e
 }
 
 func (f *Forest) findOrEdge(snpos, rhspos int) *orEdge {
 	if edges, ok := f.orEdges[snpos]; ok {
-		for i, e := range edges.edges {
-			if e.toRHS == rhspos {
-				return &edges.edges[i]
-			}
-		}
+		// TODO introduce a function FirstMatch(predicate) for efficiency
+		es := edges.Copy().Subset(func(el interface{}) bool {
+			e := el.(*orEdge)
+			return e.toRHS == rhspos
+		})
+		return asOrEdge(es.First())
 	}
 	return nil
 }
 
-// We introduce a small space optimization: and-edges may occur between
-// sym-->sym or rhs-->sym. If the origin is a RHS, we store the negative positional
-// index of the rhsNode, if it is a symbol, we simply store the index positive.
-// This helps avoid storing an index and a <none>.
+func asOrEdge(edge interface{}) *orEdge {
+	if e, ok := edge.(*orEdge); ok {
+		return e
+	}
+	panic("orEdge cannot be converted from interface{}")
+}
+
 type andEdge struct {
-	from     int // index of symNode or -index of rhsNode
+	from     int // index of rhsNode
 	toSym    int // index of symNode
-	sequence int // sequence number 0..n, used for ordering children
+	sequence int // sequence number 0…n, used for ordering children
 }
 
 // collection of edges. Made a struct to make it hashable.
@@ -229,18 +255,18 @@ func (e andEdge) isNull() bool {
 	return e == nullAndEdge
 }
 
-func (f *Forest) addAndEdge(sym lr.Symbol, rhs int, toSym lr.Symbol, start, end uint64, seq int) {
+func (f *Forest) addAndEdge(sym *lr.Symbol, rhs int, toSym *lr.Symbol, start, end uint64, seq int) {
 	var from int
 	if sym != nil {
 		from = f.addSymNode(sym, start, end)
 	} else {
 		from = f.addRHSNode(rhs, start, end)
 	}
-	to = f.addSymNode(toSym, start, end)
-	insertAndEdge(from, to, seq)
+	to := f.addSymNode(toSym, start, end)
+	f.insertAndEdge(from, to, seq)
 }
 
-func (f *Forest) insertAndEdge(pos, snpos int, sequence int) *orEdge {
+func (f *Forest) insertAndEdge(pos, snpos int, sequence int) *andEdge {
 	if e := f.findAndEdge(pos, snpos); e != nil {
 		return e
 	}
@@ -253,15 +279,23 @@ func (f *Forest) insertAndEdge(pos, snpos int, sequence int) *orEdge {
 	return &f.andEdges[from][0]
 }
 
-func (f *Forest) findAndEdge(from, snpos int) *andEdge {
-	if edges, ok := f.andEdges[from]; ok {
-		for i, e := range edges.edges {
-			if e.toSym == snpos {
-				return &edges.edges[i]
-			}
-		}
+func (f *Forest) findAndEdge(snfrom, snto int) *andEdge {
+	if edges, ok := f.andEdges[snfrom]; ok {
+		// TODO introduce a function FirstMatch(predicate) for efficiency
+		es := edges.Copy().Subset(func(el interface{}) bool {
+			e := el.(*andEdge)
+			return e.toSym == snto
+		})
+		return asAndEdge(es.First())
 	}
 	return nil
+}
+
+func asAndEdge(edge interface{}) *andEdge {
+	if e, ok := edge.(*andEdge); ok {
+		return e
+	}
+	panic("andEdge cannot be converted from interface{}")
 }
 
 type edge interface {
@@ -277,21 +311,24 @@ func (f *Forest) endpoints(e edge) (int, int) {
 	return f, t
 }
 
-func (f *Forest) orEndpoints(e edge) (lr.Symbol, *lr.Rule) {
+func (f *Forest) orEndpoints(e edge) (*lr.Symbol, *lr.Rule) {
 	return nil, nil // TODO
 }
 
 // --------------------------------------------------------------------------------
 
+/*
 func (g *fbGraph) StartOfEdge(edge wEdge) *feasibleBreakpoint {
 	if from, ok := g.nodes[edge.from]; ok {
 		return from
 	}
 	return nil
 }
+*/
 
 // Edges returns all known edges of a graph. if includePruned is true,
 // deleted edges will be included.
+/*
 func (g *fbGraph) Edges(includePrunded bool) []wEdge {
 	//edgesTo: map[int]map[int]map[int]wEdge
 	var edges []wEdge
@@ -303,30 +340,24 @@ func (g *fbGraph) Edges(includePrunded bool) []wEdge {
 			}
 		}
 	}
-	if includePrunded {
-		for _, from := range g.prunedEdges {
-			for _, edgesDict := range from {
-				for _, e := range edgesDict {
-					// edge for line l
-					edges = append(edges, e)
-				}
-			}
-		}
-	}
 	return edges
 }
+*/
 
 // Breakpoint returns the feasible breakpoint at the given position if it exists in the graph,
 // and nil otherwise.
+/*
 func (g *fbGraph) Breakpoint(position int) *feasibleBreakpoint {
 	return g.nodes[position]
 }
+*/
 
 // RemoveEdge removes the edge between two breakpoints for a linecount.
 // The breakpoints are not deleted from the graph.
 // If the edge does not exist, this is a no-op.
 //
 // Deleted edges are conserved and may be collected with g.Edges(true).
+/*
 func (g *fbGraph) RemoveEdge(from, to *feasibleBreakpoint, linecnt int) {
 	if _, ok := g.nodes[from.mark.Position()]; !ok {
 		return
@@ -357,10 +388,12 @@ func (g *fbGraph) RemoveEdge(from, to *feasibleBreakpoint, linecnt int) {
 		}
 	}
 }
+*/
 
 // AddEdge adds a weighted edge from one node to another. Endpoints which are
 // not yet contained in the graph are added.
 // Does nothing if from=to.
+/*
 func (g *fbGraph) AddEdge(from, to *feasibleBreakpoint, cost int32, total int32, linecnt int) {
 	if from.mark.Position() == to.mark.Position() {
 		return
@@ -383,7 +416,9 @@ func (g *fbGraph) AddEdge(from, to *feasibleBreakpoint, cost int32, total int32,
 		}
 	}
 }
+*/
 
+/*
 var noBreakpoints []*feasibleBreakpoint
 
 func (g *fbGraph) EdgesTo(fb *feasibleBreakpoint) edgesDict {
@@ -416,9 +451,11 @@ func (dict edgesDict) WithLabel(linecnt int) []wEdge {
 	}
 	return r
 }
+*/
 
 // To returns all breakpoints in g that can reach directly to a breakpoint given by
 // a position. The returned breakpoints are sorted by position.
+/*
 func (g *fbGraph) To(fb *feasibleBreakpoint) []*feasibleBreakpoint {
 	position := fb.mark.Position()
 	if _, ok := g.edgesTo[position]; !ok || len(g.edgesTo[position]) == 0 {
@@ -451,12 +488,14 @@ func (s breakpointSorter) Less(i, j int) bool {
 func (s breakpointSorter) Swap(i, j int) {
 	s.breakpoints[i], s.breakpoints[j] = s.breakpoints[j], s.breakpoints[i]
 }
+*/
 
 // Cost returns the cost for the edge between between two breakpoints,
 // valid for a linecount.
 // If from and to are the same node or if there is no edge (from,to),
 // a pseudo-label with infinite cost is returned.
 // Cost returns true if an edge (from,to) exists, false otherwise.
+/*
 func (g *fbGraph) Cost(from, to *feasibleBreakpoint, linecnt int) (int32, bool) {
 	if from == to {
 		return linebreak.InfinityDemerits, false
@@ -470,3 +509,4 @@ func (g *fbGraph) Cost(from, to *feasibleBreakpoint, linecnt int) (int32, bool) 
 	}
 	return linebreak.InfinityDemerits, false
 }
+*/

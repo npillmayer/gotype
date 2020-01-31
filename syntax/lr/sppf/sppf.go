@@ -8,6 +8,7 @@ to a single tree. Ambiguous grammars, on the other hand, may result in parse
 runs where more than one parse tree is created. To save space these parse
 trees will share common nodes.
 
+
 BSD License
 
 Copyright (c) 2017–20, Norbert Pillmayer
