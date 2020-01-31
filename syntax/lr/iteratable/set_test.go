@@ -128,7 +128,7 @@ func TestSetIteration1(t *testing.T) {
 	S.Add("1")
 	S.Add("5")
 	t.Logf("S.items=%v", S.items)
-	S.Iterate(Once)
+	S.IterateOnce()
 	out := ""
 	for S.Next() {
 		el := S.Item()
@@ -147,9 +147,9 @@ func TestSetIteration2(t *testing.T) {
 	S.Add("1")
 	S.Add("5")
 	t.Logf("S.items=%v", S.items)
-	S.Iterate(Once)
 	out := ""
 	i := 0
+	S.IterateOnce()
 	for S.Next() {
 		if i == 1 {
 			S.Add("7")
@@ -171,8 +171,8 @@ func TestSetIteration3(t *testing.T) {
 	S.Add("1")
 	S.Add("5")
 	t.Logf("S.items=%v", S.items)
-	S.Iterate(Exhaustively)
 	out := ""
+	S.Exhaust()
 	for S.Next() {
 		el := S.Take()
 		t.Logf("el=%v", el)
@@ -187,27 +187,50 @@ func TestSetIteration4(t *testing.T) {
 	S := NewSet(-1)
 	S.Add("1")
 	S.Add("2")
-	S.Add("1")
-	S.Add("5")
+	S.Add("3")
 	t.Logf("S.items=%v", S.items)
-	S.Iterate(Exhaustively)
 	out := ""
 	i := 0
+	S.Exhaust() // now elements-list is consulted backwards
 	for S.Next() {
-		if i == 1 {
+		if i == 1 { // 3 has been consumed, now is { 1, 2@ }
+			t.Logf("S=%v", S.items)
 			S.Add("7")
-			S.Add("9")
-			S.Remove("1")
-		}
-		if i == 20 {
+			S.Add("9") // now should be { 9, 7, 1, 2@ }
+			t.Logf("S=%v", S.items)
+			S.Remove("1") // now should be { 9, 7, 2@ }
+			t.Logf("S=%v", S.items)
 		}
 		i++
 		el := S.Take()
-		t.Logf("el=%v", el)
+		t.Logf("took el=%v", el)
 		out = out + el.(string)
 	}
-	if out != "5297" {
-		t.Errorf("output after iteration should be '5297', is %s", out)
+	if out != "3279" {
+		t.Errorf("output after iteration should be '3279', is %s", out)
+	}
+}
+
+func TestSetIteration5(t *testing.T) {
+	S := NewSet(-1)
+	S.Add("1")
+	S.Add("2")
+	S.Add("3")
+	t.Logf("S.items=%v", S.items)
+	i := 0
+	S.Exhaust()
+	for S.Next() && !S.Stagnates() {
+		i++
+		if i > 10 {
+			t.Errorf("Stagnation of S not recognized")
+			break
+		}
+		el := S.Take()
+		S.Add(el)
+	}
+	t.Logf("S stagnated, has %d elements, detected after %d iterations", S.Size(), i)
+	if S.Size() != 3 || i != 3 {
+		t.Error("Detection of stagnation did not work correctly")
 	}
 }
 

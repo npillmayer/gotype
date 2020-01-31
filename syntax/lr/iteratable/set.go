@@ -38,10 +38,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 // around scanners, parsers, etc. These kinds of algorihms are often more straightforward
 // to describe as set constructions and operations.
 type Set struct {
-	items     []interface{}
-	inx       int
-	iterating bool
-	exhaust   bool
+	items           []interface{}
+	inx             int         // iteration index
+	exhaust         bool        // iteration strives to exhaust the set
+	stagnationItem  interface{} // detected a Take/Add cycle for this item
+	stagnationCount int         // count sequence of Take/Add cycles
 }
 
 // NewSet creates a new iteratable set. Clients may provide initial elements and an
@@ -53,15 +54,13 @@ func NewSet(size int) *Set {
 	s := &Set{
 		items: make([]interface{}, 0, size),
 	}
-	// if len(initial) > 0 {
-	// 	s.items = append(s.items, initial...)
-	// }
 	return s
 }
 
 // Add adds a new item to a set, if it is not already present.
 // If an once-iteration has already read item, and the item is added again to
 // the set, the once-iteration will not process the item again.
+// For an exhaust-iteration, the added item is put at the end of the list.
 func (s *Set) Add(item interface{}) {
 	if item == nil {
 		return
@@ -74,15 +73,17 @@ func (s *Set) Add(item interface{}) {
 	if s.Contains(item) {
 		return
 	}
-	s.items = append(s.items, item)
+	s.items = append(s.items, item) // grow items-slice
 	//fmt.Printf("s.items=%v\n", s.items)
-	if s.exhaust && s.inx >= 0 { // then insert it before the current item
-		if s.inx < len(s.items)-1 {
-			i := s.inx
-			copy(s.items[i+1:], s.items[i:]) // overwrites new item
-			s.items[i] = item
-		}
+	if s.exhaust { // end of list for exhaustion is position 0
+		copy(s.items[1:], s.items[:len(s.items)-1]) // overwrites new item
+		s.items[0] = item
 		s.inx++
+		if item == s.stagnationItem {
+			s.stagnationCount++
+		} else {
+			s.stagnationCount = 0
+		}
 	}
 	//fmt.Printf("added %v, len(S)=%d\n", item, len(s.items))
 	return
@@ -364,7 +365,14 @@ func (s *Set) Take() interface{} {
 		s.items[len(s.items)-1] = nil
 		s.items = s.items[:len(s.items)-1]
 	}
+	s.stagnationItem = item
 	return item
+}
+
+// Stagnates signals that every item in the set has been schedules at least once
+// for re-consideration.
+func (s *Set) Stagnates() bool {
+	return s.stagnationCount == len(s.items)
 }
 
 // --- Helpers ----------------------------------------------------------
