@@ -7,14 +7,14 @@ import (
 
 // Listener is a type for walking a parse tree/forest.
 type Listener interface {
-	Reduce(*lr.Symbol, []*RuleNode, span, int) interface{}
-	Terminal(int, interface{}, span, int) interface{}
+	Reduce(*lr.Symbol, []*RuleNode, lr.Span, int) interface{}
+	Terminal(int, interface{}, lr.Span, int) interface{}
 }
 
 // RuleNode represents a node occuring during a parse tree/forest walk.
 type RuleNode struct {
 	sym    *lr.Symbol
-	Extent span
+	Extent lr.Span
 	Value  interface{}
 }
 
@@ -92,16 +92,16 @@ func (p *Parser) walk(item lr.Item, pos uint64, listener Listener, level int) *R
 	rhs := reverse(item.Rule().RHS()) // we iterate over RHS symbols of item
 	l := len(rhs)
 	T().Debugf("Walk from item=%s (%d…%d)", item, item.Origin, pos)
-	extent := span{item.Origin, pos}
+	extent := lr.Span{item.Origin, pos}
 	ruleNodes := make([]*RuleNode, len(rhs)) // we will collect children nodes
 	for n, B := range rhs {
 		T().Debugf("Next symbol in rev(RHS) is %s", B)
 		if B.IsTerminal() { // collect a terminal node
 			T().Infof("Tree node    %d: %s", pos-1, B)
-			value := listener.Terminal(B.Value, p.tokens[pos], span{pos - 1, pos}, level+1)
+			value := listener.Terminal(B.Value, p.tokens[pos], lr.Span{pos - 1, pos}, level+1)
 			ruleNodes[l-n-1] = &RuleNode{
 				sym:    B,
-				Extent: span{pos - 1, pos},
+				Extent: lr.Span{pos - 1, pos},
 				Value:  value,
 			}
 			pos--
@@ -134,7 +134,7 @@ func (p *Parser) walk(item lr.Item, pos uint64, listener Listener, level int) *R
 		Extent: extent,
 		Value:  value,
 	}
-	T().Infof("Tree node    %d|-----%s-----|%d", extent.from(), item.Rule().LHS.Name, extent.to())
+	T().Infof("Tree node    %d|-----%s-----|%d", extent.From(), item.Rule().LHS.Name, extent.To())
 	return node
 }
 

@@ -128,7 +128,7 @@ func NewParser(ga *lr.LRAnalysis, opts ...Option) *Parser {
 type inputSymbol struct {
 	tokval int         // token value
 	lexeme interface{} // visual representation of the symbol, if any
-	span   span        // position and extent in the input stream
+	span   lr.Span     // position and extent in the input stream
 }
 
 // http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.12.4254&rep=rep1&type=pdf
@@ -168,7 +168,7 @@ func (p *Parser) Parse(scan scanner.Tokenizer, listener Listener) (bool, error) 
 	tokval, token, start, len := p.scanner.NextToken(scanner.AnyToken)
 	for { // outer loop over Si per input token xi
 		T().Debugf("Scanner read '%v|%d' @ %d", token, tokval, start)
-		x := inputSymbol{tokval, token, span{start, start + len - 1}}
+		x := inputSymbol{tokval, token, lr.Span{start, start + len}}
 		i := p.setupNextState(token)
 		p.innerLoop(i, x)
 		if tokval == scanner.EOF {
@@ -323,21 +323,4 @@ func GenerateTree() Option {
 
 func (p *Parser) hasmode(m uint) bool {
 	return p.mode&m > 0
-}
-
-// ----------------------------------------------------------------------
-
-// span is a small type for capturing a length of input token.
-type span [2]uint64 // start and end positions in the input string
-
-func (s span) from() uint64 {
-	return s[0]
-}
-
-func (s span) to() uint64 {
-	return s[1]
-}
-
-func (s span) isNull() bool {
-	return s == span{}
 }
