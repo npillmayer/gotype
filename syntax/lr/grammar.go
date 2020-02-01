@@ -12,7 +12,7 @@ import (
 const (
 	EpsilonType = 0
 	EOFType     = -1    // pseudo terminal token for end of input
-	NonTermType = -1000 // IDs of non-terminals MUST be below this !
+	NonTermType = -1000 // IDs of non-terminals MUST be in { -2 … -999 }
 )
 
 // Serial no. for lrSymbol IDs
@@ -20,9 +20,8 @@ var lrSymbolIDSerial = NonTermType - 1
 
 // Symbol is a symbol type used for grammars and grammar builders.
 type Symbol struct {
-	//ID     int
-	Name  string
-	Value int // for terminals
+	Name  string // visual representation, if any
+	Value int    // ID or token value
 }
 
 func (lrsym *Symbol) String() string {
@@ -139,6 +138,15 @@ func (g *Grammar) Rule(no int) *Rule {
 		return nil
 	}
 	return g.rules[no]
+}
+
+// Terminal returns the terminal symbol for a given token value, if it
+// is defined in the grammar.
+func (g *Grammar) Terminal(tokval int) *Symbol {
+	if t, ok := g.terminals[tokval]; ok {
+		return t
+	}
+	return nil
 }
 
 // GetTerminalSymbolFor gets the terminal symbol for a given token value.
