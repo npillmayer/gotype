@@ -110,7 +110,7 @@ type ExprListener struct {
 	t     *testing.T
 }
 
-func (el *ExprListener) Reduce(lhs *lr.Symbol, children []*RuleNode, extent span,
+func (el *ExprListener) Reduce(lhs *lr.Symbol, children []*RuleNode, extent lr.Span,
 	level int) interface{} {
 	//
 	switch lhs.Name {
@@ -152,7 +152,7 @@ func (el *ExprListener) ReduceFactor(lhs *lr.Symbol, children []*RuleNode, level
 	return v
 }
 
-func (el *ExprListener) Terminal(tokval int, token interface{}, extent span, level int) interface{} {
+func (el *ExprListener) Terminal(tokval int, token interface{}, extent lr.Span, level int) interface{} {
 	el.t.Logf("%sToken %s|%d\n", indent(level), scanner.Lexeme(token), tokval)
 	if tokval == scanner.Int {
 		n, _ := strconv.Atoi(scanner.Lexeme(token))
