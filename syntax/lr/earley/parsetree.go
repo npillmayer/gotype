@@ -3,11 +3,12 @@ package earley
 import (
 	"github.com/npillmayer/gotype/syntax/lr"
 	"github.com/npillmayer/gotype/syntax/lr/iteratable"
+	"github.com/npillmayer/gotype/syntax/lr/sppf"
 )
 
 // Listener is a type for walking a parse tree/forest.
 type Listener interface {
-	Reduce(*lr.Symbol, []*RuleNode, lr.Span, int) interface{}
+	Reduce(*lr.Symbol, int, []*RuleNode, lr.Span, int) interface{}
 	Terminal(int, interface{}, lr.Span, int) interface{}
 }
 
@@ -128,7 +129,7 @@ func (p *Parser) walk(item lr.Item, pos uint64, listener Listener, level int) *R
 			panic("ambiguous parse trees not yet supported")
 		}
 	}
-	value := listener.Reduce(item.Rule().LHS, ruleNodes, extent, level)
+	value := listener.Reduce(item.Rule().LHS, item.Rule().Serial, ruleNodes, extent, level)
 	node := &RuleNode{
 		sym:    item.Rule().LHS,
 		Extent: extent,
@@ -196,6 +197,39 @@ func (p *Parser) reverseStates() []*iteratable.Set {
 	return reversed
 }
 
+// --- Tree building listener -------------------------------------------
+
+type TreeBuilder struct {
+	forest  *sppf.Forest
+	grammar *lr.Grammar
+}
+
+func NewTreeBuilder(g *lr.Grammar) *TreeBuilder {
+	return &TreeBuilder{
+		forest:  sppf.NewForest(),
+		grammar: g,
+	}
+}
+
+func (tb *TreeBuilder) Reduce(sym *lr.Symbol, rule int, rhs []*RuleNode, span lr.Span, level int) interface{} {
+	if len(rhs) == 0 {
+		tb.forest.AddEpsilonReduction(sym, rule, span.From())
+	}
+	treenodes := make([]*sppf.SymbolNode, len(rhs))
+	for i, r := range rhs {
+		treenodes[i] = r.Value.(*sppf.SymbolNode)
+	}
+	return tb.forest.AddReduction(sym, rule, treenodes)
+}
+
+func (tb *TreeBuilder) Terminal(tokval int, token interface{}, span lr.Span, level int) interface{} {
+	// TODO
+	t := tb.grammar.Terminal(tokval)
+	return tb.forest.AddTerminal(t, span.From())
+}
+
+var _ Listener = &TreeBuilder{}
+
 // ----------------------------------------------------------------------
 
 // Reverse the symbols of a RHS of a rule (i.e., a handle)
@@ -207,4 +241,12 @@ func reverse(syms []*lr.Symbol) []*lr.Symbol {
 		r[i], r[opp] = r[opp], r[i]
 	}
 	return r
+}
+
+func asInterfaceSlice(r []*RuleNode) []interface{} {
+	var ifs []interface{} = make([]interface{}, len(r))
+	for i, d := range r {
+		ifs[i] = d
+	}
+	return ifs
 }

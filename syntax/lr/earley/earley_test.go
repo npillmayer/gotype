@@ -12,6 +12,7 @@ import (
 
 	"github.com/npillmayer/gotype/syntax/lr"
 	"github.com/npillmayer/gotype/syntax/lr/scanner"
+	"github.com/npillmayer/gotype/syntax/lr/sppf"
 )
 
 // We use a small unambiguous expression grammar for testing.
@@ -103,6 +104,30 @@ func TestTree1(t *testing.T) {
 	}
 }
 
+func TestSPPF1(t *testing.T) {
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	input := "1+2*3"
+	parser, scanner := makeParser(t, 1, input)
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
+	accept, err := parser.Parse(scanner, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	if !accept {
+		t.Errorf("Valid input string not accepted: '%s'", input)
+	}
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	walker := NewTreeBuilder(parser.ga.Grammar())
+	forest := parser.TreeWalk(walker)
+	_, ok := forest.Value.(*sppf.SymbolNode)
+	if !ok {
+		t.Errorf("Expected root node of forest to be S'")
+	}
+	t.Fail()
+}
+
 // ---------------------------------------------------------------------------
 
 type ExprListener struct {
@@ -110,22 +135,22 @@ type ExprListener struct {
 	t     *testing.T
 }
 
-func (el *ExprListener) Reduce(lhs *lr.Symbol, children []*RuleNode, extent lr.Span,
+func (el *ExprListener) Reduce(lhs *lr.Symbol, rule int, children []*RuleNode, extent lr.Span,
 	level int) interface{} {
 	//
 	switch lhs.Name {
 	case "Sum":
-		return el.ReduceSum(lhs, children, level)
+		return el.ReduceSum(lhs, rule, children, level)
 	case "Product":
-		return el.ReduceProduct(lhs, children, level)
+		return el.ReduceProduct(lhs, rule, children, level)
 	case "Factor":
-		return el.ReduceFactor(lhs, children, level)
+		return el.ReduceFactor(lhs, rule, children, level)
 	}
 	el.t.Logf("%sReduce of grammar symbol: %v", indent(level), lhs)
 	return children[0].Value
 }
 
-func (el *ExprListener) ReduceSum(lhs *lr.Symbol, children []*RuleNode, level int) interface{} {
+func (el *ExprListener) ReduceSum(lhs *lr.Symbol, rule int, children []*RuleNode, level int) interface{} {
 	v := children[0].Value // Product
 	if len(children) > 1 {
 		v = children[0].Value.(int) + children[2].Value.(int) // Sum + Product
@@ -134,7 +159,7 @@ func (el *ExprListener) ReduceSum(lhs *lr.Symbol, children []*RuleNode, level in
 	return v
 }
 
-func (el *ExprListener) ReduceProduct(lhs *lr.Symbol, children []*RuleNode, level int) interface{} {
+func (el *ExprListener) ReduceProduct(lhs *lr.Symbol, rule int, children []*RuleNode, level int) interface{} {
 	v := children[0].Value // Factor
 	if len(children) > 1 {
 		v = children[0].Value.(int) * children[2].Value.(int) // Product * Factor
@@ -143,7 +168,7 @@ func (el *ExprListener) ReduceProduct(lhs *lr.Symbol, children []*RuleNode, leve
 	return v
 }
 
-func (el *ExprListener) ReduceFactor(lhs *lr.Symbol, children []*RuleNode, level int) interface{} {
+func (el *ExprListener) ReduceFactor(lhs *lr.Symbol, rule int, children []*RuleNode, level int) interface{} {
 	v := children[0].Value // number
 	if len(children) > 1 {
 		v = children[1].Value // ( Sum )
