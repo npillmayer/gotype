@@ -33,7 +33,7 @@ using the SPPF for more complex real word scenarios I will be prepared to recons
 
 BSD License
 
-Copyright (c) 2017–20, Norbert Pillmayer
+Copyright (c) 2019–20, Norbert Pillmayer
 
 All rights reserved.
 

@@ -10,7 +10,7 @@ trees will share common nodes.
 
 BSD License
 
-Copyright (c) 2017–20, Norbert Pillmayer
+Copyright (c) 2019–20, Norbert Pillmayer
 
 All rights reserved.
 
