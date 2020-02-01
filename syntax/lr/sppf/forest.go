@@ -299,7 +299,7 @@ type orEdge struct {
 //
 // If the edge already exists, nothing is done.
 func (f *Forest) addOrEdge(sym *lr.Symbol, rhs *rhsNode, start, end uint64) {
-	T().Debugf("Add edge %v ----> %v", sym, rhs.rule)
+	T().Debugf("Add OR-edge %v ----> %v", sym, rhs.rule)
 	sn := f.addSymNode(sym, start, end)
 	if e := f.findOrEdge(sn, rhs); e.isNull() {
 		e = orEdge{sn, rhs}
@@ -346,14 +346,14 @@ type andEdge struct {
 //
 // If the edge already exists, nothing is done.
 func (f *Forest) addAndEdge(rhs *rhsNode, sym *lr.Symbol, seq uint, start, end uint64) {
-	T().Debugf("Add edge %v --(%d)--> %v", rhs.rule, seq, sym)
+	T().Debugf("Add AND-edge %v --(%d)--> %v", rhs.rule, seq, sym)
 	sn := f.addSymNode(sym, start, end)
 	if e := f.findAndEdge(rhs, sn); e.isNull() {
 		e = andEdge{rhs, sn, seq}
 		if _, ok := f.andEdges[rhs]; !ok {
 			f.andEdges[rhs] = iteratable.NewSet(0)
 		}
-		f.andEdges[rhs].Add(sn)
+		f.andEdges[rhs].Add(e)
 	} else if e.sequence != seq {
 		panic(fmt.Sprintf("new edge with sequence=%d replaces sequence=%d", seq, e.sequence))
 	}
@@ -367,6 +367,9 @@ func (f *Forest) findAndEdge(rhs *rhsNode, sn *SymbolNode) andEdge {
 			e := el.(andEdge)
 			return e.fromRHS == rhs && e.toSym == sn
 		})
+		if v == nil {
+			return nullAndEdge
+		}
 		return v.(andEdge)
 	}
 	return nullAndEdge
