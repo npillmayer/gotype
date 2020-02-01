@@ -1,6 +1,5 @@
 /*
 Package sppf implements a "Shared Packed Parse Forest".
-It is used for GLR parsing.
 
 A packed parse forest re-uses existing parse tree nodes between different
 parse trees. For a conventional non-ambiguous parse, a parse forest degrades
