@@ -111,6 +111,7 @@ type Forest struct {
 	rhsNodes    searchTree                      // search tree for RHSs, see type rhsNode
 	orEdges     map[*SymbolNode]*iteratable.Set // or-edges from symbols to RHSs, indexed by symbol
 	andEdges    map[*rhsNode]*iteratable.Set    // and-edges
+	parent      map[*SymbolNode]*SymbolNode     // parent-edges
 }
 
 // NewForest returns an empty forest.
@@ -120,6 +121,7 @@ func NewForest() *Forest {
 		rhsNodes:    make(map[uint64]map[uint64]*iteratable.Set),
 		orEdges:     make(map[*SymbolNode]*iteratable.Set),
 		andEdges:    make(map[*rhsNode]*iteratable.Set),
+		parent:      make(map[*SymbolNode]*SymbolNode),
 	}
 }
 
@@ -140,6 +142,7 @@ func (f *Forest) AddReduction(sym *lr.Symbol, rule int, rhs []*SymbolNode) *Symb
 	f.addOrEdge(sym, rhsnode, start, end)
 	for seq, d := range rhs {
 		f.addAndEdge(rhsnode, d.Symbol, uint(seq), start, end)
+		f.parent[d] = f.findSymNode(sym, start, end)
 	}
 	return f.findSymNode(sym, start, end)
 }
