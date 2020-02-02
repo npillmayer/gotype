@@ -50,10 +50,10 @@ func makeGrammar(t *testing.T) *lr.LRAnalysis {
 	return ga
 }
 
-func makeParser(t *testing.T, no int, input string) (*Parser, scanner.Tokenizer) {
+func makeParser(t *testing.T, test string, input string) (*Parser, scanner.Tokenizer) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	reader := strings.NewReader(input)
-	scanner := scanner.GoTokenizer(fmt.Sprintf("test #%d", no), reader)
+	scanner := scanner.GoTokenizer(fmt.Sprintf("test '%s'", test), reader)
 	ga := makeGrammar(t)
 	return NewParser(ga), scanner
 }
@@ -62,7 +62,7 @@ var inputStrings = []string{
 	"1", "1+2", "1*2", "1+2*3", "1*(2+3)", "1+2+3+4", "1*2+3*4",
 }
 
-// --- the tests -------------------------------------------------------------
+// --- the Tests -------------------------------------------------------------
 
 func TestParser1(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
@@ -70,7 +70,7 @@ func TestParser1(t *testing.T) {
 	defer teardown()
 	for n, input := range inputStrings {
 		T().Infof("=== '%s' ========================", input)
-		parser, scanner := makeParser(t, 1, input)
+		parser, scanner := makeParser(t, "Parser1", input)
 		gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 		accept, err := parser.Parse(scanner, nil)
 		if err != nil {
@@ -87,7 +87,7 @@ func TestTree1(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	input := "1+2*3"
-	parser, scanner := makeParser(t, 1, input)
+	parser, scanner := makeParser(t, "Tree1", input)
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	accept, err := parser.Parse(scanner, nil)
 	if err != nil {
@@ -97,7 +97,7 @@ func TestTree1(t *testing.T) {
 		t.Errorf("Valid input string not accepted: '%s'", input)
 	}
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
-	v := parser.TreeWalk(&ExprListener{0, t})
+	v := parser.WalkDerivation(NewExprListener(t))
 	value, ok := v.Value.(int)
 	if !ok || value != 7 {
 		t.Errorf("Expected %s to be 7, is %d", input, value)
@@ -109,7 +109,7 @@ func TestSPPF1(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	input := "1+2*3"
-	parser, scanner := makeParser(t, 1, input)
+	parser, scanner := makeParser(t, "SPPF1", input)
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	accept, err := parser.Parse(scanner, nil)
 	if err != nil {
@@ -120,31 +120,41 @@ func TestSPPF1(t *testing.T) {
 	}
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	walker := NewTreeBuilder(parser.ga.Grammar())
-	forest := parser.TreeWalk(walker)
-	_, ok := forest.Value.(*sppf.SymbolNode)
-	if !ok {
-		t.Errorf("Expected root node of forest to be S'")
+	root := parser.WalkDerivation(walker)
+	_, ok := root.Value.(*sppf.SymbolNode)
+	if !ok || root.Symbol().Name != "S'" { // should have reduced top level rule
+		if root == nil {
+			t.Errorf("returned parse forest is empty")
+		} else {
+			t.Errorf("Expected root node of forest to be S', is %v", root.Symbol())
+		}
 	}
-	t.Fail()
 }
 
-// ---------------------------------------------------------------------------
+// --- Expression Listener for testing ---------------------------------------
 
+type reducer func(*lr.Symbol, int, []*RuleNode, int) interface{}
 type ExprListener struct {
-	total int
-	t     *testing.T
+	total    int
+	t        *testing.T
+	dispatch map[string]reducer
+}
+
+func NewExprListener(t *testing.T) *ExprListener {
+	el := &ExprListener{t: t}
+	el.dispatch = map[string]reducer{
+		"Sum":     el.ReduceSum,
+		"Product": el.ReduceProduct,
+		"Factor":  el.ReduceFactor,
+	}
+	return el
 }
 
 func (el *ExprListener) Reduce(lhs *lr.Symbol, rule int, children []*RuleNode, extent lr.Span,
 	level int) interface{} {
 	//
-	switch lhs.Name {
-	case "Sum":
-		return el.ReduceSum(lhs, rule, children, level)
-	case "Product":
-		return el.ReduceProduct(lhs, rule, children, level)
-	case "Factor":
-		return el.ReduceFactor(lhs, rule, children, level)
+	if r, ok := el.dispatch[lhs.Name]; ok {
+		return r(lhs, rule, children, level)
 	}
 	el.t.Logf("%sReduce of grammar symbol: %v", indent(level), lhs)
 	return children[0].Value

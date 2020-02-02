@@ -39,7 +39,7 @@ to be handy in these kinds of situations.
 
 A thorough introduction to Earley-parsing may be found in
 "Parsing Techniques" by  Dick Grune and Ceriel J.H. Jacobs
-(https://dickgrune.com/Books/PTAPG_2nd_Edition/).
+(https://dickgrune.com/Books/PTAPG_2nd_Edition/), section 7.2.
 A recent evaluation has been done by Mark Fulbright in
 "An Evaluation of Two Approaches to Parsing"
 (https://apps.cs.utexas.edu/tech_reports/reports/tr/TR-2199.pdf). It references
@@ -85,6 +85,8 @@ package earley
 import (
 	"fmt"
 
+	"github.com/npillmayer/gotype/syntax/lr/sppf"
+
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/lr"
@@ -106,6 +108,7 @@ type Parser struct {
 	sc      uint64                      // state counter
 	mode    uint                        // flags controlling some behaviour of the parser
 	Error   func(p *Parser, msg string) // Error is called for each error encountered
+	forest  *sppf.Forest                // parse forest, if generated
 }
 
 // NewParser creates and initializes an Earley parser.
@@ -158,10 +161,11 @@ type inputSymbol struct {
 // It returns true if the input string has been accepted.
 //
 // Clients may provide a Listener to perform semantic actions.
-func (p *Parser) Parse(scan scanner.Tokenizer, listener Listener) (bool, error) {
+func (p *Parser) Parse(scan scanner.Tokenizer, listener Listener) (accept bool, err error) {
 	if p.scanner = scan; scan == nil {
 		return false, fmt.Errorf("Earley-parser needs a valid scanner, is void")
 	}
+	p.forest = nil
 	startItem, _ := lr.StartItem(p.ga.Grammar().Rule(0))
 	p.states[0] = iteratable.NewSet(0) // S0
 	p.states[0].Add(startItem)         // S0 = { [S′→•S, 0] }
@@ -176,7 +180,10 @@ func (p *Parser) Parse(scan scanner.Tokenizer, listener Listener) (bool, error) 
 		}
 		tokval, token, start, len = p.scanner.NextToken(scanner.AnyToken)
 	}
-	return p.checkAccept(), nil
+	if accept = p.checkAccept(); accept && p.hasmode(optionGenerateTree) {
+		p.buildTree()
+	}
+	return
 }
 
 // Invariant: we're in set Si and prepare Si+1
@@ -279,6 +286,31 @@ func (p *Parser) checkAccept() bool {
 	return acc
 }
 
+// ParseForest returns the parse forest for the last Parse-run, if any.
+// Parser option GenerateTree must have been set to true at parser-creation time.
+// In case of serious parsing errors, generation of a forest may have been abandoned
+// by the parser.
+func (p *Parser) ParseForest() *sppf.Forest {
+	return p.forest
+}
+
+// Build a parse forest from the derivation produced during a parse run.
+// We use a special derivation walker TreeBuilder, which creates an SPPF.
+func (p *Parser) buildTree() error {
+	builder := NewTreeBuilder(p.ga.Grammar())
+	root := p.WalkDerivation(builder)
+	_, ok := root.Value.(*sppf.SymbolNode)
+	if !ok || root.Symbol().Name != "S'" { // should have reduced top level rule
+		p.forest = nil
+		if root == nil {
+			return fmt.Errorf("returned parse forest is empty")
+		}
+		return fmt.Errorf("Expected root node of forest to be start symbol, is %v", root.Symbol())
+	}
+	p.forest = builder.Forest()
+	return nil
+}
+
 // Remark about possible optimizations:  Once again take a look at
 // http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.12.4254&rep=rep1&type=pdf
 // "Practical Earley Parsing" by John Aycock and R. Nigel Horspool, 2002:
@@ -306,18 +338,24 @@ const (
 
 // StoreTokens configures the parser to remember all input tokens. This is
 // necessary for listeners during tree walks to have access to the values/tokens
-// of non-terminals.
-func StoreTokens() Option {
+// of non-terminals. Defaults to true.
+func StoreTokens(b bool) Option {
 	return func(p *Parser) {
-		p.mode |= optionStoreTokens
+		if !p.hasmode(optionGenerateTree) && b ||
+			p.hasmode(optionGenerateTree) && !b {
+			p.mode |= optionStoreTokens
+		}
 	}
 }
 
 // GenerateTree configures the parser to create a parse tree/forest for
-// a successful parse.
-func GenerateTree() Option {
+// a successful parse. Defaults to false.
+func GenerateTree(b bool) Option {
 	return func(p *Parser) {
-		p.mode |= optionGenerateTree
+		if !p.hasmode(optionGenerateTree) && b ||
+			p.hasmode(optionGenerateTree) && !b {
+			p.mode |= optionGenerateTree
+		}
 	}
 }
 

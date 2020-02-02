@@ -8,18 +8,18 @@ import (
 
 // Listener is a type for walking a parse tree/forest.
 type Listener interface {
-	Reduce(*lr.Symbol, int, []*RuleNode, lr.Span, int) interface{}
-	Terminal(int, interface{}, lr.Span, int) interface{}
+	Reduce(sym *lr.Symbol, rule int, rhs []*RuleNode, span lr.Span, level int) interface{}
+	Terminal(tokenValue int, token interface{}, span lr.Span, level int) interface{}
 }
 
 // RuleNode represents a node occuring during a parse tree/forest walk.
 type RuleNode struct {
 	sym    *lr.Symbol
-	Extent lr.Span
-	Value  interface{}
+	Extent lr.Span     // span of intput symbols this rule reduced
+	Value  interface{} // user defined value
 }
 
-// Symbol returns the symbol a RuleNode refers to.
+// Symbol returns the grammar symbol a RuleNode refers to.
 // It is either a terminal or the LHS of a reduced rule.
 func (rnode *RuleNode) Symbol() *lr.Symbol {
 	return rnode.sym
@@ -27,10 +27,10 @@ func (rnode *RuleNode) Symbol() *lr.Symbol {
 
 // --- Tree Walker -----------------------------------------------------------
 
-// TreeWalk walks the grammar items which occured during the parse.
+// WalkDerivation walks the grammar items which occured during the parse.
 // It uses a listener, which gets called for every terminal and for every
 // non-terminal reduction.
-func (p *Parser) TreeWalk(listener Listener) *RuleNode {
+func (p *Parser) WalkDerivation(listener Listener) *RuleNode {
 	T().Debugf("=== Walk ===============================")
 	var root *RuleNode
 	S := p.states[p.sc]
@@ -47,9 +47,14 @@ func (p *Parser) TreeWalk(listener Listener) *RuleNode {
 /*
 Walk backwards over the items of Earley states.
 
-http://loup-vaillant.fr/tutorials/earley-parsing/parser
-provides a good summary of how to create a parse forest from an Earley-parse.
-Here is a relevan excerpt:
+A good overview of how to construct a parse forest from Earley-items may be found in
+"Parsing Techniques" by  Dick Grune and Ceriel J.H. Jacobs
+(https://dickgrune.com/Books/PTAPG_2nd_Edition/), Section 7.2.1.2.
+
+Even more practical, a great tutorial by Loup Vaillant
+(http://loup-vaillant.fr/tutorials/earley-parsing/parser)
+provides a very approachable summary of how to create a parse forest from an Earley-parse.
+Here is a relevant excerpt:
 
 Imagine we have an item like this ('a', 'b', and 'c' are symbols, and 'i' is an integer):
 
@@ -142,9 +147,66 @@ func (p *Parser) walk(item lr.Item, pos uint64, listener Listener, level int) *R
 func itemCompletes(item lr.Item, B *lr.Symbol) bool {
 	return item.PeekSymbol() == nil &&
 		item.Rule().LHS.Value == B.Value
-	// return item.PeekSymbol() == nil &&
-	// 	len(item.Prefix()) > 0 &&
-	// 	item.Prefix()[len(item.Prefix())-1].Value == B.Value
+}
+
+// --- Tree building listener -------------------------------------------
+
+// TreeBuilder is a DerivationListener which is able to create a parse tree/forest
+// from the Earley-states. Users may create one and call it themselves, but the more
+// common usage pattern is by setting the GenerateTree-option for a parser and
+// retrieving the parse-tree/forest from parser.Forest.
+type TreeBuilder struct {
+	forest  *sppf.Forest
+	grammar *lr.Grammar
+}
+
+// NewTreeBuilder creates a TreeBuilder given an input grammar. This should obviously
+// be the same grammar as the one used for parsing, but this is not checked.
+// The TreeBuilder uses the grammar to
+func NewTreeBuilder(g *lr.Grammar) *TreeBuilder {
+	return &TreeBuilder{
+		forest:  sppf.NewForest(),
+		grammar: g,
+	}
+}
+
+// Forest returns the parse forest after walking the derivation tree.
+func (tb *TreeBuilder) Forest() *sppf.Forest {
+	return tb.forest
+}
+
+// Reduce is a listener method, called for Earley-completions.
+func (tb *TreeBuilder) Reduce(sym *lr.Symbol, rule int, rhs []*RuleNode, span lr.Span, level int) interface{} {
+	if len(rhs) == 0 {
+		tb.forest.AddEpsilonReduction(sym, rule, span.From())
+	}
+	treenodes := make([]*sppf.SymbolNode, len(rhs))
+	for i, r := range rhs {
+		treenodes[i] = r.Value.(*sppf.SymbolNode)
+	}
+	return tb.forest.AddReduction(sym, rule, treenodes)
+}
+
+// Terminal is a listener method, called when matching input tokens.
+func (tb *TreeBuilder) Terminal(tokval int, token interface{}, span lr.Span, level int) interface{} {
+	// TODO
+	t := tb.grammar.Terminal(tokval)
+	return tb.forest.AddTerminal(t, span.From())
+}
+
+var _ Listener = &TreeBuilder{}
+
+// --- Helpers ----------------------------------------------------------
+
+// Reverse the symbols of a RHS of a rule (i.e., a handle)
+// Creates a new slice.
+func reverse(syms []*lr.Symbol) []*lr.Symbol {
+	r := append([]*lr.Symbol(nil), syms...) // make copy first
+	for i := len(syms)/2 - 1; i >= 0; i-- {
+		opp := len(syms) - 1 - i
+		r[i], r[opp] = r[opp], r[i]
+	}
+	return r
 }
 
 /*
@@ -195,58 +257,4 @@ func (p *Parser) reverseStates() []*iteratable.Set {
 		dumpState(reversed, uint64(n))
 	}
 	return reversed
-}
-
-// --- Tree building listener -------------------------------------------
-
-type TreeBuilder struct {
-	forest  *sppf.Forest
-	grammar *lr.Grammar
-}
-
-func NewTreeBuilder(g *lr.Grammar) *TreeBuilder {
-	return &TreeBuilder{
-		forest:  sppf.NewForest(),
-		grammar: g,
-	}
-}
-
-func (tb *TreeBuilder) Reduce(sym *lr.Symbol, rule int, rhs []*RuleNode, span lr.Span, level int) interface{} {
-	if len(rhs) == 0 {
-		tb.forest.AddEpsilonReduction(sym, rule, span.From())
-	}
-	treenodes := make([]*sppf.SymbolNode, len(rhs))
-	for i, r := range rhs {
-		treenodes[i] = r.Value.(*sppf.SymbolNode)
-	}
-	return tb.forest.AddReduction(sym, rule, treenodes)
-}
-
-func (tb *TreeBuilder) Terminal(tokval int, token interface{}, span lr.Span, level int) interface{} {
-	// TODO
-	t := tb.grammar.Terminal(tokval)
-	return tb.forest.AddTerminal(t, span.From())
-}
-
-var _ Listener = &TreeBuilder{}
-
-// ----------------------------------------------------------------------
-
-// Reverse the symbols of a RHS of a rule (i.e., a handle)
-// Creates a new slice.
-func reverse(syms []*lr.Symbol) []*lr.Symbol {
-	r := append([]*lr.Symbol(nil), syms...) // make copy first
-	for i := len(syms)/2 - 1; i >= 0; i-- {
-		opp := len(syms) - 1 - i
-		r[i], r[opp] = r[opp], r[i]
-	}
-	return r
-}
-
-func asInterfaceSlice(r []*RuleNode) []interface{} {
-	var ifs []interface{} = make([]interface{}, len(r))
-	for i, d := range r {
-		ifs[i] = d
-	}
-	return ifs
 }
