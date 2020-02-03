@@ -49,7 +49,7 @@ mainly come in two variants:
   representing left-associativity would result in the pruning of 1+(2+3),
   leaving (1+2)+3 as the un-ambiguous parse-tree.
 
-Many heavily grammars can be invented (and often are for tests and for
+Many heavily ambiguous grammars can be invented (and often are for tests and for
 research), but real-world clients most of the time have a clear understanding
 of how strings for a given grammar are supposed to be structured. It is more
 a problem of communicating this easily to a parser.
@@ -58,6 +58,10 @@ The focus of this package is therefore, to enable the user to prune ambiguous
 parse trees, without making silent descicions which cannot be influenced by
 the user. That means: having sensible defaults, but provide options for the
 advanced user.
+
+After pruning we are left with an unambiguous parse tree. The usual strategy is
+to create an AST (abstract syntax tree) from it and go from there. We provide
+tree pattern matching and term-rewriting for making these tasks easier.
 */
 
 // Visitor is a type for traversing a parse tree/forest.
@@ -125,7 +129,7 @@ func (c *Cursor) Up() (*RuleNode, bool) {
 	return c.current, false
 }
 
-func (c *Cursor) Down() (*RuleNode, bool) {
+func (c *Cursor) Down(dir Direction) (*RuleNode, bool) {
 	rhs := c.forest.disambiguate(c.current.symbol, c.pruner)
 	if rhs == nil {
 		return c.current, false
