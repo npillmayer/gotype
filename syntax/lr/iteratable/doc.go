@@ -1,6 +1,10 @@
 /*
 Package iteratable implements iteratable container data structures.
 
+Set is a speical purpose set type, suitable mainly for implementing algorithms
+around scanners, parsers, etc. These kinds of algorihms are often more straightforward
+to describe as set constructions and operations.
+
 Unusually, all set operations are destructive!
 
 BSD License

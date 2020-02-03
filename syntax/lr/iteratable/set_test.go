@@ -250,3 +250,19 @@ func TestItemSet(t *testing.T) {
 		t.Errorf("S expected to be of size 3, is %d", S.Size())
 	}
 }
+
+func TestSorting(t *testing.T) {
+	S := NewSet(-1)
+	S.Add("2")
+	S.Add("4")
+	S.Add("1")
+	S.Add("3")
+	t.Logf("S.items=%v", S.items)
+	S.Sort(func(x, y interface{}) bool {
+		return x.(string) < y.(string)
+	})
+	t.Logf("S.items=%v", S.items)
+	if S.items[0] != "1" || S.items[3] != "4" {
+		t.Errorf("Set should be lexicographically sorted by now, isn't")
+	}
+}

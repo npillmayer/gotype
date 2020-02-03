@@ -1,5 +1,7 @@
 package iteratable
 
+import "sort"
+
 /*
 BSD License
 
@@ -43,6 +45,7 @@ type Set struct {
 	exhaust         bool        // iteration strives to exhaust the set
 	stagnationItem  interface{} // detected a Take/Add cycle for this item
 	stagnationCount int         // count sequence of Take/Add cycles
+	order           Order       // if an order is provided, elements may be sorted
 }
 
 // NewSet creates a new iteratable set. Clients may provide initial elements and an
@@ -373,6 +376,40 @@ func (s *Set) Take() interface{} {
 // for re-consideration.
 func (s *Set) Stagnates() bool {
 	return s.stagnationCount == len(s.items)
+}
+
+// --- Sorting ----------------------------------------------------------------
+
+// Order is a comparator used for sorting the elements of a set.
+// It should return true, if x < y for a given interpretation of '<'.
+type Order func(x, y interface{}) bool
+
+// Sort sorts the elements of a set according to a given order.
+// It returns the input set with elements sorted (not a copy).
+func (s *Set) Sort(order Order) *Set {
+	if s == nil || len(s.items) == 0 || order == nil {
+		return s
+	}
+	oldOrder := s.order
+	s.order = order
+	sort.Sort(s)
+	s.order = oldOrder
+	return s
+}
+
+// Len is for sort.interface; not intended for public use.
+func (s *Set) Len() int {
+	return s.Size()
+}
+
+// Swap is for sort.interface; not intended for public use.
+func (s *Set) Swap(i, j int) {
+	s.items[i], s.items[j] = s.items[j], s.items[i]
+}
+
+// Swap is for sort.interface; not intended for public use.
+func (s *Set) Less(i, j int) bool {
+	return s.order(s.items[i], s.items[j])
 }
 
 // --- Helpers ----------------------------------------------------------
