@@ -149,10 +149,17 @@ func (g *Grammar) Terminal(tokval int) *Symbol {
 	return nil
 }
 
-// GetTerminalSymbolFor gets the terminal symbol for a given token value.
-// func (g *Grammar) GetTerminalSymbolFor(tokenvalue int) Symbol {
-// 	return g.terminalsByToken[tokenvalue]
-// }
+// SymbolByName gets a symbol for a given name, if found in the grammar.
+func (g *Grammar) SymbolByName(name string) *Symbol {
+	var found *Symbol
+	g.EachSymbol(func(sym *Symbol) interface{} {
+		if sym.Name == name {
+			found = sym
+		}
+		return nil
+	})
+	return found
+}
 
 // FindNonTermRules returns a set of Earley-items, where each item stems from
 // a rule with a given LHS and the dot is at position 0.
