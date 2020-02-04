@@ -1,7 +1,5 @@
 package sppf
 
-import "github.com/npillmayer/gotype/syntax/lr"
-
 /*
 BSD License
 
@@ -36,25 +34,27 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 
+import "github.com/npillmayer/gotype/syntax/lr"
+
 /*
 Traversing a parse forest resulting from an ambiguous grammar in practice
-mainly come in two variants:
+mainly comes in two variants:
+
+- The client has additional knowledge of how to prune the parse forest and
+  select one tree. Using arithmetic expression 1+2+3 as an example, selecting
+  the tree representing left-associativity would result in the pruning of 1+(2+3),
+  leaving (1+2)+3 as the un-ambiguous parse-tree.
 
 - The choice of parse tree is irrelevant. An example for this is determining
   the result of an arithmetic expression, ignoring associativity: 1+2+3=5,
   independently of associativity.
 
-- The client has additional knowledge of how to prune the parse forest and
-  select one tree. Using again the example from above: selecting the tree
-  representing left-associativity would result in the pruning of 1+(2+3),
-  leaving (1+2)+3 as the un-ambiguous parse-tree.
-
 Many heavily ambiguous grammars can be invented (and often are for tests and for
 research), but real-world clients most of the time have a clear understanding
 of how strings for a given grammar are supposed to be structured. It is more
-a problem of communicating this easily to a parser.
+a challenge of communicating this easily to a parser.
 
-The focus of this package is therefore, to enable the user to prune ambiguous
+The focus of this package is therefore to enable the user to prune ambiguous
 parse trees, without making silent descicions which cannot be influenced by
 the user. That means: having sensible defaults, but provide options for the
 advanced user.
@@ -64,17 +64,68 @@ to create an AST (abstract syntax tree) from it and go from there. We provide
 tree pattern matching and term-rewriting for making these tasks easier.
 */
 
-// Visitor is a type for traversing a parse tree/forest.
-type Visitor interface {
-	Visit(*RuleNode) interface{}
-	SetCursor(*Cursor, *Forest)
+// RuleNode represents a node occuring during a parse tree/forest walk.
+type RuleNode struct {
+	symbol *SymbolNode
+	Value  interface{}
 }
 
+// Symbol returns the symbol a RuleNode refers to.
+// It is either a terminal or the LHS of a reduced rule.
+func (rnode *RuleNode) Symbol() *lr.Symbol {
+	return rnode.symbol.Symbol
+}
+
+// Span returns the span of input symbols this rule covers.
+func (rnode *RuleNode) Span() lr.Span {
+	return rnode.symbol.Extent
+}
+
+// HasConflict returns true if this node is ambiguous.
+func (rnode *RuleNode) HasConflict() bool {
+	return false // TODO
+}
+
+// Root returns the root node of a parse forest.
+func (f *Forest) Root() *RuleNode {
+	if f == nil || len(f.symbolNodes) == 0 {
+		return nil
+	}
+	return &RuleNode{
+		symbol: f.root,
+	}
+}
+
+// A Cursor is a movable mark within a parse forest, intended for navigating over
+// rule nodes. It abstracts away the notion of the and-or-tree. Clients therefore
+// are able to view the parse forest as a tree of SymbolNodes.
 type Cursor struct {
 	forest    *Forest
 	current   *RuleNode
 	pruner    Pruner
+	startNode *RuleNode
 	chIterate childIterator
+}
+
+// SetCursor sets up a cursor at a given rule node in a given forest. It will panic,
+// if forest is nil. If rnode is nil, the cursor will be set up at the root node
+// of the forest.
+//
+// A pruner may be given for solving disambiguities. If it is nil, parse tree variants
+// will be selected at random.
+func SetCursor(rnode *RuleNode, pruner Pruner, forest *Forest) *Cursor {
+	if forest == nil {
+		panic("sppf.Cursor must have non-nil forest")
+	}
+	if rnode == nil {
+		rnode = forest.Root()
+	}
+	return &Cursor{
+		forest:    forest,
+		current:   rnode,
+		pruner:    pruner,
+		startNode: rnode,
+	}
 }
 
 type childIterator func() (*SymbolNode, childIterator)
@@ -154,7 +205,19 @@ func (c *Cursor) Sibling() (*RuleNode, bool) {
 	return c.current, false
 }
 
-func (c *Cursor) TopDown(Listener, Direction, Breakmode) interface{}  { return nil }
+func (c *Cursor) TopDown(listener Listener, dir Direction, breakmode Breakmode) interface{} {
+	c.startNode = c.current
+	value := c.traverseTopDown(listener, dir, breakmode)
+	return value
+}
+
+func (c *Cursor) traverseTopDown(listener Listener, dir Direction, breakmode Breakmode) interface{} {
+	// level := 0
+	// value := listener.EnterRule(c.current.symbol.Symbol, c.current.RHS(), c.current.Span, level)
+	// return value
+	return nil
+}
+
 func (c *Cursor) BottomUp(Listener, Direction, Breakmode) interface{} { return nil }
 
 type Direction int8
@@ -173,29 +236,10 @@ const (
 
 // Listener is a type for walking a parse tree/forest.
 type Listener interface {
-	Rule(*lr.Symbol, []*RuleNode, lr.Span, int) interface{}
+	EnterRule(*lr.Symbol, []*RuleNode, lr.Span, int) bool
+	ExitRule(*lr.Symbol, []*RuleNode, lr.Span, int) interface{}
 	Terminal(int, interface{}, lr.Span, int) interface{}
 	Conflict(*lr.Symbol, int, lr.Span, int) (int, error)
-}
-
-// RuleNode represents a node occuring during a parse tree/forest walk.
-type RuleNode struct {
-	symbol *SymbolNode
-	Value  interface{}
-}
-
-// Symbol returns the symbol a RuleNode refers to.
-// It is either a terminal or the LHS of a reduced rule.
-func (rnode *RuleNode) Symbol() *lr.Symbol {
-	return rnode.symbol.Symbol
-}
-
-func (rnode *RuleNode) Span() lr.Span {
-	return rnode.symbol.Extent
-}
-
-func (rnode *RuleNode) HasConflict() bool {
-	return false // TODO
 }
 
 func TreeWalk(listener *Listener) {

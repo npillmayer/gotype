@@ -112,6 +112,7 @@ type Forest struct {
 	orEdges     map[*SymbolNode]*iteratable.Set // or-edges from symbols to RHSs, indexed by symbol
 	andEdges    map[*rhsNode]*iteratable.Set    // and-edges
 	parent      map[*SymbolNode]*SymbolNode     // parent-edges
+	root        *SymbolNode
 }
 
 // NewForest returns an empty forest.
@@ -144,19 +145,34 @@ func (f *Forest) AddReduction(sym *lr.Symbol, rule int, rhs []*SymbolNode) *Symb
 		f.addAndEdge(rhsnode, d.Symbol, uint(seq), start, end)
 		f.parent[d] = f.findSymNode(sym, start, end)
 	}
-	return f.findSymNode(sym, start, end)
+	symnode := f.findSymNode(sym, start, end)
+	if sym.Name == "S'" { // S' usually added as start symbol during grammar analysis
+		f.root = symnode
+	}
+	return symnode
 }
 
 // AddEpsilonReduction adds a node for a reduced ε-production.
 func (f *Forest) AddEpsilonReduction(sym *lr.Symbol, rule int, pos uint64) *SymbolNode {
 	rhsnode := f.addRHSNode(rule, []*SymbolNode{}, pos)
 	f.addOrEdge(sym, rhsnode, pos, pos)
-	return f.findSymNode(sym, pos, pos)
+	symnode := f.findSymNode(sym, pos, pos)
+	if sym.Name == "S'" { // S' usually added as start symbol during grammar analysis
+		f.root = symnode
+	}
+	return symnode
 }
 
 // AddTerminal adds a node for a recognized terminal into the forest.
 func (f *Forest) AddTerminal(t *lr.Symbol, pos uint64) *SymbolNode {
 	return f.addSymNode(t, pos, pos+1)
+}
+
+// SetRoot tells the parse forest which of the nodes will be the root node.
+// This is intended for cases where no top-level artificial symbol S' has
+// been wrapped around the grammar by grammar analyzer.
+func (f *Forest) SetRoot(symnode *SymbolNode) {
+	f.root = symnode
 }
 
 // --- Nodes -----------------------------------------------------------------
