@@ -1,4 +1,4 @@
-package gospel
+package termr
 
 import (
 	"github.com/npillmayer/gotype/core/config/gtrace"

@@ -1,6 +1,13 @@
-package gospel
+package termr
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/npillmayer/gotype/core/config/tracing"
+
+	"github.com/npillmayer/gotype/core/config/gtrace"
+	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+)
 
 func TestList1(t *testing.T) {
 	l1 := List(1, 4, 6, 8, 12)
@@ -13,7 +20,10 @@ func TestList1(t *testing.T) {
 }
 
 func TestEval1(t *testing.T) {
+	gtrace.SyntaxTracer = gologadapter.New()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	input := "(Hello ^World 1)"
 	env := &Environment{}
 	env.Eval(input)
+	t.Fail()
 }

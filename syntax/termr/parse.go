@@ -1,7 +1,8 @@
-package gospel
+package termr
 
 import (
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"sync"
 
@@ -11,8 +12,19 @@ import (
 	"github.com/npillmayer/gotype/syntax/lr/sppf"
 )
 
+// List       ::=  '(' Sequence ')'
+// QuotedList ::=  '^' '(' Sequence ')'
+// Sequence   ::=  Sequence Atom
+// Sequence   ::=  Sequence
+// Atom       ::=  '^' ident
+// Atom       ::=  ident
+// Atom       ::=  string
+// Atom       ::=  int
+// Atom       ::=  float  // TODO unify this to number
+// Atom       ::=  List
+// Atom       ::=  QuotedList
 func makeGospelGrammar() (*lr.LRAnalysis, error) {
-	b := lr.NewGrammarBuilder("Gospel")
+	b := lr.NewGrammarBuilder("TermR")
 	b.LHS("List").T("(", '(').N("Sequence").T(")", ')').End()
 	b.LHS("QuotedList").T("quote", '^').T("(", '(').N("Sequence").T(")", ')').End()
 	b.LHS("Sequence").N("Sequence").N("Atom").End()
@@ -98,6 +110,14 @@ func (env *Environment) Eval(prog string) *GCons {
 	if parsetree == nil {
 		T().Errorf("Empty eval() parse tree")
 	}
+	tmpfile, err := ioutil.TempFile(".", "tree.*.dot")
+	if err != nil {
+		panic("cannot open tmp file")
+	}
+	sppf.ToGraphViz(parsetree, tmpfile)
+	// cursor := parsetree.SetCursor(nil, nil)
+	// value := cursor.TopDown(newListener(), sppf.LtoR, sppf.Break)
+	// T().Debugf("return value of top-down traversal: %v", value)
 	return nil
 }
 

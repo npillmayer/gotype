@@ -1,4 +1,4 @@
-package gospel
+package termr
 
 // https://hanshuebner.github.io/lmman/fd-con.xml
 // https://www.tutorialspoint.com/lisp/lisp_basic_syntax.htm

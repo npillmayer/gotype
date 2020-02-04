@@ -267,6 +267,7 @@ func (c *Cursor) traverseTopDown(listener Listener, dir Direction, breakmode Bre
 		return listener.Terminal(sym.Value, sym.Token(), lr.Span{}, level+1)
 	}
 	rhsNodes := c.RHS(c.current.symbol)
+	T().Debugf("rhsNodes=%v", rhsNodes)
 	doContinue := listener.EnterRule(c.current.Symbol(), rhsNodes, c.current.Span(), level)
 	if doContinue || breakmode == Continue { // listener signalled us to traverse children nodes
 		i := 0
@@ -276,6 +277,7 @@ func (c *Cursor) traverseTopDown(listener Listener, dir Direction, breakmode Bre
 		if _, ok := c.Down(dir); ok {
 			for ; ok; _, ok = c.Sibling() {
 				chvalue := c.traverseTopDown(listener, dir, breakmode, level+1)
+				T().Debugf("i=%d", i)
 				rhsNodes[i].Value = chvalue
 				i += int(dir)
 			}
