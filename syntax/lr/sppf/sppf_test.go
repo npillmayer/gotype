@@ -87,16 +87,25 @@ func TestTraverse(t *testing.T) {
 	l := makeListener(G, t)
 	c := f.SetCursor(nil, nil)
 	c.TopDown(l, LtoR, Continue)
-	t.Fail()
+	if !l.(*L).isBack {
+		t.Errorf("Exit(S') has not been called")
+	}
+	if l.(*L).a.Name != "a" {
+		t.Errorf("Terminal(a) has not been called")
+	}
 }
+
+// ---------------------------------------------------------------------------
 
 func makeListener(G *lr.Grammar, t *testing.T) Listener {
 	return &L{G: G, t: t}
 }
 
 type L struct {
-	G *lr.Grammar
-	t *testing.T
+	G      *lr.Grammar
+	t      *testing.T
+	isBack bool
+	a      *lr.Symbol
 }
 
 func (l *L) EnterRule(sym *lr.Symbol, rhs []*RuleNode, span lr.Span, level int) bool {
@@ -107,12 +116,16 @@ func (l *L) EnterRule(sym *lr.Symbol, rhs []*RuleNode, span lr.Span, level int) 
 	return true
 }
 func (l *L) ExitRule(sym *lr.Symbol, rhs []*RuleNode, span lr.Span, level int) interface{} {
+	if sym.Name == "S'" {
+		l.isBack = true
+	}
 	l.t.Logf("- exit %v", sym)
 	return nil
 }
 
 func (l *L) Terminal(tokval int, token interface{}, span lr.Span, level int) interface{} {
 	tok := l.G.Terminal(tokval)
+	l.a = tok
 	l.t.Logf("  terminal=%s", tok.Name)
 	return tok
 }
