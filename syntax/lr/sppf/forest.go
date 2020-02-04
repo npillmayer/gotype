@@ -196,7 +196,7 @@ func (sn *SymbolNode) spanning(from, to uint64) *SymbolNode {
 }
 
 func (sn *SymbolNode) String() string {
-	return fmt.Sprintf("(%s %s)", sn.Symbol, sn.Extent.String())
+	return fmt.Sprintf("%s %s", sn.Symbol, sn.Extent.String())
 }
 
 // FindSymNode finds a (shared) node for a symbol node in the forest.
@@ -481,7 +481,7 @@ func ToGraphViz(forest *Forest, w io.Writer) {
 	for _, n := range nodes {
 		node := n.(*SymbolNode)
 		if node.Symbol.IsTerminal() {
-			io.WriteString(w, fmt.Sprintf("\"%s\" [fillcolor=grey90, style=filled]\n", node.String()))
+			io.WriteString(w, fmt.Sprintf("\"%s\" [fillcolor=grey90,style=filled]\n", node.String()))
 		} else {
 			io.WriteString(w, fmt.Sprintf("\"%s\" []\n", node.String()))
 		}
