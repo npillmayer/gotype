@@ -14,13 +14,16 @@ import (
 func makeGospelGrammar() (*lr.LRAnalysis, error) {
 	b := lr.NewGrammarBuilder("Gospel")
 	b.LHS("List").T("(", '(').N("Sequence").T(")", ')').End()
+	b.LHS("QuotedList").T("quote", '^').T("(", '(').N("Sequence").T(")", ')').End()
 	b.LHS("Sequence").N("Sequence").N("Atom").End()
 	b.LHS("Sequence").N("Atom").End()
 	b.LHS("Atom").T("quote", '^').T("ident", scanner.Ident).End()
+	b.LHS("Atom").T("ident", scanner.Ident).End()
 	b.LHS("Atom").T("string", scanner.String).End()
 	b.LHS("Atom").T("int", scanner.Int).End()
 	b.LHS("Atom").T("float", scanner.Float).End()
 	b.LHS("Atom").N("List").End()
+	b.LHS("Atom").N("QuotedList").End()
 	g, err := b.Grammar()
 	if err != nil {
 		return nil, err
@@ -28,22 +31,24 @@ func makeGospelGrammar() (*lr.LRAnalysis, error) {
 	return lr.Analysis(g), nil
 }
 
-var parser *earley.Parser
+var grammar *lr.LRAnalysis
 var startOnce sync.Once
 
-func createGlobalParser() {
+func createParser() *earley.Parser {
+	var ga *lr.LRAnalysis
 	startOnce.Do(func() {
-		ga, err := makeGospelGrammar()
-		if err != nil {
-			panic("Cannot create global parser")
+		var err error
+		if ga, err = makeGospelGrammar(); err != nil {
+			panic("Cannot create global grammar")
 		}
-		parser = earley.NewParser(ga, earley.GenerateTree(true))
 	})
+	return earley.NewParser(ga, earley.GenerateTree(true))
 }
 
 func parse(prog string, source string) (*sppf.Forest, error) {
-	createGlobalParser()
+	parser := createParser()
 	r := strings.NewReader(prog)
+	// TODO create a (lexmachine?) tokenizer
 	scan := scanner.GoTokenizer(source, r, scanner.SkipComments(true))
 	accept, err := parser.Parse(scan, nil)
 	if err != nil {
@@ -123,30 +128,56 @@ func (env *Environment) listFromParseTree(tree *sppf.Forest) *GCons {
 }
 
 type Listener struct {
-	list     *GCons
-	dispatch map[string]reducer
+	list          *GCons
+	dispatchEnter map[string]ruleEnterOp
+	dispatchExit  map[string]ruleOp
 }
-type reducer func(*lr.Symbol, []*sppf.RuleNode, lr.Span, int) interface{}
+type ruleEnterOp func(*lr.Symbol, []*sppf.RuleNode, lr.Span, int) bool
+type ruleOp func(*lr.Symbol, []*sppf.RuleNode, lr.Span, int) interface{}
 
 func newListener() *Listener {
 	l := &Listener{}
-	l.dispatch = map[string]reducer{
-		"List":     l.ReduceList,
-		"Sequence": l.ReduceSequence,
-		"Atom":     l.ReduceAtom,
+	l.dispatchEnter = map[string]ruleEnterOp{
+		"QuotedList": l.EnterQuotedList,
+	}
+	l.dispatchExit = map[string]ruleOp{
+		"List":     l.ExitList,
+		"Sequence": l.ExitSequence,
+		"Atom":     l.ExitAtom,
 	}
 	return l
 }
 
-func (l *Listener) Rule(lhs *lr.Symbol, rhs []*sppf.RuleNode, span lr.Span, level int) interface{} {
-	if r, ok := l.dispatch[lhs.Name]; ok {
+func (l *Listener) EnterRule(lhs *lr.Symbol, rhs []*sppf.RuleNode, span lr.Span, level int) bool {
+	if r, ok := l.dispatchEnter[lhs.Name]; ok {
+		return r(lhs, rhs, span, level)
+	}
+	T().Debugf("%senter grammar symbol: %v", indent(level), lhs)
+	return true
+}
+
+func (l *Listener) EnterQuotedList(lhs *lr.Symbol, rhs []*sppf.RuleNode, span lr.Span, level int) bool {
+	if len(rhs) <= 2 {
+		T().Debugf("%sempty Q-LIST", indent(level))
+		return false
+	}
+	values := make([]interface{}, len(rhs)-2)
+	for i, r := range rhs[1 : len(rhs)-1] {
+		values[i-1] = r.Value
+	}
+	T().Debugf("%senter Q-LIST (%v)\n", indent(level), values)
+	return true
+}
+
+func (l *Listener) ExitRule(lhs *lr.Symbol, rhs []*sppf.RuleNode, span lr.Span, level int) interface{} {
+	if r, ok := l.dispatchExit[lhs.Name]; ok {
 		return r(lhs, rhs, span, level)
 	}
 	T().Debugf("%sReduce of grammar symbol: %v", indent(level), lhs)
 	return rhs[0].Value
 }
 
-func (l *Listener) ReduceList(lhs *lr.Symbol, rhs []*sppf.RuleNode, span lr.Span, level int) interface{} {
+func (l *Listener) ExitList(lhs *lr.Symbol, rhs []*sppf.RuleNode, span lr.Span, level int) interface{} {
 	if len(rhs) <= 2 {
 		T().Debugf("%sempty LIST", indent(level))
 		return nil
@@ -159,12 +190,12 @@ func (l *Listener) ReduceList(lhs *lr.Symbol, rhs []*sppf.RuleNode, span lr.Span
 	return List(values)
 }
 
-func (l *Listener) ReduceSequence(lhs *lr.Symbol, rhs []*sppf.RuleNode, span lr.Span, level int) interface{} {
+func (l *Listener) ExitSequence(lhs *lr.Symbol, rhs []*sppf.RuleNode, span lr.Span, level int) interface{} {
 	T().Debugf("%sSEQUENCE\n", indent(level))
 	return nil
 }
 
-func (l *Listener) ReduceAtom(lhs *lr.Symbol, rhs []*sppf.RuleNode, span lr.Span, level int) interface{} {
+func (l *Listener) ExitAtom(lhs *lr.Symbol, rhs []*sppf.RuleNode, span lr.Span, level int) interface{} {
 	T().Debugf("%sATOM\n", indent(level))
 	return nil
 }
