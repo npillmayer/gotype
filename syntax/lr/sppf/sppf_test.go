@@ -1,6 +1,7 @@
 package sppf
 
 import (
+	"fmt"
 	"testing"
 	"text/scanner"
 
@@ -57,4 +58,66 @@ func TestSPPFAmbiguous(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	g.Dump()
 	//f := NewForest()
+}
+
+// S' ⟶ S
+// S  ⟶ A
+// A  ⟶ a
+func TestTraverse(t *testing.T) {
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	b := lr.NewGrammarBuilder("G")
+	r1 := b.LHS("S").N("A").End()
+	r2 := b.LHS("A").T("a", scanner.Ident).End()
+	G, err := b.Grammar()
+	if err != nil {
+		t.Error(err)
+	}
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	G.Dump()
+	f := NewForest()
+	a := f.AddTerminal(r2.RHS()[0], 0)
+	A := f.AddReduction(r2.LHS, 2, []*SymbolNode{a})
+	S := f.AddReduction(r1.LHS, 1, []*SymbolNode{A})
+	f.AddReduction(G.SymbolByName("S'"), 0, []*SymbolNode{S})
+	if f.Root() == nil {
+		t.Errorf("Expected root node S', is nil")
+	}
+	l := makeListener(G, t)
+	c := f.SetCursor(nil, nil)
+	c.TopDown(l, LtoR, Continue)
+	t.Fail()
+}
+
+func makeListener(G *lr.Grammar, t *testing.T) Listener {
+	return &L{G: G, t: t}
+}
+
+type L struct {
+	G *lr.Grammar
+	t *testing.T
+}
+
+func (l *L) EnterRule(sym *lr.Symbol, rhs []*RuleNode, span lr.Span, level int) bool {
+	if sym.IsTerminal() {
+		return false
+	}
+	l.t.Logf("+ enter %v", sym)
+	return true
+}
+func (l *L) ExitRule(sym *lr.Symbol, rhs []*RuleNode, span lr.Span, level int) interface{} {
+	l.t.Logf("- exit %v", sym)
+	return nil
+}
+
+func (l *L) Terminal(tokval int, token interface{}, span lr.Span, level int) interface{} {
+	tok := l.G.Terminal(tokval)
+	l.t.Logf("  terminal=%s", tok.Name)
+	return tok
+}
+
+func (l *L) Conflict(sym *lr.Symbol, rule int, span lr.Span, level int) (int, error) {
+	l.t.Error("did not expect conflict")
+	return 0, fmt.Errorf("Conflict at symbol %v", sym)
 }

@@ -67,13 +67,34 @@ tree pattern matching and term-rewriting for making these tasks easier.
 // RuleNode represents a node occuring during a parse tree/forest walk.
 type RuleNode struct {
 	symbol *SymbolNode
-	Value  interface{}
+	Value  interface{} // user-defined value of a node
 }
 
-// Symbol returns the symbol a RuleNode refers to.
+// Symbol returns the grammar symbol a RuleNode refers to.
 // It is either a terminal or the LHS of a reduced rule.
 func (rnode *RuleNode) Symbol() *lr.Symbol {
 	return rnode.symbol.Symbol
+}
+
+// RHS collects the children symbols of a node as a slice.
+// It uses a pruner to decide between ambiguous RHS variants.
+func (c *Cursor) RHS(sym *SymbolNode) []*RuleNode {
+	rhs := c.forest.disambiguate(c.current.symbol, c.pruner)
+	if rhs == nil {
+		return nil
+	}
+	if iter, ok := c.forest.children(rhs); ok {
+		edges := c.forest.andEdges[rhs]
+		rhsnodes := make([]*RuleNode, edges.Size())
+		var rhschild *SymbolNode
+		rhschild, iter = iter()
+		i := 0
+		for ; rhschild != nil; rhschild, iter = iter() {
+			rhsnodes[i] = &RuleNode{symbol: rhschild}
+		}
+		return rhsnodes
+	}
+	return nil
 }
 
 // Span returns the span of input symbols this rule covers.
@@ -107,21 +128,22 @@ type Cursor struct {
 	chIterate childIterator
 }
 
-// SetCursor sets up a cursor at a given rule node in a given forest. It will panic,
-// if forest is nil. If rnode is nil, the cursor will be set up at the root node
-// of the forest.
+// SetCursor sets up a cursor at a given rule node in a given forest.
+// If rnode is nil, the cursor will be set up at the root node of the forest.
 //
 // A pruner may be given for solving disambiguities. If it is nil, parse tree variants
 // will be selected at random.
-func SetCursor(rnode *RuleNode, pruner Pruner, forest *Forest) *Cursor {
-	if forest == nil {
-		panic("sppf.Cursor must have non-nil forest")
-	}
+func (f *Forest) SetCursor(rnode *RuleNode, pruner Pruner) *Cursor {
 	if rnode == nil {
-		rnode = forest.Root()
+		if rnode = f.Root(); rnode == nil {
+			return nil
+		}
+	}
+	if pruner == nil {
+		pruner = DontCarePruner
 	}
 	return &Cursor{
-		forest:    forest,
+		forest:    f,
 		current:   rnode,
 		pruner:    pruner,
 		startNode: rnode,
@@ -142,8 +164,8 @@ func (f *Forest) children(rhs *rhsNode) (childIterator, bool) {
 			if children.Next() { // TODO iterate by child.selector
 				// maybe sort the rhs before iterating
 				// TODO implement backwards iteration, too => Direction
-				childSym := children.Item().(*SymbolNode)
-				return childSym, iterator
+				childEdge := children.Item().(andEdge)
+				return childEdge.toSym, iterator
 			}
 			return nil, nullChildIterator
 		}
@@ -152,9 +174,23 @@ func (f *Forest) children(rhs *rhsNode) (childIterator, bool) {
 	return nullChildIterator, false
 }
 
+// Pruner is an interface type for an entity to help prune ambiguous children
+// edges.
 type Pruner interface {
 	prune(sym *SymbolNode, rhs *rhsNode) bool
 }
+
+type dcp struct{}
+
+func (p dcp) prune(sym *SymbolNode, rhs *rhsNode) bool {
+	T().Infof("Ambiguous symbol node %v detected", sym)
+	return false // do not prune anything
+}
+
+// DontCarePruner never prunes an ambiguity alternative, thus resulting
+// in always selecting the first alternative considered.
+// It is the default Pruner if none is given by the caller of a Cursor.
+var DontCarePruner dcp = dcp{}
 
 func (f *Forest) disambiguate(sym *SymbolNode, pruner Pruner) *rhsNode {
 	if choices, ok := f.orEdges[sym]; ok {
@@ -172,14 +208,20 @@ func (f *Forest) disambiguate(sym *SymbolNode, pruner Pruner) *rhsNode {
 	return nil
 }
 
+// Up moves the cursor up to the parent node of the current node, if any.
 func (c *Cursor) Up() (*RuleNode, bool) {
 	if parent, ok := c.forest.parent[c.current.symbol]; ok {
+		T().Debugf("Cursor UP")
 		c.current.symbol = parent
+		T().Debugf("Cursor @ %v", c.current.Symbol())
 		return c.current, true
 	}
 	return c.current, false
 }
 
+// Down moves the cursor down to the first child of the curent node, if any.
+// dir lets clients start at either the leftmost child (default) or the rightmost
+// child.
 func (c *Cursor) Down(dir Direction) (*RuleNode, bool) {
 	rhs := c.forest.disambiguate(c.current.symbol, c.pruner)
 	if rhs == nil {
@@ -187,54 +229,106 @@ func (c *Cursor) Down(dir Direction) (*RuleNode, bool) {
 	}
 	var ok bool
 	if c.chIterate, ok = c.forest.children(rhs); ok {
+		T().Debugf("Cursor DOWN")
 		var child *SymbolNode
 		if child, c.chIterate = c.chIterate(); child != nil {
 			c.current.symbol = child
+			T().Debugf("Cursor @ %v", c.current.Symbol())
 			return c.current, true
 		}
 	}
 	return c.current, false
 }
 
+// Sibling moves the cursor to the next sibling of the current node, if any.
 func (c *Cursor) Sibling() (*RuleNode, bool) {
 	var sym *SymbolNode
 	if sym, c.chIterate = c.chIterate(); sym != nil {
 		c.current.symbol = sym
+		T().Debugf("Cursor @ %v", c.current.Symbol())
 		return c.current, true
 	}
 	return c.current, false
 }
 
+// TopDown traverses a sub-tree top-down, applying Listener-methods for all nodes
+// encountered. It returns a user-defined value, calculated by the listener.
 func (c *Cursor) TopDown(listener Listener, dir Direction, breakmode Breakmode) interface{} {
 	c.startNode = c.current
-	value := c.traverseTopDown(listener, dir, breakmode)
+	T().Debugf("TopDown starting at node %v", c.current.Symbol())
+	value := c.traverseTopDown(listener, dir, breakmode, 0)
 	return value
 }
 
-func (c *Cursor) traverseTopDown(listener Listener, dir Direction, breakmode Breakmode) interface{} {
-	// level := 0
-	// value := listener.EnterRule(c.current.symbol.Symbol, c.current.RHS(), c.current.Span, level)
-	// return value
-	return nil
+func (c *Cursor) traverseTopDown(listener Listener, dir Direction, breakmode Breakmode, level int) interface{} {
+	var value interface{}
+	if sym := c.current.Symbol(); sym.IsTerminal() {
+		// TODO find position of token
+		return listener.Terminal(sym.Value, sym.Token(), lr.Span{}, level+1)
+	}
+	rhsNodes := c.RHS(c.current.symbol)
+	doContinue := listener.EnterRule(c.current.Symbol(), rhsNodes, c.current.Span(), level)
+	if doContinue || breakmode == Continue { // listener signalled us to traverse children nodes
+		i := 0
+		if dir == RtoL {
+			i = len(rhsNodes) - 1
+		}
+		if _, ok := c.Down(dir); ok {
+			for ; ok; _, ok = c.Sibling() {
+				chvalue := c.traverseTopDown(listener, dir, breakmode, level+1)
+				rhsNodes[i].Value = chvalue
+				i += int(dir)
+			}
+			c.Up()
+		}
+	}
+	value = listener.ExitRule(c.current.Symbol(), rhsNodes, c.current.Span(), level)
+	return value
 }
 
+// BottomUp TODO
 func (c *Cursor) BottomUp(Listener, Direction, Breakmode) interface{} { return nil }
 
-type Direction int8
+// Direction lets clients decide wether children nodes should be traversed left-to-right
+// (default) or right-to-left.
+type Direction int
 
+// Children nodes may be traversed left-to-right (default) or right-to-left.
 const (
-	LtoR int8 = iota
-	RtoL
+	LtoR Direction = 1
+	RtoL Direction = -1
 )
 
-type Breakmode int8
+// Breakmode is a client hint wether to stop traversing on break-signals or not.
+type Breakmode int
 
+// Setting Continue will always traverse a complete (sub-)tree. Break will skip
+// traversing sub-tree as soon as an Enter-function signals a break.
 const (
-	Continue int8 = iota
+	Continue Breakmode = iota
 	Break
 )
 
+// --- Listener --------------------------------------------------------------
+
 // Listener is a type for walking a parse tree/forest.
+//
+// Arguments are:
+//
+//     - *lr.Symbol:  the grammar symbol at the current node
+//     - []*RuleNode: the right-hand side of the grammar production at this node
+//     - lr.Span:     the span of input symbols covered by this node
+//     - int:         the nesting level of the current node
+//
+// enterRule returns a boolean value indicating if the traversal should continue to
+// the children of this node. ExitRule and Terminal may return user-defined values
+// to be propagated upwards of the tree.
+//
+// Conflict is called whenever the traversal encounters an ambiguous node, i.e. one
+// where the parse symbol has more than one right-hand side, resulting from different
+// applications of grammar productions. The return value indicates the positional number
+// of the RHS-variant to be selected. If it returns an error, traversal will be aborted.
+// (If in doubt what to do, simply return (0, nil).)
 type Listener interface {
 	EnterRule(*lr.Symbol, []*RuleNode, lr.Span, int) bool
 	ExitRule(*lr.Symbol, []*RuleNode, lr.Span, int) interface{}
@@ -242,6 +336,4 @@ type Listener interface {
 	Conflict(*lr.Symbol, int, lr.Span, int) (int, error)
 }
 
-func TreeWalk(listener *Listener) {
-
-}
+// ---------------------------------------------------------------------------
