@@ -66,6 +66,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/npillmayer/gotype/syntax/lr"
 	"github.com/npillmayer/gotype/syntax/lr/iteratable"
@@ -284,7 +285,7 @@ func rhsSignature(rhs []*SymbolNode, start uint64) int32 {
 		h *= int32(symnode.Symbol.Value) * o[symnode.Extent.From()%uint64(len(o))]
 		h %= largePrime
 	}
-	return 0
+	return h
 }
 
 // FindRHSNode finds a (shared) node for a right hand side in the forest.
@@ -325,7 +326,7 @@ func (f *Forest) addOrEdge(sym *lr.Symbol, rhs *rhsNode, start, end uint64) {
 		if _, ok := f.orEdges[sn]; !ok {
 			f.orEdges[sn] = iteratable.NewSet(0)
 		}
-		f.orEdges[sn].Add(rhs)
+		f.orEdges[sn].Add(e)
 	}
 }
 
@@ -457,4 +458,50 @@ func (t searchTree) Add(p1, p2 uint64, item interface{}) {
 		t[p1][p2] = iteratable.NewSet(0)
 	}
 	t[p1][p2].Add(item)
+}
+
+func (t searchTree) All() []interface{} {
+	var values []interface{}
+	for _, t1 := range t {
+		for _, set := range t1 {
+			v := set.Values()
+			values = append(values, v...)
+		}
+	}
+	return values
+}
+
+// --- GraphViz --------------------------------------------------------------
+
+func ToGraphViz(forest *Forest, w io.Writer) {
+	io.WriteString(w, `digraph G {
+{ node [shape=box]
+`)
+	nodes := forest.symbolNodes.All()
+	for _, n := range nodes {
+		node := n.(*SymbolNode)
+		io.WriteString(w, fmt.Sprintf("\"%s\" [style=rounded]\n", node.String()))
+	}
+	rhsnodes := forest.rhsNodes.All()
+	for _, n := range rhsnodes {
+		node := n.(*rhsNode)
+		io.WriteString(w, fmt.Sprintf("\"%d %d\" []\n", node.rule, node.sigma))
+	}
+	io.WriteString(w, "}\n")
+	for _, set := range forest.orEdges {
+		oredges := set.Values()
+		for _, e := range oredges {
+			edge := e.(orEdge)
+			io.WriteString(w, fmt.Sprintf("\"%s\" -> \"%d %d\" [style=dashed]\n", edge.fromSym, edge.toRHS.rule, edge.toRHS.sigma))
+		}
+	}
+	for _, set := range forest.andEdges {
+		andedges := set.Values()
+		for _, e := range andedges {
+			edge := e.(andEdge)
+			io.WriteString(w, fmt.Sprintf("\"%d %d\" -> \"%s\" [label=%d]\n", edge.fromRHS.rule,
+				edge.fromRHS.sigma, edge.toSym, edge.sequence))
+		}
+	}
+	io.WriteString(w, "}\n")
 }

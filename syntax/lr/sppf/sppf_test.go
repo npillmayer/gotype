@@ -12,6 +12,23 @@ import (
 	"github.com/npillmayer/gotype/syntax/lr"
 )
 
+func TestSigma(t *testing.T) {
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	b := lr.NewGrammarBuilder("G")
+	b.LHS("S").T("<", '<').N("A").N("Z").T(">", '>').End()
+	g, _ := b.Grammar()
+	s1 := makeSym(g.SymbolByName("A")).spanning(1, 8)
+	s2 := makeSym(g.SymbolByName("Z")).spanning(8, 9)
+	rhs := []*SymbolNode{s1, s2}
+	t.Logf("rhs=%v", rhs)
+	sigma := rhsSignature(rhs, 0)
+	if sigma != 105544 {
+		t.Errorf("sigma expected to be 105544, is %d", sigma)
+	}
+}
+
 // S' ⟶ S
 // S  ⟶ A
 // A  ⟶ a
