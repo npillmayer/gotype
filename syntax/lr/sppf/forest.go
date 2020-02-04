@@ -273,19 +273,19 @@ func (rhs *rhsNode) identified(start uint64, signature int32) *rhsNode {
 // rhsSignature hashes over the symbols of a RHS, given a slice of symbols and
 // a start position. The latter is used only in cases where RHS=ε.
 // To randomize input positions, we map them to an array o of offsets.
-var o = [...]int32{107, 401, 353, 223, 811, 569, 619, 173, 433, 757}
+var o = [...]int64{107, 401, 353, 223, 811, 569, 619, 173, 433, 757}
 
 func rhsSignature(rhs []*SymbolNode, start uint64) int32 {
-	const largePrime = int32(143743)
+	const largePrime = int64(143743)
 	if len(rhs) == 0 { // ε
-		return o[start%uint64(len(o))]
+		return int32(o[start%uint64(len(o))])
 	}
-	h := int32(817)
+	h := int64(817)
 	for _, symnode := range rhs {
-		h *= int32(symnode.Symbol.Value) * o[symnode.Extent.From()%uint64(len(o))]
+		h *= int64(symnode.Symbol.Value) * o[symnode.Extent.From()%uint64(len(o))]
 		h %= largePrime
 	}
-	return h
+	return int32(h)
 }
 
 // FindRHSNode finds a (shared) node for a right hand side in the forest.
@@ -480,12 +480,16 @@ func ToGraphViz(forest *Forest, w io.Writer) {
 	nodes := forest.symbolNodes.All()
 	for _, n := range nodes {
 		node := n.(*SymbolNode)
-		io.WriteString(w, fmt.Sprintf("\"%s\" [style=rounded]\n", node.String()))
+		if node.Symbol.IsTerminal() {
+			io.WriteString(w, fmt.Sprintf("\"%s\" [fillcolor=grey90, style=filled]\n", node.String()))
+		} else {
+			io.WriteString(w, fmt.Sprintf("\"%s\" []\n", node.String()))
+		}
 	}
 	rhsnodes := forest.rhsNodes.All()
 	for _, n := range rhsnodes {
 		node := n.(*rhsNode)
-		io.WriteString(w, fmt.Sprintf("\"%d %d\" []\n", node.rule, node.sigma))
+		io.WriteString(w, fmt.Sprintf("\"%d %d\" [style=rounded]\n", node.rule, node.sigma))
 	}
 	io.WriteString(w, "}\n")
 	for _, set := range forest.orEdges {
