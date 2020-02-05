@@ -143,7 +143,7 @@ func (f *Forest) AddReduction(sym *lr.Symbol, rule int, rhs []*SymbolNode) *Symb
 	rhsnode := f.addRHSNode(rule, rhs, rhs[0].Extent.From())
 	f.addOrEdge(sym, rhsnode, start, end)
 	for seq, d := range rhs {
-		f.addAndEdge(rhsnode, d.Symbol, uint(seq), start, end)
+		f.addAndEdge(rhsnode, uint(seq), d.Symbol, d.Extent.From(), d.Extent.To())
 		f.parent[d] = f.findSymNode(sym, start, end)
 	}
 	symnode := f.findSymNode(sym, start, end)
@@ -282,7 +282,7 @@ func rhsSignature(rhs []*SymbolNode, start uint64) int32 {
 	}
 	h := int64(817)
 	for _, symnode := range rhs {
-		h *= int64(symnode.Symbol.Value)
+		h *= abs(symnode.Symbol.Value)
 		h %= largePrime
 		h *= o[symnode.Extent.From()%uint64(len(o))]
 		h %= largePrime
@@ -367,7 +367,7 @@ type andEdge struct {
 // is found.
 //
 // If the edge already exists, nothing is done.
-func (f *Forest) addAndEdge(rhs *rhsNode, sym *lr.Symbol, seq uint, start, end uint64) {
+func (f *Forest) addAndEdge(rhs *rhsNode, seq uint, sym *lr.Symbol, start, end uint64) {
 	T().Debugf("Add AND-edge %v --(%d)--> %v", rhs.rule, seq, sym)
 	sn := f.addSymNode(sym, start, end)
 	if e := f.findAndEdge(rhs, sn); e.isNull() {
@@ -462,12 +462,11 @@ func (t searchTree) Add(p1, p2 uint64, item interface{}) {
 	t[p1][p2].Add(item)
 }
 
-func (t searchTree) All() []interface{} {
-	var values []interface{}
+func (t searchTree) All() *iteratable.Set {
+	values := iteratable.NewSet(0)
 	for _, t1 := range t {
 		for _, set := range t1 {
-			v := set.Values()
-			values = append(values, v...)
+			values = values.Union(set)
 		}
 	}
 	return values
@@ -475,22 +474,33 @@ func (t searchTree) All() []interface{} {
 
 // --- GraphViz --------------------------------------------------------------
 
+// ToGraphViz exports an SPPF to an io.Writer in GrahpViz DOT format.
 func ToGraphViz(forest *Forest, w io.Writer) {
 	io.WriteString(w, `digraph G {
-{ node [shape=box]
+{ graph [fontname="helvetica"];
+  node [fontname="helvetica",shape=box];
+  edge [fontname="helvetica"];
 `)
 	nodes := forest.symbolNodes.All()
-	for _, n := range nodes {
-		node := n.(*SymbolNode)
+	nodes.Sort(func(x, y interface{}) bool {
+		return x.(*SymbolNode).Extent.From() < y.(*SymbolNode).Extent.From()
+	})
+	nodes.IterateOnce()
+	for nodes.Next() {
+		node := nodes.Item().(*SymbolNode)
 		if node.Symbol.IsTerminal() {
 			io.WriteString(w, fmt.Sprintf("\"%s\" [fillcolor=grey90,style=filled]\n", node.String()))
 		} else {
 			io.WriteString(w, fmt.Sprintf("\"%s\" []\n", node.String()))
 		}
 	}
-	rhsnodes := forest.rhsNodes.All()
-	for _, n := range rhsnodes {
-		node := n.(*rhsNode)
+	nodes = forest.rhsNodes.All()
+	nodes.Sort(func(x, y interface{}) bool {
+		return x.(*rhsNode).rule < y.(*rhsNode).rule
+	})
+	nodes.IterateOnce()
+	for nodes.Next() {
+		node := nodes.Item().(*rhsNode)
 		io.WriteString(w, fmt.Sprintf("\"%d %d\" [style=rounded]\n", node.rule, node.sigma))
 	}
 	io.WriteString(w, "}\n")
@@ -502,12 +512,24 @@ func ToGraphViz(forest *Forest, w io.Writer) {
 		}
 	}
 	for _, set := range forest.andEdges {
-		andedges := set.Values()
-		for _, e := range andedges {
-			edge := e.(andEdge)
+		set.Sort(func(x, y interface{}) bool {
+			return x.(andEdge).sequence < y.(andEdge).sequence
+		})
+		set.IterateOnce()
+		for set.Next() {
+			edge := set.Item().(andEdge)
 			io.WriteString(w, fmt.Sprintf("\"%d %d\" -> \"%s\" [label=%d]\n", edge.fromRHS.rule,
 				edge.fromRHS.sigma, edge.toSym, edge.sequence))
 		}
 	}
 	io.WriteString(w, "}\n")
+}
+
+// ---------------------------------------------------------------------------
+
+func abs(n int) int64 {
+	if n < 0 {
+		n = -n
+	}
+	return int64(n)
 }
