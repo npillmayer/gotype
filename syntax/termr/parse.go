@@ -13,29 +13,27 @@ import (
 )
 
 // List       ::=  '(' Sequence ')'
-// QuotedList ::=  '^' '(' Sequence ')'
 // Sequence   ::=  Sequence Atom
 // Sequence   ::=  Sequence
-// Atom       ::=  '^' ident
+// Atom       ::=  '^' Atom   // currently un-ambiguated by QuoteOrAtom, TODO: parse ambiguously
 // Atom       ::=  ident
 // Atom       ::=  string
 // Atom       ::=  int
-// Atom       ::=  float  // TODO unify this to number
+// Atom       ::=  float      // TODO unify this to number
 // Atom       ::=  List
-// Atom       ::=  QuotedList
-func makeGospelGrammar() (*lr.LRAnalysis, error) {
+func makeTermRGrammar() (*lr.LRAnalysis, error) {
 	b := lr.NewGrammarBuilder("TermR")
 	b.LHS("List").T("(", '(').N("Sequence").T(")", ')').End()
-	b.LHS("QuotedList").T("quote", '^').T("(", '(').N("Sequence").T(")", ')').End()
-	b.LHS("Sequence").N("Sequence").N("Atom").End()
-	b.LHS("Sequence").N("Atom").End()
-	b.LHS("Atom").T("quote", '^').T("ident", scanner.Ident).End()
+	b.LHS("Sequence").N("Sequence").N("QuoteOrAtom").End()
+	b.LHS("Sequence").N("QuoteOrAtom").End()
+	b.LHS("QuoteOrAtom").N("Quote").End()
+	b.LHS("QuoteOrAtom").N("Atom").End()
+	b.LHS("Quote").T("quote", '^').N("Atom").End()
 	b.LHS("Atom").T("ident", scanner.Ident).End()
 	b.LHS("Atom").T("string", scanner.String).End()
 	b.LHS("Atom").T("int", scanner.Int).End()
 	b.LHS("Atom").T("float", scanner.Float).End()
 	b.LHS("Atom").N("List").End()
-	b.LHS("Atom").N("QuotedList").End()
 	g, err := b.Grammar()
 	if err != nil {
 		return nil, err
@@ -50,7 +48,7 @@ func createParser() *earley.Parser {
 	var ga *lr.LRAnalysis
 	startOnce.Do(func() {
 		var err error
-		if ga, err = makeGospelGrammar(); err != nil {
+		if ga, err = makeTermRGrammar(); err != nil {
 			panic("Cannot create global grammar")
 		}
 	})
@@ -158,7 +156,7 @@ type ruleOp func(*lr.Symbol, []*sppf.RuleNode, lr.Span, int) interface{}
 func newListener() *Listener {
 	l := &Listener{}
 	l.dispatchEnter = map[string]ruleEnterOp{
-		"QuotedList": l.EnterQuotedList,
+		"QuoteOrAtom": l.EnterQuoteOrAtom,
 	}
 	l.dispatchExit = map[string]ruleOp{
 		"List":     l.ExitList,
@@ -176,7 +174,7 @@ func (l *Listener) EnterRule(lhs *lr.Symbol, rhs []*sppf.RuleNode, span lr.Span,
 	return true
 }
 
-func (l *Listener) EnterQuotedList(lhs *lr.Symbol, rhs []*sppf.RuleNode, span lr.Span, level int) bool {
+func (l *Listener) EnterQuoteOrAtom(lhs *lr.Symbol, rhs []*sppf.RuleNode, span lr.Span, level int) bool {
 	if len(rhs) <= 2 {
 		T().Debugf("%sempty Q-LIST", indent(level))
 		return false

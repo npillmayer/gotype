@@ -12,6 +12,7 @@ const (
 	BoolType
 	ConsType
 	OperatorType
+	TokenType
 	UserType
 )
 
