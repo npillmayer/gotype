@@ -85,12 +85,15 @@ func (c *Cursor) RHS(sym *SymbolNode) []*RuleNode {
 	}
 	if iter, ok := c.forest.children(rhs); ok {
 		edges := c.forest.andEdges[rhs]
+		T().Debugf("RHS(%s) has length %d", sym, edges.Size())
 		rhsnodes := make([]*RuleNode, edges.Size())
 		var rhschild *SymbolNode
 		rhschild, iter = iter()
 		i := 0
 		for ; rhschild != nil; rhschild, iter = iter() {
+			T().Debugf("   RHS #%d = %s", i, rhschild)
 			rhsnodes[i] = &RuleNode{symbol: rhschild}
+			i++
 		}
 		return rhsnodes
 	}
@@ -125,7 +128,7 @@ type Cursor struct {
 	current   *RuleNode
 	pruner    Pruner
 	startNode *RuleNode
-	chIterate childIterator
+	stack     []childIterator
 }
 
 // SetCursor sets up a cursor at a given rule node in a given forest.
@@ -147,6 +150,7 @@ func (f *Forest) SetCursor(rnode *RuleNode, pruner Pruner) *Cursor {
 		current:   rnode,
 		pruner:    pruner,
 		startNode: rnode,
+		stack:     make([]childIterator, 0, 256),
 	}
 }
 
@@ -195,14 +199,14 @@ var DontCarePruner dcp = dcp{}
 func (f *Forest) disambiguate(sym *SymbolNode, pruner Pruner) *rhsNode {
 	if choices, ok := f.orEdges[sym]; ok {
 		if choices.Size() == 1 {
-			return choices.First().(*rhsNode)
+			return choices.First().(orEdge).toRHS
 		}
 		match := choices.FirstMatch(func(el interface{}) bool {
-			rhs := el.(*rhsNode)
+			rhs := el.(orEdge).toRHS
 			return !pruner.prune(sym, rhs)
 		})
 		if match != nil {
-			return match.(*rhsNode)
+			return match.(orEdge).toRHS
 		}
 	}
 	return nil
@@ -211,9 +215,9 @@ func (f *Forest) disambiguate(sym *SymbolNode, pruner Pruner) *rhsNode {
 // Up moves the cursor up to the parent node of the current node, if any.
 func (c *Cursor) Up() (*RuleNode, bool) {
 	if parent, ok := c.forest.parent[c.current.symbol]; ok {
-		T().Debugf("Cursor UP")
 		c.current.symbol = parent
-		T().Debugf("Cursor @ %v", c.current.Symbol())
+		T().Debugf("UP Cursor @ %v", c.current.Symbol())
+		c.stack = c.stack[:len(c.stack)-1]
 		return c.current, true
 	}
 	return c.current, false
@@ -227,13 +231,12 @@ func (c *Cursor) Down(dir Direction) (*RuleNode, bool) {
 	if rhs == nil {
 		return c.current, false
 	}
-	var ok bool
-	if c.chIterate, ok = c.forest.children(rhs); ok {
-		T().Debugf("Cursor DOWN")
+	if iter, ok := c.forest.children(rhs); ok {
+		c.stack = append(c.stack, iter)
 		var child *SymbolNode
-		if child, c.chIterate = c.chIterate(); child != nil {
+		if child, iter = iter(); child != nil {
 			c.current.symbol = child
-			T().Debugf("Cursor @ %v", c.current.Symbol())
+			T().Debugf("DOWN Cursor @ %v", c.current.Symbol())
 			return c.current, true
 		}
 	}
@@ -242,10 +245,11 @@ func (c *Cursor) Down(dir Direction) (*RuleNode, bool) {
 
 // Sibling moves the cursor to the next sibling of the current node, if any.
 func (c *Cursor) Sibling() (*RuleNode, bool) {
+	iter := c.stack[len(c.stack)-1]
 	var sym *SymbolNode
-	if sym, c.chIterate = c.chIterate(); sym != nil {
+	if sym, iter = iter(); sym != nil {
 		c.current.symbol = sym
-		T().Debugf("Cursor @ %v", c.current.Symbol())
+		T().Debugf("SIBLING Cursor @ %v", c.current.Symbol())
 		return c.current, true
 	}
 	return c.current, false
@@ -266,8 +270,9 @@ func (c *Cursor) traverseTopDown(listener Listener, dir Direction, breakmode Bre
 		// TODO find position of token
 		return listener.Terminal(sym.Value, sym.Token(), lr.Span{}, level+1)
 	}
+	T().Debugf(">>> %s", c.current.symbol)
 	rhsNodes := c.RHS(c.current.symbol)
-	T().Debugf("rhsNodes=%v", rhsNodes)
+	T().Debugf("%s.rhsNodes=%v", c.current.Symbol(), rhsNodes)
 	doContinue := listener.EnterRule(c.current.Symbol(), rhsNodes, c.current.Span(), level)
 	if doContinue || breakmode == Continue { // listener signalled us to traverse children nodes
 		i := 0
@@ -277,7 +282,8 @@ func (c *Cursor) traverseTopDown(listener Listener, dir Direction, breakmode Bre
 		if _, ok := c.Down(dir); ok {
 			for ; ok; _, ok = c.Sibling() {
 				chvalue := c.traverseTopDown(listener, dir, breakmode, level+1)
-				T().Debugf("i=%d", i)
+				//T().Debugf("i=%d", i)
+				T().Debugf("child value[%d] = %v", i, chvalue)
 				rhsNodes[i].Value = chvalue
 				i += int(dir)
 			}
@@ -285,6 +291,7 @@ func (c *Cursor) traverseTopDown(listener Listener, dir Direction, breakmode Bre
 		}
 	}
 	value = listener.ExitRule(c.current.Symbol(), rhsNodes, c.current.Span(), level)
+	T().Debugf("<<< %s", c.current.symbol)
 	return value
 }
 
