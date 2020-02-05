@@ -282,7 +282,9 @@ func rhsSignature(rhs []*SymbolNode, start uint64) int32 {
 	}
 	h := int64(817)
 	for _, symnode := range rhs {
-		h *= int64(symnode.Symbol.Value) * o[symnode.Extent.From()%uint64(len(o))]
+		h *= int64(symnode.Symbol.Value)
+		h %= largePrime
+		h *= o[symnode.Extent.From()%uint64(len(o))]
 		h %= largePrime
 	}
 	return int32(h)
