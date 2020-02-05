@@ -477,11 +477,21 @@ func (t searchTree) All() *iteratable.Set {
 // ToGraphViz exports an SPPF to an io.Writer in GrahpViz DOT format.
 func ToGraphViz(forest *Forest, w io.Writer) {
 	io.WriteString(w, `digraph G {
-{ graph [fontname="helvetica"];
-  node [fontname="helvetica",shape=box];
-  edge [fontname="helvetica"];
+{ graph [fontname="Helvetica"];
+  node [fontname="Helvetica",shape=box,fontsize=10];
+  edge [fontname="Helvetica",fontsize=9];
 `)
-	nodes := forest.symbolNodes.All()
+	nodes := forest.rhsNodes.All()
+	nodes.Sort(func(x, y interface{}) bool {
+		return x.(*rhsNode).rule < y.(*rhsNode).rule
+	})
+	nodes.IterateOnce()
+	for nodes.Next() {
+		node := nodes.Item().(*rhsNode)
+		io.WriteString(w, fmt.Sprintf("\"rule %d (%d)\" [style=rounded,color=\"#404040\"]\n",
+			node.rule, node.sigma))
+	}
+	nodes = forest.symbolNodes.All()
 	nodes.Sort(func(x, y interface{}) bool {
 		return x.(*SymbolNode).Extent.From() < y.(*SymbolNode).Extent.From()
 	})
@@ -494,21 +504,13 @@ func ToGraphViz(forest *Forest, w io.Writer) {
 			io.WriteString(w, fmt.Sprintf("\"%s\" []\n", node.String()))
 		}
 	}
-	nodes = forest.rhsNodes.All()
-	nodes.Sort(func(x, y interface{}) bool {
-		return x.(*rhsNode).rule < y.(*rhsNode).rule
-	})
-	nodes.IterateOnce()
-	for nodes.Next() {
-		node := nodes.Item().(*rhsNode)
-		io.WriteString(w, fmt.Sprintf("\"%d %d\" [style=rounded]\n", node.rule, node.sigma))
-	}
 	io.WriteString(w, "}\n")
 	for _, set := range forest.orEdges {
 		oredges := set.Values()
 		for _, e := range oredges {
 			edge := e.(orEdge)
-			io.WriteString(w, fmt.Sprintf("\"%s\" -> \"%d %d\" [style=dashed]\n", edge.fromSym, edge.toRHS.rule, edge.toRHS.sigma))
+			io.WriteString(w, fmt.Sprintf("\"%s\" -> \"rule %d (%d)\" [style=dashed]\n",
+				edge.fromSym, edge.toRHS.rule, edge.toRHS.sigma))
 		}
 	}
 	for _, set := range forest.andEdges {
@@ -518,11 +520,20 @@ func ToGraphViz(forest *Forest, w io.Writer) {
 		set.IterateOnce()
 		for set.Next() {
 			edge := set.Item().(andEdge)
-			io.WriteString(w, fmt.Sprintf("\"%d %d\" -> \"%s\" [label=%d]\n", edge.fromRHS.rule,
+			io.WriteString(w, fmt.Sprintf("\"rule %d (%d)\" -> \"%s\" [label=%d]\n", edge.fromRHS.rule,
 				edge.fromRHS.sigma, edge.toSym, edge.sequence))
 		}
 	}
-	io.WriteString(w, "}\n")
+	io.WriteString(w, "{ rank=max;\n")
+	// { rank=max; T1; T2; T3 } => all terminals at bottom row
+	nodes.IterateOnce()
+	for nodes.Next() {
+		node := nodes.Item().(*SymbolNode)
+		if node.Symbol.IsTerminal() {
+			io.WriteString(w, fmt.Sprintf("\"%s\";", node.String()))
+		}
+	}
+	io.WriteString(w, "\n}\n}\n")
 }
 
 // ---------------------------------------------------------------------------
