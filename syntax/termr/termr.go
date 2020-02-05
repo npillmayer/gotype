@@ -1,5 +1,10 @@
 package termr
 
+import (
+	"bytes"
+	"fmt"
+)
+
 // https://hanshuebner.github.io/lmman/fd-con.xml
 // https://www.tutorialspoint.com/lisp/lisp_basic_syntax.htm
 
@@ -72,9 +77,60 @@ func atomize(thing interface{}) carNode {
 	return carnode
 }
 
+func (car carNode) String() string {
+	if car.child != nil {
+		return "(list)"
+	}
+	switch car.atom.typ {
+	case NumType:
+		return fmt.Sprintf("%d", car.atom.Data)
+	case BoolType:
+		return fmt.Sprintf("%v", car.atom.Data)
+	case StringType:
+		return fmt.Sprintf("\"%s\"", car.atom.Data)
+	}
+	return fmt.Sprintf("%v", car.atom.Data)
+}
+func (car carNode) ListString() string {
+	if car.child != nil {
+		return car.child.ListString()
+	}
+	return car.String()
+}
+
 type GCons struct {
 	car carNode
 	cdr *GCons
+}
+
+func (c GCons) String() string {
+	var cdrstring string
+	if c.cdr == nil {
+		cdrstring = "∖"
+	} else {
+		cdrstring = "→"
+	}
+	return fmt.Sprintf("(%s,%s)", c.car, cdrstring)
+}
+
+func (c *GCons) ListString() string {
+	if c == nil {
+		return "()"
+	}
+	var b bytes.Buffer
+	b.WriteString("(")
+	first := true
+	for c != nil {
+		if first {
+			first = false
+		} else {
+			b.WriteString(" ")
+		}
+		b.WriteString(c.car.ListString())
+		c = c.cdr
+	}
+	b.WriteString(")")
+	return b.String()
 }
 
 func (l *GCons) Atom() Atom {
