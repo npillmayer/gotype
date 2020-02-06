@@ -287,7 +287,7 @@ func isLower(s string) bool {
 
 // GenerateParser generates Go source code for a parser for the given grammar.
 func GenerateParser(g *EBNFGrammar) error {
-	return nil
+	return fmt.Errorf("grammy.GenerateParser() not yet implemented")
 }
 
 func basepkgname(pkgname string) string {
