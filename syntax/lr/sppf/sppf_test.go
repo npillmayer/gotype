@@ -24,8 +24,8 @@ func TestSigma(t *testing.T) {
 	rhs := []*SymbolNode{s1, s2}
 	t.Logf("rhs=%v", rhs)
 	sigma := rhsSignature(rhs, 0)
-	if sigma != 105544 {
-		t.Errorf("sigma expected to be 105544, is %d", sigma)
+	if sigma != 98854 {
+		t.Errorf("sigma expected to be 98854, is %d", sigma)
 	}
 }
 
@@ -125,14 +125,14 @@ type L struct {
 	a      *lr.Symbol
 }
 
-func (l *L) EnterRule(sym *lr.Symbol, rhs []*RuleNode, span lr.Span, level int) bool {
+func (l *L) EnterRule(sym *lr.Symbol, rhs []*RuleNode, ctxt RuleCtxt) bool {
 	if sym.IsTerminal() {
 		return false
 	}
 	l.t.Logf("+ enter %v", sym)
 	return true
 }
-func (l *L) ExitRule(sym *lr.Symbol, rhs []*RuleNode, span lr.Span, level int) interface{} {
+func (l *L) ExitRule(sym *lr.Symbol, rhs []*RuleNode, ctxt RuleCtxt) interface{} {
 	if sym.Name == "S'" {
 		l.isBack = true
 	}
@@ -140,14 +140,18 @@ func (l *L) ExitRule(sym *lr.Symbol, rhs []*RuleNode, span lr.Span, level int) i
 	return nil
 }
 
-func (l *L) Terminal(tokval int, token interface{}, span lr.Span, level int) interface{} {
+func (l *L) Terminal(tokval int, token interface{}, ctxt RuleCtxt) interface{} {
 	tok := l.G.Terminal(tokval)
 	l.a = tok
 	l.t.Logf("  terminal=%s", tok.Name)
 	return tok
 }
 
-func (l *L) Conflict(sym *lr.Symbol, rule int, span lr.Span, level int) (int, error) {
+func (l *L) Conflict(sym *lr.Symbol, ctxt RuleCtxt) (int, error) {
 	l.t.Error("did not expect conflict")
 	return 0, fmt.Errorf("Conflict at symbol %v", sym)
+}
+
+func (l *L) MakeAttrs(*lr.Symbol) interface{} {
+	return nil
 }

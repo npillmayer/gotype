@@ -78,10 +78,11 @@ func (rnode *RuleNode) Symbol() *lr.Symbol {
 
 // RHS collects the children symbols of a node as a slice.
 // It uses a pruner to decide between ambiguous RHS variants.
-func (c *Cursor) RHS(sym *SymbolNode) []*RuleNode {
-	rhs := c.forest.disambiguate(c.current.symbol, c.pruner)
+func (c *Cursor) RHS(sym *SymbolNode) (int, []*RuleNode) {
+	//rhs := c.forest.disambiguate(c.current.symbol, c.pruner)
+	rhs := c.forest.disambiguate(sym, c.pruner)
 	if rhs == nil {
-		return nil
+		return -1, nil
 	}
 	if iter, ok := c.forest.children(rhs); ok {
 		edges := c.forest.andEdges[rhs]
@@ -95,9 +96,9 @@ func (c *Cursor) RHS(sym *SymbolNode) []*RuleNode {
 			rhsnodes[i] = &RuleNode{symbol: rhschild}
 			i++
 		}
-		return rhsnodes
+		return rhs.rule, rhsnodes
 	}
-	return nil
+	return rhs.rule, nil
 }
 
 // Span returns the span of input symbols this rule covers.
@@ -268,12 +269,15 @@ func (c *Cursor) traverseTopDown(listener Listener, dir Direction, breakmode Bre
 	var value interface{}
 	if sym := c.current.Symbol(); sym.IsTerminal() {
 		// TODO find position of token
-		return listener.Terminal(sym.Value, sym.Token(), lr.Span{}, level+1)
+		ctxt := makeCtxt(c.current.symbol.Extent, level+1, -1, nil)
+		return listener.Terminal(sym.Value, sym.Token(), ctxt)
 	}
 	T().Debugf(">>> %s", c.current.symbol)
-	rhsNodes := c.RHS(c.current.symbol)
+	ruleno, rhsNodes := c.RHS(c.current.symbol)
 	T().Debugf("%s.rhsNodes=%v", c.current.Symbol(), rhsNodes)
-	doContinue := listener.EnterRule(c.current.Symbol(), rhsNodes, c.current.Span(), level)
+	localAttributes := listener.MakeAttrs(c.current.Symbol())
+	ctxt := makeCtxt(c.current.Span(), level, ruleno, localAttributes)
+	doContinue := listener.EnterRule(c.current.Symbol(), rhsNodes, ctxt)
 	if doContinue || breakmode == Continue { // listener signalled us to traverse children nodes
 		i := 0
 		if dir == RtoL {
@@ -282,7 +286,6 @@ func (c *Cursor) traverseTopDown(listener Listener, dir Direction, breakmode Bre
 		if _, ok := c.Down(dir); ok {
 			for ; ok; _, ok = c.Sibling() {
 				chvalue := c.traverseTopDown(listener, dir, breakmode, level+1)
-				//T().Debugf("i=%d", i)
 				T().Debugf("child value[%d] = %v", i, chvalue)
 				rhsNodes[i].Value = chvalue
 				i += int(dir)
@@ -290,13 +293,15 @@ func (c *Cursor) traverseTopDown(listener Listener, dir Direction, breakmode Bre
 			c.Up()
 		}
 	}
-	value = listener.ExitRule(c.current.Symbol(), rhsNodes, c.current.Span(), level)
+	value = listener.ExitRule(c.current.Symbol(), rhsNodes, ctxt)
 	T().Debugf("<<< %s", c.current.symbol)
 	return value
 }
 
 // BottomUp TODO
-func (c *Cursor) BottomUp(Listener, Direction, Breakmode) interface{} { return nil }
+func (c *Cursor) BottomUp(Listener, Direction, Breakmode) interface{} {
+	panic("sppf.Cursor.BottomUp() not yet implemented")
+}
 
 // Direction lets clients decide wether children nodes should be traversed left-to-right
 // (default) or right-to-left.
@@ -326,8 +331,7 @@ const (
 //
 //     - *lr.Symbol:  the grammar symbol at the current node
 //     - []*RuleNode: the right-hand side of the grammar production at this node
-//     - lr.Span:     the span of input symbols covered by this node
-//     - int:         the nesting level of the current node
+//     - RuleCtxt:    contextual information for the node
 //
 // enterRule returns a boolean value indicating if the traversal should continue to
 // the children of this node. ExitRule and Terminal may return user-defined values
@@ -339,10 +343,28 @@ const (
 // of the RHS-variant to be selected. If it returns an error, traversal will be aborted.
 // (If in doubt what to do, simply return (0, nil).)
 type Listener interface {
-	EnterRule(*lr.Symbol, []*RuleNode, lr.Span, int) bool
-	ExitRule(*lr.Symbol, []*RuleNode, lr.Span, int) interface{}
-	Terminal(int, interface{}, lr.Span, int) interface{}
-	Conflict(*lr.Symbol, int, lr.Span, int) (int, error)
+	EnterRule(*lr.Symbol, []*RuleNode, RuleCtxt) bool
+	ExitRule(*lr.Symbol, []*RuleNode, RuleCtxt) interface{}
+	Terminal(int, interface{}, RuleCtxt) interface{}
+	Conflict(*lr.Symbol, RuleCtxt) (int, error)
+	MakeAttrs(*lr.Symbol) interface{}
+}
+
+// RuleCtxt is a context structure for Listeners.
+type RuleCtxt struct {
+	Span      lr.Span     // span of input symbols covered by this rule
+	Level     int         // nesting level
+	RuleIndex int         // -1 for terminals
+	Attrs     interface{} // client-defined attributes local to node
+}
+
+func makeCtxt(span lr.Span, level int, rule int, attrs interface{}) RuleCtxt {
+	return RuleCtxt{
+		Span:      span,
+		Level:     level,
+		RuleIndex: rule,
+		Attrs:     attrs,
+	}
 }
 
 // ---------------------------------------------------------------------------
