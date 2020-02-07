@@ -8,13 +8,11 @@ import (
 // ASTBuilder is a parse tree listener for building ASTs.
 // AST is a homogenous abstract syntax tree.
 type ASTBuilder struct {
-	G      *lr.Grammar  // input grammar the parse forest stems from
-	forest *sppf.Forest // input parse forest
-	ast    *GCons       // root of the AST to construct
-	last   *GCons       // current last node to append conses
-	// dispatchEnter    func(string) ruleABEnter
-	// dispatchExit     func(string) ruleABExit
-	operators        map[string]*ASTOperator
+	G                *lr.Grammar  // input grammar the parse forest stems from
+	forest           *sppf.Forest // input parse forest
+	ast              *GCons       // root of the AST to construct
+	last             *GCons       // current last node to append conses
+	operators        map[string]ASTOperator
 	conflictStrategy sppf.Pruner
 	Error            func(error)
 	stack            []*GCons
@@ -29,44 +27,25 @@ func NewASTBuilder(g *lr.Grammar) *ASTBuilder {
 		G:         g,
 		ast:       &GCons{Node{NullAtom, nil}, nil}, // AST anchor
 		stack:     make([]*GCons, 0, 256),
-		operators: make(map[string]*ASTOperator),
-		// dispatchEnter: nullABEnter,
-		// dispatchExit:  nullABExit,
+		operators: make(map[string]ASTOperator),
 	}
 	ab.last = ab.ast
 	ab.stack = append(ab.stack, ab.ast) // push as stopper
 	return ab
 }
 
-// func nullABEnter(string) ruleABEnter {
-// 	return nil
-// }
-
-// func nullABExit(string) ruleABExit {
-// 	return nil
-// }
-
 // ASTOperator is a type for an operator for AST creation and transformation
 // (rewriting).
-type ASTOperator struct {
-	Name    string
-	Rewrite func(*GCons, *Environment) *GCons
-	Descend func(sppf.RuleCtxt) bool
-}
-
-func (op *ASTOperator) String() string {
-	return op.Name + ":Op"
-}
-
-// Call is part of interface Operator.
-func (op *ASTOperator) Call(term *GCons) *GCons {
-	return op.Rewrite(term, globalEnvironment)
+type ASTOperator interface {
+	Name() string
+	Rewrite(*GCons, *Environment) *GCons
+	Descend(sppf.RuleCtxt) bool
 }
 
 // AddOperator adds an AST operator for a grammar symbol to the builder.
-func (ab *ASTBuilder) AddOperator(op *ASTOperator) {
+func (ab *ASTBuilder) AddOperator(op ASTOperator) {
 	if op != nil {
-		ab.operators[op.Name] = op
+		ab.operators[op.Name()] = op
 	}
 }
 
@@ -86,48 +65,11 @@ func (ab *ASTBuilder) AST(parseTree *sppf.Forest) (*GCons, interface{}) {
 	return ab.ast, value
 }
 
-// func (ab *ASTBuilder) appendList(list *GCons) {
-// 	if list == nil {
-// 		return
-// 	}
-// 	T().Debugf("APPEND LIST %s", list.ListString())
-// 	//ab.last.cdr = &GCons{Node{NullAtom, list}, nil}
-// 	ab.last.cdr = &GCons{list.Car().car, nil}
-// 	ab.last = ab.last.cdr
-// }
-
-// func (ab *ASTBuilder) append(car Node) {
-// 	if car == nullNode {
-// 		return
-// 	}
-// 	ab.last.cdr = &GCons{car, nil}
-// 	ab.last = ab.last.cdr
-// }
-
-// func (ab *ASTBuilder) up() {
-// 	if ab.stack[len(ab.stack)-1].car.atom == NullAtom {
-// 		T().Errorf("up() called with empty stack")
-// 		panic("empty stack")
-// 	}
-// 	ab.last = ab.stack[len(ab.stack)-1]
-// 	ab.stack = ab.stack[:len(ab.stack)-1] // pop last
-// }
-
-// func (ab *ASTBuilder) down(car Node) {
-// 	ab.stack = append(ab.stack, ab.last)
-// 	child := &GCons{car, nil}
-// 	ab.last.cdr = &GCons{Node{NullAtom, child}, nil}
-// 	ab.last = child
-// }
-
 // --- sppf.Listener interface -----------------------------------------------
 
 // EnterRule is part of sppf.Listener interface.
 // Not intended for direct client use.
 func (ab *ASTBuilder) EnterRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.RuleCtxt) bool {
-	// if r := ab.dispatchEnter(sym.Name); r != nil {
-	// 	return r(sym, rhs)
-	// }
 	if op, ok := ab.operators[sym.Name]; ok {
 		if !op.Descend(ctxt) {
 			return false
@@ -143,9 +85,6 @@ func (ab *ASTBuilder) EnterRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.
 // ExitRule is part of sppf.Listener interface.
 // Not intended for direct client use.
 func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.RuleCtxt) interface{} {
-	// if r := ab.dispatchExit(sym.Name); r != nil {
-	// 	return r(sym, rhs)
-	// }
 	if op, ok := ab.operators[sym.Name]; ok {
 		env, err := EnvironmentForGrammarSymbol(sym.Name, ab.G)
 		if err != nil && ab.Error != nil {
@@ -171,7 +110,6 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 		}
 		T().Debugf("Rewrite of %s", rhsList.ListString())
 		rhsList = op.Rewrite(rhsList, env)
-		//ab.stack[len(ab.stack)-1] = rhsList
 		ab.stack = ab.stack[:len(ab.stack)-1]
 		T().Debugf("%s returns %s", sym.Name, rhsList.ListString())
 		return rhsList
@@ -182,16 +120,35 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 		switch v := r.Value.(type) {
 		case Node:
 			end = appendNode(end, v)
+			if list == nil {
+				list = end
+			}
 		case *GCons:
-			end = appendTee(end, v)
+			if v.car.Type() == OperatorType {
+				T().Infof("%s: tee appending %v", sym, v.ListString())
+				end = appendTee(end, v)
+				if list == nil {
+					list = end
+				}
+			} else {
+				var l *GCons
+				T().Infof("%s: inline appending %v", sym, v.ListString())
+				l, end = appendList(end, v)
+				if list == nil {
+					list = l
+				}
+			}
 		default:
 			panic("Unknown value type of RHS symbol")
 		}
-		if list == nil {
-			list = end
-		}
 	}
-	T().Debugf("%s returns %s", sym.Name, list.ListString())
+	T().Infof("List of length %d: %s", list.Length(), list.ListString())
+	if list.Length() == 1 && list.car.Type() == ConsType {
+		// unlist
+		T().Infof("Inner list of length %d: %s", list.car.child.Length(), list.car.child.ListString())
+		list = list.car.child
+	}
+	T().Infof("%s returns %s", sym.Name, list.ListString())
 	T().Debugf("exit grammar symbol: %v", sym)
 	return list
 }
@@ -200,8 +157,8 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 // Not intended for direct client use.
 func (ab *ASTBuilder) Terminal(tokval int, token interface{}, ctxt sppf.RuleCtxt) interface{} {
 	//t := ab.G.Terminal(tokval).Name
-	node := makeNode(tokval)
-	node.atom.typ = TokenType
+	terminal := ab.G.Terminal(tokval)
+	node := makeNode(&Token{terminal.Name, tokval})
 	T().Debugf("cons(terminal=%s) = %v", ab.G.Terminal(tokval).Name, node)
 	return node
 }
@@ -229,16 +186,19 @@ func appendNode(cons *GCons, node Node) *GCons {
 	return cons.cdr
 }
 
-func appendList(cons *GCons, list *GCons) *GCons {
+func appendList(cons *GCons, list *GCons) (*GCons, *GCons) {
+	start := cons
 	if cons == nil {
 		cons = list
+		start = list
 	} else {
 		cons.cdr = list
 	}
 	for cons.cdr != nil {
 		cons = cons.cdr
 	}
-	return cons
+	T().Debugf("appendList: new list is %s", start.ListString())
+	return start, cons
 }
 
 func appendTee(cons *GCons, list *GCons) *GCons {

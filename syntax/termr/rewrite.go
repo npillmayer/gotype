@@ -6,7 +6,7 @@ type RewriteRule struct {
 }
 
 /*
-Match an S-expr to a pattern.
+Match an s-expr to a pattern.
 
 From https://hanshuebner.github.io/lmman/fd-con.xml:
 
@@ -29,24 +29,11 @@ variables. If the match fails, some or all of the variables may already have bee
 
 Example:
 
-(list-match-p foo
+    (list-match-p foo
               `((a ,x) ,ignore . ,c))
 
 is t if foo's value is a list of two or more elements, the first of which is a list
 of two elements; and in that case it sets x to (cadar foo) and c to (cddr foo).
-An equivalent expression would be
-
-(let ((tem foo))
-  (and (consp tem)
-       (consp (car tem))
-       (eq (caar tem) 'a)
-       (consp (cdar tem))
-       (progn (setq x (cadar tem)) t)
-       (null (cddar tem))
-       (consp (cdr tem))
-	   (setq c (cddr tem))))
-
-but list-match-p is faster.
 */
 func (l *GCons) Match(other *GCons, env *Environment) bool {
 	if l == nil {

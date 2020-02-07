@@ -58,15 +58,17 @@ func TestMatch2(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
-	sym := globalEnvironment.Intern("S", false)
-	l1 := List("a", sym, 2)
+	S := globalEnvironment.Intern("S", false)
+	l1 := List("a", S, 2)
 	l2 := List("a", 1, 2)
 	t.Logf("l1 = %s, l2 = %s", l1.ListString(), l2.ListString())
 	if !l1.Match(l2, globalEnvironment) {
 		t.Errorf("l1 and l2 expected to match, don't")
 	}
 	t.Logf(globalEnvironment.Dump())
-	t.Fail()
+	if S.value.atom.typ != NumType { // S expected to be bound to 1
+		t.Errorf("Symbol a expected to be of number type now, is %s", S.value.atom.typ.String())
+	}
 }
 
 func TestString(t *testing.T) {
@@ -106,16 +108,38 @@ func TestEnvSym(t *testing.T) {
 	t.Fail()
 }
 
-// TODO
-func TestEval1(t *testing.T) {
+func TestAST1(t *testing.T) {
+	//gtrace.SyntaxTracer = gotestingadapter.New()
 	gtrace.SyntaxTracer = gologadapter.New()
-	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
-	input := "(Hello ^World 1)"
-	globalEnvironment.Eval(input)
-	t.Errorf("TODO: TestEval1 to be cleaned up !")
+	//teardown := gotestingadapter.RedirectTracing(t)
+	//defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
+	b := lr.NewGrammarBuilder("TermR")
+	b.LHS("E").N("E").T("+", '+').T("a", scanner.Ident).End()
+	b.LHS("E").T("a", scanner.Ident).End()
+	G, _ := b.Grammar()
+	ga := lr.Analysis(G)
+	parser := earley.NewParser(ga, earley.GenerateTree(true))
+	input := strings.NewReader("a+a")
+	scanner := scanner.GoTokenizer("TestAST", input)
+	acc, err := parser.Parse(scanner, nil)
+	if !acc || err != nil {
+		t.Errorf("parser could not parse input")
+	}
+	// tmpfile, _ := ioutil.TempFile(".", "tree-*.dot")
+	// sppf.ToGraphViz(parser.ParseForest(), tmpfile)
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	builder := NewASTBuilder(G)
+	ast, _ := builder.AST(parser.ParseForest())
+	expected := `(a + a)`
+	if ast.cdr == nil {
+		t.Errorf("AST is empty")
+	} else if ast.ListString() != expected {
+		t.Errorf("AST should be %s, is %s", expected, ast.ListString())
+	}
 }
 
-func TestAST(t *testing.T) {
+func TestAST2(t *testing.T) {
 	//gtrace.SyntaxTracer = gotestingadapter.New()
 	gtrace.SyntaxTracer = gologadapter.New()
 	//teardown := gotestingadapter.RedirectTracing(t)
@@ -147,19 +171,36 @@ func TestAST(t *testing.T) {
 	}
 }
 
-func echoRewrite(list *GCons, env *Environment) *GCons {
+// TODO
+func TestEval1(t *testing.T) {
+	gtrace.SyntaxTracer = gologadapter.New()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
+	input := "(Hello ^World 1)"
+	globalEnvironment.Eval(input)
+	t.Errorf("TODO: TestEval1 to be cleaned up !")
+}
+
+// ---------------------------------------------------------------------------
+
+type testOp struct {
+	name string
+}
+
+func (op *testOp) Rewrite(list *GCons, env *Environment) *GCons {
 	T().Debugf(env.Dump())
 	return list
 }
 
-func alwaysDescend(sppf.RuleCtxt) bool {
+func (op *testOp) Descend(sppf.RuleCtxt) bool {
 	return true
 }
 
-func makeOp(name string) *ASTOperator {
-	return &ASTOperator{
-		Name:    name,
-		Rewrite: echoRewrite,
-		Descend: alwaysDescend,
+func (op *testOp) Name() string {
+	return op.name
+}
+
+func makeOp(name string) ASTOperator {
+	return &testOp{
+		name: name,
 	}
 }

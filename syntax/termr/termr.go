@@ -41,7 +41,7 @@ const (
 	UserType
 )
 
-// NullAtom is zero value for atoms.
+// NullAtom is a zero value for atoms.
 var NullAtom Atom = Atom{}
 
 // Type returns an atom's type.
@@ -66,6 +66,7 @@ func atomize(thing interface{}) Atom {
 		atom.Data = c
 		atom.typ = BoolType
 	case Operator:
+		T().Errorf("ATOMIZING AN OPERATOR: %v", c)
 		atom.Data = c
 		atom.typ = OperatorType
 	case *Symbol:
@@ -74,6 +75,9 @@ func atomize(thing interface{}) Atom {
 	case *Environment:
 		atom.Data = c
 		atom.typ = EnvironmentType
+	case *Token:
+		atom.Data = c
+		atom.typ = TokenType
 	default:
 		atom.Data = c
 		atom.typ = UserType
@@ -81,6 +85,8 @@ func atomize(thing interface{}) Atom {
 	return atom
 }
 
+// Operator is an interface to be implemented by every node being able to
+// operate on an argument list.
 type Operator interface {
 	Call(*GCons) *GCons
 }
@@ -123,6 +129,9 @@ func (node Node) String() string {
 		return fmt.Sprintf("%v", node.atom.Data)
 	case StringType:
 		return fmt.Sprintf("\"%s\"", node.atom.Data)
+	case TokenType:
+		t := node.atom.Data.(*Token)
+		return fmt.Sprintf("%s", t.String())
 	}
 	return fmt.Sprintf("%v", node.atom.Data)
 }

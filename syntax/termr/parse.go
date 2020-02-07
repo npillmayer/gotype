@@ -14,6 +14,8 @@ import (
 	"github.com/npillmayer/gotype/syntax/lr/sppf"
 )
 
+// --- Grammar ---------------------------------------------------------------
+
 // Atom       ::=  '^' Atom   // currently un-ambiguated by QuoteOrAtom
 // Atom       ::=  ident
 // Atom       ::=  string
@@ -44,7 +46,8 @@ func makeTermRGrammar() (*lr.LRAnalysis, error) {
 }
 
 var grammar *lr.LRAnalysis
-var startOnce sync.Once
+var astBuilder *ASTBuilder
+var startOnce sync.Once // monitors one-time creation of grammar and AST-builder
 
 func createParser() *earley.Parser {
 	startOnce.Do(func() {
@@ -52,13 +55,15 @@ func createParser() *earley.Parser {
 		if grammar, err = makeTermRGrammar(); err != nil {
 			panic("Cannot create global grammar")
 		}
+		astBuilder = NewASTBuilder(grammar.Grammar())
+		astBuilder.AddOperator(makeASTOp("Atom"))
 	})
 	return earley.NewParser(grammar, earley.GenerateTree(true))
 }
 
-func parse(prog string, source string) (*sppf.Forest, error) {
+func parse(sexpr string, source string) (*sppf.Forest, error) {
 	parser := createParser()
-	r := strings.NewReader(prog)
+	r := strings.NewReader(sexpr)
 	// TODO create a (lexmachine?) tokenizer
 	scan := scanner.GoTokenizer(source, r, scanner.SkipComments(true))
 	accept, err := parser.Parse(scan, nil)
@@ -71,14 +76,18 @@ func parse(prog string, source string) (*sppf.Forest, error) {
 	return parser.ParseForest(), nil
 }
 
+// --- Symbols ---------------------------------------------------------------
+
 // Symbol is a type for language symbols (stored in the Environment).
+// A symbol can change its value. A value may be any atom or s-expr type.
+// A value of nil means the symbol is not yet bound.
 type Symbol struct {
 	Name  string
 	props properties
 	value Node
 }
 
-// newSymbol creates a new symbol for a given initial value.
+// newSymbol creates a new symbol for a given initial value (which may be nil).
 func newSymbol(name string, thing interface{}) *Symbol {
 	return &Symbol{
 		Name:  name,
@@ -144,6 +153,18 @@ func (p properties) Set(key string, value interface{}) properties {
 	return p
 }
 
+// Token represents a grammar terminal, and a corresponding input token, respectively.
+type Token struct {
+	Name  string
+	value int
+}
+
+func (t Token) String() string {
+	return t.Name
+}
+
+// --- Environments ----------------------------------------------------------
+
 // Environment is a type for a symbol environment.
 type Environment struct {
 	name      string
@@ -169,11 +190,11 @@ func NewEnvironment(name string, parent *Environment) *Environment {
 	}
 }
 
-// Eval evaluates an S-expr (given in textual form).
+// Eval evaluates an s-expr (given in textual form).
 // It will parse the string, create an internal S-expr structure and evaluate it,
 // using the symbols in env,
-func (env *Environment) Eval(prog string) *GCons {
-	parsetree, err := parse(prog, "eval")
+func (env *Environment) Eval(sexpr string) *GCons {
+	parsetree, err := parse(sexpr, "eval")
 	if err != nil {
 		env.lastError = err
 		T().Errorf("Eval parsing error: %v", err)
@@ -183,14 +204,15 @@ func (env *Environment) Eval(prog string) *GCons {
 		T().Errorf("Empty eval() parse tree")
 		return nil
 	}
-	// tmpfile, err := ioutil.TempFile(".", "parsetree.*.dot")
+	// tmpfile, err := ioutil.TempFile(".", "eval-parsetree-*.dot")
 	// if err != nil {
 	// 	panic("cannot open tmp file")
 	// }
 	// sppf.ToGraphViz(parsetree, tmpfile)
 	// T().Errorf("Exported parse tree to %s", tmpfile.Name())
-	astbuilder := NewASTBuilder(grammar.Grammar())
-	ast, _ := astbuilder.AST(parsetree)
+	//
+	//astbuilder := NewASTBuilder(grammar.Grammar())
+	ast, _ := astBuilder.AST(parsetree)
 	if ast == nil {
 		T().Errorf("Cannot create AST from parsetree")
 		return nil
@@ -303,119 +325,45 @@ func EnvironmentForGrammarSymbol(symname string, G *lr.Grammar) (*Environment, e
 	return env, nil
 }
 
-// func (env *Environment) listFromParseTree(tree *sppf.Forest) *GCons {
-// 	listener := newListener()
-// 	if listener != nil {
-// 		// remove this if
-// 	}
-// 	// TODO
-// 	return nil
-// }
+// --- S-expr AST builder listener -------------------------------------------
 
-// ---------------------------------------------------------------------------
-
-/* TODO remove this
-
-type Listener struct {
-	list          *GCons
-	dispatchEnter map[string]ruleEnterOp
-	dispatchExit  map[string]ruleOp
+type sExprOp struct {
+	name  string
+	rules []RewriteRule
 }
-type ruleEnterOp func(*lr.Symbol, []*sppf.RuleNode, sppf.RuleCtxt) bool
-type ruleOp func(*lr.Symbol, []*sppf.RuleNode, sppf.RuleCtxt) interface{}
 
-func newListener() *Listener {
-	l := &Listener{}
-	l.dispatchEnter = map[string]ruleEnterOp{
-		"QuoteOrAtom": l.EnterQuoteOrAtom,
+func makeASTOp(name string) ASTOperator {
+	op := &sExprOp{
+		name:  name,
+		rules: make([]RewriteRule, 0, 1),
 	}
-	l.dispatchExit = map[string]ruleOp{
-		"List":     l.ExitList,
-		"Sequence": l.ExitSequence,
-		"Atom":     l.ExitAtom,
+	return op
+}
+
+func (op *sExprOp) Name() string {
+	return op.name
+}
+
+func (op *sExprOp) String() string {
+	return op.name + ":Op"
+}
+
+func (op *sExprOp) Rewrite(l *GCons, env *Environment) *GCons {
+	T().Debugf("Op:%s.Rewrite() called", op.Name())
+	for _, rule := range op.rules {
+		if l.Match(rule.Pattern, env) {
+			T().Debugf("Op %s has a match", op.Name())
+			//
+		}
 	}
 	return l
 }
 
-func (l *Listener) EnterRule(lhs *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.RuleCtxt) bool {
-	if r, ok := l.dispatchEnter[lhs.Name]; ok {
-		return r(lhs, rhs, ctxt)
-	}
-	T().Debugf("%senter grammar symbol: %v", indent(ctxt.Level), lhs)
+func (op *sExprOp) Descend(sppf.RuleCtxt) bool {
 	return true
 }
 
-func (l *Listener) EnterQuoteOrAtom(lhs *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.RuleCtxt) bool {
-	if len(rhs) <= 2 {
-		T().Debugf("%sempty Q-LIST", indent(ctxt.Level))
-		return false
-	}
-	values := make([]interface{}, len(rhs)-2)
-	for i, r := range rhs[1 : len(rhs)-1] {
-		values[i-1] = r.Value
-	}
-	T().Debugf("%senter Q-LIST (%v)\n", indent(ctxt.Level), values)
-	return true
-}
-
-func (l *Listener) ExitRule(lhs *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.RuleCtxt) interface{} {
-	if r, ok := l.dispatchExit[lhs.Name]; ok {
-		return r(lhs, rhs, ctxt)
-	}
-	T().Debugf("%sReduce of grammar symbol: %v", indent(ctxt.Level), lhs)
-	return rhs[0].Value
-}
-
-func (l *Listener) ExitList(lhs *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.RuleCtxt) interface{} {
-	if len(rhs) <= 2 {
-		T().Debugf("%sempty LIST", indent(ctxt.Level))
-		return nil
-	}
-	values := make([]interface{}, len(rhs)-2)
-	for i, r := range rhs[1 : len(rhs)-1] {
-		values[i-1] = r.Value
-	}
-	T().Debugf("%sLIST (%v)\n", indent(ctxt.Level), values)
-	return List(values)
-}
-
-func (l *Listener) ExitSequence(lhs *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.RuleCtxt) interface{} {
-	T().Debugf("%sSEQUENCE\n", indent(ctxt.Level))
-	return nil
-}
-
-func (l *Listener) ExitAtom(lhs *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.RuleCtxt) interface{} {
-	T().Debugf("%sATOM\n", indent(ctxt.Level))
-	return nil
-}
-
-func (l *Listener) Terminal(tokval int, token interface{}, ctxt sppf.RuleCtxt) interface{} {
-	// switch tokval {
-	// case scanner.Ident:
-	// case scanner.String:
-	// case scanner.Int:
-	// case scanner.Float:
-	// default:
-	// }
-	a := atomize(token)
-	T().Debugf("new Atom(%v) of type %d", token, tokval)
-	return a
-}
-
-func (l *Listener) Conflict(*lr.Symbol, sppf.RuleCtxt) (int, error) {
-	panic("AST should never be ambiguous")
-}
-
-func (l *Listener) MakeAttrs(*lr.Symbol) interface{} {
-	return nil
-}
-*/
-
-func indent(level int) string {
-	in := ""
-	for level > 0 {
-		in = in + ". "
-		level--
-	}
-	return in
+// Call is part of interface Operator.
+func (op *sExprOp) Call(term *GCons) *GCons {
+	return op.Rewrite(term, globalEnvironment)
 }
