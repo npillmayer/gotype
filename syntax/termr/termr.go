@@ -41,6 +41,7 @@ const (
 	UserType
 	AnyType
 	AnyList
+	ErrorType
 )
 
 // NullAtom is a zero value for atoms.
@@ -89,7 +90,7 @@ func atomize(thing interface{}) Atom {
 // Operator is an interface to be implemented by every node being able to
 // operate on an argument list.
 type Operator interface {
-	Call(*GCons) *GCons
+	Call(*GCons) interface{} // returns *GCons or Node
 }
 
 // Node is a type for a list node.
@@ -100,6 +101,10 @@ type Node struct {
 }
 
 var nullNode Node = Node{atom: Atom{}}
+var errNode Node = Node{atom: Atom{typ: ErrorType}}
+
+// ErrorNode is a return value in case of errors.
+var ErrorNode = errNode
 
 func makeNode(thing interface{}) Node {
 	node := nullNode
@@ -277,4 +282,17 @@ func (l *GCons) First(n int) *GCons {
 		f, l = f.cdr, l.cdr
 	}
 	return start
+}
+
+// --- Intern operations -----------------------------------------------------
+
+func _Add(args *GCons) interface{} {
+	sum := 0
+	for args != nil {
+		if args.car.Type() != NumType {
+			return ErrorNode
+		}
+		sum += args.car.atom.Data.(int)
+	}
+	return makeNode(sum)
 }

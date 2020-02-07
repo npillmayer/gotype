@@ -181,6 +181,25 @@ var globalEnvironment *Environment = &Environment{
 	dict: make(map[string]*Symbol),
 }
 
+func initGlobalEnvironment() {
+	defun("+", _Add)
+}
+
+func defun(opname string, exec func(*GCons) interface{}) {
+	opsym := globalEnvironment.Intern(opname, false)
+	opsym.value = makeNode(internalOp{exec})
+}
+
+type internalOp struct {
+	Execute func(*GCons) interface{}
+}
+
+func (iop *internalOp) Call(l *GCons) interface{} {
+	return iop.Execute(l)
+}
+
+var _ Operator = &internalOp{}
+
 // NewEnvironment creates a new environment.
 func NewEnvironment(name string, parent *Environment) *Environment {
 	if parent == nil {
@@ -377,9 +396,11 @@ func (op *sExprOp) Descend(sppf.RuleCtxt) bool {
 }
 
 // Call is part of interface Operator.
-func (op *sExprOp) Call(term *GCons) *GCons {
+func (op *sExprOp) Call(term *GCons) interface{} {
 	return op.Rewrite(term, globalEnvironment)
 }
+
+var _ Operator = &sExprOp{}
 
 func (op *sExprOp) Rule(pattern *GCons, rw Rewriter) *sExprOp {
 	r := RewriteRule{
