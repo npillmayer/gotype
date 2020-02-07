@@ -4,9 +4,9 @@ package termr
 
 import "strconv"
 
-const _AtomType_name = "ConsTypeSymbolTypeNumTypeStringTypeBoolTypeOperatorTypeTokenTypeEnvironmentTypeUserType"
+const _AtomType_name = "ConsTypeSymbolTypeNumTypeStringTypeBoolTypeOperatorTypeTokenTypeEnvironmentTypeUserTypeAnyTypeAnyList"
 
-var _AtomType_index = [...]uint8{0, 8, 18, 25, 35, 43, 55, 64, 79, 87}
+var _AtomType_index = [...]uint8{0, 8, 18, 25, 35, 43, 55, 64, 79, 87, 94, 101}
 
 func (i AtomType) String() string {
 	if i < 0 || i >= AtomType(len(_AtomType_index)-1) {

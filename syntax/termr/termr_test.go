@@ -21,8 +21,29 @@ func TestList1(t *testing.T) {
 	if l1.Length() != 5 {
 		t.Errorf("length of list expected to be 5, is %d", l1.Length())
 	}
-	if l1.Car().Atom().Data != 1 {
-		t.Errorf("element #1 expected to be 1, is %v", l1.Car().Atom().Data)
+	if l1.Car().atom.Data != 1 {
+		t.Errorf("element #1 expected to be 1, is %v", l1.Car().atom.Data)
+	}
+}
+func TestFirst(t *testing.T) {
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	l := List(1, 2, 3, 4, 5)
+	f := l.First(3)
+	if f.Length() != 3 || f.car.atom.Data != 1 {
+		t.Errorf("Expected f to be (1 2 3), is %s", f.ListString())
+	}
+	l = List(1)
+	f = l.First(1)
+	if f.Length() != 1 || f.car.atom.Data != 1 {
+		t.Errorf("Expected f to be (1), is %s", f.ListString())
+	}
+	l = List(1)
+	f = l.First(5)
+	if f.Length() != 1 || f.car.atom.Data != 1 {
+		t.Errorf("Expected f to be (1), is %s", f.ListString())
 	}
 }
 
@@ -71,17 +92,42 @@ func TestMatch2(t *testing.T) {
 	}
 }
 
+func TestMatch3(t *testing.T) {
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	initDefaultPatterns()
+	l1 := List(makeASTOp("S"), 1)
+	t.Logf("l1 = %s, pattern = %s", l1.ListString(), SingleTokenArg.ListString())
+	if !SingleTokenArg.Match(l1, globalEnvironment) {
+		t.Errorf("Expected l1 to match pattern (Op any)")
+	}
+}
+
+func TestMatch4(t *testing.T) {
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	initDefaultPatterns()
+	l := List(1, 2, 3)
+	if !Anything.Match(l, globalEnvironment) {
+		t.Errorf("Expected !Anything to match (1 2 3)")
+	}
+}
+
 func TestString(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	l2 := List("+", 5, 7, 12)
-	l := Cons(1, nil)
-	l.cdr = Cons(2, nil)
+	l := Cons(makeNode(1), nil)
+	l.cdr = Cons(makeNode(2), nil)
 	x := &GCons{Node{NullAtom, l2}, nil}
 	l.cdr.cdr = x
-	x.cdr = Cons("Hello", nil)
+	x.cdr = Cons(makeNode("Hello"), nil)
 	s := l.ListString()
 	t.Logf("l = %s", s)
 	if s != `(1 2 ("+" 5 7 12) "Hello")` {

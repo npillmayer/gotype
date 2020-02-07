@@ -97,60 +97,88 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 			sym := env.Intern(r.Symbol().Name, true)
 			//T().Debugf("sym = %v", sym)
 			if !r.Symbol().IsTerminal() {
-				sym.value.atom.Data = r.Value // must be a Node
+				sym.value.atom.Data = r.Value // value must be a Node
 			}
-			switch v := r.Value.(type) {
-			case Node:
-				end = appendNode(end, v)
-			case *GCons:
-				end = appendTee(end, v)
-			default:
-				panic("Unknown value type of RHS symbol")
-			}
+			rhsList, end = growRHSList(rhsList, end, r, env)
+			// switch v := r.Value.(type) { // TODO same logic as below (factor out)
+			// case Node:
+			// 	end = appendNode(end, v)
+			// case *GCons:
+			// 	end = appendTee(end, v)
+			// default:
+			// 	panic("Unknown value type of RHS symbol")
+			// }
 		}
-		T().Debugf("Rewrite of %s", rhsList.ListString())
+		T().Infof("Rewrite of %s", rhsList.ListString())
 		rhsList = op.Rewrite(rhsList, env)
 		ab.stack = ab.stack[:len(ab.stack)-1]
 		T().Debugf("%s returns %s", sym.Name, rhsList.ListString())
 		return rhsList
 	}
-	var list *GCons
-	var end *GCons
+	var list, end *GCons
 	for _, r := range rhs {
-		switch v := r.Value.(type) {
-		case Node:
-			end = appendNode(end, v)
-			if list == nil {
-				list = end
-			}
-		case *GCons:
-			if v.car.Type() == OperatorType {
-				T().Infof("%s: tee appending %v", sym, v.ListString())
-				end = appendTee(end, v)
-				if list == nil {
-					list = end
-				}
-			} else {
-				var l *GCons
-				T().Infof("%s: inline appending %v", sym, v.ListString())
-				l, end = appendList(end, v)
-				if list == nil {
-					list = l
-				}
-			}
-		default:
-			panic("Unknown value type of RHS symbol")
-		}
+		list, end = growRHSList(list, end, r, globalEnvironment)
+		// switch v := r.Value.(type) {
+		// case Node:
+		// 	end = appendNode(end, v)
+		// 	if list == nil {
+		// 		list = end
+		// 	}
+		// case *GCons:
+		// 	if v.car.Type() == OperatorType {
+		// 		//T().Infof("%s: tee appending %v", sym, v.ListString())
+		// 		end = appendTee(end, v)
+		// 		if list == nil {
+		// 			list = end
+		// 		}
+		// 	} else {
+		// 		var l *GCons
+		// 		//T().Infof("%s: inline appending %v", sym, v.ListString())
+		// 		l, end = appendList(end, v)
+		// 		if list == nil {
+		// 			list = l
+		// 		}
+		// 	}
+		// default:
+		// 	panic("Unknown value type of RHS symbol")
+		// }
 	}
-	T().Infof("List of length %d: %s", list.Length(), list.ListString())
+	//T().Infof("List of length %d: %s", list.Length(), list.ListString())
 	if list.Length() == 1 && list.car.Type() == ConsType {
-		// unlist
-		T().Infof("Inner list of length %d: %s", list.car.child.Length(), list.car.child.ListString())
-		list = list.car.child
+		//T().Infof("Inner list of length %d: %s", list.car.child.Length(), list.car.child.ListString())
+		list = list.car.child // unwrap
 	}
 	T().Infof("%s returns %s", sym.Name, list.ListString())
 	T().Debugf("exit grammar symbol: %v", sym)
 	return list
+}
+
+func growRHSList(start, end *GCons, r *sppf.RuleNode, env *Environment) (*GCons, *GCons) {
+	switch v := r.Value.(type) {
+	case Node:
+		end = appendNode(end, v)
+		if start == nil {
+			start = end
+		}
+	case *GCons:
+		if v.car.Type() == OperatorType {
+			//T().Infof("%s: tee appending %v", sym, v.ListString())
+			end = appendTee(end, v)
+			if start == nil {
+				start = end
+			}
+		} else {
+			var l *GCons
+			//T().Infof("%s: inline appending %v", sym, v.ListString())
+			l, end = appendList(end, v)
+			if start == nil {
+				start = l
+			}
+		}
+	default:
+		panic("Unknown value type of RHS symbol")
+	}
+	return start, end
 }
 
 // Terminal is part of sppf.Listener interface.

@@ -55,8 +55,11 @@ func createParser() *earley.Parser {
 		if grammar, err = makeTermRGrammar(); err != nil {
 			panic("Cannot create global grammar")
 		}
+		initDefaultPatterns()
 		astBuilder = NewASTBuilder(grammar.Grammar())
-		astBuilder.AddOperator(makeASTOp("Atom"))
+		astBuilder.AddOperator(atomOp)
+		astBuilder.AddOperator(quoteOp)
+		astBuilder.AddOperator(listOp)
 	})
 	return earley.NewParser(grammar, earley.GenerateTree(true))
 }
@@ -327,12 +330,18 @@ func EnvironmentForGrammarSymbol(symname string, G *lr.Grammar) (*Environment, e
 
 // --- S-expr AST builder listener -------------------------------------------
 
+var atomOp *sExprOp  // for Atom -> ... productions
+var quoteOp *sExprOp // for Quote -> ... productions
+var listOp *sExprOp  // for List -> ... productions
+
+// --- AST operator helpers --------------------------------------------------
+
 type sExprOp struct {
 	name  string
 	rules []RewriteRule
 }
 
-func makeASTOp(name string) ASTOperator {
+func makeASTOp(name string) *sExprOp {
 	op := &sExprOp{
 		name:  name,
 		rules: make([]RewriteRule, 0, 1),
@@ -349,11 +358,15 @@ func (op *sExprOp) String() string {
 }
 
 func (op *sExprOp) Rewrite(l *GCons, env *Environment) *GCons {
-	T().Debugf("Op:%s.Rewrite() called", op.Name())
+	T().Errorf("%s:Op.Rewrite[%s] called, %d rules", op.Name(), l.ListString(), len(op.rules))
 	for _, rule := range op.rules {
-		if l.Match(rule.Pattern, env) {
-			T().Debugf("Op %s has a match", op.Name())
-			//
+		T().Errorf("match: trying %s %% %s ?", rule.Pattern.ListString(), l.ListString())
+		if rule.Pattern.Match(l, env) {
+			T().Infof("Op %s has a match", op.Name())
+			v := rule.Rewrite(l, env)
+			T().Infof("Op %s rewrite -> %s", op.Name(), v.ListString())
+			//return rule.Rewrite(l, env)
+			return v
 		}
 	}
 	return l
@@ -366,4 +379,56 @@ func (op *sExprOp) Descend(sppf.RuleCtxt) bool {
 // Call is part of interface Operator.
 func (op *sExprOp) Call(term *GCons) *GCons {
 	return op.Rewrite(term, globalEnvironment)
+}
+
+func (op *sExprOp) Rule(pattern *GCons, rw Rewriter) *sExprOp {
+	r := RewriteRule{
+		Pattern: pattern,
+		Rewrite: rw,
+	}
+	op.rules = append(op.rules, r)
+	return op
+}
+
+// Anything is a pattern matching any s-expr.
+var Anything *GCons
+
+// AnyToken is a pattern matching any arg of TokenType
+var AnyToken *GCons
+
+// SingleTokenArg is a pattern matching an operator with a single arg of TokenType.
+var SingleTokenArg *GCons
+
+// AnyOp is a pattern matching any node with OperatorType
+var AnyOp = makeASTOp("!AnyOp")
+
+func initDefaultPatterns() {
+	Anything = Cons(makeNode(1), nil)
+	T().Errorf("Anything=%s", Anything.ListString())
+	Anything.car.atom.typ = AnyList
+	arg := makeNode(nil)
+	arg.atom.typ = AnyType
+	AnyToken = Cons(arg, nil)
+	SingleTokenArg = Cons(makeNode(AnyOp), AnyToken)
+	//p := Cons(makeNode(AnyOp), Anything)
+	atomOp = makeASTOp("Atom").Rule(Anything, func(l *GCons, env *Environment) *GCons {
+		return l.Cdr()
+	})
+	// .Rule(SingleTokenArg, func(l *GCons, env *Environment) *GCons {
+	// 	return l.Cdr()
+	// })
+	p := Cons(makeNode(AnyOp), Cons(makeNode(&Token{"^", '^'}), AnyToken))
+	T().Errorf("PATTERN Quote = %s", p.ListString())
+	quoteOp = makeASTOp("Quote").Rule(p, func(l *GCons, env *Environment) *GCons {
+		return Cons(l.car, l.Cddr())
+	})
+	//p = Cons(makeNode(AnyOp), Cons(makeNode(&Token{"'('", '('}), Cons(R, nil)))
+	listOp = makeASTOp("List").Rule(Anything, func(l *GCons, env *Environment) *GCons {
+		if l.Length() <= 3 { // ( )
+			return nil
+		}
+		content := l.Cddr()                     // strip (
+		content = content.First(l.Length() - 1) // strip )
+		return Cons(l.car, content)             // (List:Op ...)
+	})
 }

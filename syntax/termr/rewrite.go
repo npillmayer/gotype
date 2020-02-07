@@ -1,9 +1,21 @@
 package termr
 
+// Rewriter is a function
+//
+//     list × env ↦ list
+//
+// i.e., a term rewriting function.
+type Rewriter func(l *GCons, env *Environment) *GCons
+
+// RewriteRule is a type representing a rule for term rewriting.
+// It contains a pattern and a rewriting-function. The pattern will be applied
+// to nodes in an AST, and if it matches the rewriter will be called on the redex.
 type RewriteRule struct {
 	Pattern *GCons
-	Rewrite func(*GCons, *Environment) *GCons
+	Rewrite Rewriter
 }
+
+// --- Matching --------------------------------------------------------------
 
 /*
 Match an s-expr to a pattern.
@@ -34,8 +46,14 @@ Example:
 
 is t if foo's value is a list of two or more elements, the first of which is a list
 of two elements; and in that case it sets x to (cadar foo) and c to (cddr foo).
+
+List l is the pattern, other is the argument to be matched against the pattern.
 */
 func (l *GCons) Match(other *GCons, env *Environment) bool {
+	T().Debugf("Match: %s vs %s", l, other)
+	if l != nil && l.car.Type() == AnyList {
+		return true
+	}
 	if l == nil {
 		return other == nil
 	}
@@ -49,6 +67,7 @@ func (l *GCons) Match(other *GCons, env *Environment) bool {
 }
 
 func matchCar(car Node, otherNode Node, env *Environment) bool {
+	T().Debugf("Match Car: %s vs %s", car, otherNode)
 	if car == nullNode {
 		return otherNode == nullNode
 	}
@@ -65,16 +84,21 @@ func matchCar(car Node, otherNode Node, env *Environment) bool {
 }
 
 func matchAtom(atom Atom, otherAtom Atom) bool {
+	T().Debugf("Match Atom: %v vs %v", atom, otherAtom)
 	if atom == NullAtom {
 		return otherAtom == NullAtom
 	}
 	if otherAtom == NullAtom {
 		return false
 	}
-	if atom.typ != otherAtom.typ {
+	typeMatches, doMatchData := typeMatch(atom.typ, otherAtom.typ)
+	if !typeMatches {
 		return false
 	}
-	return atom.Data == otherAtom.Data
+	if doMatchData {
+		return dataMatch(atom.Data, otherAtom.Data, atom.typ)
+	}
+	return true
 }
 
 func bindSymbol(symcar Node, otherNode Node, env *Environment) bool {
@@ -89,4 +113,35 @@ func bindSymbol(symcar Node, otherNode Node, env *Environment) bool {
 	// valuecar := symcar.atom.Data.(Node)
 	// return matchCar(valuecar, otherNode, env)
 	return true // TODO match sym.value to other
+}
+
+// typeMatch returns (typesAreMatching, mustMatchValue)
+func typeMatch(t1 AtomType, t2 AtomType) (bool, bool) {
+	if t1 == t2 {
+		return true, true
+	}
+	if t1 == AnyType {
+		return true, false
+	}
+	return false, true
+}
+
+func dataMatch(d1 interface{}, d2 interface{}, t AtomType) bool {
+	if t == OperatorType && d1 != nil {
+		if op, ok := d1.(*sExprOp); ok {
+			if op.Name() == AnyOp.name {
+				return true
+			}
+		}
+	}
+	if t == TokenType && d2 != nil {
+		tok1, _ := d1.(*Token)
+		if tok2, ok := d2.(*Token); ok {
+			if tok1.value == tok2.value { // only tokval must match
+				return true
+			}
+		}
+	}
+	T().Errorf("dataMatch()")
+	return d1 == d2
 }

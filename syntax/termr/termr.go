@@ -39,6 +39,8 @@ const (
 	TokenType
 	EnvironmentType
 	UserType
+	AnyType
+	AnyList
 )
 
 // NullAtom is a zero value for atoms.
@@ -66,7 +68,6 @@ func atomize(thing interface{}) Atom {
 		atom.Data = c
 		atom.typ = BoolType
 	case Operator:
-		T().Errorf("ATOMIZING AN OPERATOR: %v", c)
 		atom.Data = c
 		atom.typ = OperatorType
 	case *Symbol:
@@ -210,25 +211,20 @@ func List(elements ...interface{}) *GCons {
 	return first
 }
 
-// Cons 709 985 255
 // Cons creates a cons from a given node (Car) value.
-func Cons(thing interface{}, cdr *GCons) *GCons {
-	if thing == nil {
+func Cons(car Node, cdr *GCons) *GCons {
+	if car == nullNode {
 		return cdr
 	}
-	carnode := makeNode(thing)
-	return &GCons{car: carnode, cdr: cdr}
+	return &GCons{car: car, cdr: cdr}
 }
 
 // Car returns the Car of a list/cons.
-func (l *GCons) Car() *GCons {
+func (l *GCons) Car() Node {
 	if l == nil {
-		return nil
+		return nullNode
 	}
-	if l.car.Type() == ConsType {
-		return l.car.child
-	}
-	return &GCons{car: l.car}
+	return l.car
 }
 
 // Cdr returns the Cdr of a list/node.
@@ -237,6 +233,14 @@ func (l *GCons) Cdr() *GCons {
 		return nil
 	}
 	return l.cdr
+}
+
+// Cddr returns Cdr(Cdr(...)) of a list/node.
+func (l *GCons) Cddr() *GCons {
+	if l == nil || l.cdr == nil {
+		return nil
+	}
+	return l.cdr.cdr
 }
 
 // Length returns the length of a list.
@@ -250,4 +254,27 @@ func (l *GCons) Length() int {
 		l = l.Cdr()
 	}
 	return length
+}
+
+func (l *GCons) copyCons() *GCons {
+	node := l.car
+	return Cons(node, nil)
+}
+
+// First returns the frist n elements of a list.
+func (l *GCons) First(n int) *GCons {
+	if l == nil || n <= 0 {
+		return nil
+	}
+	f := l.copyCons()
+	start := f
+	l = l.cdr
+	for n--; n > 0; n-- {
+		if l == nil {
+			break
+		}
+		f.cdr = l.copyCons()
+		f, l = f.cdr, l.cdr
+	}
+	return start
 }
