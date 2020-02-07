@@ -77,7 +77,7 @@ func TestString(t *testing.T) {
 	l2 := List("+", 5, 7, 12)
 	l := Cons(1, nil)
 	l.cdr = Cons(2, nil)
-	x := &GCons{carNode{NullAtom, l2}, nil}
+	x := &GCons{Node{NullAtom, l2}, nil}
 	l.cdr.cdr = x
 	x.cdr = Cons("Hello", nil)
 	s := l.ListString()

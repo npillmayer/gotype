@@ -19,6 +19,13 @@ the Massachusetts Institute of Technology (MIT).
 
 // TODO Properties: https://www.tutorialspoint.com/lisp/lisp_symbols.htm
 
+// Atom is a type for atomic values (in lists).
+type Atom struct {
+	typ  AtomType
+	Data interface{}
+}
+
+// AtomType is a type specifier for an atom.
 type AtomType int
 
 //go:generate stringer -type AtomType
@@ -34,13 +41,10 @@ const (
 	UserType
 )
 
-type Atom struct {
-	typ  AtomType
-	Data interface{}
-}
-
+// NullAtom is zero value for atoms.
 var NullAtom Atom = Atom{}
 
+// Type returns an atom's type.
 func (a Atom) Type() AtomType {
 	return a.typ
 }
@@ -81,87 +85,95 @@ type Operator interface {
 	Call(*GCons) *GCons
 }
 
-type carNode struct {
+// Node is a type for a list node.
+// A Cons will consist of a Node and a Cdr.
+type Node struct {
 	atom  Atom
 	child *GCons
 }
 
-var nullCar carNode = carNode{atom: Atom{}}
+var nullNode Node = Node{atom: Atom{}}
 
-func makeCar(thing interface{}) carNode {
-	car := nullCar
+func makeNode(thing interface{}) Node {
+	node := nullNode
 	if cons, ok := thing.(*GCons); ok {
-		car.child = cons
+		node.child = cons
 	} else {
-		car.atom = atomize(thing)
+		node.atom = atomize(thing)
 	}
-	return car
+	return node
 }
 
-func (cnode carNode) Type() AtomType {
-	if cnode.child == nil {
-		return cnode.atom.typ
+// Type returns the atom type of a node.
+func (node Node) Type() AtomType {
+	if node.child == nil {
+		return node.atom.typ
 	}
 	return ConsType
 }
 
-func (car carNode) String() string {
-	if car.child != nil {
+func (node Node) String() string {
+	if node.child != nil {
 		return "(list)"
 	}
-	switch car.atom.typ {
+	switch node.atom.typ {
 	case NumType:
-		return fmt.Sprintf("%d", car.atom.Data)
+		return fmt.Sprintf("%d", node.atom.Data)
 	case BoolType:
-		return fmt.Sprintf("%v", car.atom.Data)
+		return fmt.Sprintf("%v", node.atom.Data)
 	case StringType:
-		return fmt.Sprintf("\"%s\"", car.atom.Data)
+		return fmt.Sprintf("\"%s\"", node.atom.Data)
 	}
-	return fmt.Sprintf("%v", car.atom.Data)
+	return fmt.Sprintf("%v", node.atom.Data)
 }
 
-func (car carNode) ListString() string {
-	if car.child != nil {
-		return car.child.ListString()
+// ListString returns a Node within a list representation. Will usually be called
+// indirectly with GCons.ListString().
+func (node Node) ListString() string {
+	if node.child != nil {
+		return node.child.ListString()
 	}
-	return car.String()
+	return node.String()
 }
 
+// GCons is a type for a list cons.
 type GCons struct {
-	car carNode
+	car Node
 	cdr *GCons
 }
 
-func (c GCons) String() string {
+func (l GCons) String() string {
 	var cdrstring string
-	if c.cdr == nil {
+	if l.cdr == nil {
 		cdrstring = "∖"
 	} else {
 		cdrstring = "→"
 	}
-	return fmt.Sprintf("(%s,%s)", c.car, cdrstring)
+	return fmt.Sprintf("(%s,%s)", l.car, cdrstring)
 }
 
-func (c *GCons) ListString() string {
-	if c == nil {
+// ListString returns a string representing a list (or cons).
+func (l *GCons) ListString() string {
+	if l == nil {
 		return "()"
 	}
 	var b bytes.Buffer
 	b.WriteString("(")
 	first := true
-	for c != nil {
+	for l != nil {
 		if first {
 			first = false
 		} else {
 			b.WriteString(" ")
 		}
-		b.WriteString(c.car.ListString())
-		c = c.cdr
+		b.WriteString(l.car.ListString())
+		l = l.cdr
 	}
 	b.WriteString(")")
 	return b.String()
 }
 
+// Atom returns the Car atom of a list or cons.
 func (l *GCons) Atom() Atom {
 	if l == nil {
 		return NullAtom
@@ -169,6 +181,7 @@ func (l *GCons) Atom() Atom {
 	return l.car.atom
 }
 
+// List makes a list from given elements.
 func List(elements ...interface{}) *GCons {
 	if len(elements) == 0 {
 		return nil
@@ -177,7 +190,7 @@ func List(elements ...interface{}) *GCons {
 	var first *GCons
 	for _, e := range elements {
 		cons := &GCons{}
-		cons.car = makeCar(e)
+		cons.car = makeNode(e)
 		if first == nil {
 			first = cons
 		} else {
@@ -188,14 +201,17 @@ func List(elements ...interface{}) *GCons {
 	return first
 }
 
+// Cons 709 985 255
+// Cons creates a cons from a given node (Car) value.
 func Cons(thing interface{}, cdr *GCons) *GCons {
 	if thing == nil {
 		return cdr
 	}
-	carnode := makeCar(thing)
+	carnode := makeNode(thing)
 	return &GCons{car: carnode, cdr: cdr}
 }
 
+// Car returns the Car of a list/cons.
 func (l *GCons) Car() *GCons {
 	if l == nil {
 		return nil
@@ -206,6 +222,7 @@ func (l *GCons) Car() *GCons {
 	return &GCons{car: l.car}
 }
 
+// Cdr returns the Cdr of a list/node.
 func (l *GCons) Cdr() *GCons {
 	if l == nil {
 		return nil
@@ -213,6 +230,7 @@ func (l *GCons) Cdr() *GCons {
 	return l.cdr
 }
 
+// Length returns the length of a list.
 func (l *GCons) Length() int {
 	if l == nil {
 		return 0

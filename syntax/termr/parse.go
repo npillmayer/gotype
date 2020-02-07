@@ -71,28 +71,32 @@ func parse(prog string, source string) (*sppf.Forest, error) {
 	return parser.ParseForest(), nil
 }
 
+// Symbol is a type for language symbols (stored in the Environment).
 type Symbol struct {
 	Name  string
 	props properties
-	car   carNode
+	value Node
 }
 
-func NewSymbol(name string, thing interface{}) *Symbol {
+// newSymbol creates a new symbol for a given initial value.
+func newSymbol(name string, thing interface{}) *Symbol {
 	return &Symbol{
 		Name:  name,
 		props: makeProps(),
-		car:   makeCar(thing),
+		value: makeNode(thing),
 	}
 }
 
 func (sym Symbol) String() string {
-	return fmt.Sprintf("%s:%s(%s)", sym.Name, sym.car.Type().String(), sym.car.String())
+	return fmt.Sprintf("%s:%s(%s)", sym.Name, sym.value.Type().String(), sym.value.String())
 }
 
+// IsAtom returns true if a symbol represents an atom (not a cons).
 func (sym Symbol) IsAtom() bool {
-	return sym.car.Type() != ConsType
+	return sym.value.Type() != ConsType
 }
 
+// Get returns a property value for a given key.
 func (sym *Symbol) Get(key string) Atom {
 	value := sym.props.Get(key, sym)
 	if value == nil {
@@ -113,7 +117,7 @@ func makeProps() properties {
 
 func (p properties) Get(key string, sym *Symbol) interface{} {
 	if key == "type" {
-		return sym.car.Type()
+		return sym.value.Type()
 	}
 	if key == "name" {
 		return sym.Name
@@ -140,6 +144,7 @@ func (p properties) Set(key string, value interface{}) properties {
 	return p
 }
 
+// Environment is a type for a symbol environment.
 type Environment struct {
 	name      string
 	parent    *Environment
@@ -152,6 +157,7 @@ var globalEnvironment *Environment = &Environment{
 	dict: make(map[string]*Symbol),
 }
 
+// NewEnvironment creates a new environment.
 func NewEnvironment(name string, parent *Environment) *Environment {
 	if parent == nil {
 		parent = globalEnvironment
@@ -163,6 +169,9 @@ func NewEnvironment(name string, parent *Environment) *Environment {
 	}
 }
 
+// Eval evaluates an S-expr (given in textual form).
+// It will parse the string, create an internal S-expr structure and evaluate it,
+// using the symbols in env,
 func (env *Environment) Eval(prog string) *GCons {
 	parsetree, err := parse(prog, "eval")
 	if err != nil {
@@ -193,6 +202,8 @@ func (env *Environment) Eval(prog string) *GCons {
 	// T().Debugf("return value of top-down traversal: %v", value)
 }
 
+// FindSymbol checks wether a symbol is defined in env and returns it, if found.
+// Otherwise nil is returned.
 func (env *Environment) FindSymbol(name string, inherit bool) *Symbol {
 	var sym *Symbol
 	var ok bool
@@ -210,6 +221,10 @@ func (env *Environment) FindSymbol(name string, inherit bool) *Symbol {
 	return nil
 }
 
+// Intern interns a symbol name as a symbol, returning a reference to that symbol.
+// If the symbol already exists, the existing symbol is returned.
+// Parameter inherit dictates wether ancestor environments should be searched, too,
+// to detect the symbol.
 func (env *Environment) Intern(name string, inherit bool) *Symbol {
 	sym := env.FindSymbol(name, inherit)
 	if sym == nil {
@@ -223,6 +238,7 @@ func (env *Environment) String() string {
 	return env.name
 }
 
+// Dump is a debugging helper, listing all known symbols in env.
 func (env *Environment) Dump() string {
 	var b bytes.Buffer
 	b.WriteString(env.String())
@@ -234,16 +250,27 @@ func (env *Environment) Dump() string {
 	return b.String()
 }
 
+// EnvironmentForGrammarSymbol creates a new environment, suitable for the
+// grammar symbols at a given tree node of a parse-tree or AST.
+//
+// Given a grammar production
+//
+//     A -> B C D
+//
+// it will create an environment #A for A, with pre-interned (but empty) symbols
+// for A, B, C and D. If any of the right-hand-side symbols are terminals, they will
+// be created as nodes with an appropriate atom type.
+//
 func EnvironmentForGrammarSymbol(symname string, G *lr.Grammar) (*Environment, error) {
 	if G == nil {
 		return globalEnvironment, errors.New("Grammar is null")
 	}
 	envname := "#" + symname
 	if env := globalEnvironment.FindSymbol(envname, false); env != nil {
-		if env.car.Type() != EnvironmentType {
+		if env.value.Type() != EnvironmentType {
 			panic(fmt.Errorf("Internal error, environment misconstructed: %s", envname))
 		}
-		return env.car.atom.Data.(*Environment), nil
+		return env.value.atom.Data.(*Environment), nil
 	}
 	gsym := G.SymbolByName(symname)
 	if gsym == nil || gsym.IsTerminal() {
@@ -264,7 +291,7 @@ func EnvironmentForGrammarSymbol(symname string, G *lr.Grammar) (*Environment, e
 		gsym := rhsSyms.Item().(*lr.Symbol)
 		sym := env.Intern(gsym.Name, false)
 		if gsym.IsTerminal() {
-			sym.car = makeCar(gsym.Value)
+			sym.value = makeNode(gsym.Value)
 		}
 		// else {
 		// 	sym.atom.typ = SymbolType

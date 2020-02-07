@@ -27,7 +27,7 @@ type ruleABExit func(sym *lr.Symbol, rhs []*sppf.RuleNode) interface{}
 func NewASTBuilder(g *lr.Grammar) *ASTBuilder {
 	ab := &ASTBuilder{
 		G:         g,
-		ast:       &GCons{carNode{NullAtom, nil}, nil}, // AST anchor
+		ast:       &GCons{Node{NullAtom, nil}, nil}, // AST anchor
 		stack:     make([]*GCons, 0, 256),
 		operators: make(map[string]*ASTOperator),
 		// dispatchEnter: nullABEnter,
@@ -46,6 +46,8 @@ func NewASTBuilder(g *lr.Grammar) *ASTBuilder {
 // 	return nil
 // }
 
+// ASTOperator is a type for an operator for AST creation and transformation
+// (rewriting).
 type ASTOperator struct {
 	Name    string
 	Rewrite func(*GCons, *Environment) *GCons
@@ -56,10 +58,12 @@ func (op *ASTOperator) String() string {
 	return op.Name + ":Op"
 }
 
+// Call is part of interface Operator.
 func (op *ASTOperator) Call(term *GCons) *GCons {
 	return op.Rewrite(term, globalEnvironment)
 }
 
+// AddOperator adds an AST operator for a grammar symbol to the builder.
 func (ab *ASTBuilder) AddOperator(op *ASTOperator) {
 	if op != nil {
 		ab.operators[op.Name] = op
@@ -87,13 +91,13 @@ func (ab *ASTBuilder) AST(parseTree *sppf.Forest) (*GCons, interface{}) {
 // 		return
 // 	}
 // 	T().Debugf("APPEND LIST %s", list.ListString())
-// 	//ab.last.cdr = &GCons{carNode{NullAtom, list}, nil}
+// 	//ab.last.cdr = &GCons{Node{NullAtom, list}, nil}
 // 	ab.last.cdr = &GCons{list.Car().car, nil}
 // 	ab.last = ab.last.cdr
 // }
 
-// func (ab *ASTBuilder) append(car carNode) {
-// 	if car == nullCar {
+// func (ab *ASTBuilder) append(car Node) {
+// 	if car == nullNode {
 // 		return
 // 	}
 // 	ab.last.cdr = &GCons{car, nil}
@@ -109,10 +113,10 @@ func (ab *ASTBuilder) AST(parseTree *sppf.Forest) (*GCons, interface{}) {
 // 	ab.stack = ab.stack[:len(ab.stack)-1] // pop last
 // }
 
-// func (ab *ASTBuilder) down(car carNode) {
+// func (ab *ASTBuilder) down(car Node) {
 // 	ab.stack = append(ab.stack, ab.last)
 // 	child := &GCons{car, nil}
-// 	ab.last.cdr = &GCons{carNode{NullAtom, child}, nil}
+// 	ab.last.cdr = &GCons{Node{NullAtom, child}, nil}
 // 	ab.last = child
 // }
 
@@ -129,7 +133,7 @@ func (ab *ASTBuilder) EnterRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.
 			return false
 		}
 		T().Debugf("enter operator symbol: %v", sym)
-		ab.stack = append(ab.stack, &GCons{makeCar(op), nil})
+		ab.stack = append(ab.stack, &GCons{makeNode(op), nil})
 	} else {
 		T().Debugf("enter grammar symbol: %v", sym)
 	}
@@ -154,11 +158,11 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 			sym := env.Intern(r.Symbol().Name, true)
 			//T().Debugf("sym = %v", sym)
 			if !r.Symbol().IsTerminal() {
-				sym.car.atom.Data = r.Value // must be a carNode
+				sym.value.atom.Data = r.Value // must be a Node
 			}
 			switch v := r.Value.(type) {
-			case carNode:
-				end = appendCar(end, v)
+			case Node:
+				end = appendNode(end, v)
 			case *GCons:
 				end = appendTee(end, v)
 			default:
@@ -176,8 +180,8 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 	var end *GCons
 	for _, r := range rhs {
 		switch v := r.Value.(type) {
-		case carNode:
-			end = appendCar(end, v)
+		case Node:
+			end = appendNode(end, v)
 		case *GCons:
 			end = appendTee(end, v)
 		default:
@@ -196,10 +200,10 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 // Not intended for direct client use.
 func (ab *ASTBuilder) Terminal(tokval int, token interface{}, ctxt sppf.RuleCtxt) interface{} {
 	//t := ab.G.Terminal(tokval).Name
-	car := makeCar(tokval)
-	car.atom.typ = TokenType
-	T().Debugf("cons(terminal=%s) = %v", ab.G.Terminal(tokval).Name, car)
-	return car
+	node := makeNode(tokval)
+	node.atom.typ = TokenType
+	T().Debugf("cons(terminal=%s) = %v", ab.G.Terminal(tokval).Name, node)
+	return node
 }
 
 // Conflict is part of sppf.Listener interface.
@@ -217,11 +221,11 @@ func (ab *ASTBuilder) MakeAttrs(*lr.Symbol) interface{} {
 
 // ---------------------------------------------------------------------------
 
-func appendCar(cons *GCons, car carNode) *GCons {
+func appendNode(cons *GCons, node Node) *GCons {
 	if cons == nil {
-		return &GCons{car, nil}
+		return &GCons{node, nil}
 	}
-	cons.cdr = &GCons{car, nil}
+	cons.cdr = &GCons{node, nil}
 	return cons.cdr
 }
 
@@ -238,7 +242,7 @@ func appendList(cons *GCons, list *GCons) *GCons {
 }
 
 func appendTee(cons *GCons, list *GCons) *GCons {
-	tee := &GCons{nullCar, nil}
+	tee := &GCons{nullNode, nil}
 	tee.car.child = list
 	if cons == nil {
 		cons = tee

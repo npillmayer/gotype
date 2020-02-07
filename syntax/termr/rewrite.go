@@ -6,6 +6,8 @@ type RewriteRule struct {
 }
 
 /*
+Match an S-expr to a pattern.
+
 From https://hanshuebner.github.io/lmman/fd-con.xml:
 
 list-match-p object pattern
@@ -59,20 +61,20 @@ func (l *GCons) Match(other *GCons, env *Environment) bool {
 	return l.cdr.Match(other.cdr, env)
 }
 
-func matchCar(car carNode, otherCar carNode, env *Environment) bool {
-	if car == nullCar {
-		return otherCar == nullCar
+func matchCar(car Node, otherNode Node, env *Environment) bool {
+	if car == nullNode {
+		return otherNode == nullNode
 	}
 	if car.Type() == SymbolType {
-		return bindSymbol(car, otherCar, env)
+		return bindSymbol(car, otherNode, env)
 	}
 	if car.Type() == ConsType {
-		if otherCar.Type() != ConsType {
+		if otherNode.Type() != ConsType {
 			return false
 		}
-		return car.child.Match(otherCar.child, env)
+		return car.child.Match(otherNode.child, env)
 	}
-	return matchAtom(car.atom, otherCar.atom)
+	return matchAtom(car.atom, otherNode.atom)
 }
 
 func matchAtom(atom Atom, otherAtom Atom) bool {
@@ -88,16 +90,16 @@ func matchAtom(atom Atom, otherAtom Atom) bool {
 	return atom.Data == otherAtom.Data
 }
 
-func bindSymbol(symcar carNode, otherCar carNode, env *Environment) bool {
+func bindSymbol(symcar Node, otherNode Node, env *Environment) bool {
 	sym := symcar.atom.Data.(*Symbol)
-	T().Debugf("binding symbol %s to %s", sym.String(), otherCar.String())
-	if sym.car == nullCar {
-		//symcar.atom.Data = otherCar
-		sym.car = otherCar // bind it
+	T().Debugf("binding symbol %s to %s", sym.String(), otherNode.String())
+	if sym.value == nullNode {
+		//symcar.atom.Data = otherNode
+		sym.value = otherNode // bind it
 		T().Debugf("bound symbol %s", sym.String())
 		return true
 	}
-	// valuecar := symcar.atom.Data.(carNode)
-	// return matchCar(valuecar, otherCar, env)
+	// valuecar := symcar.atom.Data.(Node)
+	// return matchCar(valuecar, otherNode, env)
 	return true // TODO match sym.value to other
 }
