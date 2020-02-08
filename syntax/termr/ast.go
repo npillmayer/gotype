@@ -1,8 +1,13 @@
 package termr
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/npillmayer/gotype/syntax/lr"
+	"github.com/npillmayer/gotype/syntax/lr/iteratable"
 	"github.com/npillmayer/gotype/syntax/lr/sppf"
+	"github.com/npillmayer/gotype/syntax/terex"
 )
 
 // ASTBuilder is a parse tree listener for building ASTs.
@@ -10,12 +15,12 @@ import (
 type ASTBuilder struct {
 	G                *lr.Grammar  // input grammar the parse forest stems from
 	forest           *sppf.Forest // input parse forest
-	ast              *GCons       // root of the AST to construct
-	last             *GCons       // current last node to append conses
+	ast              *terex.GCons // root of the AST to construct
+	last             *terex.GCons // current last node to append conses
 	operators        map[string]ASTOperator
 	conflictStrategy sppf.Pruner
 	Error            func(error)
-	stack            []*GCons
+	stack            []*terex.GCons
 }
 
 type ruleABEnter func(sym *lr.Symbol, rhs []*sppf.RuleNode) bool
@@ -25,8 +30,8 @@ type ruleABExit func(sym *lr.Symbol, rhs []*sppf.RuleNode) interface{}
 func NewASTBuilder(g *lr.Grammar) *ASTBuilder {
 	ab := &ASTBuilder{
 		G:         g,
-		ast:       &GCons{Node{NullAtom, nil}, nil}, // AST anchor
-		stack:     make([]*GCons, 0, 256),
+		ast:       &terex.GCons{terex.NilAtom, nil}, // AST anchor
+		stack:     make([]*terex.GCons, 0, 256),
 		operators: make(map[string]ASTOperator),
 	}
 	ab.last = ab.ast
@@ -38,7 +43,7 @@ func NewASTBuilder(g *lr.Grammar) *ASTBuilder {
 // (rewriting).
 type ASTOperator interface {
 	Name() string
-	Rewrite(*GCons, *Environment) *GCons
+	Rewrite(*terex.GCons, *terex.Environment) *terex.GCons
 	Descend(sppf.RuleCtxt) bool
 }
 
@@ -50,7 +55,7 @@ func (ab *ASTBuilder) AddOperator(op ASTOperator) {
 }
 
 // AST creates an abstract syntax tree from a parse tree/forest.
-func (ab *ASTBuilder) AST(parseTree *sppf.Forest) (*GCons, interface{}) {
+func (ab *ASTBuilder) AST(parseTree *sppf.Forest) (*terex.GCons, interface{}) {
 	if parseTree == nil {
 		return nil, nil
 	}
@@ -59,7 +64,7 @@ func (ab *ASTBuilder) AST(parseTree *sppf.Forest) (*GCons, interface{}) {
 	value := cursor.TopDown(ab, sppf.LtoR, sppf.Break)
 	T().Infof("AST creation return value = %v", value)
 	if value != nil {
-		ab.ast = value.(*GCons)
+		ab.ast = value.(*terex.GCons)
 		T().Infof("AST = %s", ab.ast.ListString())
 	}
 	return ab.ast, value
@@ -75,7 +80,7 @@ func (ab *ASTBuilder) EnterRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.
 			return false
 		}
 		T().Debugf("enter operator symbol: %v", sym)
-		ab.stack = append(ab.stack, &GCons{makeNode(op), nil})
+		ab.stack = append(ab.stack, terex.Cons(terex.Atomize(op), nil))
 	} else {
 		T().Debugf("enter grammar symbol: %v", sym)
 	}
@@ -97,13 +102,13 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 			sym := env.Intern(r.Symbol().Name, true)
 			//T().Debugf("sym = %v", sym)
 			if !r.Symbol().IsTerminal() {
-				sym.value.atom.Data = r.Value // value must be a Node
+				sym.Value.Data = r.Value // value must be a Node
 			}
 			rhsList, end = growRHSList(rhsList, end, r, env)
 			// switch v := r.Value.(type) { // TODO same logic as below (factor out)
 			// case Node:
 			// 	end = appendNode(end, v)
-			// case *GCons:
+			// case *terex.GCons:
 			// 	end = appendTee(end, v)
 			// default:
 			// 	panic("Unknown value type of RHS symbol")
@@ -115,16 +120,16 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 		T().Debugf("%s returns %s", sym.Name, rhsList.ListString())
 		return rhsList
 	}
-	var list, end *GCons
+	var list, end *terex.GCons
 	for _, r := range rhs {
-		list, end = growRHSList(list, end, r, globalEnvironment)
+		list, end = growRHSList(list, end, r, terex.GlobalEnvironment)
 		// switch v := r.Value.(type) {
 		// case Node:
 		// 	end = appendNode(end, v)
 		// 	if list == nil {
 		// 		list = end
 		// 	}
-		// case *GCons:
+		// case *terex.GCons:
 		// 	if v.car.Type() == OperatorType {
 		// 		//T().Infof("%s: tee appending %v", sym, v.ListString())
 		// 		end = appendTee(end, v)
@@ -132,7 +137,7 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 		// 			list = end
 		// 		}
 		// 	} else {
-		// 		var l *GCons
+		// 		var l *terex.GCons
 		// 		//T().Infof("%s: inline appending %v", sym, v.ListString())
 		// 		l, end = appendList(end, v)
 		// 		if list == nil {
@@ -144,31 +149,32 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 		// }
 	}
 	//T().Infof("List of length %d: %s", list.Length(), list.ListString())
-	if list.Length() == 1 && list.car.Type() == ConsType {
+	if list.Length() == 1 && list.Car.Type() == terex.ConsType {
 		//T().Infof("Inner list of length %d: %s", list.car.child.Length(), list.car.child.ListString())
-		list = list.car.child // unwrap
+		list = list.Cadr()
+		//list = list.car.child // unwrap
 	}
 	T().Infof("%s returns %s", sym.Name, list.ListString())
 	T().Debugf("exit grammar symbol: %v", sym)
 	return list
 }
 
-func growRHSList(start, end *GCons, r *sppf.RuleNode, env *Environment) (*GCons, *GCons) {
+func growRHSList(start, end *terex.GCons, r *sppf.RuleNode, env *terex.Environment) (*terex.GCons, *terex.GCons) {
 	switch v := r.Value.(type) {
-	case Node:
-		end = appendNode(end, v)
+	case terex.Atom:
+		end = appendAtom(end, v)
 		if start == nil {
 			start = end
 		}
-	case *GCons:
-		if v.car.Type() == OperatorType {
+	case *terex.GCons:
+		if v.Car.Type() == terex.OperatorType {
 			//T().Infof("%s: tee appending %v", sym, v.ListString())
 			end = appendTee(end, v)
 			if start == nil {
 				start = end
 			}
 		} else {
-			var l *GCons
+			var l *terex.GCons
 			//T().Infof("%s: inline appending %v", sym, v.ListString())
 			l, end = appendList(end, v)
 			if start == nil {
@@ -186,9 +192,9 @@ func growRHSList(start, end *GCons, r *sppf.RuleNode, env *Environment) (*GCons,
 func (ab *ASTBuilder) Terminal(tokval int, token interface{}, ctxt sppf.RuleCtxt) interface{} {
 	//t := ab.G.Terminal(tokval).Name
 	terminal := ab.G.Terminal(tokval)
-	node := makeNode(&Token{terminal.Name, tokval})
-	T().Debugf("cons(terminal=%s) = %v", ab.G.Terminal(tokval).Name, node)
-	return node
+	atom := terex.Atomize(&terex.Token{terminal.Name, tokval})
+	T().Debugf("cons(terminal=%s) = %v", ab.G.Terminal(tokval).Name, atom)
+	return atom
 }
 
 // Conflict is part of sppf.Listener interface.
@@ -206,36 +212,88 @@ func (ab *ASTBuilder) MakeAttrs(*lr.Symbol) interface{} {
 
 // ---------------------------------------------------------------------------
 
-func appendNode(cons *GCons, node Node) *GCons {
+func appendAtom(cons *terex.GCons, atom terex.Atom) *terex.GCons {
 	if cons == nil {
-		return &GCons{node, nil}
+		return &terex.GCons{atom, nil}
 	}
-	cons.cdr = &GCons{node, nil}
-	return cons.cdr
+	cons.Cdr = &terex.GCons{atom, nil}
+	return cons.Cdr
 }
 
-func appendList(cons *GCons, list *GCons) (*GCons, *GCons) {
+func appendList(cons *terex.GCons, list *terex.GCons) (*terex.GCons, *terex.GCons) {
 	start := cons
 	if cons == nil {
 		cons = list
 		start = list
 	} else {
-		cons.cdr = list
+		cons.Cdr = list
 	}
-	for cons.cdr != nil {
-		cons = cons.cdr
+	for cons.Cdr != nil {
+		cons = cons.Cdr
 	}
 	T().Debugf("appendList: new list is %s", start.ListString())
 	return start, cons
 }
 
-func appendTee(cons *GCons, list *GCons) *GCons {
-	tee := &GCons{nullNode, nil}
-	tee.car.child = list
+func appendTee(cons *terex.GCons, list *terex.GCons) *terex.GCons {
+	tee := terex.Cons(terex.Atomize(list), nil)
 	if cons == nil {
 		cons = tee
 	} else {
-		cons.cdr = tee
+		cons.Cdr = tee
 	}
 	return tee
+}
+
+// EnvironmentForGrammarSymbol creates a new environment, suitable for the
+// grammar symbols at a given tree node of a parse-tree or AST.
+//
+// Given a grammar production
+//
+//     A -> B C D
+//
+// it will create an environment #A for A, with pre-interned (but empty) symbols
+// for A, B, C and D. If any of the right-hand-side symbols are terminals, they will
+// be created as nodes with an appropriate atom type.
+//
+func EnvironmentForGrammarSymbol(symname string, G *lr.Grammar) (*terex.Environment, error) {
+	if G == nil {
+		return terex.GlobalEnvironment, errors.New("Grammar is null")
+	}
+	envname := "#" + symname
+	if env := terex.GlobalEnvironment.FindSymbol(envname, false); env != nil {
+		if env.Value.Type() != terex.EnvironmentType {
+			panic(fmt.Errorf("Internal error, environment misconstructed: %s", envname))
+		}
+		return env.Value.Data.(*terex.Environment), nil
+	}
+	gsym := G.SymbolByName(symname)
+	if gsym == nil || gsym.IsTerminal() {
+		return terex.GlobalEnvironment, fmt.Errorf("Non-terminal not found in grammar: %s", symname)
+	}
+	env := terex.NewEnvironment(envname, nil)
+	rhsSyms := iteratable.NewSet(0)
+	rules := G.FindNonTermRules(gsym, false)
+	rules.IterateOnce()
+	for rules.Next() {
+		rule := rules.Item().(lr.Item).Rule()
+		for _, s := range rule.RHS() {
+			rhsSyms.Add(s)
+		}
+	}
+	rhsSyms.IterateOnce()
+	for rhsSyms.Next() {
+		gsym := rhsSyms.Item().(*lr.Symbol)
+		sym := env.Intern(gsym.Name, false)
+		if gsym.IsTerminal() {
+			sym.Value = terex.Atomize(gsym.Value)
+		}
+		// else {
+		// 	sym.atom.typ = SymbolType
+		// }
+	}
+	// e := globalEnvironment.Intern(envname, false)
+	// e.atom.typ = EnvironmentType
+	// e.atom.Data = env
+	return env, nil
 }

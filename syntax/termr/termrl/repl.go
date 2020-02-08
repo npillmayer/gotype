@@ -11,6 +11,7 @@ import (
 	"github.com/chzyer/readline"
 	"github.com/npillmayer/gotype/syntax/lr/earley"
 	"github.com/npillmayer/gotype/syntax/lr/sppf"
+	"github.com/npillmayer/gotype/syntax/terex"
 	"github.com/npillmayer/gotype/syntax/termr"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
@@ -85,7 +86,7 @@ type Intp struct {
 	GA        *lr.LRAnalysis
 	repl      *readline.Instance
 	tree      *sppf.Forest
-	ast       *termr.GCons
+	ast       *terex.GCons
 }
 
 func (intp *Intp) REPL() {
