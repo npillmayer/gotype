@@ -11,6 +11,7 @@ import (
 	"github.com/npillmayer/gotype/syntax/lr"
 	"github.com/npillmayer/gotype/syntax/lr/earley"
 	"github.com/npillmayer/gotype/syntax/lr/scanner"
+	"github.com/npillmayer/gotype/syntax/lr/sppf"
 )
 
 func TestEnvSym(t *testing.T) {
@@ -92,5 +93,30 @@ func TestAST2(t *testing.T) {
 		t.Errorf("AST is empty")
 	} else if ast.ListString() != expected {
 		t.Errorf("AST should be %s, is %s", expected, ast.ListString())
+	}
+}
+
+// ---------------------------------------------------------------------------
+
+type testOp struct {
+	name string
+}
+
+func (op *testOp) Rewrite(list *GCons, env *Environment) *GCons {
+	T().Debugf(env.Dump())
+	return list
+}
+
+func (op *testOp) Descend(sppf.RuleCtxt) bool {
+	return true
+}
+
+func (op *testOp) Name() string {
+	return op.name
+}
+
+func makeOp(name string) ASTOperator {
+	return &testOp{
+		name: name,
 	}
 }
