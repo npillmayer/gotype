@@ -100,6 +100,7 @@ type Environment struct {
 	lastError error
 }
 
+// GlobalEnvironment is the base environment all other environments stem from.
 var GlobalEnvironment *Environment = &Environment{
 	name: "#global",
 	dict: make(map[string]*Symbol),
@@ -109,20 +110,25 @@ func initGlobalEnvironment() {
 	defun("+", _Add)
 }
 
-func defun(opname string, exec func(*GCons) interface{}) {
+func defun(opname string, funcBody Mapper) {
 	opsym := GlobalEnvironment.Intern(opname, false)
-	opsym.Value = Atomize(internalOp{exec})
+	opsym.Value = Atomize(&internalOp{sym: opsym, Execute: funcBody})
+	T().Debugf("new interal op %s = %v", opsym.Name, opsym.Value)
 }
 
 type internalOp struct {
-	Execute func(*GCons) interface{}
+	sym     *Symbol
+	Execute Mapper
 }
 
-func (iop *internalOp) Call(l *GCons) interface{} {
-	return iop.Execute(l)
+func (iop *internalOp) Call(el Element) Element {
+	return iop.Execute(el)
 }
 
-func (iop *internalOp) Name() string {
+func (iop *internalOp) String() string {
+	if iop.sym != nil {
+		return iop.sym.Name
+	}
 	return "internal"
 }
 

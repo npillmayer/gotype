@@ -179,39 +179,34 @@ func (op *sExprOp) Rule(pattern *terex.GCons, rw termr.Rewriter) *sExprOp {
 	return op
 }
 
-// Anything is a pattern matching any s-expr.
-var Anything *terex.GCons
-
 // AnyToken is a pattern matching any arg of TokenType
-var AnyToken *terex.GCons
+//var AnyToken *terex.GCons
 
 // SingleTokenArg is a pattern matching an operator with a single arg of TokenType.
 var SingleTokenArg *terex.GCons
 
 // AnyOp is a pattern matching any node with OperatorType
-var AnyOp = makeASTOp("!AnyOp")
+//var AnyOp = makeASTOp("!AnyOp")
 
 func initDefaultPatterns() {
-	Anything = terex.Cons(terex.Atomize(terex.AnyList), nil)
-	T().Errorf("Anything=%s", Anything.ListString())
-	arg := terex.Atomize(terex.AnyType)
-	AnyToken = terex.Cons(arg, nil)
-	SingleTokenArg = terex.Cons(terex.Atomize(AnyOp), AnyToken)
+	//arg := terex.Atomize(terex.AnyType)
+	//AnyToken = terex.Cons(arg, nil)
+	SingleTokenArg = terex.Cons(terex.Atomize(terex.OperatorType), termr.AnySymbol)
 	//p := Cons(makeNode(AnyOp), Anything)
-	atomOp = makeASTOp("Atom").Rule(Anything, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
+	atomOp = makeASTOp("Atom").Rule(termr.Anything, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 		return l.Cdr
 	})
 	// .Rule(SingleTokenArg, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 	// 	return l.Cdr()
 	// })
-	p := terex.Cons(terex.Atomize(AnyOp),
-		terex.Cons(terex.Atomize(&terex.Token{Name: "^", Value: '^'}), AnyToken))
+	p := terex.Cons(terex.Atomize(terex.OperatorType),
+		terex.Cons(terex.Atomize(&terex.Token{Name: "^", Value: '^'}), termr.AnySymbol))
 	T().Errorf("PATTERN Quote = %s", p.ListString())
 	quoteOp = makeASTOp("Quote").Rule(p, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 		return terex.Cons(l.Car, l.Cddr())
 	})
 	//p = Cons(makeNode(AnyOp), Cons(makeNode(&Token{"'('", '('}), Cons(R, nil)))
-	listOp = makeASTOp("List").Rule(Anything, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
+	listOp = makeASTOp("List").Rule(termr.Anything, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 		if l.Length() <= 3 { // ( )
 			return nil
 		}

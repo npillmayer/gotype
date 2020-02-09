@@ -8,9 +8,10 @@ import (
 	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/syntax/terex"
+	"github.com/npillmayer/gotype/syntax/termr"
 )
 
-func TestMatch3(t *testing.T) {
+func TestMatchAnyOp(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
@@ -23,14 +24,14 @@ func TestMatch3(t *testing.T) {
 	}
 }
 
-func TestMatch4(t *testing.T) {
+func TestMatchAnything(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	initDefaultPatterns()
 	l := terex.List(1, 2, 3)
-	if !Anything.Match(l, terex.GlobalEnvironment) {
+	if !termr.Anything.Match(l, terex.GlobalEnvironment) {
 		t.Errorf("Expected !Anything to match (1 2 3)")
 	}
 }

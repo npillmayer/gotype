@@ -6,6 +6,7 @@ import (
 	"github.com/npillmayer/gotype/core/config/tracing"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
+	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 )
 
@@ -100,4 +101,31 @@ func TestString(t *testing.T) {
 	if s != `(1 2 ("+" 5 7 12) "Hello")` {
 		t.Errorf(`Expected list to be (1 2 ("+" 5 7 12) "Hello"), is "%s"`, s)
 	}
+}
+
+func TestMap(t *testing.T) {
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	l := List(1, 2, 3)
+	r := l.Map(_Inc)
+	t.Logf("inc('%s) = %s", l.ListString(), r.ListString())
+	t.Fail()
+}
+
+func TestEvalAdd(t *testing.T) {
+	gtrace.SyntaxTracer = gologadapter.New()
+	// gtrace.SyntaxTracer = gotestingadapter.New()
+	// teardown := gotestingadapter.RedirectTracing(t)
+	// defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	initGlobalEnvironment()
+	add := GlobalEnvironment.FindSymbol("+", false).Value
+	l := List(add, 1, 2)
+	r := GlobalEnvironment.Eval(l)
+	if r == nil {
+		t.Errorf("Call to _Add failed")
+	}
+	t.Fail()
 }

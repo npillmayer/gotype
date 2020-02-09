@@ -45,7 +45,6 @@ const (
 	EnvironmentType
 	UserType
 	AnyType
-	AnyList
 	ErrorType
 )
 
@@ -62,12 +61,16 @@ func Atomize(thing interface{}) Atom {
 	if thing == nil {
 		return NilAtom
 	}
+	if a, ok := thing.(Atom); ok {
+		return a
+	}
 	atom := Atom{Data: thing}
 	switch c := thing.(type) {
 	case *GCons:
 		atom.typ = ConsType
 	case AtomType:
 		atom.typ = c
+		atom.Data = nil
 	case int, int32, int64, uint, uint32, uint64:
 		atom.typ = NumType
 	case string, []byte, []rune:
@@ -113,9 +116,12 @@ func (a Atom) String() string {
 		return fmt.Sprintf("\"%s\"", a.Data)
 	case TokenType:
 		t := a.Data.(*Token)
-		return fmt.Sprintf("T(%s)", t.String())
+		return fmt.Sprintf(":%s", t.String())
+	case OperatorType:
+		o := a.Data.(Operator)
+		return fmt.Sprintf("#%s", o.String())
 	}
-	return fmt.Sprintf("%v", a.Data)
+	return fmt.Sprintf("%s[%v]", a.typ, a.Data)
 }
 
 // ListString returns an Atom's string representation within a list. Will usually be called
@@ -270,24 +276,112 @@ func (l *GCons) FirstN(n int) *GCons {
 	return start
 }
 
+// Map applies a mapping-function to every element of a list.
+func (l *GCons) Map(mapper Mapper) *GCons {
+	return _Map(mapper, elem(l)).AsList()
+}
+
 // --- Internal Operations ---------------------------------------------------
 
 // Operator is an interface to be implemented by every node being able to
 // operate on an argument list.
 type Operator interface {
-	Name() string            // returns the string representation of this operator
-	Call(*GCons) interface{} // returns *GCons or Node
+	String() string       // returns the string representation of this operator
+	Call(Element) Element // takes and returns *GCons or Node
 }
 
-func _Add(args *GCons) interface{} {
-	sum := 0
-	for args != nil {
-		if args.Car.Type() != NumType {
-			return ErrorAtom
-		}
-		sum += args.Car.Data.(int)
+// A Mapper takes an atom or list and maps it to an atom or list
+type Mapper func(Element) Element
+
+type Element struct {
+	thing interface{}
+}
+
+func elem(thing interface{}) Element {
+	return Element{thing: thing}
+}
+
+func (el Element) IsAtom() bool {
+	if _, ok := el.thing.(Atom); ok {
+		return true
 	}
-	return Atomize(sum)
+	return false
+}
+
+func (el Element) IsError() bool {
+	return el.AsAtom().typ == ErrorType
+}
+
+func (el Element) AsAtom() Atom {
+	if el.IsAtom() {
+		return el.thing.(Atom)
+	}
+	return Atomize(el.thing.(*GCons))
+}
+
+func (el Element) AsList() *GCons {
+	if el.IsAtom() {
+		return Cons(el.thing.(Atom), nil)
+	}
+	return el.thing.(*GCons)
+}
+
+func (el Element) String() string {
+	if el.IsAtom() {
+		return el.AsAtom().String()
+	}
+	return el.AsList().ListString()
+}
+
+func _Add(args Element) Element {
+	if args.IsAtom() {
+		if a := args.AsAtom(); a.typ == NumType {
+			return elem(a)
+		}
+	}
+	sum := 0
+	arglist := args.AsList()
+	for arglist != nil {
+		if arglist.Car.Type() != NumType {
+			return elem(ErrorAtom)
+		}
+		sum += arglist.Car.Data.(int)
+		arglist = arglist.Cdr
+	}
+	return elem(Atomize(sum))
+}
+
+func _Inc(args Element) Element {
+	if args.IsAtom() {
+		if a := args.AsAtom(); a.typ == NumType {
+			return elem(Atomize(a.Data.(int) + 1))
+		}
+	}
+	return elem(ErrorAtom)
+}
+
+func _Map(mapper Mapper, args Element) Element {
+	arglist := args.AsList()
+	r := mapper(elem(arglist.Car))
+	T().Debugf("Map: mapping(%s) = %s", arglist.Car, r)
+	if arglist.Cdr == nil {
+		return elem(r)
+	}
+	result := Cons(r.AsAtom(), nil)
+	iter := result
+	cons := arglist.Cdr
+	for cons != nil {
+		el := mapper(elem(cons.Car))
+		T().Debugf("Map: mapping(%s) = %s", cons.Car, el)
+		if el.IsError() {
+			return el
+		}
+		iter.Cdr = Cons(el.AsAtom(), nil)
+		iter = iter.Cdr
+		cons = cons.Cdr
+	}
+	T().Debugf("_Map result = %s", result.ListString())
+	return elem(result)
 }
 
 // --- Matching --------------------------------------------------------------
@@ -326,7 +420,7 @@ List l is the pattern, other is the argument to be matched against the pattern.
 */
 func (l *GCons) Match(other *GCons, env *Environment) bool {
 	T().Debugf("Match: %s vs %s", l, other)
-	if l != nil && l.Car.Type() == AnyList {
+	if l != nil && l.Car.Type() == ConsType && l.Car.Data == nil {
 		return true
 	}
 	if l == nil {
@@ -374,7 +468,7 @@ func matchAtom(atom Atom, otherAtom Atom, env *Environment) bool {
 		return false
 	}
 	if doMatchData {
-		return dataMatch(atom.Data, otherAtom.Data, atom.typ)
+		return dataMatch(atom.Data, otherAtom.Data, atom.typ, env)
 	}
 	return true
 }
@@ -395,22 +489,19 @@ func bindSymbol(symatom Atom, value Atom, env *Environment) bool {
 
 // typeMatch returns (typesAreMatching, mustMatchValue)
 func typeMatch(t1 AtomType, t2 AtomType) (bool, bool) {
-	if t1 == t2 {
-		return true, true
-	}
 	if t1 == AnyType {
 		return true, false
 	}
+	if t1 == t2 {
+		return true, true
+	}
+	T().Debugf("No type match: %s vs %s", t1, t2)
 	return false, true
 }
 
-func dataMatch(d1 interface{}, d2 interface{}, t AtomType) bool {
-	if t == OperatorType && d1 != nil {
-		if op, ok := d1.(Operator); ok {
-			if op.Name() == "Any" {
-				return true
-			}
-		}
+func dataMatch(d1 interface{}, d2 interface{}, t AtomType, env *Environment) bool {
+	if d1 == nil {
+		return true
 	}
 	if t == TokenType && d2 != nil {
 		tok1, _ := d1.(*Token)
@@ -420,6 +511,8 @@ func dataMatch(d1 interface{}, d2 interface{}, t AtomType) bool {
 			}
 		}
 	}
-	T().Errorf("dataMatch()")
+	if t == ConsType {
+		return d1.(*GCons).Match(d2.(*GCons), env)
+	}
 	return d1 == d2
 }
