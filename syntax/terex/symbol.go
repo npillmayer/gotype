@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"sync"
 )
 
 // Symbol is a type for language symbols (stored in the Environment).
@@ -107,10 +108,17 @@ var GlobalEnvironment *Environment = &Environment{
 	dict: make(map[string]*Symbol),
 }
 
-func initGlobalEnvironment() {
-	defun("+", _Add, nil)
-	defun("quote", _Quote, nil)
-	defun("list", _ErrorMapper(errors.New("list used as function call")), _Quote)
+var initOnce sync.Once // monitors one-time initialization of global environment
+
+// InitGlobalEnvironment initializes the global environment. It is guarded against
+// multiple execution. Without calling this, the "native" operators will not be
+// found in the symbol table.
+func InitGlobalEnvironment() {
+	initOnce.Do(func() {
+		defun("+", _Add, nil)
+		defun("quote", _Quote, nil)
+		defun("list", _ErrorMapper(errors.New("list used as function call")), _Quote)
+	})
 }
 
 func defun(opname string, funcBody Mapper, quoter Mapper) {
@@ -136,7 +144,10 @@ func (iop *internalOp) Call(el Element, env *Environment) Element {
 func (iop *internalOp) Quote(el Element, env *Environment) Element {
 	// TODO is env needed for internal ops?
 	if iop.quoter == nil {
-		return el
+		if el.IsAtom() {
+			return Elem(Cons(Atomize(iop), Cons(el.AsAtom(), nil)))
+		}
+		return Elem(Cons(Atomize(iop), el.AsList()))
 	}
 	return iop.quoter(el)
 }

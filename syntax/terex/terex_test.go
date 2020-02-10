@@ -29,7 +29,7 @@ func TestList1(t *testing.T) {
 	}
 }
 func TestList2(t *testing.T) {
-	initGlobalEnvironment()
+	InitGlobalEnvironment()
 	l := List(GlobalEnvironment.FindSymbol("+", false), 1, 2)
 	t.Logf("l=%s", l.ListString())
 	if l.Car.Type() != OperatorType {
@@ -139,7 +139,7 @@ func TestEvalAdd(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
-	initGlobalEnvironment()
+	InitGlobalEnvironment()
 	add := GlobalEnvironment.FindSymbol("+", false).Value
 	l := List(add, 1, 2)
 	r := GlobalEnvironment.Eval(l)

@@ -397,7 +397,14 @@ func _Inc(args Element) Element {
 }
 
 func _Quote(args Element) Element {
-	return GlobalEnvironment.quote(args)
+	if args.IsAtom() {
+		//T().Errorf("   ------- _Quote Atom")
+		return args
+		//return GlobalEnvironment.quoteAtom(args.AsAtom())
+	}
+	//T().Errorf("   ------- _Quote List")
+	//return args
+	return GlobalEnvironment.quoteList(args.AsList())
 }
 
 func _ErrorMapper(err error) Mapper {
@@ -409,16 +416,16 @@ func _ErrorMapper(err error) Mapper {
 func _Map(mapper Mapper, args Element) Element {
 	arglist := args.AsList()
 	r := mapper(Elem(arglist.Car))
-	T().Debugf("Map: mapping(%s) = %s", arglist.Car, r)
+	//T().Debugf("Map: mapping(%s) = %s", arglist.Car, r)
 	if arglist.Cdr == nil {
-		return Elem(r)
+		return r
 	}
 	result := Cons(r.AsAtom(), nil)
 	iter := result
 	cons := arglist.Cdr
 	for cons != nil {
 		el := mapper(Elem(cons.Car))
-		T().Debugf("Map: mapping(%s) = %s", cons.Car, el)
+		//T().Debugf("Map: mapping(%s) = %s", cons.Car, el)
 		if el.IsError() {
 			return el
 		}
@@ -426,7 +433,7 @@ func _Map(mapper Mapper, args Element) Element {
 		iter = iter.Cdr
 		cons = cons.Cdr
 	}
-	T().Debugf("_Map result = %s", result.ListString())
+	//T().Debugf("_Map result = %s", result.ListString())
 	return Elem(result)
 }
 

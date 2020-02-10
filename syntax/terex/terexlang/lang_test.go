@@ -11,7 +11,7 @@ import (
 )
 
 func TestAssignability(t *testing.T) {
-	var e interface{} = &sExprOp{name: "Hello"}
+	var e interface{} = &sExprTermR{name: "Hello"}
 	switch x := e.(type) {
 	case termr.TermR:
 		t.Logf("sExprOp %v accepted as termr.TermR", x)
@@ -57,7 +57,14 @@ func TestEval1(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
+	terex.InitGlobalEnvironment()
 	input := "(Hello ^World 1)"
-	Eval(input, terex.GlobalEnvironment)
-	//t.Errorf("TODO: TestEval1 to be cleaned up !")
+	result := Eval(input, terex.GlobalEnvironment)
+	if result.Length() != 2 {
+		t.Errorf("Expected resulting list to be of length 2, is %d", result.Length())
+	}
+	t.Logf("AST=%s", result.Car.Data.(*terex.GCons).ListString())
+	if result.Car.Data.(*terex.GCons).Length() != 3 {
+		t.Errorf("Expected AST to be of length 3, is %d", result.Cadr().Length())
+	}
 }
