@@ -11,16 +11,16 @@ import (
 )
 
 func TestAssignability(t *testing.T) {
-	var e interface{} = &sExprOp{}
-	switch x := e.(type) {
-	case terex.Operator:
-		t.Logf("sExprOp %v accepted as terex.Operator", x)
-	default:
-		t.Errorf("Expected terexlang.sExprOp to implement termr.TermR interface")
-	}
+	var e interface{} = &sExprOp{name: "Hello"}
 	switch x := e.(type) {
 	case termr.TermR:
 		t.Logf("sExprOp %v accepted as termr.TermR", x)
+		switch o := x.Operator().(type) {
+		case terex.Operator:
+			t.Logf("sExprOp.Operator() %v accepted as terex.Operator", o)
+		default:
+			t.Errorf("Expected %v to implement terex.Operator interface", o)
+		}
 	default:
 		t.Errorf("Expected terexlang.sExprOp to implement termr.TermR interface")
 	}
@@ -32,7 +32,7 @@ func TestMatchAnyOp(t *testing.T) {
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	initDefaultPatterns()
-	l1 := terex.List(makeASTOp("S"), 1)
+	l1 := terex.List(makeASTTermR("S", "start").Operator(), 1)
 	t.Logf("l1 = %s, pattern = %s", l1.ListString(), SingleTokenArg.ListString())
 	if !SingleTokenArg.Match(l1, terex.GlobalEnvironment) {
 		t.Errorf("Expected l1 to match pattern (Op any)")

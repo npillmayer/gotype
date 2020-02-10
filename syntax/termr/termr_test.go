@@ -30,7 +30,9 @@ func TestEnvSym(t *testing.T) {
 	}
 	t.Logf(env.Dump())
 	t.Logf(terex.GlobalEnvironment.Dump())
-	t.Fail()
+	if env.FindSymbol("E", true) == nil {
+		t.Errorf("Expected to have symbol E in environment")
+	}
 }
 
 func TestAST1(t *testing.T) {
@@ -121,8 +123,12 @@ func (op *testOp) Operator() terex.Operator {
 	return op
 }
 
-func (op *testOp) Call(el terex.Element) terex.Element {
+func (op *testOp) Call(el terex.Element, env *terex.Environment) terex.Element {
 	return terex.Elem(nil)
+}
+
+func (op *testOp) Quote(el terex.Element, env *terex.Environment) terex.Element {
+	return el
 }
 
 func makeOp(name string) *testOp {

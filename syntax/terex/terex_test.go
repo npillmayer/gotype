@@ -6,16 +6,25 @@ import (
 	"github.com/npillmayer/gotype/core/config/tracing"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 )
+
+func TestAssignability(t *testing.T) {
+	var op interface{} = &internalOp{}
+	switch x := op.(type) {
+	case Operator:
+		t.Logf("internalOp %v assignable to Operator", x)
+	default:
+		t.Errorf("Expected internalOp to be assignable to Operator")
+	}
+}
 
 func TestList1(t *testing.T) {
 	l1 := List(1, 4, 6, 8, 12)
 	if l1.Length() != 5 {
 		t.Errorf("length of list expected to be 5, is %d", l1.Length())
 	}
-	if l1.Car.Data != 1 {
+	if l1.Car.Data != 1.0 {
 		t.Errorf("element #1 expected to be 1, is %v", l1.Car.Data)
 	}
 }
@@ -26,17 +35,17 @@ func TestFirst(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	l := List(1, 2, 3, 4, 5)
 	f := l.FirstN(3)
-	if f.Length() != 3 || f.Car.Data != 1 {
+	if f.Length() != 3 || f.Car.Data != 1.0 {
 		t.Errorf("Expected f to be (1 2 3), is %s", f.ListString())
 	}
 	l = List(1)
 	f = l.FirstN(1)
-	if f.Length() != 1 || f.Car.Data != 1 {
+	if f.Length() != 1 || f.Car.Data != 1.0 {
 		t.Errorf("Expected f to be (1), is %s", f.ListString())
 	}
 	l = List(1)
 	f = l.FirstN(5)
-	if f.Length() != 1 || f.Car.Data != 1 {
+	if f.Length() != 1 || f.Car.Data != 1.0 {
 		t.Errorf("Expected f to be (1), is %s", f.ListString())
 	}
 }
@@ -111,14 +120,15 @@ func TestMap(t *testing.T) {
 	l := List(1, 2, 3)
 	r := l.Map(_Inc)
 	t.Logf("inc('%s) = %s", l.ListString(), r.ListString())
-	t.Fail()
+	if r.Car.Data != 2.0 {
+		t.Errorf("Expected first element of r to be 2, is %g", r.Car.Data)
+	}
 }
 
 func TestEvalAdd(t *testing.T) {
-	gtrace.SyntaxTracer = gologadapter.New()
-	// gtrace.SyntaxTracer = gotestingadapter.New()
-	// teardown := gotestingadapter.RedirectTracing(t)
-	// defer teardown()
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	initGlobalEnvironment()
 	add := GlobalEnvironment.FindSymbol("+", false).Value
@@ -127,5 +137,4 @@ func TestEvalAdd(t *testing.T) {
 	if r == nil {
 		t.Errorf("Call to _Add failed")
 	}
-	t.Fail()
 }

@@ -2,6 +2,7 @@ package terex
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 )
 
@@ -107,22 +108,37 @@ var GlobalEnvironment *Environment = &Environment{
 }
 
 func initGlobalEnvironment() {
-	defun("+", _Add)
+	defun("+", _Add, nil)
+	defun("quote", _Quote, nil)
+	defun("list", _ErrorMapper(errors.New("list used as function call")), _Quote)
 }
 
-func defun(opname string, funcBody Mapper) {
+func defun(opname string, funcBody Mapper, quoter Mapper) {
 	opsym := GlobalEnvironment.Intern(opname, false)
-	opsym.Value = Atomize(&internalOp{sym: opsym, Execute: funcBody})
+	opsym.Value = Atomize(&internalOp{sym: opsym, caller: funcBody, quoter: quoter})
 	T().Debugf("new interal op %s = %v", opsym.Name, opsym.Value)
 }
 
 type internalOp struct {
-	sym     *Symbol
-	Execute Mapper
+	sym    *Symbol
+	caller Mapper
+	quoter Mapper
 }
 
-func (iop *internalOp) Call(el Element) Element {
-	return iop.Execute(el)
+func (iop *internalOp) Call(el Element, env *Environment) Element {
+	// TODO is env needed for internal ops?
+	if iop.caller == nil {
+		return el
+	}
+	return iop.caller(el)
+}
+
+func (iop *internalOp) Quote(el Element, env *Environment) Element {
+	// TODO is env needed for internal ops?
+	if iop.quoter == nil {
+		return el
+	}
+	return iop.quoter(el)
 }
 
 func (iop *internalOp) String() string {
@@ -131,8 +147,6 @@ func (iop *internalOp) String() string {
 	}
 	return "internal"
 }
-
-var _ Operator = &internalOp{}
 
 // NewEnvironment creates a new environment.
 func NewEnvironment(name string, parent *Environment) *Environment {

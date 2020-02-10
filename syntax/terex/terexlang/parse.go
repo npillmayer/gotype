@@ -124,14 +124,18 @@ var listOp *sExprOp  // for List -> ... productions
 // --- AST operator helpers --------------------------------------------------
 
 type sExprOp struct {
-	name  string
-	rules []termr.RewriteRule
+	name   string
+	opname string
+	rules  []termr.RewriteRule
+	call   func(terex.Element, *terex.Environment) terex.Element
+	quote  func(terex.Element, *terex.Environment) terex.Element
 }
 
-func makeASTOp(name string) *sExprOp {
+func makeASTTermR(name string, opname string) *sExprOp {
 	op := &sExprOp{
-		name:  name,
-		rules: make([]termr.RewriteRule, 0, 1),
+		name:   name,
+		opname: opname,
+		rules:  make([]termr.RewriteRule, 0, 1),
 	}
 	return op
 }
@@ -140,12 +144,8 @@ func (op *sExprOp) Name() string {
 	return op.name
 }
 
-func (op *sExprOp) String() string {
-	return op.name + ":Op"
-}
-
 func (op *sExprOp) Operator() terex.Operator {
-	return op
+	return &globalOpInEnv{op.opname}
 }
 
 func (op *sExprOp) Rewrite(l *terex.GCons, env *terex.Environment) *terex.GCons {
@@ -167,13 +167,6 @@ func (op *sExprOp) Descend(sppf.RuleCtxt) bool {
 	return true
 }
 
-// Call is part of interface Operator.
-//func (op *sExprOp) Call(term *terex.GCons) interface{} {
-func (op *sExprOp) Call(term terex.Element) terex.Element {
-	panic("Call() called")
-	//return op.Rewrite(term, terex.GlobalEnvironment)
-}
-
 func (op *sExprOp) Rule(pattern *terex.GCons, rw termr.Rewriter) *sExprOp {
 	r := termr.RewriteRule{
 		Pattern: pattern,
@@ -190,14 +183,14 @@ func (op *sExprOp) Rule(pattern *terex.GCons, rw termr.Rewriter) *sExprOp {
 var SingleTokenArg *terex.GCons
 
 // AnyOp is a pattern matching any node with OperatorType
-//var AnyOp = makeASTOp("!AnyOp")
+//var AnyOp = makeASTTermR("!AnyOp")
 
 func initDefaultPatterns() {
 	//arg := terex.Atomize(terex.AnyType)
 	//AnyToken = terex.Cons(arg, nil)
 	SingleTokenArg = terex.Cons(terex.Atomize(terex.OperatorType), termr.AnySymbol())
 	//p := Cons(makeNode(AnyOp), Anything)
-	atomOp = makeASTOp("Atom").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) *terex.GCons {
+	atomOp = makeASTTermR("Atom", "Atom").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 		return l.Cdr
 	})
 	// .Rule(SingleTokenArg, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
@@ -206,11 +199,11 @@ func initDefaultPatterns() {
 	p := terex.Cons(terex.Atomize(terex.OperatorType),
 		terex.Cons(terex.Atomize(&terex.Token{Name: "^", Value: '^'}), termr.AnySymbol()))
 	T().Errorf("PATTERN Quote = %s", p.ListString())
-	quoteOp = makeASTOp("Quote").Rule(p, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
+	quoteOp = makeASTTermR("Quote", "quote").Rule(p, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 		return terex.Cons(l.Car, l.Cddr())
 	})
 	//p = Cons(makeNode(AnyOp), Cons(makeNode(&Token{"'('", '('}), Cons(R, nil)))
-	listOp = makeASTOp("List").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) *terex.GCons {
+	listOp = makeASTTermR("List", "list").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 		if l.Length() <= 3 { // ( )
 			return nil
 		}
@@ -218,4 +211,44 @@ func initDefaultPatterns() {
 		content = content.FirstN(l.Length() - 1) // strip )
 		return terex.Cons(l.Car, content)        // (List:Op ...)
 	})
+}
+
+// ---------------------------------------------------------------------------
+
+type globalOpInEnv struct {
+	opname string
+}
+
+func (op globalOpInEnv) String() string {
+	return op.opname
+}
+
+// Call is part of interface Operator.
+//func (op *sExprOp) Call(term *terex.GCons) interface{} {
+func (op globalOpInEnv) Call(term terex.Element, env *terex.Environment) terex.Element {
+	opsym := terex.GlobalEnvironment.FindSymbol(op.opname, true)
+	if opsym == nil {
+		T().Errorf("Cannot find parsing operation %s", op.opname)
+		return term
+	}
+	operator, ok := opsym.Value.Data.(terex.Operator)
+	if !ok {
+		T().Errorf("Cannot quote-call parsing operation %s", op.opname)
+		return term
+	}
+	return operator.Call(term, env)
+}
+
+func (op globalOpInEnv) Quote(term terex.Element, env *terex.Environment) terex.Element {
+	opsym := terex.GlobalEnvironment.FindSymbol(op.opname, true)
+	if opsym == nil {
+		T().Errorf("Cannot find parsing operation %s", op.opname)
+		return term
+	}
+	operator, ok := opsym.Value.Data.(terex.Operator)
+	if !ok {
+		T().Errorf("Cannot quote-call parsing operation %s", op.opname)
+		return term
+	}
+	return operator.Quote(term, env)
 }

@@ -75,12 +75,13 @@ func (ab *ASTBuilder) AST(parseTree *sppf.Forest) (*terex.GCons, interface{}) {
 // EnterRule is part of sppf.Listener interface.
 // Not intended for direct client use.
 func (ab *ASTBuilder) EnterRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.RuleCtxt) bool {
-	if op, ok := ab.rewriters[sym.Name]; ok {
-		if !op.Descend(ctxt) {
+	if rew, ok := ab.rewriters[sym.Name]; ok {
+		if !rew.Descend(ctxt) {
 			return false
 		}
-		T().Debugf("enter operator symbol: %v", sym)
-		ab.stack = append(ab.stack, terex.Cons(terex.Atomize(op), nil))
+		T().Errorf("enter operator symbol: %v", sym)
+		//opsym := terex.Cons(terex.Atomize(rew.Operator()), nil)
+		ab.stack = append(ab.stack, terex.Cons(terex.Atomize(rew.Operator()), nil))
 	} else {
 		T().Debugf("enter grammar symbol: %v", sym)
 	}

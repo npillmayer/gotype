@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"reflect"
 )
 
 /*
@@ -37,7 +38,7 @@ type AtomType int
 const (
 	NoType AtomType = iota
 	ConsType
-	SymbolType
+	VarType
 	NumType
 	StringType
 	BoolType
@@ -73,8 +74,13 @@ func Atomize(thing interface{}) Atom {
 		atom.typ = c
 		atom.Data = nil
 		T().Debugf("atomize(%s) = %v", thing, atom)
-	case int, int32, int64, uint, uint32, uint64:
+	case int, int32, int64, uint, uint32, uint64, float32, float64:
+		f, err := toFloat(c)
+		if err != nil {
+			return ErrorAtom(err.Error())
+		}
 		atom.typ = NumType
+		atom.Data = f
 	case string, []byte, []rune:
 		atom.typ = StringType
 	case bool:
@@ -82,11 +88,11 @@ func Atomize(thing interface{}) Atom {
 	case Operator:
 		atom.typ = OperatorType
 	case *Symbol:
-		atom.typ = SymbolType
-	case *Environment:
-		atom.typ = EnvironmentType
+		atom.typ = VarType
 	case *Token:
 		atom.typ = TokenType
+	case *Environment:
+		atom.typ = EnvironmentType
 	case error:
 		atom.typ = ErrorType
 	default:
@@ -117,7 +123,7 @@ func (a Atom) String() string {
 	}
 	switch a.typ {
 	case NumType:
-		return fmt.Sprintf("%d", a.Data)
+		return fmt.Sprintf("%g", a.Data)
 	case BoolType:
 		return fmt.Sprintf("%v", a.Data)
 	case StringType:
@@ -300,8 +306,9 @@ func (l *GCons) Map(mapper Mapper) *GCons {
 // Operator is an interface to be implemented by every node being able to
 // operate on an argument list.
 type Operator interface {
-	String() string       // returns the string representation of this operator
-	Call(Element) Element // takes and returns *GCons or Node
+	String() string                      // returns the string representation of this operator
+	Call(Element, *Environment) Element  // takes and returns *GCons or Node
+	Quote(Element, *Environment) Element // takes and returns *GCons or Node
 }
 
 // A Mapper takes an atom or list and maps it to an atom or list
@@ -353,13 +360,13 @@ func _Add(args Element) Element {
 			return Elem(a)
 		}
 	}
-	sum := 0
+	sum := 0.0
 	arglist := args.AsList()
 	for arglist != nil {
 		if arglist.Car.Type() != NumType {
 			return Elem(ErrorAtom)
 		}
-		sum += arglist.Car.Data.(int)
+		sum += arglist.Car.Data.(float64)
 		arglist = arglist.Cdr
 	}
 	return Elem(Atomize(sum))
@@ -368,10 +375,20 @@ func _Add(args Element) Element {
 func _Inc(args Element) Element {
 	if args.IsAtom() {
 		if a := args.AsAtom(); a.typ == NumType {
-			return Elem(Atomize(a.Data.(int) + 1))
+			return Elem(Atomize(a.Data.(float64) + 1))
 		}
 	}
 	return Elem(ErrorAtom)
+}
+
+func _Quote(args Element) Element {
+	return GlobalEnvironment.quote(args)
+}
+
+func _ErrorMapper(err error) Mapper {
+	return func(Element) Element {
+		return Elem(ErrorAtom(err.Error()))
+	}
 }
 
 func _Map(mapper Mapper, args Element) Element {
@@ -458,7 +475,7 @@ func (l *GCons) Match(other *GCons, env *Environment) bool {
 // 	if car == nullNode {
 // 		return otherNode == nullNode
 // 	}
-// 	if car.Type() == SymbolType {
+// 	if car.Type() == VarType {
 // 		return bindSymbol(car, otherNode, env)
 // 	}
 // 	if car.Type() == ConsType {
@@ -478,7 +495,7 @@ func matchAtom(atom Atom, otherAtom Atom, env *Environment) bool {
 	if otherAtom == NilAtom {
 		return false
 	}
-	if atom.Type() == SymbolType {
+	if atom.Type() == VarType {
 		return bindSymbol(atom, otherAtom, env)
 	}
 	typeMatches, doMatchData := typeMatch(atom.typ, otherAtom.typ)
@@ -533,4 +550,18 @@ func dataMatch(d1 interface{}, d2 interface{}, t AtomType, env *Environment) boo
 		return d1.(*GCons).Match(d2.(*GCons), env)
 	}
 	return d1 == d2
+}
+
+// ----------------------------------------------------------------------
+
+var floatType = reflect.TypeOf(float64(0))
+
+func toFloat(unk interface{}) (float64, error) {
+	v := reflect.ValueOf(unk)
+	v = reflect.Indirect(v)
+	if !v.Type().ConvertibleTo(floatType) {
+		return 0, fmt.Errorf("cannot convert %v to float64", v.Type())
+	}
+	fv := v.Convert(floatType)
+	return fv.Float(), nil
 }
