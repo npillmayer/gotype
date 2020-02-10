@@ -31,7 +31,7 @@ func TestMatchAnything(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	initDefaultPatterns()
 	l := terex.List(1, 2, 3)
-	if !termr.Anything.Match(l, terex.GlobalEnvironment) {
+	if !termr.Anything().Match(l, terex.GlobalEnvironment) {
 		t.Errorf("Expected !Anything to match (1 2 3)")
 	}
 }

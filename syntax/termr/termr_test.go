@@ -6,12 +6,12 @@ import (
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/syntax/lr"
 	"github.com/npillmayer/gotype/syntax/lr/earley"
 	"github.com/npillmayer/gotype/syntax/lr/scanner"
 	"github.com/npillmayer/gotype/syntax/lr/sppf"
+	"github.com/npillmayer/gotype/syntax/terex"
 )
 
 func TestEnvSym(t *testing.T) {
@@ -29,15 +29,14 @@ func TestEnvSym(t *testing.T) {
 		t.Errorf(err.Error())
 	}
 	t.Logf(env.Dump())
-	t.Logf(globalEnvironment.Dump())
+	t.Logf(terex.GlobalEnvironment.Dump())
 	t.Fail()
 }
 
 func TestAST1(t *testing.T) {
-	//gtrace.SyntaxTracer = gotestingadapter.New()
-	gtrace.SyntaxTracer = gologadapter.New()
-	//teardown := gotestingadapter.RedirectTracing(t)
-	//defer teardown()
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	b := lr.NewGrammarBuilder("TermR")
 	b.LHS("E").N("E").T("+", '+').T("a", scanner.Ident).End()
@@ -56,8 +55,8 @@ func TestAST1(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	builder := NewASTBuilder(G)
 	ast, _ := builder.AST(parser.ParseForest())
-	expected := `(a + a)`
-	if ast.cdr == nil {
+	expected := `(:a :+ :a :#eof)`
+	if ast.Cdr == nil {
 		t.Errorf("AST is empty")
 	} else if ast.ListString() != expected {
 		t.Errorf("AST should be %s, is %s", expected, ast.ListString())
@@ -65,10 +64,9 @@ func TestAST1(t *testing.T) {
 }
 
 func TestAST2(t *testing.T) {
-	//gtrace.SyntaxTracer = gotestingadapter.New()
-	gtrace.SyntaxTracer = gologadapter.New()
-	//teardown := gotestingadapter.RedirectTracing(t)
-	//defer teardown()
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	b := lr.NewGrammarBuilder("TermR")
 	b.LHS("E").N("E").T("+", '+').T("a", scanner.Ident).End()
@@ -88,8 +86,8 @@ func TestAST2(t *testing.T) {
 	builder := NewASTBuilder(G)
 	builder.AddOperator(makeOp("E"))
 	ast, _ := builder.AST(parser.ParseForest())
-	expected := `(a + a)`
-	if ast.cdr == nil {
+	expected := `((#E (#E :a) :+ :a) :#eof)`
+	if ast.Cdr == nil {
 		t.Errorf("AST is empty")
 	} else if ast.ListString() != expected {
 		t.Errorf("AST should be %s, is %s", expected, ast.ListString())
@@ -102,7 +100,7 @@ type testOp struct {
 	name string
 }
 
-func (op *testOp) Rewrite(list *GCons, env *Environment) *GCons {
+func (op *testOp) Rewrite(list *terex.GCons, env *terex.Environment) *terex.GCons {
 	T().Debugf(env.Dump())
 	return list
 }
@@ -114,9 +112,18 @@ func (op *testOp) Descend(sppf.RuleCtxt) bool {
 func (op *testOp) Name() string {
 	return op.name
 }
+func (op *testOp) String() string {
+	return op.name
+}
 
-func makeOp(name string) ASTOperator {
+func (op *testOp) Call(el terex.Element) terex.Element {
+	return terex.Elem(nil)
+}
+
+func makeOp(name string) *testOp {
 	return &testOp{
 		name: name,
 	}
 }
+
+var _ terex.Operator = makeOp("Hello")

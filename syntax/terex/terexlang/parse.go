@@ -164,8 +164,10 @@ func (op *sExprOp) Descend(sppf.RuleCtxt) bool {
 }
 
 // Call is part of interface Operator.
-func (op *sExprOp) Call(term *terex.GCons) interface{} {
-	return op.Rewrite(term, terex.GlobalEnvironment)
+//func (op *sExprOp) Call(term *terex.GCons) interface{} {
+func (op *sExprOp) Call(term terex.Element) terex.Element {
+	panic("Call() called")
+	//return op.Rewrite(term, terex.GlobalEnvironment)
 }
 
 var _ terex.Operator = &sExprOp{}
@@ -191,22 +193,22 @@ var SingleTokenArg *terex.GCons
 func initDefaultPatterns() {
 	//arg := terex.Atomize(terex.AnyType)
 	//AnyToken = terex.Cons(arg, nil)
-	SingleTokenArg = terex.Cons(terex.Atomize(terex.OperatorType), termr.AnySymbol)
+	SingleTokenArg = terex.Cons(terex.Atomize(terex.OperatorType), termr.AnySymbol())
 	//p := Cons(makeNode(AnyOp), Anything)
-	atomOp = makeASTOp("Atom").Rule(termr.Anything, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
+	atomOp = makeASTOp("Atom").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 		return l.Cdr
 	})
 	// .Rule(SingleTokenArg, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 	// 	return l.Cdr()
 	// })
 	p := terex.Cons(terex.Atomize(terex.OperatorType),
-		terex.Cons(terex.Atomize(&terex.Token{Name: "^", Value: '^'}), termr.AnySymbol))
+		terex.Cons(terex.Atomize(&terex.Token{Name: "^", Value: '^'}), termr.AnySymbol()))
 	T().Errorf("PATTERN Quote = %s", p.ListString())
 	quoteOp = makeASTOp("Quote").Rule(p, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 		return terex.Cons(l.Car, l.Cddr())
 	})
 	//p = Cons(makeNode(AnyOp), Cons(makeNode(&Token{"'('", '('}), Cons(R, nil)))
-	listOp = makeASTOp("List").Rule(termr.Anything, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
+	listOp = makeASTOp("List").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 		if l.Length() <= 3 { // ( )
 			return nil
 		}

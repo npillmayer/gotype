@@ -35,7 +35,8 @@ type AtomType int
 
 //go:generate stringer -type AtomType
 const (
-	ConsType AtomType = iota
+	NoType AtomType = iota
+	ConsType
 	SymbolType
 	NumType
 	StringType
@@ -71,6 +72,7 @@ func Atomize(thing interface{}) Atom {
 	case AtomType:
 		atom.typ = c
 		atom.Data = nil
+		T().Debugf("atomize(%s) = %v", thing, atom)
 	case int, int32, int64, uint, uint32, uint64:
 		atom.typ = NumType
 	case string, []byte, []rune:
@@ -104,7 +106,13 @@ func (a Atom) IsAtom() Atom {
 }
 
 func (a Atom) String() string {
+	if a == NilAtom {
+		return "NIL"
+	}
 	if a.typ == ConsType {
+		if a.Data == nil {
+			return "()"
+		}
 		return "(list)"
 	}
 	switch a.typ {
@@ -115,9 +123,15 @@ func (a Atom) String() string {
 	case StringType:
 		return fmt.Sprintf("\"%s\"", a.Data)
 	case TokenType:
+		if a.Data == nil {
+			return ":any"
+		}
 		t := a.Data.(*Token)
 		return fmt.Sprintf(":%s", t.String())
 	case OperatorType:
+		if a.Data == nil {
+			return "Op:any"
+		}
 		o := a.Data.(Operator)
 		return fmt.Sprintf("#%s", o.String())
 	}
@@ -278,7 +292,7 @@ func (l *GCons) FirstN(n int) *GCons {
 
 // Map applies a mapping-function to every element of a list.
 func (l *GCons) Map(mapper Mapper) *GCons {
-	return _Map(mapper, elem(l)).AsList()
+	return _Map(mapper, Elem(l)).AsList()
 }
 
 // --- Internal Operations ---------------------------------------------------
@@ -297,7 +311,7 @@ type Element struct {
 	thing interface{}
 }
 
-func elem(thing interface{}) Element {
+func Elem(thing interface{}) Element {
 	return Element{thing: thing}
 }
 
@@ -336,42 +350,42 @@ func (el Element) String() string {
 func _Add(args Element) Element {
 	if args.IsAtom() {
 		if a := args.AsAtom(); a.typ == NumType {
-			return elem(a)
+			return Elem(a)
 		}
 	}
 	sum := 0
 	arglist := args.AsList()
 	for arglist != nil {
 		if arglist.Car.Type() != NumType {
-			return elem(ErrorAtom)
+			return Elem(ErrorAtom)
 		}
 		sum += arglist.Car.Data.(int)
 		arglist = arglist.Cdr
 	}
-	return elem(Atomize(sum))
+	return Elem(Atomize(sum))
 }
 
 func _Inc(args Element) Element {
 	if args.IsAtom() {
 		if a := args.AsAtom(); a.typ == NumType {
-			return elem(Atomize(a.Data.(int) + 1))
+			return Elem(Atomize(a.Data.(int) + 1))
 		}
 	}
-	return elem(ErrorAtom)
+	return Elem(ErrorAtom)
 }
 
 func _Map(mapper Mapper, args Element) Element {
 	arglist := args.AsList()
-	r := mapper(elem(arglist.Car))
+	r := mapper(Elem(arglist.Car))
 	T().Debugf("Map: mapping(%s) = %s", arglist.Car, r)
 	if arglist.Cdr == nil {
-		return elem(r)
+		return Elem(r)
 	}
 	result := Cons(r.AsAtom(), nil)
 	iter := result
 	cons := arglist.Cdr
 	for cons != nil {
-		el := mapper(elem(cons.Car))
+		el := mapper(Elem(cons.Car))
 		T().Debugf("Map: mapping(%s) = %s", cons.Car, el)
 		if el.IsError() {
 			return el
@@ -381,7 +395,7 @@ func _Map(mapper Mapper, args Element) Element {
 		cons = cons.Cdr
 	}
 	T().Debugf("_Map result = %s", result.ListString())
-	return elem(result)
+	return Elem(result)
 }
 
 // --- Matching --------------------------------------------------------------
@@ -419,12 +433,16 @@ of two elements; and in that case it sets x to (cadar foo) and c to (cddr foo).
 List l is the pattern, other is the argument to be matched against the pattern.
 */
 func (l *GCons) Match(other *GCons, env *Environment) bool {
-	T().Debugf("Match: %s vs %s", l, other)
-	if l != nil && l.Car.Type() == ConsType && l.Car.Data == nil {
-		return true
+	T().Debugf("Match: %s vs %s", l.ListString(), other.ListString())
+	if l == nil {
+		T().Debugf("l=nil")
 	}
 	if l == nil {
 		return other == nil
+	}
+	T().Debugf("l.type=%s, l.data=%v", l.Car.Type(), l.Car.Data)
+	if l != nil && l.Car.Type() == ConsType && l.Car.Data == nil {
+		return true
 	}
 	if other == nil {
 		return false

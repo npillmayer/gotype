@@ -99,10 +99,10 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 		end := rhsList
 		//T().Debugf("iterating over %d RHS elements", len(rhs))
 		for _, r := range rhs {
-			sym := env.Intern(r.Symbol().Name, true)
+			rhssym := env.Intern(r.Symbol().Name, true)
 			//T().Debugf("sym = %v", sym)
 			if !r.Symbol().IsTerminal() {
-				sym.Value.Data = r.Value // value must be a Node
+				rhssym.Value.Data = r.Value // value must be a Node
 			}
 			rhsList, end = growRHSList(rhsList, end, r, env)
 			// switch v := r.Value.(type) { // TODO same logic as below (factor out)
@@ -114,10 +114,10 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 			// 	panic("Unknown value type of RHS symbol")
 			// }
 		}
-		T().Infof("Rewrite of %s", rhsList.ListString())
+		T().Infof("%s: Rewrite of %s", sym.Name, rhsList.ListString())
 		rhsList = op.Rewrite(rhsList, env)
 		ab.stack = ab.stack[:len(ab.stack)-1]
-		T().Debugf("%s returns %s", sym.Name, rhsList.ListString())
+		T().Infof("%s returns %s", sym.Name, rhsList.ListString())
 		return rhsList
 	}
 	var list, end *terex.GCons
@@ -149,13 +149,13 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 		// }
 	}
 	//T().Infof("List of length %d: %s", list.Length(), list.ListString())
-	if list.Length() == 1 && list.Car.Type() == terex.ConsType {
-		//T().Infof("Inner list of length %d: %s", list.car.child.Length(), list.car.child.ListString())
-		list = list.Cadr()
-		//list = list.car.child // unwrap
-	}
+	//if list.Length() == 1 && list.Car.Type() == terex.ConsType {
+	//T().Infof("Inner list of length %d: %s", list.car.child.Length(), list.car.child.ListString())
+	//list = list.Cadr()
+	//list = list.car.child // unwrap
+	//}
 	T().Infof("%s returns %s", sym.Name, list.ListString())
-	T().Debugf("exit grammar symbol: %v", sym)
+	T().Infof("exit grammar symbol: %v", sym)
 	return list
 }
 

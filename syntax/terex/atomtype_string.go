@@ -4,9 +4,9 @@ package terex
 
 import "strconv"
 
-const _AtomType_name = "ConsTypeSymbolTypeNumTypeStringTypeBoolTypeOperatorTypeTokenTypeEnvironmentTypeUserTypeAnyTypeAnyList"
+const _AtomType_name = "NoTypeConsTypeSymbolTypeNumTypeStringTypeBoolTypeOperatorTypeTokenTypeEnvironmentTypeUserTypeAnyTypeErrorType"
 
-var _AtomType_index = [...]uint8{0, 8, 18, 25, 35, 43, 55, 64, 79, 87, 94, 101}
+var _AtomType_index = [...]uint8{0, 6, 14, 24, 31, 41, 49, 61, 70, 85, 93, 100, 109}
 
 func (i AtomType) String() string {
 	if i < 0 || i >= AtomType(len(_AtomType_index)-1) {

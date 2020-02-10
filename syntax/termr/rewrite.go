@@ -18,7 +18,11 @@ type RewriteRule struct {
 }
 
 // Anything is a pattern matching any s-expr.
-var Anything *terex.GCons = terex.Cons(terex.Atomize(terex.ConsType), nil)
+func Anything() *terex.GCons {
+	return terex.Cons(terex.Atomize(terex.ConsType), nil)
+}
 
 // AnySymbol is a pattern matching any single symbol or token.
-var AnySymbol *terex.GCons = terex.Cons(terex.Atomize(terex.AnyType), nil)
+func AnySymbol() *terex.GCons {
+	return terex.Cons(terex.Atomize(terex.AnyType), nil)
+}
