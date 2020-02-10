@@ -51,14 +51,30 @@ func TestMatchAnything(t *testing.T) {
 	}
 }
 
-// TODO
-func TestEval1(t *testing.T) {
+func TestQuote(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	terex.InitGlobalEnvironment()
 	input := "(Hello ^World 1)"
+	result := Eval(input, terex.GlobalEnvironment)
+	if result.Length() != 2 {
+		t.Errorf("Expected resulting list to be of length 2, is %d", result.Length())
+	}
+	t.Logf("AST=%s", result.Car.Data.(*terex.GCons).ListString())
+	if result.Car.Data.(*terex.GCons).Length() != 3 {
+		t.Errorf("Expected AST to be of length 3, is %d", result.Cadr().Length())
+	}
+}
+
+func TestEval(t *testing.T) {
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	terex.InitGlobalEnvironment()
+	input := "(+ 1 2 3)"
 	result := Eval(input, terex.GlobalEnvironment)
 	if result.Length() != 2 {
 		t.Errorf("Expected resulting list to be of length 2, is %d", result.Length())

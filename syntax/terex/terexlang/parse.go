@@ -123,8 +123,6 @@ var atomOp *sExprTermR  // for Atom -> ... productions
 var quoteOp *sExprTermR // for Quote -> ... productions
 var listOp *sExprTermR  // for List -> ... productions
 
-// --- AST operator helpers --------------------------------------------------
-
 type sExprTermR struct {
 	name   string
 	opname string
@@ -178,14 +176,8 @@ func (op *sExprTermR) Rule(pattern *terex.GCons, rw termr.Rewriter) *sExprTermR 
 	return op
 }
 
-// AnyToken is a pattern matching any arg of TokenType
-//var AnyToken *terex.GCons
-
 // SingleTokenArg is a pattern matching an operator with a single arg of TokenType.
 var SingleTokenArg *terex.GCons
-
-// AnyOp is a pattern matching any node with OperatorType
-//var AnyOp = makeASTTermR("!AnyOp")
 
 func initDefaultPatterns() {
 	//arg := terex.Atomize(terex.AnyType)
@@ -226,7 +218,6 @@ func (op globalOpInEnv) String() string {
 }
 
 // Call is part of interface Operator.
-//func (op *sExprTermR) Call(term *terex.GCons) interface{} {
 func (op globalOpInEnv) Call(term terex.Element, env *terex.Environment) terex.Element {
 	opsym := terex.GlobalEnvironment.FindSymbol(op.opname, true)
 	if opsym == nil {
@@ -241,6 +232,7 @@ func (op globalOpInEnv) Call(term terex.Element, env *terex.Environment) terex.E
 	return operator.Call(term, env)
 }
 
+// Quote is part of interface Operator
 func (op globalOpInEnv) Quote(term terex.Element, env *terex.Environment) terex.Element {
 	opsym := terex.GlobalEnvironment.FindSymbol(op.opname, true)
 	if opsym == nil {
@@ -252,6 +244,5 @@ func (op globalOpInEnv) Quote(term terex.Element, env *terex.Environment) terex.
 		T().Errorf("Cannot quote-call parsing operation %s", op.opname)
 		return term
 	}
-	//T().Errorf("============== QUOTING with %s", operator)
 	return operator.Quote(term, env)
 }
