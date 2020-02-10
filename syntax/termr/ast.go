@@ -17,7 +17,7 @@ type ASTBuilder struct {
 	forest           *sppf.Forest // input parse forest
 	ast              *terex.GCons // root of the AST to construct
 	last             *terex.GCons // current last node to append conses
-	operators        map[string]ASTOperator
+	rewriters        map[string]TermR
 	conflictStrategy sppf.Pruner
 	Error            func(error)
 	stack            []*terex.GCons
@@ -30,27 +30,27 @@ type ruleABExit func(sym *lr.Symbol, rhs []*sppf.RuleNode) interface{}
 func NewASTBuilder(g *lr.Grammar) *ASTBuilder {
 	ab := &ASTBuilder{
 		G:         g,
-		ast:       &terex.GCons{terex.NilAtom, nil}, // AST anchor
+		ast:       &terex.GCons{Car: terex.NilAtom, Cdr: nil}, // AST anchor
 		stack:     make([]*terex.GCons, 0, 256),
-		operators: make(map[string]ASTOperator),
+		rewriters: make(map[string]TermR),
 	}
 	ab.last = ab.ast
 	ab.stack = append(ab.stack, ab.ast) // push as stopper
 	return ab
 }
 
-// ASTOperator is a type for an operator for AST creation and transformation
-// (rewriting).
-type ASTOperator interface {
-	Name() string
-	Rewrite(*terex.GCons, *terex.Environment) *terex.GCons
-	Descend(sppf.RuleCtxt) bool
+// TermR is a type for a rewriter for AST creation and transformation.
+type TermR interface {
+	Name() string                                          // printable name
+	Rewrite(*terex.GCons, *terex.Environment) *terex.GCons // term rewriting
+	Descend(sppf.RuleCtxt) bool                            // predicate wether to descend to children nodes
+	Operator() terex.Operator                              // operator to place as sub-tree node
 }
 
-// AddOperator adds an AST operator for a grammar symbol to the builder.
-func (ab *ASTBuilder) AddOperator(op ASTOperator) {
+// AddTermR adds an AST rewriter for a grammar symbol to the builder.
+func (ab *ASTBuilder) AddTermR(op TermR) {
 	if op != nil {
-		ab.operators[op.Name()] = op
+		ab.rewriters[op.Name()] = op
 	}
 }
 
@@ -75,7 +75,7 @@ func (ab *ASTBuilder) AST(parseTree *sppf.Forest) (*terex.GCons, interface{}) {
 // EnterRule is part of sppf.Listener interface.
 // Not intended for direct client use.
 func (ab *ASTBuilder) EnterRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.RuleCtxt) bool {
-	if op, ok := ab.operators[sym.Name]; ok {
+	if op, ok := ab.rewriters[sym.Name]; ok {
 		if !op.Descend(ctxt) {
 			return false
 		}
@@ -90,7 +90,7 @@ func (ab *ASTBuilder) EnterRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.
 // ExitRule is part of sppf.Listener interface.
 // Not intended for direct client use.
 func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.RuleCtxt) interface{} {
-	if op, ok := ab.operators[sym.Name]; ok {
+	if op, ok := ab.rewriters[sym.Name]; ok {
 		env, err := EnvironmentForGrammarSymbol(sym.Name, ab.G)
 		if err != nil && ab.Error != nil {
 			ab.Error(err)
@@ -192,7 +192,7 @@ func growRHSList(start, end *terex.GCons, r *sppf.RuleNode, env *terex.Environme
 func (ab *ASTBuilder) Terminal(tokval int, token interface{}, ctxt sppf.RuleCtxt) interface{} {
 	//t := ab.G.Terminal(tokval).Name
 	terminal := ab.G.Terminal(tokval)
-	atom := terex.Atomize(&terex.Token{terminal.Name, tokval})
+	atom := terex.Atomize(&terex.Token{Name: terminal.Name, Value: tokval})
 	T().Debugf("cons(terminal=%s) = %v", ab.G.Terminal(tokval).Name, atom)
 	return atom
 }
@@ -213,10 +213,13 @@ func (ab *ASTBuilder) MakeAttrs(*lr.Symbol) interface{} {
 // ---------------------------------------------------------------------------
 
 func appendAtom(cons *terex.GCons, atom terex.Atom) *terex.GCons {
-	if cons == nil {
-		return &terex.GCons{atom, nil}
+	if atom == terex.NilAtom {
+		return cons
 	}
-	cons.Cdr = &terex.GCons{atom, nil}
+	if cons == nil {
+		return terex.Cons(atom, nil)
+	}
+	cons.Cdr = terex.Cons(atom, nil)
 	return cons.Cdr
 }
 
@@ -288,9 +291,6 @@ func EnvironmentForGrammarSymbol(symname string, G *lr.Grammar) (*terex.Environm
 		if gsym.IsTerminal() {
 			sym.Value = terex.Atomize(gsym.Value)
 		}
-		// else {
-		// 	sym.atom.typ = SymbolType
-		// }
 	}
 	// e := globalEnvironment.Intern(envname, false)
 	// e.atom.typ = EnvironmentType

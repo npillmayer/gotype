@@ -64,9 +64,9 @@ func createParser() *earley.Parser {
 		}
 		initDefaultPatterns()
 		astBuilder = termr.NewASTBuilder(grammar.Grammar())
-		astBuilder.AddOperator(atomOp)
-		astBuilder.AddOperator(quoteOp)
-		astBuilder.AddOperator(listOp)
+		astBuilder.AddTermR(atomOp)
+		astBuilder.AddTermR(quoteOp)
+		astBuilder.AddTermR(listOp)
 	})
 	return earley.NewParser(grammar, earley.GenerateTree(true))
 }
@@ -144,6 +144,10 @@ func (op *sExprOp) String() string {
 	return op.name + ":Op"
 }
 
+func (op *sExprOp) Operator() terex.Operator {
+	return op
+}
+
 func (op *sExprOp) Rewrite(l *terex.GCons, env *terex.Environment) *terex.GCons {
 	T().Errorf("%s:Op.Rewrite[%s] called, %d rules", op.Name(), l.ListString(), len(op.rules))
 	for _, rule := range op.rules {
@@ -169,8 +173,6 @@ func (op *sExprOp) Call(term terex.Element) terex.Element {
 	panic("Call() called")
 	//return op.Rewrite(term, terex.GlobalEnvironment)
 }
-
-var _ terex.Operator = &sExprOp{}
 
 func (op *sExprOp) Rule(pattern *terex.GCons, rw termr.Rewriter) *sExprOp {
 	r := termr.RewriteRule{

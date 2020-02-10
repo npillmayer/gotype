@@ -84,7 +84,7 @@ func TestAST2(t *testing.T) {
 	// sppf.ToGraphViz(parser.ParseForest(), tmpfile)
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	builder := NewASTBuilder(G)
-	builder.AddOperator(makeOp("E"))
+	builder.AddTermR(makeOp("E"))
 	ast, _ := builder.AST(parser.ParseForest())
 	expected := `((#E (#E :a) :+ :a) :#eof)`
 	if ast.Cdr == nil {
@@ -112,8 +112,13 @@ func (op *testOp) Descend(sppf.RuleCtxt) bool {
 func (op *testOp) Name() string {
 	return op.name
 }
+
 func (op *testOp) String() string {
 	return op.name
+}
+
+func (op *testOp) Operator() terex.Operator {
+	return op
 }
 
 func (op *testOp) Call(el terex.Element) terex.Element {

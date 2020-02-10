@@ -5,11 +5,26 @@ import (
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
 	"github.com/npillmayer/gotype/syntax/terex"
 	"github.com/npillmayer/gotype/syntax/termr"
 )
+
+func TestAssignability(t *testing.T) {
+	var e interface{} = &sExprOp{}
+	switch x := e.(type) {
+	case terex.Operator:
+		t.Logf("sExprOp %v accepted as terex.Operator", x)
+	default:
+		t.Errorf("Expected terexlang.sExprOp to implement termr.TermR interface")
+	}
+	switch x := e.(type) {
+	case termr.TermR:
+		t.Logf("sExprOp %v accepted as termr.TermR", x)
+	default:
+		t.Errorf("Expected terexlang.sExprOp to implement termr.TermR interface")
+	}
+}
 
 func TestMatchAnyOp(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
@@ -38,9 +53,11 @@ func TestMatchAnything(t *testing.T) {
 
 // TODO
 func TestEval1(t *testing.T) {
-	gtrace.SyntaxTracer = gologadapter.New()
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	input := "(Hello ^World 1)"
 	Eval(input, terex.GlobalEnvironment)
-	t.Errorf("TODO: TestEval1 to be cleaned up !")
+	//t.Errorf("TODO: TestEval1 to be cleaned up !")
 }
