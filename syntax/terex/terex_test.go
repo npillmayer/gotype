@@ -28,6 +28,15 @@ func TestList1(t *testing.T) {
 		t.Errorf("element #1 expected to be 1, is %v", l1.Car.Data)
 	}
 }
+func TestList2(t *testing.T) {
+	initGlobalEnvironment()
+	l := List(GlobalEnvironment.FindSymbol("+", false), 1, 2)
+	t.Logf("l=%s", l.ListString())
+	if l.Car.Type() != OperatorType {
+		t.Errorf("expected '+' to be retrieved as symbolf for _Add")
+	}
+}
+
 func TestFirst(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
@@ -82,7 +91,7 @@ func TestMatch2(t *testing.T) {
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	S := GlobalEnvironment.Intern("S", false)
-	l1 := List("a", S, 2)
+	l1 := QuotedList("a", S, 2)
 	l2 := List("a", 1, 2)
 	t.Logf("l1 = %s, l2 = %s", l1.ListString(), l2.ListString())
 	if !l1.Match(l2, GlobalEnvironment) {

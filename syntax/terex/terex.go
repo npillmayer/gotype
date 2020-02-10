@@ -200,8 +200,17 @@ func (l *GCons) IsAtom() Atom {
 	return NilAtom
 }
 
+// QuotedList makes a list from given elements, quoting them.
+func QuotedList(things ...interface{}) *GCons {
+	return makeList(true, things)
+}
+
 // List makes a list from given elements.
 func List(things ...interface{}) *GCons {
+	return makeList(false, things)
+}
+
+func makeList(quoted bool, things []interface{}) *GCons {
 	if len(things) == 0 {
 		return nil
 	}
@@ -209,10 +218,10 @@ func List(things ...interface{}) *GCons {
 	var first *GCons
 	for _, e := range things {
 		cons := &GCons{}
-		if s, ok := e.(string); ok {
-			if sym := GlobalEnvironment.FindSymbol(s, true); sym != nil {
-				cons.Car = Atomize(sym)
-			}
+		if quoted {
+			cons.Car = Atomize(e)
+		} else if sym, ok := e.(*Symbol); ok {
+			cons.Car = Atomize(sym.Value)
 		} else {
 			cons.Car = Atomize(e)
 		}
