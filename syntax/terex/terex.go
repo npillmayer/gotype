@@ -201,15 +201,21 @@ func (l *GCons) IsAtom() Atom {
 }
 
 // List makes a list from given elements.
-func List(elements ...interface{}) *GCons {
-	if len(elements) == 0 {
+func List(things ...interface{}) *GCons {
+	if len(things) == 0 {
 		return nil
 	}
 	last := &GCons{}
 	var first *GCons
-	for _, e := range elements {
+	for _, e := range things {
 		cons := &GCons{}
-		cons.Car = Atomize(e)
+		if s, ok := e.(string); ok {
+			if sym := GlobalEnvironment.FindSymbol(s, true); sym != nil {
+				cons.Car = Atomize(sym)
+			}
+		} else {
+			cons.Car = Atomize(e)
+		}
 		if first == nil {
 			first = cons
 		} else {

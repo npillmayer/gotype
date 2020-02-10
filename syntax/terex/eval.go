@@ -9,7 +9,7 @@ func (env *Environment) Eval(list *GCons) *GCons {
 func (env *Environment) eval(el Element) Element {
 	T().Debugf("eval of %v", el)
 	if el.IsAtom() {
-		return el
+		return el // TODO retrieve value if el = symbol
 	}
 	list := el.AsList()
 	if list == nil || list.Car == NilAtom {
