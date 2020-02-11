@@ -13,6 +13,7 @@ func TestN(t *testing.T) {
 		a = append(a, n)
 	}
 	t.Logf("a=%v", a)
+	if a[0] != 0 || a[9] != 9 || len(a) != 10 {
 		t.Errorf("Generating 10 n in N failed")
 	}
 }
