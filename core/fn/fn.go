@@ -135,3 +135,7 @@ func (seq IntSeq) Map(mapper IntMapper) IntSeq {
 	}
 	return IntSeq{v, F}
 }
+
+func (seq IntSeq) Vec() []int64 {
+	return nil
+}
