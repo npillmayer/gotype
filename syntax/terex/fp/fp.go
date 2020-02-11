@@ -1,4 +1,4 @@
-package fn
+package fp
 
 type IntSeq struct {
 	n   int64
