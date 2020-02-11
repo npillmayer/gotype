@@ -64,13 +64,13 @@ var startOnce sync.Once // monitors one-time creation of grammar and AST-builder
 func createParser() *earley.Parser {
 	startOnce.Do(func() {
 		var err error
+		T().Infof("Creating lexer")
+		if lexer, err = Lexer(); err != nil { // MUST be called before grammar builing !
+			panic("Cannot create lexer")
+		}
 		T().Infof("Creating grammar")
 		if grammar, err = makeTermRGrammar(); err != nil {
 			panic("Cannot create global grammar")
-		}
-		T().Infof("Creating lexer")
-		if lexer, err = Lexer(); err != nil {
-			panic("Cannot create lexer")
 		}
 		initDefaultPatterns()
 		astBuilder = termr.NewASTBuilder(grammar.Grammar())

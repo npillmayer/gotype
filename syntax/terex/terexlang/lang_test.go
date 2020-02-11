@@ -58,16 +58,6 @@ func TestParse(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	terex.InitGlobalEnvironment()
 	input := "(Hello 'World 1)"
-	// lexer, err := Lexer()
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	// scan, err := lexer.Scanner(input)
-	// if err != nil {
-	// 	t.Error(err)
-	// }
-	//gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
-	lexer, _ := Lexer()
 	parser := createParser()
 	scan, _ := lexer.Scanner(input)
 	accept, err := parser.Parse(scan, nil)
@@ -88,25 +78,16 @@ func TestQuote(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	terex.InitGlobalEnvironment()
 	input := "(Hello 'World 1)"
-	//lexer, _ := Lexer()
-	parser := createParser()
-	scan, err := lexer.Scanner(input)
-	if err != nil {
-		t.Error(err)
+	result := Eval(input, terex.GlobalEnvironment)
+	if result.Length() != 2 {
+		t.Errorf("Expected resulting list to be of length 2, is %d", result.Length())
+	} else {
+		t.Logf("AST=%s", result.Car.Data.(*terex.GCons).ListString())
+		if result.Car.Data.(*terex.GCons).Length() != 3 {
+			t.Errorf("Expected AST to be of length 3, is %d", result.Cadr().Length())
+		}
 	}
-	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
-	accept, err := parser.Parse(scan, nil)
-	T().Errorf("accept=%v, input=%s", accept, input)
-	// result := Eval(input, terex.GlobalEnvironment)
-	// if result.Length() != 2 {
-	// 	t.Errorf("Expected resulting list to be of length 2, is %d", result.Length())
-	// } else {
-	// 	t.Logf("AST=%s", result.Car.Data.(*terex.GCons).ListString())
-	// 	if result.Car.Data.(*terex.GCons).Length() != 3 {
-	// 		t.Errorf("Expected AST to be of length 3, is %d", result.Cadr().Length())
-	// 	}
-	// }
-	t.Fail()
+	//t.Fail()
 }
 
 func TestEval(t *testing.T) {
