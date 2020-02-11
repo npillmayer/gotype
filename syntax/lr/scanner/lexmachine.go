@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"strings"
-	"sync"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 
@@ -12,83 +11,79 @@ import (
 
 // lexmachine adapter
 
-var Literals []string       // The tokens representing literal strings
-var Keywords []string       // The keyword tokens
-var Tokens []string         // All of the tokens (including literals and keywords)
-var TokenIds map[string]int // A map from the token names to their int ids
-var lexer *lex.Lexer
-
-var initOnce sync.Once // monitors one-time initialization
-
-func initTokens() {
-	initOnce.Do(func() {
-		Literals = []string{
-			"(",
-			")",
-			"[",
-			"]",
-			"=",
-			",",
-			"+",
-			"-",
-			"*",
-			"/",
-		}
-		Keywords = []string{
-			"NODE",
-			"EDGE",
-			"GRAPH",
-			"DIGRAPH",
-			"SUBGRAPH",
-			"STRICT",
-		}
-		Tokens = []string{
-			"COMMENT",
-			"ID",
-		}
-		Tokens = append(Tokens, Keywords...)
-		Tokens = append(Tokens, Literals...)
-		TokenIds = make(map[string]int)
-		for i, tok := range Tokens {
-			TokenIds[tok] = i
-		}
-	})
-}
-
+// LMAdapter is a lexmachine adapter to use lexmachine as a scanner.
 type LMAdapter struct {
-	lexer *lex.Lexer
+	Lexer *lex.Lexer
 }
 
-func NewLMAdapter() *LMAdapter {
+// NewLMAdapter creates a new lexmachine adapter. It receives a list of
+// literals ('[', ';', …), a list of keywords ("if", "for", …) and a
+// map for translating token strings to their values.
+//
+// NewLMAdapter will return an error if compiling the DFA failed.
+func NewLMAdapter(init func(*lex.Lexer), literals []string, keywords []string, tokenIds map[string]int) (*LMAdapter, error) {
 	adapter := &LMAdapter{}
-	adapter.lexer = lex.NewLexer()
-	for _, lit := range Literals {
+	adapter.Lexer = lex.NewLexer()
+	init(adapter.Lexer)
+	for _, lit := range literals {
 		r := "\\" + strings.Join(strings.Split(lit, ""), "\\")
-		adapter.lexer.Add([]byte(r), token(lit))
+		gtrace.SyntaxTracer.Debugf("adding literal %s", r)
+		adapter.Lexer.Add([]byte(r), MakeToken(lit, tokenIds[lit]))
 	}
-	for _, name := range Keywords {
-		adapter.lexer.Add([]byte(strings.ToLower(name)), token(name))
+	for _, name := range keywords {
+		adapter.Lexer.Add([]byte(strings.ToLower(name)), MakeToken(name, tokenIds[name]))
 	}
-	adapter.lexer.Add([]byte(`//[^\n]*\n?`), token("COMMENT"))
-	adapter.lexer.Add([]byte(`#?([a-z]|[A-Z])([a-z]|[A-Z]|[0-9]|_|-)*[!\?]?`), token("ID"))
-	adapter.lexer.Add([]byte("( |;|\t|\n|\r)+"), skip)
-	if err := adapter.lexer.Compile(); err != nil {
+	if err := adapter.Lexer.Compile(); err != nil {
 		gtrace.SyntaxTracer.Errorf("Error compiling DFA: %v", err)
-		panic(err)
+		return nil, err
 	}
-	return adapter
+	return adapter, nil
 }
 
-func (lm *LMAdapter) NextToken(expected []int) (tokval int, token interface{}, start, len uint64) {
-	//
+// Scanner creates a scanner for a given input. The scanner will implement the
+// Tokenizer interface.
+func (lm *LMAdapter) Scanner(input string) (LMScanner, error) {
+	s, err := lm.Lexer.Scanner([]byte(input))
+	if err != nil {
+		return LMScanner{}, err
+	}
+	return LMScanner{s}, nil
 }
 
-func skip(*lex.Scanner, *machines.Match) (interface{}, error) {
+// LMScanner is a scanner type for lexmachine scanners, implementing the
+// Tokenizer interface.
+type LMScanner struct {
+	scanner *lex.Scanner
+}
+
+// NextToken is part of the Tokenizer interface.
+//
+// Warning: The current implementation will ignore the 'expected'-argument.
+func (lms *LMScanner) NextToken(expected []int) (int, interface{}, uint64, uint64) {
+	tok, err, eof := lms.scanner.Next()
+	if err != nil {
+		gtrace.SyntaxTracer.Errorf(err.Error())
+	}
+	if eof {
+		return EOF, nil, 0, 0
+	}
+	token := tok.(*lex.Token)
+	tokval := token.Type
+	start := uint64(token.StartColumn)
+	length := uint64(len(token.Lexeme))
+	return tokval, token, start, length
+}
+
+// ---------------------------------------------------------------------------
+
+// Skip is a pre-defined action which ignores the scanned match.
+func Skip(*lex.Scanner, *machines.Match) (interface{}, error) {
 	return nil, nil
 }
 
-func token(name string) lex.Action {
+// MakeToken is a pre-defined action which wraps a scanned match into a token.
+func MakeToken(name string, id int) lex.Action {
 	return func(s *lex.Scanner, m *machines.Match) (interface{}, error) {
-		return s.Token(TokenIds[name], string(m.Bytes), m), nil
+		return s.Token(id, string(m.Bytes), m), nil
 	}
 }
