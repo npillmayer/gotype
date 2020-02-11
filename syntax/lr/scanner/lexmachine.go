@@ -59,7 +59,7 @@ type LMScanner struct {
 // NextToken is part of the Tokenizer interface.
 //
 // Warning: The current implementation will ignore the 'expected'-argument.
-func (lms *LMScanner) NextToken(expected []int) (int, interface{}, uint64, uint64) {
+func (lms LMScanner) NextToken(expected []int) (int, interface{}, uint64, uint64) {
 	tok, err, eof := lms.scanner.Next()
 	if err != nil {
 		gtrace.SyntaxTracer.Errorf(err.Error())

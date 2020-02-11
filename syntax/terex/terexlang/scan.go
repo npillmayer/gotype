@@ -20,42 +20,42 @@ var tokenIds map[string]int // A map from the token names to their int ids
 var initOnce sync.Once // monitors one-time initialization
 
 func initTokens() {
-	initOnce.Do(func() {
-		/*
-			literals = []string{
-				"'",
-				"(",
-				")",
-				"[",
-				"]",
-				"=",
-				"+",
-				"-",
-				"*",
-				"/",
-			}
-			keywords = []string{
-				"nil",
-				"t",
-			}
-		*/
-		tokens = []string{
-			"COMMENT",
-			"ID",
-			"NUM",
-			"STRING",
+	//initOnce.Do(func() {
+	/*
+		literals = []string{
+			"'",
+			"(",
+			")",
+			"[",
+			"]",
+			"=",
+			"+",
+			"-",
+			"*",
+			"/",
 		}
-		tokens = append(tokens, keywords...)
-		tokens = append(tokens, literals...)
-		tokenIds = make(map[string]int)
-		tokenIds["COMMENT"] = scanner.Comment
-		tokenIds["ID"] = scanner.Ident
-		tokenIds["NUM"] = scanner.Int
-		tokenIds["STRING"] = scanner.String
-		for i, tok := range tokens[4:] {
-			tokenIds[tok] = i + 10
+		keywords = []string{
+			"nil",
+			"t",
 		}
-	})
+	*/
+	tokens = []string{
+		"COMMENT",
+		"ID",
+		"NUM",
+		"STRING",
+	}
+	tokens = append(tokens, keywords...)
+	tokens = append(tokens, literals...)
+	tokenIds = make(map[string]int)
+	tokenIds["COMMENT"] = scanner.Comment
+	tokenIds["ID"] = scanner.Ident
+	tokenIds["NUM"] = scanner.Int
+	tokenIds["STRING"] = scanner.String
+	for i, tok := range tokens[4:] {
+		tokenIds[tok] = i + 10
+	}
+	//})
 }
 
 // Token returns a token name and its value.

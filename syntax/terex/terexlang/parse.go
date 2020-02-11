@@ -2,7 +2,6 @@ package terexlang
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
@@ -23,6 +22,12 @@ func T() tracing.Trace {
 
 // --- Grammar ---------------------------------------------------------------
 
+// b.LHS("Quote").T("quote", '^').N("Atom").End()
+// b.LHS("Atom").T("ident", scanner.Ident).End()
+// b.LHS("Atom").T("string", scanner.String).End()
+// b.LHS("Atom").T("int", scanner.Int).End()
+// b.LHS("Atom").T("float", scanner.Float).End()
+
 // Atom       ::=  '^' Atom   // currently un-ambiguated by QuoteOrAtom
 // Atom       ::=  ident
 // Atom       ::=  string
@@ -36,13 +41,12 @@ func makeTermRGrammar() (*lr.LRAnalysis, error) {
 	b := lr.NewGrammarBuilder("TermR")
 	b.LHS("QuoteOrAtom").N("Quote").End()
 	b.LHS("QuoteOrAtom").N("Atom").End()
-	b.LHS("Quote").T("quote", '^').N("Atom").End()
-	b.LHS("Atom").T("ident", scanner.Ident).End()
-	b.LHS("Atom").T("string", scanner.String).End()
-	b.LHS("Atom").T("int", scanner.Int).End()
-	b.LHS("Atom").T("float", scanner.Float).End()
+	b.LHS("Quote").T(Token("'")).N("Atom").End()
+	b.LHS("Atom").T(Token("ID")).End()
+	b.LHS("Atom").T(Token("STRING")).End()
+	b.LHS("Atom").T(Token("NUM")).End()
 	b.LHS("Atom").N("List").End()
-	b.LHS("List").T("(", '(').N("Sequence").T(")", ')').End()
+	b.LHS("List").T(Token("(")).N("Sequence").T(Token(")")).End()
 	b.LHS("Sequence").N("Sequence").N("QuoteOrAtom").End()
 	b.LHS("Sequence").N("QuoteOrAtom").End()
 	g, err := b.Grammar()
@@ -53,14 +57,20 @@ func makeTermRGrammar() (*lr.LRAnalysis, error) {
 }
 
 var grammar *lr.LRAnalysis
+var lexer *scanner.LMAdapter
 var astBuilder *termr.ASTBuilder
 var startOnce sync.Once // monitors one-time creation of grammar and AST-builder
 
 func createParser() *earley.Parser {
 	startOnce.Do(func() {
 		var err error
+		T().Infof("Creating grammar")
 		if grammar, err = makeTermRGrammar(); err != nil {
 			panic("Cannot create global grammar")
+		}
+		T().Infof("Creating lexer")
+		if lexer, err = Lexer(); err != nil {
+			panic("Cannot create lexer")
 		}
 		initDefaultPatterns()
 		astBuilder = termr.NewASTBuilder(grammar.Grammar())
@@ -71,12 +81,19 @@ func createParser() *earley.Parser {
 	return earley.NewParser(grammar, earley.GenerateTree(true))
 }
 
-func parse(sexpr string, source string) (*sppf.Forest, error) {
+func parse(input string, source string) (*sppf.Forest, error) {
 	parser := createParser()
-	r := strings.NewReader(sexpr)
+	//r := strings.NewReader(sexpr)
 	// TODO create a (lexmachine?) tokenizer
-	scan := scanner.GoTokenizer(source, r, scanner.SkipComments(true))
+	//scan := scanner.GoTokenizer(source, r, scanner.SkipComments(true))
+	lexer, _ := Lexer()
+	scan, err := lexer.Scanner(input)
+	if err != nil {
+		return nil, err
+	}
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	accept, err := parser.Parse(scan, nil)
+	T().Errorf("accept=%v, input=%s", accept, input)
 	if err != nil {
 		return nil, err
 	}
@@ -190,9 +207,10 @@ func initDefaultPatterns() {
 	// .Rule(SingleTokenArg, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 	// 	return l.Cdr()
 	// })
+	_, tokval := Token("'")
 	p := terex.Cons(terex.Atomize(terex.OperatorType),
-		terex.Cons(terex.Atomize(&terex.Token{Name: "^", Value: '^'}), termr.AnySymbol()))
-	T().Errorf("PATTERN Quote = %s", p.ListString())
+		terex.Cons(terex.Atomize(&terex.Token{Name: "'", Value: tokval}), termr.AnySymbol()))
+	//T().Debugf("PATTERN Quote = %s", p.ListString())
 	quoteOp = makeASTTermR("Quote", "quote").Rule(p, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 		return terex.Cons(l.Car, l.Cddr())
 	})
