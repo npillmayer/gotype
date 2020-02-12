@@ -119,6 +119,7 @@ func TestEval(t *testing.T) {
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	terex.InitGlobalEnvironment()
+	terex.Defun("!TokenEvaluator", convertTerminalToken, nil)
 	sym := terex.GlobalEnvironment.FindSymbol("+", false)
 	if sym == nil {
 		t.Error("Expected to find operator '+' in global environment")

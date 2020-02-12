@@ -2,6 +2,7 @@ package terexlang
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/npillmayer/gotype/syntax/lr"
@@ -10,6 +11,7 @@ import (
 	"github.com/npillmayer/gotype/syntax/lr/sppf"
 	"github.com/npillmayer/gotype/syntax/terex"
 	"github.com/npillmayer/gotype/syntax/termr"
+	"github.com/timtadh/lexmachine"
 )
 
 // --- Grammar ---------------------------------------------------------------
@@ -101,6 +103,10 @@ func parse(input string, source string) (*sppf.Forest, error) {
 // using the symbols in env,
 func Eval(sexpr string, env *terex.Environment) *terex.GCons {
 	ast := Quote(sexpr, env)
+	if ast != nil {
+		ast = ast.Tee()
+	}
+	T().Infof("AST.Tee()=%s", ast.ListString())
 	r := env.Eval(ast)
 	T().Infof("eval(AST) = %s", r.ListString())
 	return r
@@ -268,9 +274,14 @@ func (op globalOpInEnv) Call(term terex.Element, env *terex.Environment) terex.E
 	}
 	operator, ok := opsym.Value.Data.(terex.Operator)
 	if !ok {
-		T().Errorf("Cannot quote-call parsing operation %s", op.opname)
+		T().Errorf("Cannot call parsing operation %s", op.opname)
 		return term
 	}
+	//if op.String() == "+" {
+	T().Infof("========================================================")
+	T().Infof("=====     %s         =================================", op.String())
+	T().Infof("========================================================")
+	//}
 	return operator.Call(term, env)
 }
 
@@ -292,4 +303,35 @@ func (op globalOpInEnv) Quote(term terex.Element, env *terex.Environment) terex.
 		T().Infof("========================================================")
 	}
 	return operator.Quote(term, env)
+}
+
+func convertTerminalToken(el terex.Element) terex.Element {
+	T().Infof("!TokenEvaluator -> CONVERT TERMINAL TOKEN")
+	if !el.IsAtom() {
+		return el
+	}
+	atom := el.AsAtom()
+	if atom.Type() != terex.TokenType {
+		return el
+	}
+	T().Infof("token atom = %s", atom)
+	t := atom.Data.(*terex.Token)
+	T().Infof("t.Value=%v, t.Token=%v", t.Value, t.Token)
+	token := t.Token.(*lexmachine.Token)
+	switch t.Value {
+	case tokenIds["NUM"]:
+		if n, err := strconv.Atoi(string(token.Lexeme)); err != nil {
+			return terex.Elem(terex.Atomize(n))
+		}
+	case tokenIds["STRING"]:
+		s := string(token.Lexeme)
+		return terex.Elem(terex.Atomize(s))
+	case tokenIds["ID"]:
+		s := string(token.Lexeme)
+		sym := terex.GlobalEnvironment.FindSymbol(s, true)
+		if sym != nil {
+			return terex.Elem(terex.Atomize(sym))
+		}
+	}
+	return el
 }

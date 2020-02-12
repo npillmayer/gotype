@@ -2,33 +2,63 @@ package terex
 
 func (env *Environment) Eval(list *GCons) *GCons {
 	r := env.eval(Elem(list))
-	T().Debugf("Eval => %s", r)
-	return r.AsList()
-}
-
-func (env *Environment) Quote(list *GCons) *GCons {
-	r := env.quote(Elem(list))
-	T().Debugf("Quote => %s", r)
+	T().Debugf("Eval => %s", r.String())
 	return r.AsList()
 }
 
 func (env *Environment) eval(el Element) Element {
 	T().Debugf("eval of %v", el)
 	if el.IsAtom() {
-		return el // TODO retrieve value if el = symbol
+		if el.AsAtom().Type() == ConsType {
+			sublist := el.AsAtom().Data.(*GCons)
+			mapped := env.evalList(sublist)
+			return mapped
+		}
+		return env.evalAtom(el.AsAtom())
 	}
 	list := el.AsList()
+	l := env.evalList(list)
+	return l
+}
+
+func (env *Environment) evalList(list *GCons) Element {
 	if list == nil || list.Car == NilAtom {
 		return Elem(list)
 	}
 	op := list.Car
 	if op.typ != OperatorType {
-		T().Errorf("%s is not an operator in (%s ...)", op, op)
-		return Elem(list)
+		verblist := list.Map(env.eval)
+		return Elem(verblist)
 	}
+	T().Infof("-------- op=%s -----------", op.String())
 	operator := op.Data.(Operator)
 	args := list.Cdr.Map(env.eval)
-	return operator.Call(Elem(args), env)
+	T().Infof("-------- call ------------")
+	ev := operator.Call(Elem(args), env)
+	T().Infof("  eval result = %v", ev)
+	T().Infof("--------------------------")
+	return ev
+}
+
+func (env *Environment) evalAtom(atom Atom) Element {
+	if atom.Type() == TokenType {
+		if sym := env.FindSymbol("!TokenEvaluator", true); sym != nil {
+			if sym.Value.typ == OperatorType { // then use it
+				teval := sym.Value.Data.(Operator)
+				result := teval.Call(Elem(atom), env)
+				return result
+			}
+		}
+	}
+	return Elem(atom)
+}
+
+// --- Quote -----------------------------------------------------------------
+
+func (env *Environment) Quote(list *GCons) *GCons {
+	r := env.quote(Elem(list))
+	T().Debugf("Quote => %s", r)
+	return r.AsList()
 }
 
 func (env *Environment) quote(el Element) Element {

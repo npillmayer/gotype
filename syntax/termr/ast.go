@@ -173,7 +173,7 @@ func growRHSList(start, end *terex.GCons, r *sppf.RuleNode, env *terex.Environme
 func (ab *ASTBuilder) Terminal(tokval int, token interface{}, ctxt sppf.RuleCtxt) interface{} {
 	//t := ab.G.Terminal(tokval).Name
 	terminal := ab.G.Terminal(tokval)
-	atom := terex.Atomize(&terex.Token{Name: terminal.Name, Value: tokval})
+	atom := terex.Atomize(&terex.Token{Name: terminal.Name, Value: tokval, Token: token})
 	T().Debugf("cons(terminal=%s) = %v", ab.G.Terminal(tokval).Name, atom)
 	return terex.Elem(atom)
 }

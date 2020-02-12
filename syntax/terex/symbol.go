@@ -86,6 +86,7 @@ func (p properties) Set(key string, value interface{}) properties {
 type Token struct {
 	Name  string
 	Value int
+	Token interface{}
 }
 
 func (t Token) String() string {
@@ -115,13 +116,13 @@ var initOnce sync.Once // monitors one-time initialization of global environment
 // found in the symbol table.
 func InitGlobalEnvironment() {
 	initOnce.Do(func() {
-		defun("+", _Add, nil)
-		defun("quote", _Quote, nil)
-		defun("list", _ErrorMapper(errors.New("list used as function call")), _Identity)
+		Defun("+", _Add, nil)
+		Defun("quote", _Quote, nil)
+		Defun("list", _ErrorMapper(errors.New("list used as function call")), _Identity)
 	})
 }
 
-func defun(opname string, funcBody Mapper, quoter Mapper) {
+func Defun(opname string, funcBody Mapper, quoter Mapper) {
 	opsym := GlobalEnvironment.Intern(opname, false)
 	opsym.Value = Atomize(&internalOp{sym: opsym, caller: funcBody, quoter: quoter})
 	T().Debugf("new interal op %s = %v", opsym.Name, opsym.Value)
@@ -135,6 +136,7 @@ type internalOp struct {
 
 func (iop *internalOp) Call(el Element, env *Environment) Element {
 	// TODO is env needed for internal ops?
+	T().Errorf("######## iop=%s #################", iop.String())
 	if iop.caller == nil {
 		return el
 	}

@@ -428,6 +428,7 @@ func _Identity(args Element) Element {
 }
 
 func _Add(args Element) Element {
+	T().Infof("_Add args=%s", args.String())
 	if args.IsAtom() {
 		if a := args.AsAtom(); a.typ == NumType {
 			return Elem(a)
@@ -436,10 +437,15 @@ func _Add(args Element) Element {
 	sum := 0.0
 	arglist := args.AsList()
 	for arglist != nil {
-		if arglist.Car.Type() != NumType {
+		T().Infof("     arg=%v", arglist.Car)
+		if arglist.Car.Type() == NumType {
+			sum += arglist.Car.Data.(float64)
+		} else if arglist.Car.Type() == TokenType {
+			v := arglist.Car.Data.(*Token).Value
+			sum += float64(v)
+		} else {
 			return Elem(ErrorAtom)
 		}
-		sum += arglist.Car.Data.(float64)
 		arglist = arglist.Cdr
 	}
 	return Elem(Atomize(sum))
