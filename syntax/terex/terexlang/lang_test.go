@@ -14,15 +14,15 @@ func TestAssignability(t *testing.T) {
 	var e interface{} = &sExprTermR{name: "Hello"}
 	switch x := e.(type) {
 	case termr.TermR:
-		t.Logf("sExprOp %v accepted as termr.TermR", x)
+		t.Logf("sExprTermR %v accepted as termr.TermR", x)
 		switch o := x.Operator().(type) {
 		case terex.Operator:
-			t.Logf("sExprOp.Operator() %v accepted as terex.Operator", o)
+			t.Logf("sExprTermR.Operator() %v accepted as terex.Operator", o)
 		default:
 			t.Errorf("Expected %v to implement terex.Operator interface", o)
 		}
 	default:
-		t.Errorf("Expected terexlang.sExprOp to implement termr.TermR interface")
+		t.Errorf("Expected terexlang.sExprTermR to implement termr.TermR interface")
 	}
 }
 
@@ -78,7 +78,7 @@ func TestQuote(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	terex.InitGlobalEnvironment()
 	input := "(Hello 'World 1)"
-	result := Eval(input, terex.GlobalEnvironment)
+	result := Quote(input, terex.GlobalEnvironment)
 	if result.Length() != 2 {
 		t.Errorf("Expected resulting list to be of length 2, is %d", result.Length())
 	} else {
@@ -87,7 +87,6 @@ func TestQuote(t *testing.T) {
 			t.Errorf("Expected AST to be of length 3, is %d", result.Cadr().Length())
 		}
 	}
-	//t.Fail()
 }
 
 func TestEval(t *testing.T) {
@@ -106,4 +105,5 @@ func TestEval(t *testing.T) {
 			t.Errorf("Expected AST to be of length 3, is %d", result.Cadr().Length())
 		}
 	}
+	t.Fail()
 }

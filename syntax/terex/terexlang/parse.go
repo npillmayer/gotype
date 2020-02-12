@@ -15,18 +15,7 @@ import (
 	"github.com/npillmayer/gotype/syntax/termr"
 )
 
-// T traces to the global syntax tracer
-func T() tracing.Trace {
-	return gtrace.SyntaxTracer
-}
-
 // --- Grammar ---------------------------------------------------------------
-
-// b.LHS("Quote").T("quote", '^').N("Atom").End()
-// b.LHS("Atom").T("ident", scanner.Ident).End()
-// b.LHS("Atom").T("string", scanner.String).End()
-// b.LHS("Atom").T("int", scanner.Int).End()
-// b.LHS("Atom").T("float", scanner.Float).End()
 
 // Atom       ::=  '^' Atom   // currently un-ambiguated by QuoteOrAtom
 // Atom       ::=  ident
@@ -69,7 +58,7 @@ func makeTermRGrammar() (*lr.LRAnalysis, error) {
 var grammar *lr.LRAnalysis
 var lexer *scanner.LMAdapter
 var astBuilder *termr.ASTBuilder
-var startOnce sync.Once // monitors one-time creation of grammar and AST-builder
+var startOnce sync.Once // monitors one-time creation of grammar, lexer and AST-builder
 
 func createParser() *earley.Parser {
 	startOnce.Do(func() {
@@ -93,22 +82,17 @@ func createParser() *earley.Parser {
 
 func parse(input string, source string) (*sppf.Forest, error) {
 	parser := createParser()
-	//r := strings.NewReader(sexpr)
-	// TODO create a (lexmachine?) tokenizer
-	//scan := scanner.GoTokenizer(source, r, scanner.SkipComments(true))
-	//lexer, _ := Lexer()
 	scan, err := lexer.Scanner(input)
 	if err != nil {
 		return nil, err
 	}
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	accept, err := parser.Parse(scan, nil)
-	T().Errorf("accept=%v, input=%s", accept, input)
+	//T().Infof("accept=%v, input=%s", accept, input)
 	if err != nil {
 		return nil, err
-	}
-	if !accept {
-		return nil, fmt.Errorf("Not a valid expression")
+	} else if !accept {
+		return nil, fmt.Errorf("Not a valid TeREx expression")
 	}
 	return parser.ParseForest(), nil
 }
@@ -117,6 +101,16 @@ func parse(input string, source string) (*sppf.Forest, error) {
 // It will parse the string, create an internal S-expr structure and evaluate it,
 // using the symbols in env,
 func Eval(sexpr string, env *terex.Environment) *terex.GCons {
+	ast := Quote(sexpr, env)
+	r := env.Eval(ast)
+	T().Infof("eval(AST) = %s", r.ListString())
+	return r
+}
+
+// Quote qotes an s-expr (given in textual form).
+// It will parse the string, create an internal S-expr structure and quote it,
+// using the symbols in env,
+func Quote(sexpr string, env *terex.Environment) *terex.GCons {
 	parsetree, err := parse(sexpr, "eval")
 	if err != nil {
 		//env.lastError = err
@@ -147,6 +141,7 @@ func Eval(sexpr string, env *terex.Environment) *terex.GCons {
 // --- S-expr AST builder listener -------------------------------------------
 
 var atomOp *sExprTermR  // for Atom -> ... productions
+var opOp *sExprTermR    // for Op -> ... productions
 var quoteOp *sExprTermR // for Quote -> ... productions
 var listOp *sExprTermR  // for List -> ... productions
 
@@ -176,9 +171,9 @@ func (op *sExprTermR) Operator() terex.Operator {
 }
 
 func (op *sExprTermR) Rewrite(l *terex.GCons, env *terex.Environment) *terex.GCons {
-	T().Errorf("%s:Op.Rewrite[%s] called, %d rules", op.Name(), l.ListString(), len(op.rules))
+	T().Debugf("%s:Op.Rewrite[%s] called, %d rules", op.Name(), l.ListString(), len(op.rules))
 	for _, rule := range op.rules {
-		T().Errorf("match: trying %s %% %s ?", rule.Pattern.ListString(), l.ListString())
+		T().Infof("match: trying %s %% %s ?", rule.Pattern.ListString(), l.ListString())
 		if rule.Pattern.Match(l, env) {
 			T().Infof("Op %s has a match", op.Name())
 			v := rule.Rewrite(l, env)
@@ -207,24 +202,31 @@ func (op *sExprTermR) Rule(pattern *terex.GCons, rw termr.Rewriter) *sExprTermR 
 var SingleTokenArg *terex.GCons
 
 func initDefaultPatterns() {
-	//arg := terex.Atomize(terex.AnyType)
-	//AnyToken = terex.Cons(arg, nil)
 	SingleTokenArg = terex.Cons(terex.Atomize(terex.OperatorType), termr.AnySymbol())
-	//p := Cons(makeNode(AnyOp), Anything)
 	atomOp = makeASTTermR("Atom", "").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 		return l.Cdr
 	})
 	// .Rule(SingleTokenArg, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 	// 	return l.Cdr()
 	// })
+	opOp = makeASTTermR("Op", "").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) *terex.GCons {
+		if l.Car.Type() == terex.TokenType {
+			tname := l.Car.Data.(*terex.Token).String()
+			if sym := terex.GlobalEnvironment.FindSymbol(tname, true); sym != nil {
+				if sym.Value.Type() == terex.OperatorType {
+					op := terex.Atomize(&globalOpInEnv{tname})
+					return terex.Cons(op, l.Cdr)
+				}
+			}
+		}
+		return l
+	})
 	_, tokval := Token("'")
 	p := terex.Cons(terex.Atomize(terex.OperatorType),
 		terex.Cons(terex.Atomize(&terex.Token{Name: "'", Value: tokval}), termr.AnySymbol()))
-	//T().Debugf("PATTERN Quote = %s", p.ListString())
 	quoteOp = makeASTTermR("Quote", "quote").Rule(p, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 		return terex.Cons(l.Car, l.Cddr())
 	})
-	//p = Cons(makeNode(AnyOp), Cons(makeNode(&Token{"'('", '('}), Cons(R, nil)))
 	listOp = makeASTTermR("List", "list").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) *terex.GCons {
 		if l.Length() <= 3 { // ( )
 			return nil

@@ -106,14 +106,6 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 				rhssym.Value.Data = r.Value // value must be a Node
 			}
 			rhsList, end = growRHSList(rhsList, end, r, env)
-			// switch v := r.Value.(type) { // TODO same logic as below (factor out)
-			// case Node:
-			// 	end = appendNode(end, v)
-			// case *terex.GCons:
-			// 	end = appendTee(end, v)
-			// default:
-			// 	panic("Unknown value type of RHS symbol")
-			// }
 		}
 		T().Infof("%s: Rewrite of %s", sym.Name, rhsList.ListString())
 		rhsList = op.Rewrite(rhsList, env)
@@ -124,37 +116,7 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 	var list, end *terex.GCons
 	for _, r := range rhs {
 		list, end = growRHSList(list, end, r, terex.GlobalEnvironment)
-		// switch v := r.Value.(type) {
-		// case Node:
-		// 	end = appendNode(end, v)
-		// 	if list == nil {
-		// 		list = end
-		// 	}
-		// case *terex.GCons:
-		// 	if v.car.Type() == OperatorType {
-		// 		//T().Infof("%s: tee appending %v", sym, v.ListString())
-		// 		end = appendTee(end, v)
-		// 		if list == nil {
-		// 			list = end
-		// 		}
-		// 	} else {
-		// 		var l *terex.GCons
-		// 		//T().Infof("%s: inline appending %v", sym, v.ListString())
-		// 		l, end = appendList(end, v)
-		// 		if list == nil {
-		// 			list = l
-		// 		}
-		// 	}
-		// default:
-		// 	panic("Unknown value type of RHS symbol")
-		// }
 	}
-	//T().Infof("List of length %d: %s", list.Length(), list.ListString())
-	//if list.Length() == 1 && list.Car.Type() == terex.ConsType {
-	//T().Infof("Inner list of length %d: %s", list.car.child.Length(), list.car.child.ListString())
-	//list = list.Cadr()
-	//list = list.car.child // unwrap
-	//}
 	T().Infof("%s returns %s", sym.Name, list.ListString())
 	T().Infof("exit grammar symbol: %v", sym)
 	return list
