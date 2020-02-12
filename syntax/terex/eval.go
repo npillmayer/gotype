@@ -79,12 +79,21 @@ func (env *Environment) quoteList(list *GCons) Element {
 	}
 	op := list.Car
 	if op.typ != OperatorType {
+		T().Infof("------- VerbList -----------------------------")
+		T().Infof("   > Map(quote(...))")
 		verblist := list.Map(env.quote)
+		T().Infof("----------------------------------------------")
 		return Elem(verblist)
 	}
 	//T().Errorf("quote-OP = %s", op)
 	operator := op.Data.(Operator)
-	//args := list.Cdr.Map(env.quote)
-	args := list.Cdr
-	return operator.Quote(Elem(args), env)
+	args := list.Cdr.Map(env.quote)
+	//args := list.Cdr
+	T().Infof("-------- Op = %s -----------------------------", operator.String())
+	T().Infof("     args=%s", args.ListString())
+	T().Infof("   > quote(args...)")
+	quoted := operator.Quote(Elem(args), env)
+	T().Infof("     quoted=%s", quoted.String())
+	T().Infof("----------------------------------------------")
+	return quoted
 }

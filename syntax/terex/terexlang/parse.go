@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/npillmayer/gotype/core/config/gtrace"
-	"github.com/npillmayer/gotype/core/config/tracing"
-
 	"github.com/npillmayer/gotype/syntax/lr"
 	"github.com/npillmayer/gotype/syntax/lr/earley"
 	"github.com/npillmayer/gotype/syntax/lr/scanner"
@@ -74,7 +71,9 @@ func createParser() *earley.Parser {
 		initDefaultPatterns()
 		astBuilder = termr.NewASTBuilder(grammar.Grammar())
 		astBuilder.AddTermR(atomOp)
+		astBuilder.AddTermR(opOp)
 		astBuilder.AddTermR(quoteOp)
+		astBuilder.AddTermR(seqOp)
 		astBuilder.AddTermR(listOp)
 	})
 	return earley.NewParser(grammar, earley.GenerateTree(true))
@@ -86,7 +85,7 @@ func parse(input string, source string) (*sppf.Forest, error) {
 	if err != nil {
 		return nil, err
 	}
-	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
+	//gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	accept, err := parser.Parse(scan, nil)
 	//T().Infof("accept=%v, input=%s", accept, input)
 	if err != nil {
@@ -143,6 +142,7 @@ func Quote(sexpr string, env *terex.Environment) *terex.GCons {
 var atomOp *sExprTermR  // for Atom -> ... productions
 var opOp *sExprTermR    // for Op -> ... productions
 var quoteOp *sExprTermR // for Quote -> ... productions
+var seqOp *sExprTermR   // for Sequence -> ... productions
 var listOp *sExprTermR  // for List -> ... productions
 
 type sExprTermR struct {
@@ -170,19 +170,19 @@ func (op *sExprTermR) Operator() terex.Operator {
 	return &globalOpInEnv{op.opname}
 }
 
-func (op *sExprTermR) Rewrite(l *terex.GCons, env *terex.Environment) *terex.GCons {
+func (op *sExprTermR) Rewrite(l *terex.GCons, env *terex.Environment) terex.Element {
 	T().Debugf("%s:Op.Rewrite[%s] called, %d rules", op.Name(), l.ListString(), len(op.rules))
 	for _, rule := range op.rules {
 		T().Infof("match: trying %s %% %s ?", rule.Pattern.ListString(), l.ListString())
 		if rule.Pattern.Match(l, env) {
 			T().Infof("Op %s has a match", op.Name())
 			v := rule.Rewrite(l, env)
-			T().Infof("Op %s rewrite -> %s", op.Name(), v.ListString())
+			T().Infof("Op %s rewrite -> %s", op.Name(), v.String())
 			//return rule.Rewrite(l, env)
 			return v
 		}
 	}
-	return l
+	return terex.Elem(l)
 }
 
 func (op *sExprTermR) Descend(sppf.RuleCtxt) bool {
@@ -203,37 +203,49 @@ var SingleTokenArg *terex.GCons
 
 func initDefaultPatterns() {
 	SingleTokenArg = terex.Cons(terex.Atomize(terex.OperatorType), termr.AnySymbol())
-	atomOp = makeASTTermR("Atom", "").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) *terex.GCons {
-		return l.Cdr
+	atomOp = makeASTTermR("Atom", "").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) terex.Element {
+		// l=(atom x),  => x     // should be standard behaviour, thus unneccessary
+		return terex.Elem(l.Cdar()) // an atom simply unwraps its arg
 	})
-	// .Rule(SingleTokenArg, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
-	// 	return l.Cdr()
-	// })
-	opOp = makeASTTermR("Op", "").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) *terex.GCons {
-		if l.Car.Type() == terex.TokenType {
-			tname := l.Car.Data.(*terex.Token).String()
-			if sym := terex.GlobalEnvironment.FindSymbol(tname, true); sym != nil {
-				if sym.Value.Type() == terex.OperatorType {
-					op := terex.Atomize(&globalOpInEnv{tname})
-					return terex.Cons(op, l.Cdr)
-				}
+	opOp = makeASTTermR("Op", "").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) terex.Element {
+		if l.Length() <= 1 || l.Cdar().Type() != terex.TokenType {
+			return terex.Elem(l)
+		}
+		// (op "x") => x:op
+		tname := l.Cdar().Data.(*terex.Token).String()
+		T().Errorf("FOUND TOKEN=%s", tname)
+		if sym := terex.GlobalEnvironment.FindSymbol(tname, true); sym != nil {
+			T().Errorf("FOUND SYM=%v", sym)
+			if sym.Value.Type() == terex.OperatorType {
+				op := terex.Atomize(&globalOpInEnv{tname})
+				return terex.Elem(op)
 			}
 		}
-		return l
+		return terex.Elem(l)
 	})
 	_, tokval := Token("'")
 	p := terex.Cons(terex.Atomize(terex.OperatorType),
 		terex.Cons(terex.Atomize(&terex.Token{Name: "'", Value: tokval}), termr.AnySymbol()))
-	quoteOp = makeASTTermR("Quote", "quote").Rule(p, func(l *terex.GCons, env *terex.Environment) *terex.GCons {
-		return terex.Cons(l.Car, l.Cddr())
+	quoteOp = makeASTTermR("Quote", "quote").Rule(p, func(l *terex.GCons, env *terex.Environment) terex.Element {
+		return terex.Elem(terex.Cons(l.Car, l.Cddr()))
 	})
-	listOp = makeASTTermR("List", "list").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) *terex.GCons {
+	seqOp = makeASTTermR("Sequence", "!seq").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) terex.Element {
+		if l.Cdar().Type() == terex.ConsType {
+			seq := l.Cdr.Tee().Concat(l.Cddr())
+			return terex.Elem(seq)
+		} else if l.Cddr() == nil {
+			return terex.Elem(l.Cdar())
+		}
+		return terex.Elem(l.Cdr)
+	})
+	listOp = makeASTTermR("List", "list").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) terex.Element {
+		// list '(' x y ... ')'  => (#list x y ...)
 		if l.Length() <= 3 { // ( )
-			return nil
+			return terex.Elem(nil)
 		}
 		content := l.Cddr()                            // strip (
 		content = content.FirstN(content.Length() - 1) // strip )
-		return terex.Cons(l.Car, content)              // (List:Op ...)
+		return terex.Elem(terex.Cons(l.Car, content))  // (List:Op ...)
 	})
 }
 
@@ -273,6 +285,11 @@ func (op globalOpInEnv) Quote(term terex.Element, env *terex.Environment) terex.
 	if !ok {
 		T().Errorf("Cannot quote-call parsing operation %s", op.opname)
 		return term
+	}
+	if op.String() == "list" {
+		T().Infof("========================================================")
+		T().Infof("=====     LIST         =================================")
+		T().Infof("========================================================")
 	}
 	return operator.Quote(term, env)
 }

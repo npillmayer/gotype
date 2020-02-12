@@ -7,7 +7,7 @@ import "github.com/npillmayer/gotype/syntax/terex"
 //     list × env ↦ list
 //
 // i.e., a term rewriting function.
-type Rewriter func(l *terex.GCons, env *terex.Environment) *terex.GCons
+type Rewriter func(l *terex.GCons, env *terex.Environment) terex.Element
 
 // RewriteRule is a type representing a rule for term rewriting.
 // It contains a pattern and a rewriting-function. The pattern will be applied

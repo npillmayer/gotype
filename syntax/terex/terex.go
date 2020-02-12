@@ -327,6 +327,23 @@ func (l *GCons) FirstN(n int) *GCons {
 	return start
 }
 
+func (l *GCons) Last() *GCons {
+	if l == nil {
+		return nil
+	}
+	for l.Cdr != nil {
+		l = l.Cdr
+	}
+	return l
+}
+
+func (l *GCons) Concat(other *GCons) *GCons {
+	infinity := 999999
+	cc := l.FirstN(infinity) // make a copy
+	cc.Last().Cdr = other
+	return cc
+}
+
 // Map applies a mapping-function to every element of a list.
 func (l *GCons) Map(mapper Mapper) *GCons {
 	return _Map(mapper, Elem(l)).AsList()
@@ -360,6 +377,10 @@ func (el Element) IsAtom() bool {
 	return false
 }
 
+func (el Element) IsNil() bool {
+	return el.thing == nil
+}
+
 func (el Element) IsError() bool {
 	return el.AsAtom().typ == ErrorType
 }
@@ -375,6 +396,9 @@ func (el Element) AsList() *GCons {
 	if el.IsAtom() {
 		return Cons(el.thing.(Atom), nil)
 	}
+	if el.thing == nil {
+		return nil
+	}
 	return el.thing.(*GCons)
 }
 
@@ -382,7 +406,25 @@ func (el Element) String() string {
 	if el.IsAtom() {
 		return el.AsAtom().String()
 	}
+	if el.thing == nil {
+		return "nil"
+	}
 	return el.AsList().ListString()
+}
+
+func _First(args Element) Element {
+	if args.IsAtom() {
+		return args
+	}
+	return Elem(args.AsList().Car)
+}
+
+func _Rest(args Element) Element {
+	return Elem(args.AsList().Cdr)
+}
+
+func _Identity(args Element) Element {
+	return args
 }
 
 func _Add(args Element) Element {
@@ -412,14 +454,21 @@ func _Inc(args Element) Element {
 	return Elem(ErrorAtom)
 }
 
+// func _Quote(op Element, args Element) Element {
+// 	if args.IsAtom() {
+// 		return args
+// 	}
+// 	if op.IsAtom() {
+// 		qargs := GlobalEnvironment.quoteList(args.AsList())
+// 		return Elem(Cons(op.AsAtom(), qargs.AsList()))
+// 	}
+// 	panic(fmt.Errorf("_Quote called with op=list %s", op))
+// }
+
 func _Quote(args Element) Element {
 	if args.IsAtom() {
-		//T().Errorf("   ------- _Quote Atom")
 		return args
-		//return GlobalEnvironment.quoteAtom(args.AsAtom())
 	}
-	//T().Errorf("   ------- _Quote List")
-	//return args
 	return GlobalEnvironment.quoteList(args.AsList())
 }
 

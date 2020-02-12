@@ -41,10 +41,10 @@ func NewASTBuilder(g *lr.Grammar) *ASTBuilder {
 
 // TermR is a type for a rewriter for AST creation and transformation.
 type TermR interface {
-	Name() string                                          // printable name
-	Rewrite(*terex.GCons, *terex.Environment) *terex.GCons // term rewriting
-	Descend(sppf.RuleCtxt) bool                            // predicate wether to descend to children nodes
-	Operator() terex.Operator                              // operator to place as sub-tree node
+	Name() string                                           // printable name
+	Rewrite(*terex.GCons, *terex.Environment) terex.Element // term rewriting
+	Descend(sppf.RuleCtxt) bool                             // predicate wether to descend to children nodes
+	Operator() terex.Operator                               // operator to place as sub-tree node
 }
 
 // AddTermR adds an AST rewriter for a grammar symbol to the builder.
@@ -64,7 +64,7 @@ func (ab *ASTBuilder) AST(parseTree *sppf.Forest) (*terex.GCons, interface{}) {
 	value := cursor.TopDown(ab, sppf.LtoR, sppf.Break)
 	T().Infof("AST creation return value = %v", value)
 	if value != nil {
-		ab.ast = value.(*terex.GCons)
+		ab.ast = value.(terex.Element).AsList()
 		T().Infof("AST = %s", ab.ast.ListString())
 	}
 	return ab.ast, value
@@ -80,8 +80,8 @@ func (ab *ASTBuilder) EnterRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.
 			return false
 		}
 		T().Errorf("enter operator symbol: %v", sym)
-		//opsym := terex.Cons(terex.Atomize(rew.Operator()), nil)
-		ab.stack = append(ab.stack, terex.Cons(terex.Atomize(rew.Operator()), nil))
+		opSymListStart := terex.Cons(terex.Atomize(rew.Operator()), nil)
+		ab.stack = append(ab.stack, opSymListStart) // put '(op ... ' on stack
 	} else {
 		T().Debugf("enter grammar symbol: %v", sym)
 	}
@@ -98,54 +98,72 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 		}
 		rhsList := ab.stack[len(ab.stack)-1]
 		end := rhsList
-		//T().Debugf("iterating over %d RHS elements", len(rhs))
+		T().Infof("iterating over %d RHS elements", len(rhs))
 		for _, r := range rhs {
+			T().Infof("r = %v", r)
+			// TODO set value of RHS vars in Env
 			rhssym := env.Intern(r.Symbol().Name, true)
-			//T().Debugf("sym = %v", sym)
+			T().Infof("sym = %v", sym)
 			if !r.Symbol().IsTerminal() {
-				rhssym.Value.Data = r.Value // value must be a Node
+				rhssym.Value.Data = r.Value
 			}
 			rhsList, end = growRHSList(rhsList, end, r, env)
 		}
 		T().Infof("%s: Rewrite of %s", sym.Name, rhsList.ListString())
-		rhsList = op.Rewrite(rhsList, env)
-		ab.stack = ab.stack[:len(ab.stack)-1]
-		T().Infof("%s returns %s", sym.Name, rhsList.ListString())
-		return rhsList
+		rewritten := op.Rewrite(rhsList, env) // returns an terex.Element
+		ab.stack = ab.stack[:len(ab.stack)-1] // pop initial '(op ...'
+		T().Infof("%s returns %s", sym.Name, rewritten.String())
+		return rewritten
 	}
+	//var list, end *terex.GCons
 	var list, end *terex.GCons
 	for _, r := range rhs {
 		list, end = growRHSList(list, end, r, terex.GlobalEnvironment)
 	}
-	T().Infof("%s returns %s", sym.Name, list.ListString())
+	rew := noOpRewrite(list)
+	T().Infof("%s returns %s", sym.Name, rew.String())
 	T().Infof("exit grammar symbol: %v", sym)
-	return list
+	return rew
 }
 
+func noOpRewrite(list *terex.GCons) terex.Element {
+	if list != nil && list.Length() == 1 {
+		return terex.Elem(list.Car)
+	}
+	return terex.Elem(list)
+}
+
+//func growRHSList(start, end *terex.GCons, r *sppf.RuleNode, env *terex.Environment) (*terex.GCons, *terex.GCons) {
 func growRHSList(start, end *terex.GCons, r *sppf.RuleNode, env *terex.Environment) (*terex.GCons, *terex.GCons) {
-	switch v := r.Value.(type) {
-	case terex.Atom:
-		end = appendAtom(end, v)
+	if _, ok := r.Value.(terex.Element); !ok {
+		T().Errorf("r.Value=%v", r.Value)
+		panic("RHS symbol is not of type Element")
+	}
+	e := r.Value.(terex.Element) // value of rule-node r is either atom or list
+	if e.IsNil() {
+		return start, end
+	}
+	if e.IsAtom() {
+		end = (appendAtom(end, e.AsAtom()))
 		if start == nil {
 			start = end
 		}
-	case *terex.GCons:
-		if v.Car.Type() == terex.OperatorType {
+	} else {
+		l := e.AsList()
+		if l.Car.Type() == terex.OperatorType {
 			//T().Infof("%s: tee appending %v", sym, v.ListString())
-			end = appendTee(end, v)
+			end = appendTee(end, l)
 			if start == nil {
 				start = end
 			}
-		} else {
-			var l *terex.GCons
+		} else { // append l at end of current list
+			var concat *terex.GCons
 			//T().Infof("%s: inline appending %v", sym, v.ListString())
-			l, end = appendList(end, v)
+			concat, end = appendList(end, l)
 			if start == nil {
-				start = l
+				start = concat
 			}
 		}
-	default:
-		panic("Unknown value type of RHS symbol")
 	}
 	return start, end
 }
@@ -157,7 +175,7 @@ func (ab *ASTBuilder) Terminal(tokval int, token interface{}, ctxt sppf.RuleCtxt
 	terminal := ab.G.Terminal(tokval)
 	atom := terex.Atomize(&terex.Token{Name: terminal.Name, Value: tokval})
 	T().Debugf("cons(terminal=%s) = %v", ab.G.Terminal(tokval).Name, atom)
-	return atom
+	return terex.Elem(atom)
 }
 
 // Conflict is part of sppf.Listener interface.

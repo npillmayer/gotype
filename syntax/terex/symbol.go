@@ -117,7 +117,7 @@ func InitGlobalEnvironment() {
 	initOnce.Do(func() {
 		defun("+", _Add, nil)
 		defun("quote", _Quote, nil)
-		defun("list", _ErrorMapper(errors.New("list used as function call")), _Quote)
+		defun("list", _ErrorMapper(errors.New("list used as function call")), _Identity)
 	})
 }
 
@@ -141,6 +141,13 @@ func (iop *internalOp) Call(el Element, env *Environment) Element {
 	return iop.caller(el)
 }
 
+// Quote
+// TODO The whole quote-thing is unnecessary. Currently we use it to get rid
+// of the #list:op quoting, but this should be replaced by a term rewrite.
+// #list is used as a sentinel to stop sequences from flowing in parent nodes.
+// It is useful until the first AST is complete. Afterwards, instead of quoting,
+// we should rewrite AST nodes of type #list.
+//
 func (iop *internalOp) Quote(el Element, env *Environment) Element {
 	// TODO is env needed for internal ops?
 	if iop.quoter == nil {
