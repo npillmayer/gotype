@@ -171,7 +171,7 @@ func (f *Forest) AddTerminal(t *lr.Symbol, pos uint64) *SymbolNode {
 
 // SetRoot tells the parse forest which of the nodes will be the root node.
 // This is intended for cases where no top-level artificial symbol S' has
-// been wrapped around the grammar by grammar analyzer.
+// been wrapped around the grammar (usually done by the grammar analyzer).
 func (f *Forest) SetRoot(symnode *SymbolNode) {
 	f.root = symnode
 }
