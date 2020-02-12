@@ -6,6 +6,16 @@ import (
 	"github.com/npillmayer/gotype/syntax/lr/sppf"
 )
 
+// TokenAt returns the input token at position pos.
+func (p *Parser) TokenAt(pos uint64) interface{} {
+	if pos < uint64(len(p.tokens)) {
+		return p.tokens[pos]
+	}
+	return nil
+}
+
+// --- Derivation listener ---------------------------------------------------
+
 // Listener is a type for walking a parse tree/forest.
 type Listener interface {
 	Reduce(sym *lr.Symbol, rule int, rhs []*RuleNode, span lr.Span, level int) interface{}

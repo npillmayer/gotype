@@ -130,7 +130,7 @@ func NewParser(ga *lr.LRAnalysis, opts ...Option) *Parser {
 // The parser consumes input symbols until the token value is EOF.
 type inputSymbol struct {
 	tokval int         // token value
-	lexeme interface{} // visual representation of the symbol, if any
+	token  interface{} // visual representation of the symbol, if any
 	span   lr.Span     // position and extent in the input stream
 }
 
