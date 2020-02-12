@@ -275,6 +275,14 @@ func (l *GCons) Cadr() *GCons {
 	return l.Car.Data.(*GCons).Cdr
 }
 
+// Cdar returns Car(Cdr(...)) of a list/node.
+func (l *GCons) Cdar() Atom {
+	if l == nil || l.Cdr == nil {
+		return NilAtom
+	}
+	return l.Cdr.Car
+}
+
 // Cddr returns Cdr(Cdr(...)) of a list/node.
 func (l *GCons) Cddr() *GCons {
 	if l == nil || l.Cdr == nil {
