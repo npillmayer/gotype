@@ -32,11 +32,15 @@ func T() tracing.Trace {
 // Atom       ::=  ident
 // Atom       ::=  string
 // Atom       ::=  int
-// Atom       ::=  float      // TODO unify this to number
+// Atom       ::=  Op
+// Op         ::=  '+' | '-' | '*' | '/' | '='
 // Atom       ::=  List
 // List       ::=  '(' Sequence ')'
 // Sequence   ::=  Sequence Atom
 // Sequence   ::=  Sequence
+//
+// Comments starting with // will be filtered by the scanner.
+// ',' counts as whitespace and is discarded as well.
 func makeTermRGrammar() (*lr.LRAnalysis, error) {
 	b := lr.NewGrammarBuilder("TermR")
 	b.LHS("QuoteOrAtom").N("Quote").End()
@@ -45,6 +49,12 @@ func makeTermRGrammar() (*lr.LRAnalysis, error) {
 	b.LHS("Atom").T(Token("ID")).End()
 	b.LHS("Atom").T(Token("STRING")).End()
 	b.LHS("Atom").T(Token("NUM")).End()
+	b.LHS("Atom").N("Op").End()
+	b.LHS("Op").T(Token("+")).End()
+	b.LHS("Op").T(Token("-")).End()
+	b.LHS("Op").T(Token("*")).End()
+	b.LHS("Op").T(Token("/")).End()
+	b.LHS("Op").T(Token("=")).End()
 	b.LHS("Atom").N("List").End()
 	b.LHS("List").T(Token("(")).N("Sequence").T(Token(")")).End()
 	b.LHS("Sequence").N("Sequence").N("QuoteOrAtom").End()
@@ -86,7 +96,7 @@ func parse(input string, source string) (*sppf.Forest, error) {
 	//r := strings.NewReader(sexpr)
 	// TODO create a (lexmachine?) tokenizer
 	//scan := scanner.GoTokenizer(source, r, scanner.SkipComments(true))
-	lexer, _ := Lexer()
+	//lexer, _ := Lexer()
 	scan, err := lexer.Scanner(input)
 	if err != nil {
 		return nil, err

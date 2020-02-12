@@ -1,6 +1,7 @@
 package terexlang
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/npillmayer/gotype/syntax/lr/scanner"
@@ -39,7 +40,11 @@ func initTokens() {
 
 // Token returns a token name and its value.
 func Token(t string) (string, int) {
-	return t, tokenIds[t]
+	id, ok := tokenIds[t]
+	if !ok {
+		panic(fmt.Errorf("unknown token: %s", t))
+	}
+	return t, id
 }
 
 // Lexer creates a new lexmachine lexer.
@@ -60,5 +65,9 @@ func Lexer() (*scanner.LMAdapter, error) {
 }
 
 func makeToken(s string) lexmachine.Action {
-	return scanner.MakeToken(s, tokenIds[s])
+	id, ok := tokenIds[s]
+	if !ok {
+		panic(fmt.Errorf("unknown token: %s", s))
+	}
+	return scanner.MakeToken(s, id)
 }

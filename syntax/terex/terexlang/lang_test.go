@@ -100,9 +100,10 @@ func TestEval(t *testing.T) {
 	result := Eval(input, terex.GlobalEnvironment)
 	if result.Length() != 2 {
 		t.Errorf("Expected resulting list to be of length 2, is %d", result.Length())
-	}
-	t.Logf("AST=%s", result.Car.Data.(*terex.GCons).ListString())
-	if result.Car.Data.(*terex.GCons).Length() != 3 {
-		t.Errorf("Expected AST to be of length 3, is %d", result.Cadr().Length())
+	} else {
+		t.Logf("AST=%s", result.Car.Data.(*terex.GCons).ListString())
+		if result.Cadr().Length() != 3 {
+			t.Errorf("Expected AST to be of length 3, is %d", result.Cadr().Length())
+		}
 	}
 }
