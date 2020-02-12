@@ -259,6 +259,14 @@ func (l *GCons) Rest() *GCons {
 	return l.Cdr
 }
 
+// Tee returns the Car as a list, if it is of sublist-type, nil otherwise.
+func (l *GCons) Tee() *GCons {
+	if l == nil || l.Car.typ != ConsType || l.Car.Data == nil {
+		return nil
+	}
+	return l.Car.Data.(*GCons)
+}
+
 // Cadr returns Cdr(Car(...)) of a list/node.
 func (l *GCons) Cadr() *GCons {
 	if l == nil || l.Car.typ != ConsType || l.Car.Data == nil {
