@@ -173,6 +173,9 @@ func growRHSList(start, end *terex.GCons, r *sppf.RuleNode, env *terex.Environme
 func (ab *ASTBuilder) Terminal(tokval int, token interface{}, ctxt sppf.RuleCtxt) interface{} {
 	//t := ab.G.Terminal(tokval).Name
 	terminal := ab.G.Terminal(tokval)
+	// TODO token is currently identical to tokval
+	// Need to change parser and SPPF to include the original token.
+	// Otherwise we have no access to numeric values, strings, identifiers
 	atom := terex.Atomize(&terex.Token{Name: terminal.Name, Value: tokval, Token: token})
 	T().Debugf("cons(terminal=%s) = %v", ab.G.Terminal(tokval).Name, atom)
 	return terex.Elem(atom)
