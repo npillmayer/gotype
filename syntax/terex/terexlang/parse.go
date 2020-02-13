@@ -2,7 +2,6 @@ package terexlang
 
 import (
 	"fmt"
-	"strconv"
 	"sync"
 
 	"github.com/npillmayer/gotype/syntax/lr"
@@ -11,7 +10,6 @@ import (
 	"github.com/npillmayer/gotype/syntax/lr/sppf"
 	"github.com/npillmayer/gotype/syntax/terex"
 	"github.com/npillmayer/gotype/syntax/termr"
-	"github.com/timtadh/lexmachine"
 )
 
 // --- Grammar ---------------------------------------------------------------
@@ -81,66 +79,71 @@ func createParser() *earley.Parser {
 	return earley.NewParser(grammar, earley.GenerateTree(true))
 }
 
-func parse(input string, source string) (*sppf.Forest, error) {
+// Parse parses an input string in TeREx language format. It returns the
+// parse forest and a TokenReceiver, or an error in case of failure.
+//
+// Client may use an terex.ASTBuilder to create an abstract syntax tree
+// from the parse forest.
+func Parse(input string) (*sppf.Forest, termr.TokenRetriever, error) {
 	parser := createParser()
 	scan, err := lexer.Scanner(input)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	//gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	accept, err := parser.Parse(scan, nil)
-	//T().Infof("accept=%v, input=%s", accept, input)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	} else if !accept {
-		return nil, fmt.Errorf("Not a valid TeREx expression")
+		return nil, nil, fmt.Errorf("Not a valid TeREx expression")
 	}
-	return parser.ParseForest(), nil
+	return parser.ParseForest(), earleyTokenReceiver(parser), nil
 }
+
+func earleyTokenReceiver(parser *earley.Parser) termr.TokenRetriever {
+	return func(pos uint64) interface{} {
+		return parser.TokenAt(pos)
+	}
+}
+
+// ---------------------------------------------------------------------------
 
 // Eval evaluates an s-expr (given in textual form).
 // It will parse the string, create an internal S-expr structure and evaluate it,
 // using the symbols in env,
-func Eval(sexpr string, env *terex.Environment) *terex.GCons {
-	ast := Quote(sexpr, env)
-	if ast != nil {
-		ast = ast.Tee()
+func Eval(sexpr string) (*terex.GCons, *terex.Environment) {
+	quoted, env := Quote(sexpr)
+	if quoted == nil {
+		return nil, env
 	}
-	T().Infof("AST.Tee()=%s", ast.ListString())
-	r := env.Eval(ast)
-	T().Infof("eval(AST) = %s", r.ListString())
-	return r
+	T().Infof("AST.Tee()=%s", quoted.ListString())
+	evald := env.Eval(quoted.Tee())
+	T().Infof("eval(AST) = %s", evald.ListString())
+	return evald, env
 }
 
 // Quote qotes an s-expr (given in textual form).
 // It will parse the string, create an internal S-expr structure and quote it,
 // using the symbols in env,
-func Quote(sexpr string, env *terex.Environment) *terex.GCons {
-	parsetree, err := parse(sexpr, "eval")
+func Quote(sexpr string) (*terex.GCons, *terex.Environment) {
+	parsetree, tokRetr, err := Parse(sexpr)
 	if err != nil {
 		//env.lastError = err
 		T().Errorf("Eval parsing error: %v", err)
-		return nil
+		return nil, nil
 	}
 	if parsetree == nil {
 		T().Errorf("Empty eval() parse tree")
-		return nil
+		return nil, nil
 	}
-	// tmpfile, err := ioutil.TempFile(".", "eval-parsetree-*.dot")
-	// if err != nil {
-	// 	panic("cannot open tmp file")
-	// }
-	// sppf.ToGraphViz(parsetree, tmpfile)
-	// T().Errorf("Exported parse tree to %s", tmpfile.Name())
-	ast, _ := astBuilder.AST(parsetree)
-	if ast == nil {
+	env := astBuilder.AST(parsetree, tokRetr)
+	if env == nil {
 		T().Errorf("Cannot create AST from parsetree")
-		return nil
+		return nil, nil
 	}
-	T().Infof("AST: %s", ast.ListString())
-	r := env.Quote(ast)
+	T().Infof("AST: %s", env.AST.ListString())
+	r := env.Quote(env.AST)
 	T().Infof("quote(AST) = %s", r.ListString())
-	return r
+	return r, env
 }
 
 // --- S-expr AST builder listener -------------------------------------------
@@ -305,6 +308,7 @@ func (op globalOpInEnv) Quote(term terex.Element, env *terex.Environment) terex.
 	return operator.Quote(term, env)
 }
 
+/*
 func convertTerminalToken(el terex.Element) terex.Element {
 	T().Infof("!TokenEvaluator -> CONVERT TERMINAL TOKEN")
 	if !el.IsAtom() {
@@ -316,8 +320,7 @@ func convertTerminalToken(el terex.Element) terex.Element {
 	}
 	T().Infof("token atom = %s", atom)
 	t := atom.Data.(*terex.Token)
-	T().Infof("t.Value=%v, t.Token=%v", t.Value, t.Token)
-	token := t.Token.(*lexmachine.Token)
+	tokpos := t.Position
 	switch t.Value {
 	case tokenIds["NUM"]:
 		if n, err := strconv.Atoi(string(token.Lexeme)); err != nil {
@@ -335,3 +338,4 @@ func convertTerminalToken(el terex.Element) terex.Element {
 	}
 	return el
 }
+*/

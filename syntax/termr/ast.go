@@ -11,31 +11,38 @@ import (
 )
 
 // ASTBuilder is a parse tree listener for building ASTs.
-// AST is a homogenous abstract syntax tree.
 type ASTBuilder struct {
-	G                *lr.Grammar  // input grammar the parse forest stems from
-	forest           *sppf.Forest // input parse forest
-	ast              *terex.GCons // root of the AST to construct
-	last             *terex.GCons // current last node to append conses
+	G      *lr.Grammar        // input grammar the parse forest stems from
+	Env    *terex.Environment // environment for the AST to create
+	forest *sppf.Forest       // input parse forest
+	toks   TokenRetriever     // retriever parse tree leafs
+	//ast    *terex.GCons       // root of the AST to construct
+	//last             *terex.GCons       // current last node to append conses
 	rewriters        map[string]TermR
 	conflictStrategy sppf.Pruner
 	Error            func(error)
 	stack            []*terex.GCons
 }
 
-type ruleABEnter func(sym *lr.Symbol, rhs []*sppf.RuleNode) bool
-type ruleABExit func(sym *lr.Symbol, rhs []*sppf.RuleNode) interface{}
+// TODO remove these
+// type ruleABEnter func(sym *lr.Symbol, rhs []*sppf.RuleNode) bool
+// type ruleABExit func(sym *lr.Symbol, rhs []*sppf.RuleNode) interface{}
 
 // NewASTBuilder creates an AST builder from a parse forest/tree.
+// It is initialized with the grammar, which has been used to create the parse tree.
+//
+// Clients will first create an ASTBuilder, then initialize it with all the
+// term rewriters and variables/symbols necessary, and finally call ASTBuilder.AST(…).
 func NewASTBuilder(g *lr.Grammar) *ASTBuilder {
 	ab := &ASTBuilder{
-		G:         g,
-		ast:       &terex.GCons{Car: terex.NilAtom, Cdr: nil}, // AST anchor
+		G:   g,
+		Env: terex.NewEnvironment("AST "+g.Name, terex.GlobalEnvironment),
+		//ast:       &terex.GCons{Car: terex.NilAtom, Cdr: nil}, // AST anchor
 		stack:     make([]*terex.GCons, 0, 256),
 		rewriters: make(map[string]TermR),
 	}
-	ab.last = ab.ast
-	ab.stack = append(ab.stack, ab.ast) // push as stopper
+	//ab.last = ab.ast
+	//ab.stack = append(ab.stack, ab.ast) // push as stopper
 	return ab
 }
 
@@ -55,20 +62,24 @@ func (ab *ASTBuilder) AddTermR(op TermR) {
 }
 
 // AST creates an abstract syntax tree from a parse tree/forest.
-func (ab *ASTBuilder) AST(parseTree *sppf.Forest) (*terex.GCons, interface{}) {
-	if parseTree == nil {
-		return nil, nil
+// The type of ASTs we create is a homogenous abstract syntax tree.
+func (ab *ASTBuilder) AST(parseTree *sppf.Forest, tokRetr TokenRetriever) *terex.Environment {
+	if parseTree == nil || tokRetr == nil {
+		return nil
 	}
 	ab.forest = parseTree
 	cursor := ab.forest.SetCursor(nil, nil) // TODO set Pruner
 	value := cursor.TopDown(ab, sppf.LtoR, sppf.Break)
 	T().Infof("AST creation return value = %v", value)
 	if value != nil {
-		ab.ast = value.(terex.Element).AsList()
-		T().Infof("AST = %s", ab.ast.ListString())
+		ab.Env.AST = value.(terex.Element).AsList()
+		T().Infof("AST = %s", ab.Env.AST.ListString())
 	}
-	return ab.ast, value
+	return ab.Env
 }
+
+// TokenRetriever is a type for getting tokens at an input position.
+type TokenRetriever func(uint64) interface{}
 
 // --- sppf.Listener interface -----------------------------------------------
 
@@ -173,10 +184,11 @@ func growRHSList(start, end *terex.GCons, r *sppf.RuleNode, env *terex.Environme
 func (ab *ASTBuilder) Terminal(tokval int, token interface{}, ctxt sppf.RuleCtxt) interface{} {
 	//t := ab.G.Terminal(tokval).Name
 	terminal := ab.G.Terminal(tokval)
-	// TODO token is currently identical to tokval
-	// Need to change parser and SPPF to include the original token.
-	// Otherwise we have no access to numeric values, strings, identifiers
-	atom := terex.Atomize(&terex.Token{Name: terminal.Name, Value: tokval, Token: token})
+	tokpos := ctxt.Span.From()
+	t := ab.toks(tokpos)
+	// token is currently identical to tokval
+	// Would need to change parser and SPPF to include the original token.
+	atom := terex.Atomize(&terex.Token{Name: terminal.Name, Value: tokval, Token: t})
 	T().Debugf("cons(terminal=%s) = %v", ab.G.Terminal(tokval).Name, atom)
 	return terex.Elem(atom)
 }

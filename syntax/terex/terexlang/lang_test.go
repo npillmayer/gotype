@@ -70,6 +70,13 @@ func TestParse(t *testing.T) {
 	if !accept {
 		t.Errorf("No accept. Not a valid TeREx expression")
 	}
+	// parsetree := parser.ParseForest()
+	// tmpfile, err := ioutil.TempFile(".", "eval-parsetree-*.dot")
+	// if err != nil {
+	// 	panic("cannot open tmp file")
+	// }
+	// sppf.ToGraphViz(parsetree, tmpfile)
+	// T().Errorf("Exported parse tree to %s", tmpfile.Name())
 }
 
 func TestAST(t *testing.T) {
@@ -79,7 +86,7 @@ func TestAST(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	terex.InitGlobalEnvironment()
 	input := "(+ (+ 2 3) 4)"
-	parsetree, err := parse(input, "eval")
+	parsetree, _, err := Parse(input)
 	if err != nil {
 		t.Error(err)
 	}
@@ -119,7 +126,6 @@ func TestEval(t *testing.T) {
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	terex.InitGlobalEnvironment()
-	terex.Defun("!TokenEvaluator", convertTerminalToken, nil)
 	sym := terex.GlobalEnvironment.FindSymbol("+", false)
 	if sym == nil {
 		t.Error("Expected to find operator '+' in global environment")

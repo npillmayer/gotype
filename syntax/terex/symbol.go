@@ -101,13 +101,11 @@ type Environment struct {
 	parent    *Environment
 	dict      map[string]*Symbol
 	lastError error
+	AST       *GCons
 }
 
 // GlobalEnvironment is the base environment all other environments stem from.
-var GlobalEnvironment *Environment = &Environment{
-	name: "#global",
-	dict: make(map[string]*Symbol),
-}
+var GlobalEnvironment *Environment = NewEnvironment("#global", nil)
 
 var initOnce sync.Once // monitors one-time initialization of global environment
 
@@ -116,13 +114,16 @@ var initOnce sync.Once // monitors one-time initialization of global environment
 // found in the symbol table.
 func InitGlobalEnvironment() {
 	initOnce.Do(func() {
-		Defun("+", _Add, nil)
-		Defun("quote", _Quote, nil)
-		Defun("list", _ErrorMapper(errors.New("list used as function call")), _Identity)
+		Defun("+", _Add, nil, GlobalEnvironment)
+		Defun("quote", _Quote, nil, GlobalEnvironment)
+		Defun("list", _ErrorMapper(errors.New("list used as function call")), _Identity,
+			GlobalEnvironment)
 	})
 }
 
-func Defun(opname string, funcBody Mapper, quoter Mapper) {
+// Defun defines a new operator and stores its symbol in the given environment.
+// funcBody is the operator function, called during eval().
+func Defun(opname string, funcBody Mapper, quoter Mapper, env *Environment) {
 	opsym := GlobalEnvironment.Intern(opname, false)
 	opsym.Value = Atomize(&internalOp{sym: opsym, caller: funcBody, quoter: quoter})
 	T().Debugf("new interal op %s = %v", opsym.Name, opsym.Value)
@@ -170,9 +171,6 @@ func (iop *internalOp) String() string {
 
 // NewEnvironment creates a new environment.
 func NewEnvironment(name string, parent *Environment) *Environment {
-	if parent == nil {
-		parent = GlobalEnvironment
-	}
 	return &Environment{
 		name:   name,
 		parent: parent,
