@@ -6,6 +6,13 @@ import (
 	"github.com/npillmayer/gotype/syntax/terex"
 )
 
+/*
+The current implementation always pre-fetches the first value.
+This could be optimized. It would be a problem with long-running ops in the
+atom-creation, in case the value is never fetched by an output call.
+For now, we will leave it this way.
+*/
+
 type ListSeq struct {
 	atom terex.Atom
 	seq  ListGenerator
