@@ -370,6 +370,22 @@ func Elem(thing interface{}) Element {
 	return Element{thing: thing}
 }
 
+func DumpElement(el Element) {
+	if el.IsAtom() {
+		T().Debugf("Dump element: %v", el)
+	} else {
+		switch e := el.thing.(type) {
+		case Element:
+			T().Debugf("Dump element: recursive element:")
+			DumpElement(e)
+		case *GCons:
+			T().Debugf("Dump element: list = %s", e.ListString())
+		default:
+			T().Debugf("Dump element: unknown = %v", e)
+		}
+	}
+}
+
 func (el Element) IsAtom() bool {
 	if _, ok := el.thing.(Atom); ok {
 		return true
@@ -442,7 +458,11 @@ func _Add(args Element) Element {
 			sum += arglist.Car.Data.(float64)
 		} else if arglist.Car.Type() == TokenType {
 			v := arglist.Car.Data.(*Token).Value
-			sum += float64(v)
+			f, err := toFloat(v)
+			if err != nil {
+				return Elem(ErrorAtom)
+			}
+			sum += f
 		} else {
 			return Elem(ErrorAtom)
 		}
@@ -634,7 +654,7 @@ func dataMatch(d1 interface{}, d2 interface{}, t AtomType, env *Environment) boo
 	if t == TokenType && d2 != nil {
 		tok1, _ := d1.(*Token)
 		if tok2, ok := d2.(*Token); ok {
-			if tok1.Value == tok2.Value { // only tokval must match
+			if tok1.TokType == tok2.TokType { // only tokval must match
 				return true
 			}
 		}

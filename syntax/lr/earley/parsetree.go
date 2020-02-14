@@ -8,8 +8,8 @@ import (
 
 // TokenAt returns the input token at position pos.
 func (p *Parser) TokenAt(pos uint64) interface{} {
-	if pos < uint64(len(p.tokens)) {
-		return p.tokens[pos]
+	if pos > 0 && pos < uint64(len(p.tokens)) {
+		return p.tokens[pos+1] // tokens start at index 1
 	}
 	return nil
 }
@@ -50,6 +50,11 @@ func (p *Parser) WalkDerivation(listener Listener) *RuleNode {
 		if item.PeekSymbol() == nil && item.Rule().LHS == p.ga.Grammar().Rule(0).LHS {
 			root = p.walk(item, p.sc, listener, 0)
 		}
+	}
+	T().Debugf("========================================")
+	T().Debugf("TOKENS: %d", len(p.tokens))
+	for i, t := range p.tokens {
+		T().Debugf("        [%d]=%v", i, t)
 	}
 	return root
 }

@@ -2,6 +2,7 @@ package terexlang
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/npillmayer/gotype/syntax/lr"
@@ -10,6 +11,7 @@ import (
 	"github.com/npillmayer/gotype/syntax/lr/sppf"
 	"github.com/npillmayer/gotype/syntax/terex"
 	"github.com/npillmayer/gotype/syntax/termr"
+	"github.com/timtadh/lexmachine"
 )
 
 // --- Grammar ---------------------------------------------------------------
@@ -185,7 +187,10 @@ func (op *sExprTermR) Rewrite(l *terex.GCons, env *terex.Environment) terex.Elem
 		T().Infof("match: trying %s %% %s ?", rule.Pattern.ListString(), l.ListString())
 		if rule.Pattern.Match(l, env) {
 			T().Infof("Op %s has a match", op.Name())
+			//T().Debugf("-> pre rewrite: %s", l.ListString())
 			v := rule.Rewrite(l, env)
+			//T().Debugf("<- post rewrite:")
+			terex.DumpElement(v)
 			T().Infof("Op %s rewrite -> %s", op.Name(), v.String())
 			//return rule.Rewrite(l, env)
 			return v
@@ -213,8 +218,13 @@ var SingleTokenArg *terex.GCons
 func initDefaultPatterns() {
 	SingleTokenArg = terex.Cons(terex.Atomize(terex.OperatorType), termr.AnySymbol())
 	atomOp = makeASTTermR("Atom", "").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) terex.Element {
-		// l=(atom x),  => x     // should be standard behaviour, thus unneccessary
-		return terex.Elem(l.Cdar()) // an atom simply unwraps its arg
+		// in (atom x), check if x is terminal
+		c := l.Cdar()
+		T().Debugf("_____________ in: %s__-> %v_____", l.ListString(), c)
+		e := convertTerminalToken(terex.Elem(l.Cdar()))
+		T().Debugf("_____________ in: %s___out: %s_____", c, e)
+		// rewrite: (atom x)  => x
+		return e
 	})
 	opOp = makeASTTermR("Op", "").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) terex.Element {
 		if l.Length() <= 1 || l.Cdar().Type() != terex.TokenType {
@@ -234,7 +244,7 @@ func initDefaultPatterns() {
 	})
 	_, tokval := Token("'")
 	p := terex.Cons(terex.Atomize(terex.OperatorType),
-		terex.Cons(terex.Atomize(&terex.Token{Name: "'", Value: tokval}), termr.AnySymbol()))
+		terex.Cons(terex.Atomize(&terex.Token{Name: "'", TokType: tokval}), termr.AnySymbol()))
 	quoteOp = makeASTTermR("Quote", "quote").Rule(p, func(l *terex.GCons, env *terex.Environment) terex.Element {
 		return terex.Elem(terex.Cons(l.Car, l.Cddr()))
 	})
@@ -308,9 +318,7 @@ func (op globalOpInEnv) Quote(term terex.Element, env *terex.Environment) terex.
 	return operator.Quote(term, env)
 }
 
-/*
 func convertTerminalToken(el terex.Element) terex.Element {
-	T().Infof("!TokenEvaluator -> CONVERT TERMINAL TOKEN")
 	if !el.IsAtom() {
 		return el
 	}
@@ -318,24 +326,33 @@ func convertTerminalToken(el terex.Element) terex.Element {
 	if atom.Type() != terex.TokenType {
 		return el
 	}
-	T().Infof("token atom = %s", atom)
+	//T().Infof("token atom = %s", atom)
 	t := atom.Data.(*terex.Token)
-	tokpos := t.Position
-	switch t.Value {
+	token := t.Token.(*lexmachine.Token)
+	T().Infof("!TokenEvaluator -> CONVERT TERMINAL TOKEN: '%v'", string(token.Lexeme))
+	//switch t.TokType { // TODO why is this incorrect ?
+	switch token.Type {
 	case tokenIds["NUM"]:
-		if n, err := strconv.Atoi(string(token.Lexeme)); err != nil {
-			return terex.Elem(terex.Atomize(n))
+		T().Debugf("-> tokval NUM")
+		if f, err := strconv.ParseFloat(string(token.Lexeme), 64); err == nil {
+			T().Debugf("   t.Value=%g", f)
+			t.Value = f
+		} else {
+			T().Errorf("   %s", err.Error())
+			return terex.Elem(terex.Atomize(err))
 		}
 	case tokenIds["STRING"]:
-		s := string(token.Lexeme)
-		return terex.Elem(terex.Atomize(s))
+		T().Debugf("-> tokval STRING")
+		t.Value = string(token.Lexeme)
 	case tokenIds["ID"]:
+		T().Debugf("-> tokval ID")
 		s := string(token.Lexeme)
-		sym := terex.GlobalEnvironment.FindSymbol(s, true)
+		//sym := terex.GlobalEnvironment.FindSymbol(s, true)
+		sym := terex.GlobalEnvironment.Intern(s, true)
 		if sym != nil {
 			return terex.Elem(terex.Atomize(sym))
 		}
+	default:
 	}
 	return el
 }
-*/

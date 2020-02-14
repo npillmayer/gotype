@@ -84,13 +84,23 @@ func (p properties) Set(key string, value interface{}) properties {
 
 // Token represents a grammar terminal, and a corresponding input token, respectively.
 type Token struct {
-	Name  string
-	Value int
-	Token interface{}
+	Name    string
+	TokType int
+	Token   interface{}
+	Value   interface{}
 }
 
 func (t Token) String() string {
-	return t.Name
+	if t.Value == nil {
+		return t.Name
+	}
+	switch v := t.Value.(type) {
+	case float64:
+		return fmt.Sprintf("%s[%g]", t.Name, v)
+	case string:
+		return fmt.Sprintf("%s[\"%s\"]", t.Name, v)
+	}
+	return t.Name + "[?]"
 }
 
 // --- Environments ----------------------------------------------------------

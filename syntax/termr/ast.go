@@ -8,6 +8,7 @@ import (
 	"github.com/npillmayer/gotype/syntax/lr/iteratable"
 	"github.com/npillmayer/gotype/syntax/lr/sppf"
 	"github.com/npillmayer/gotype/syntax/terex"
+	"github.com/timtadh/lexmachine"
 )
 
 // ASTBuilder is a parse tree listener for building ASTs.
@@ -68,6 +69,7 @@ func (ab *ASTBuilder) AST(parseTree *sppf.Forest, tokRetr TokenRetriever) *terex
 		return nil
 	}
 	ab.forest = parseTree
+	ab.toks = tokRetr
 	cursor := ab.forest.SetCursor(nil, nil) // TODO set Pruner
 	value := cursor.TopDown(ab, sppf.LtoR, sppf.Break)
 	T().Infof("AST creation return value = %v", value)
@@ -182,14 +184,17 @@ func growRHSList(start, end *terex.GCons, r *sppf.RuleNode, env *terex.Environme
 // Terminal is part of sppf.Listener interface.
 // Not intended for direct client use.
 func (ab *ASTBuilder) Terminal(tokval int, token interface{}, ctxt sppf.RuleCtxt) interface{} {
-	//t := ab.G.Terminal(tokval).Name
 	terminal := ab.G.Terminal(tokval)
 	tokpos := ctxt.Span.From()
-	t := ab.toks(tokpos)
-	// token is currently identical to tokval
-	// Would need to change parser and SPPF to include the original token.
-	atom := terex.Atomize(&terex.Token{Name: terminal.Name, Value: tokval, Token: t})
-	T().Debugf("cons(terminal=%s) = %v", ab.G.Terminal(tokval).Name, atom)
+	t := ab.toks(tokpos) // opaque token type
+	atom := terex.Atomize(&terex.Token{Name: terminal.Name, TokType: tokval, Token: t})
+	if t != nil {
+		tt := t.(*lexmachine.Token)
+		s := string(tt.Lexeme)
+		T().Debugf("CONS(terminal=%s) = %v @%d [%s]", terminal.Name, atom, tokpos, s)
+	} else {
+		T().Debugf("CONS(terminal=%s) = %v @%d", terminal.Name, atom, tokpos)
+	}
 	return terex.Elem(atom)
 }
 

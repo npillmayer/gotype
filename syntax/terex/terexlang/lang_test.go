@@ -1,11 +1,13 @@
 package terexlang
 
 import (
+	"io/ioutil"
 	"testing"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
+	"github.com/npillmayer/gotype/syntax/lr/sppf"
 	"github.com/npillmayer/gotype/syntax/terex"
 	"github.com/npillmayer/gotype/syntax/termr"
 )
@@ -58,7 +60,8 @@ func TestParse(t *testing.T) {
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	terex.InitGlobalEnvironment()
-	input := "(Hello 'World 1)"
+	input := "(+ 1 2 3)"
+	//input := "(Hello 'World 1)"
 	parser := createParser()
 	scan, _ := lexer.Scanner(input)
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
@@ -70,13 +73,13 @@ func TestParse(t *testing.T) {
 	if !accept {
 		t.Errorf("No accept. Not a valid TeREx expression")
 	}
-	// parsetree := parser.ParseForest()
-	// tmpfile, err := ioutil.TempFile(".", "eval-parsetree-*.dot")
-	// if err != nil {
-	// 	panic("cannot open tmp file")
-	// }
-	// sppf.ToGraphViz(parsetree, tmpfile)
-	// T().Errorf("Exported parse tree to %s", tmpfile.Name())
+	parsetree := parser.ParseForest()
+	tmpfile, err := ioutil.TempFile(".", "eval-parsetree-*.dot")
+	if err != nil {
+		panic("cannot open tmp file")
+	}
+	sppf.ToGraphViz(parsetree, tmpfile)
+	T().Infof("Exported parse tree to %s", tmpfile.Name())
 }
 
 func TestAST(t *testing.T) {
@@ -86,20 +89,25 @@ func TestAST(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	terex.InitGlobalEnvironment()
 	input := "(+ (+ 2 3) 4)"
-	parsetree, _, err := Parse(input)
+	parsetree, retr, err := Parse(input)
 	if err != nil {
 		t.Error(err)
 	}
-	ast, _ := astBuilder.AST(parsetree)
-	if ast == nil {
+	if parsetree == nil || retr == nil {
+		t.Errorf("parse tree or  token retriever is nil")
+	}
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	T().Infof("####################################################")
+	env := astBuilder.AST(parsetree, retr)
+	if env == nil {
 		t.Errorf("Cannot create AST from parsetree")
 	}
+	ast := env.AST
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	T().Infof("AST: %s", ast.ListString())
 	T().Infof("####################################################")
 	terseAst := terex.GlobalEnvironment.Quote(ast)
 	T().Infof("reduced AST: %s", terseAst.ListString())
-	t.Fail()
 }
 
 func TestQuote(t *testing.T) {
@@ -109,7 +117,7 @@ func TestQuote(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	terex.InitGlobalEnvironment()
 	input := "(Hello 'World 1)"
-	result := Quote(input, terex.GlobalEnvironment)
+	result, _ := Quote(input)
 	if result.Length() != 2 {
 		t.Errorf("Expected resulting list to be of length 2, is %d", result.Length())
 	} else {
@@ -132,13 +140,14 @@ func TestEval(t *testing.T) {
 	}
 	input := "(+ 1 2 3)"
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
-	result := Eval(input, terex.GlobalEnvironment)
+	result, env := Eval(input)
 	if result.Length() != 2 {
 		t.Errorf("Expected resulting list to be of length 2, is %d", result.Length())
 	} else {
+		ast := env.AST.Cadr()
 		t.Logf("AST=%s", result.Car.Data.(*terex.GCons).ListString())
-		if result.Cadr().Length() != 3 {
-			t.Errorf("Expected AST to be of length 3, is %d", result.Cadr().Length())
+		if ast.Length() != 3 {
+			t.Errorf("Expected AST to be of length 3, is %d", ast.Length())
 		}
 	}
 	t.Fail()
