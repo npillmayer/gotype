@@ -1,8 +1,10 @@
 package fp_test
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/npillmayer/gotype/syntax/terex"
 	"github.com/npillmayer/gotype/syntax/terex/fp"
 )
 
@@ -68,4 +70,30 @@ func TestIntMapper(t *testing.T) {
 		t.Errorf("Generating 10 squares failed")
 	}
 	t.Logf("a=%v", a)
+}
+
+func TestListSeq(t *testing.T) {
+	l := terex.List("a", "b", "c")
+	//var seq fp.ListSeq
+	var a terex.Atom
+	if a, _ = fp.Seq(l).First(); a.Data != "a" {
+		t.Errorf("first element expected to be \"a\", is %v", a)
+	}
+	L := fp.Seq(l).List()
+	if L == nil || L.Length() != 3 {
+		t.Errorf("expected L to be of length 3, is %v", L.ListString())
+	}
+	uppercase := func(atom terex.Atom) terex.Atom {
+		if atom == terex.NilAtom {
+			return atom
+		}
+		return terex.Atomize(strings.ToUpper(atom.Data.(string)))
+	}
+	U := fp.Seq(l).Map(uppercase).List()
+	if U == nil || U.Length() != 3 {
+		t.Errorf("expected U to be of length 3, is %v", U.ListString())
+	}
+	if U.Car.Data != "A" {
+		t.Errorf("expected U to be uppercase, is %s", U.ListString())
+	}
 }
