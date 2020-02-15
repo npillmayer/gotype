@@ -234,6 +234,12 @@ func (l *GCons) IsAtom() Atom {
 	return NilAtom
 }
 
+// IsLeaf returns true if this node das have neither a Cdr nor
+// a left child.
+func (l *GCons) IsLeaf() bool {
+	return l.Cdr == nil && (l.Car.typ != ConsType || l.Car.Data == nil)
+}
+
 // QuotedList makes a list from given elements, quoting them.
 func QuotedList(things ...interface{}) *GCons {
 	return makeList(true, things)

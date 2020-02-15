@@ -117,8 +117,36 @@ func (seq ListSeq) List() *terex.GCons {
 // --- Trees -----------------------------------------------------------------
 
 type TreeSeq struct {
-	list terex.GCons
-	seq  TreeGenerator
+	stack []*terex.GCons
+}
+
+func Tree(l *terex.GCons) *TreeSeq {
+	tseg := &TreeSeq{stack: make([]*terex.GCons, 0, 32)}
+	if l == nil {
+		return tseg
+	}
+	tseg.stack = append(tseg.stack, l) // push root
+	node := tseg.stack[len(tseg.stack)-1]
+	if node.IsLeaf() {
+		node = nil
+		tseg.stack = tseg.stack[:len(tseg.stack)-1] // pop node
+		if len(tseg.stack) == 0 {
+			tseg.seq = nil // have returned to root
+		}
+	} else if node.Car.Type() == terex.ConsType {
+		if node.Car.Data != nil {
+			tseg.stack = append(tseg.stack, node.Tee()) // push left child node
+		} else {
+			node = nil
+			tseg.stack = tseg.stack[:len(tseg.stack)-1] // pop node
+			if len(tseg.stack) == 0 {
+				tseg.seq = nil // have returned to root
+			}
+		}
+	} else { // Cdr != nil
+		tseg.stack = append(tseg.stack, node.Cdr) // push right child node
+	}
+	return tseg
 }
 
 func (seq *TreeSeq) Break() {
@@ -129,18 +157,18 @@ func (seq *TreeSeq) Done() bool {
 	return seq.seq == nil
 }
 
-func (seq TreeSeq) First() (terex.Atom, TreeSeq) {
-	return seq.list.Car, seq
+func (seq *TreeSeq) First() (*terex.GCons, *TreeSeq) {
+	return seq.stack[len(seq.stack)-1], seq
 }
 
-func (seq *TreeSeq) Next() terex.Atom {
+func (seq *TreeSeq) Next() *terex.GCons {
 	if seq.Done() {
-		return terex.NilAtom
+		return nil
 	}
-	next := seq.seq()
-	seq.list = next.list
-	seq.seq = next.seq
-	return seq.list.Car
+	// next := seq.seq()
+	// seq.list = next.list
+	// seq.seq = next.seq
+	return seq.stack[len(seq.stack)-1]
 }
 
-type TreeGenerator func() TreeSeq
+type TreeGenerator func() *TreeSeq
