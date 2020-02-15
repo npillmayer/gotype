@@ -1,5 +1,39 @@
 package terexlang
 
+/*
+BSD License
+
+Copyright (c) 2019–20, Norbert Pillmayer
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+3. Neither the name of this software nor the names of its contributors
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
+
 import (
 	"fmt"
 	"strconv"
@@ -117,7 +151,6 @@ func Eval(sexpr string) (*terex.GCons, *terex.Environment) {
 	if quoted == nil {
 		return nil, env
 	}
-	T().Infof("AST.Tee()=%s", quoted.ListString())
 	evald := env.Eval(quoted.Tee())
 	T().Infof("eval(AST) = %s", evald.ListString())
 	return evald, env
@@ -219,10 +252,7 @@ func initDefaultPatterns() {
 	SingleTokenArg = terex.Cons(terex.Atomize(terex.OperatorType), termr.AnySymbol())
 	atomOp = makeASTTermR("Atom", "").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) terex.Element {
 		// in (atom x), check if x is terminal
-		c := l.Cdar()
-		T().Debugf("_____________ in: %s__-> %v_____", l.ListString(), c)
 		e := convertTerminalToken(terex.Elem(l.Cdar()))
-		T().Debugf("_____________ in: %s___out: %s_____", c, e)
 		// rewrite: (atom x)  => x
 		return e
 	})
@@ -232,9 +262,7 @@ func initDefaultPatterns() {
 		}
 		// (op "x") => x:op
 		tname := l.Cdar().Data.(*terex.Token).String()
-		T().Errorf("FOUND TOKEN=%s", tname)
 		if sym := terex.GlobalEnvironment.FindSymbol(tname, true); sym != nil {
-			T().Errorf("FOUND SYM=%v", sym)
 			if sym.Value.Type() == terex.OperatorType {
 				op := terex.Atomize(&globalOpInEnv{tname})
 				return terex.Elem(op)
@@ -290,11 +318,6 @@ func (op globalOpInEnv) Call(term terex.Element, env *terex.Environment) terex.E
 		T().Errorf("Cannot call parsing operation %s", op.opname)
 		return term
 	}
-	//if op.String() == "+" {
-	T().Infof("========================================================")
-	T().Infof("=====     %s         =================================", op.String())
-	T().Infof("========================================================")
-	//}
 	return operator.Call(term, env)
 }
 
@@ -310,11 +333,6 @@ func (op globalOpInEnv) Quote(term terex.Element, env *terex.Environment) terex.
 		T().Errorf("Cannot quote-call parsing operation %s", op.opname)
 		return term
 	}
-	if op.String() == "list" {
-		T().Infof("========================================================")
-		T().Infof("=====     LIST         =================================")
-		T().Infof("========================================================")
-	}
 	return operator.Quote(term, env)
 }
 
@@ -329,11 +347,9 @@ func convertTerminalToken(el terex.Element) terex.Element {
 	//T().Infof("token atom = %s", atom)
 	t := atom.Data.(*terex.Token)
 	token := t.Token.(*lexmachine.Token)
-	T().Infof("!TokenEvaluator -> CONVERT TERMINAL TOKEN: '%v'", string(token.Lexeme))
-	//switch t.TokType { // TODO why is this incorrect ?
+	T().Infof("Convert terminal token: '%v'", string(token.Lexeme))
 	switch token.Type {
 	case tokenIds["NUM"]:
-		T().Debugf("-> tokval NUM")
 		if f, err := strconv.ParseFloat(string(token.Lexeme), 64); err == nil {
 			T().Debugf("   t.Value=%g", f)
 			t.Value = f
@@ -342,10 +358,8 @@ func convertTerminalToken(el terex.Element) terex.Element {
 			return terex.Elem(terex.Atomize(err))
 		}
 	case tokenIds["STRING"]:
-		T().Debugf("-> tokval STRING")
 		t.Value = string(token.Lexeme)
 	case tokenIds["ID"]:
-		T().Debugf("-> tokval ID")
 		s := string(token.Lexeme)
 		//sym := terex.GlobalEnvironment.FindSymbol(s, true)
 		sym := terex.GlobalEnvironment.Intern(s, true)
