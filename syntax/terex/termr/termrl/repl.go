@@ -71,7 +71,7 @@ func main() {
 		repl:      repl,
 	}
 	if input != "" {
-		intp.tree, err = Parse(ga, input)
+		intp.tree, intp.tretr, err = Parse(ga, input)
 		if err != nil {
 			T().Errorf("%v", err)
 			os.Exit(2)
@@ -87,6 +87,8 @@ type Intp struct {
 	repl      *readline.Instance
 	tree      *sppf.Forest
 	ast       *terex.GCons
+	env       *terex.Environment
+	tretr     termr.TokenRetriever
 }
 
 func (intp *Intp) REPL() {
@@ -121,7 +123,7 @@ func (intp *Intp) Execute(cmd string, args []string) (error, bool) {
 		intp.ast = nil
 		intp.lastInput = strings.TrimSpace(strings.Join(args[1:], " "))
 		var err error
-		intp.tree, err = Parse(intp.GA, intp.lastInput)
+		intp.tree, intp.tretr, err = Parse(intp.GA, intp.lastInput)
 		return err, false
 	case "dot":
 		if intp.tree == nil {
@@ -134,7 +136,7 @@ func (intp *Intp) Execute(cmd string, args []string) (error, bool) {
 				return errors.New("No parse tree present"), false
 			}
 			astbuild := termr.NewASTBuilder(intp.GA.Grammar())
-			intp.ast, intp.lastValue = astbuild.AST(intp.tree)
+			intp.env = astbuild.AST(intp.tree, intp.tretr)
 		}
 		out := intp.ast.ListString()
 		println(out)
@@ -154,7 +156,7 @@ func ExportTree(tree *sppf.Forest) error {
 	return nil
 }
 
-func Parse(ga *lr.LRAnalysis, input string) (*sppf.Forest, error) {
+func Parse(ga *lr.LRAnalysis, input string) (*sppf.Forest, termr.TokenRetriever, error) {
 	level := T().GetTraceLevel()
 	T().SetTraceLevel(tracing.LevelError)
 	parser := earley.NewParser(ga, earley.GenerateTree(true))
@@ -162,11 +164,14 @@ func Parse(ga *lr.LRAnalysis, input string) (*sppf.Forest, error) {
 	scanner := scanner.GoTokenizer(ga.Grammar().Name, reader)
 	acc, err := parser.Parse(scanner, nil)
 	if !acc || err != nil {
-		return nil, fmt.Errorf("could not parse input: %v", err)
+		return nil, nil, fmt.Errorf("could not parse input: %v", err)
 	}
 	T().SetTraceLevel(level)
 	T().Infof("Successfully parsed input")
-	return parser.ParseForest(), nil
+	tokretr := func(pos uint64) interface{} {
+		return parser.TokenAt(pos)
+	}
+	return parser.ParseForest(), tokretr, nil
 }
 
 func traceLevel(l string) tracing.TraceLevel {
