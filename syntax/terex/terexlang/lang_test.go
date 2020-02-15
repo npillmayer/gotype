@@ -1,15 +1,13 @@
 package terexlang
 
 import (
-	"io/ioutil"
 	"testing"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
-	"github.com/npillmayer/gotype/syntax/lr/sppf"
 	"github.com/npillmayer/gotype/syntax/terex"
-	"github.com/npillmayer/gotype/syntax/termr"
+	"github.com/npillmayer/gotype/syntax/terex/termr"
 )
 
 func TestAssignability(t *testing.T) {
@@ -73,13 +71,13 @@ func TestParse(t *testing.T) {
 	if !accept {
 		t.Errorf("No accept. Not a valid TeREx expression")
 	}
-	parsetree := parser.ParseForest()
-	tmpfile, err := ioutil.TempFile(".", "eval-parsetree-*.dot")
-	if err != nil {
-		panic("cannot open tmp file")
-	}
-	sppf.ToGraphViz(parsetree, tmpfile)
-	T().Infof("Exported parse tree to %s", tmpfile.Name())
+	// parsetree := parser.ParseForest()
+	// tmpfile, err := ioutil.TempFile(".", "eval-parsetree-*.dot")
+	// if err != nil {
+	// 	panic("cannot open tmp file")
+	// }
+	// sppf.ToGraphViz(parsetree, tmpfile)
+	// T().Infof("Exported parse tree to %s", tmpfile.Name())
 }
 
 func TestAST(t *testing.T) {

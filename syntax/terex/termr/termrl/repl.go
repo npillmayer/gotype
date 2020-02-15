@@ -12,7 +12,7 @@ import (
 	"github.com/npillmayer/gotype/syntax/lr/earley"
 	"github.com/npillmayer/gotype/syntax/lr/sppf"
 	"github.com/npillmayer/gotype/syntax/terex"
-	"github.com/npillmayer/gotype/syntax/termr"
+	"github.com/npillmayer/gotype/syntax/terex/termr"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
