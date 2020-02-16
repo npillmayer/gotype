@@ -4,6 +4,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/npillmayer/gotype/core/config/tracing"
+
+	"github.com/npillmayer/gotype/core/config/gtrace"
+	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
+
 	"github.com/npillmayer/gotype/syntax/terex"
 	"github.com/npillmayer/gotype/syntax/terex/fp"
 )
@@ -96,4 +101,39 @@ func TestListSeq(t *testing.T) {
 	if U.Car.Data != "A" {
 		t.Errorf("expected U to be uppercase, is %s", U.ListString())
 	}
+}
+
+func TestTreeTraverse1(t *testing.T) {
+	tree := makeTree()
+	t.Logf("tree = %s", tree.ListString())
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
+	for node := range fp.TreeIteratorCh(makeTree()) {
+		t.Logf("node=%s", node)
+	}
+	t.Fail()
+}
+
+func TestTreeTraverse2(t *testing.T) {
+	tree := makeTree()
+	t.Logf("tree = %s", tree.ListString())
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	l := fp.Traverse(tree).List()
+	t.Logf("list = %s", l.ListString())
+	t.Fail()
+}
+
+// ---------------------------------------------------------------------------
+
+// see https://www.geeksforgeeks.org/iterative-postorder-traversal-using-stack/
+func makeTree() *terex.GCons {
+	l2 := terex.List(2, terex.Atomize(terex.List(4)), 5)
+	l6 := terex.Atomize(terex.List(6))
+	root := terex.List(1, l2, 3, l6, 7)
+	return root
 }

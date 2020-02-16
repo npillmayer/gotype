@@ -3,6 +3,8 @@ package fp
 import (
 	"fmt"
 
+	"github.com/npillmayer/gotype/core/config/gtrace"
+
 	"github.com/npillmayer/gotype/syntax/terex"
 )
 
@@ -117,36 +119,139 @@ func (seq ListSeq) List() *terex.GCons {
 // --- Trees -----------------------------------------------------------------
 
 type TreeSeq struct {
-	stack []*terex.GCons
+	node    *terex.GCons
+	channel <-chan *terex.GCons
+	seq     TreeGenerator
 }
 
-func Tree(l *terex.GCons) *TreeSeq {
-	tseg := &TreeSeq{stack: make([]*terex.GCons, 0, 32)}
+type TreeGenerator func() TreeSeq
+
+type treeTraverser []*terex.GCons
+
+/*
+Tree creates a sequence from a TeREx tree structure. The sequence traverses the
+tree in depth-first post-order.
+
+https://www.geeksforgeeks.org/iterative-postorder-traversal-using-stack/
+
+	1.1 Create an empty stack
+	2.1 Do following while root is not NULL
+		a) Push root's right child and then root to stack.
+		b) Set root as root's left child.
+	2.2 Pop an item from stack and set it as root.
+		a) If the popped item has a right child and the right child
+		is at top of stack, then remove the right child from stack,
+		push the root back and set root as root's right child.
+		b) Else print root's data and set root as NULL.
+	2.3 Repeat steps 2.1 and 2.2 while stack is not empty.
+
+For TeREx' pre-order, a node's content is Car, left child is Cdar, right child is Cddr.
+The tree from the above website's example
+
+    1---2---4
+    |   \---5
+    \---3---6
+	    \---7
+
+is
+
+	(1 (2 (4) 5) 3 (6) 7)
+
+in TeREx pre-order format. A depth-first traversal will yield
+
+	(4 5 2 6 7 3 1)
+
+*/
+func TreeIteratorCh(l *terex.GCons) <-chan *terex.GCons {
+	// 1.1 Create an empty stack
+	t := make([]*terex.GCons, 0, 32)
 	if l == nil {
-		return tseg
+		return nil
 	}
-	tseg.stack = append(tseg.stack, l) // push root
-	node := tseg.stack[len(tseg.stack)-1]
-	if node.IsLeaf() {
-		node = nil
-		tseg.stack = tseg.stack[:len(tseg.stack)-1] // pop node
-		if len(tseg.stack) == 0 {
-			tseg.seq = nil // have returned to root
-		}
-	} else if node.Car.Type() == terex.ConsType {
-		if node.Car.Data != nil {
-			tseg.stack = append(tseg.stack, node.Tee()) // push left child node
-		} else {
-			node = nil
-			tseg.stack = tseg.stack[:len(tseg.stack)-1] // pop node
-			if len(tseg.stack) == 0 {
-				tseg.seq = nil // have returned to root
+	channel := make(chan *terex.GCons)
+	go func(l *terex.GCons) {
+		defer close(channel)
+		node := l // set root
+		for {
+			// 2.1 Do following while root is not NULL
+			for node != nil {
+				left, right := children(node)
+				// a) Push root's right child and then root to stack.
+				if right != nil {
+					t = append(t, right) // push right child node
+				}
+				t = append(t, node) // push node
+				// b) Set root as root's left child.
+				node = left
+			} // now node == nil
+			// 2.2 Pop an item from stack and set it as root.
+			node, t = t[len(t)-1], t[:len(t)-1]
+			_, right := children(node)
+			if len(t) > 0 && right != nil && right == t[len(t)-1] {
+				// a) If the popped item has a right child and the right child
+				// is at top of stack, then remove the right child from stack,
+				// push the root back and set root as root's right child.
+				t = t[:len(t)-1]    // pop right child
+				t = append(t, node) // push root
+				node = right        // root <- right child
+			} else {
+				// b) Else print root's data and set root as NULL.
+				gtrace.SyntaxTracer.Debugf("Node=%s", node)
+				channel <- node
+				node = nil
+			}
+			// 2.3 Repeat steps 2.1 and 2.2 while stack is not empty.
+			if len(t) == 0 {
+				break
 			}
 		}
-	} else { // Cdr != nil
-		tseg.stack = append(tseg.stack, node.Cdr) // push right child node
+	}(l)
+	return channel
+}
+
+func Traverse(l *terex.GCons) TreeSeq {
+	channel := TreeIteratorCh(l)
+	if channel == nil {
+		return TreeSeq{}
 	}
-	return tseg
+	var T TreeGenerator
+	T = func() TreeSeq {
+		var ok bool
+		tseq := TreeSeq{nil, channel, T}
+		if tseq.node, ok = <-channel; !ok {
+			tseq.seq = nil
+		}
+		return tseq
+	}
+	var ok bool
+	var node *terex.GCons
+	tseq := TreeSeq{node, channel, T}
+	if tseq.node, ok = <-channel; !ok {
+		tseq.seq = nil
+	}
+	return tseq
+}
+
+func children(node *terex.GCons) (*terex.GCons, *terex.GCons) {
+	if node == nil {
+		return nil, nil
+	}
+	if node.Car.Type() == terex.ConsType {
+		// anonymous node
+		panic("anonymous nodes not yet implemented")
+	}
+	if node.Cdr == nil {
+		return nil, nil
+	}
+	left := node.Cdr.Tee()
+	right := node.Cddr()
+	return left, right
+}
+
+func (t treeTraverser) printStack() {
+	for i, n := range t {
+		gtrace.SyntaxTracer.Debugf("   [%d] %s", i, terex.Elem(n).String())
+	}
 }
 
 func (seq *TreeSeq) Break() {
@@ -157,18 +262,33 @@ func (seq *TreeSeq) Done() bool {
 	return seq.seq == nil
 }
 
-func (seq *TreeSeq) First() (*terex.GCons, *TreeSeq) {
-	return seq.stack[len(seq.stack)-1], seq
+func (seq TreeSeq) First() (*terex.GCons, TreeSeq) {
+	return seq.node, seq
 }
 
 func (seq *TreeSeq) Next() *terex.GCons {
 	if seq.Done() {
 		return nil
 	}
-	// next := seq.seq()
-	// seq.list = next.list
-	// seq.seq = next.seq
-	return seq.stack[len(seq.stack)-1]
+	next := seq.seq()
+	node := next.node
+	seq.seq = next.seq
+	return node
 }
 
-type TreeGenerator func() *TreeSeq
+func (seq TreeSeq) List() *terex.GCons {
+	if seq.Done() {
+		return nil
+	}
+	var start, end *terex.GCons
+	for node, T := seq.First(); !T.Done(); node = T.Next() {
+		if start == nil {
+			start = terex.Cons(node.Car, nil)
+			end = start
+		} else {
+			end.Cdr = terex.Cons(node.Car, nil)
+			end = end.Cdr
+		}
+	}
+	return start
+}
