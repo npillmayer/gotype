@@ -113,7 +113,6 @@ func TestTreeTraverse1(t *testing.T) {
 	for node := range fp.TreeIteratorCh(makeTree()) {
 		t.Logf("node=%s", node)
 	}
-	t.Fail()
 }
 
 func TestTreeTraverse2(t *testing.T) {
@@ -125,7 +124,6 @@ func TestTreeTraverse2(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	l := fp.Traverse(tree).List()
 	t.Logf("list = %s", l.ListString())
-	t.Fail()
 }
 
 // ---------------------------------------------------------------------------

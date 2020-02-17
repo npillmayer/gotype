@@ -1,25 +1,68 @@
+/*
+Package fp provides utilities for kind-of functional programming on
+TeREx lists. It introduces sequence types, which wrap lists and other
+iteratable/enumeratable types, and Lisp-like operations on them.
+Sequences may be infinite, i.e. be generators.
+
+
+BSD License
+
+Copyright (c) 2019–20, Norbert Pillmayer
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+3. Neither the name of this software nor the names of its contributors
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 package fp
 
 import (
 	"fmt"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
-
 	"github.com/npillmayer/gotype/syntax/terex"
 )
 
 /*
+Note:
+=====
 The current implementation always pre-fetches the first value.
 This could be optimized. It would be a problem with long-running ops in the
 atom-creation, in case the value is never fetched by an output call.
 For now, we will leave it this way.
 */
 
+// ListSeq is a sequence on TeREx lists.
+// It moves over the atoms of concrete or virtual lists.
 type ListSeq struct {
 	atom terex.Atom
 	seq  ListGenerator
 }
 
+// Seq wraps a TeREx list into a sequence.
 func Seq(l *terex.GCons) ListSeq {
 	var S ListGenerator
 	S = func() ListSeq {
@@ -34,18 +77,22 @@ func Seq(l *terex.GCons) ListSeq {
 	return ListSeq{atom, S}
 }
 
+// Break signals a sequene to stop iterating.
 func (seq *ListSeq) Break() {
 	seq.seq = nil
 }
 
+// Done returns true if a sequence stopped iterating.
 func (seq *ListSeq) Done() bool {
 	return seq.seq == nil
 }
 
+// First returns the first atom of a list, together with a sequence successor.
 func (seq ListSeq) First() (terex.Atom, ListSeq) {
 	return seq.atom, seq
 }
 
+// Next returns the next atom of a list-sequence.
 func (seq *ListSeq) Next() terex.Atom {
 	if seq.Done() {
 		return terex.NilAtom
@@ -60,8 +107,10 @@ func (seq *ListSeq) Next() terex.Atom {
 	return seq.atom
 }
 
+// ListGenerator is a function type to generate a list.
 type ListGenerator func() ListSeq
 
+// NSeq is an infinite sequence over whole number 0...
 func NSeq() ListSeq {
 	var n int64
 	var S ListGenerator
@@ -74,8 +123,10 @@ func NSeq() ListSeq {
 	return ListSeq{atom, S}
 }
 
+// A ListMapper represents an operation on an atom, resulting in a modified atom.
 type ListMapper func(terex.Atom) terex.Atom
 
+// Map creates new values from elements/atoms in a list.
 func (seq ListSeq) Map(mapper ListMapper) ListSeq {
 	var F ListGenerator
 	//inner := seq
@@ -92,6 +143,7 @@ func (seq ListSeq) Map(mapper ListMapper) ListSeq {
 	return ListSeq{v, F}
 }
 
+// List returns all the atoms of a sequence as an instantiated list.
 func (seq ListSeq) List() *terex.GCons {
 	if seq.Done() {
 		return nil
@@ -118,19 +170,50 @@ func (seq ListSeq) List() *terex.GCons {
 
 // --- Trees -----------------------------------------------------------------
 
+// TreeSeq is a type which represents a tree walk as a sequence.
 type TreeSeq struct {
 	node    *terex.GCons
 	channel <-chan *terex.GCons
 	seq     TreeGenerator
 }
 
+// TreeGenerator is a generator function type to iterate over trees.
 type TreeGenerator func() TreeSeq
 
 type treeTraverser []*terex.GCons
 
+// Traverse creates a sequence from a TeREx tree structure. The sequence traverses the
+// tree in depth-first post-order. Internally it uses a goroutine to produce the sequence
+// of nodes, receiving them in a channel.
+//
+// Warning: Currently a goroutine will leak if not all of the nodes of the list are fetched
+// by the client.
+func Traverse(l *terex.GCons) TreeSeq {
+	channel := TreeIteratorCh(l)
+	if channel == nil {
+		return TreeSeq{}
+	}
+	var T TreeGenerator
+	T = func() TreeSeq {
+		var ok bool
+		tseq := TreeSeq{nil, channel, T}
+		if tseq.node, ok = <-channel; !ok {
+			tseq.seq = nil
+		}
+		return tseq
+	}
+	var ok bool
+	var node *terex.GCons
+	tseq := TreeSeq{node, channel, T}
+	if tseq.node, ok = <-channel; !ok {
+		tseq.seq = nil
+	}
+	return tseq
+}
+
 /*
-Tree creates a sequence from a TeREx tree structure. The sequence traverses the
-tree in depth-first post-order.
+TreeIteratorCh creates a goroutine and a channel to produce a sequence of nodes from
+a depth-first tree walk.
 
 https://www.geeksforgeeks.org/iterative-postorder-traversal-using-stack/
 
@@ -209,29 +292,6 @@ func TreeIteratorCh(l *terex.GCons) <-chan *terex.GCons {
 	return channel
 }
 
-func Traverse(l *terex.GCons) TreeSeq {
-	channel := TreeIteratorCh(l)
-	if channel == nil {
-		return TreeSeq{}
-	}
-	var T TreeGenerator
-	T = func() TreeSeq {
-		var ok bool
-		tseq := TreeSeq{nil, channel, T}
-		if tseq.node, ok = <-channel; !ok {
-			tseq.seq = nil
-		}
-		return tseq
-	}
-	var ok bool
-	var node *terex.GCons
-	tseq := TreeSeq{node, channel, T}
-	if tseq.node, ok = <-channel; !ok {
-		tseq.seq = nil
-	}
-	return tseq
-}
-
 func children(node *terex.GCons) (*terex.GCons, *terex.GCons) {
 	if node == nil {
 		return nil, nil
@@ -254,18 +314,22 @@ func (t treeTraverser) printStack() {
 	}
 }
 
+// Break stops a traversing sequence.
 func (seq *TreeSeq) Break() {
 	seq.seq = nil
 }
 
+// Done returns true if a traversing sequence is stopped.
 func (seq *TreeSeq) Done() bool {
 	return seq.seq == nil
 }
 
+// First returns the first node of a tree traversal.
 func (seq TreeSeq) First() (*terex.GCons, TreeSeq) {
 	return seq.node, seq
 }
 
+// Next returns the next node of a tree traversal.
 func (seq *TreeSeq) Next() *terex.GCons {
 	if seq.Done() {
 		return nil
@@ -276,6 +340,7 @@ func (seq *TreeSeq) Next() *terex.GCons {
 	return node
 }
 
+// List returns all the nodes of a tree walk as a instantiated list.
 func (seq TreeSeq) List() *terex.GCons {
 	if seq.Done() {
 		return nil
