@@ -167,15 +167,32 @@ func (seq ListSeq) List() *terex.GCons {
 
 // TreeSeq is a type which represents a tree walk as a sequence.
 type TreeSeq struct {
-	node    *terex.GCons
-	channel <-chan *terex.GCons
+	node    TreeNode
+	channel <-chan TreeNode
 	seq     TreeGenerator
+}
+
+// A TreeNode represents a homogenous tree node, together with its parent node.
+type TreeNode struct {
+	Node   *terex.GCons
+	Parent *terex.GCons
+}
+
+func node(n *terex.GCons, p *terex.GCons) TreeNode {
+	return TreeNode{Node: n, Parent: p}
 }
 
 // TreeGenerator is a generator function type to iterate over trees.
 type TreeGenerator func() TreeSeq
 
 type treeTraverser []*terex.GCons
+
+func (t treeTraverser) tos() *terex.GCons {
+	if len(t) > 0 {
+		return t[len(t)-1]
+	}
+	return nil
+}
 
 // Traverse creates a sequence from a TeREx tree structure. The sequence traverses the
 // tree in depth-first post-order. Internally it uses a goroutine to produce the sequence
@@ -191,14 +208,14 @@ func Traverse(l *terex.GCons) TreeSeq {
 	var T TreeGenerator
 	T = func() TreeSeq {
 		var ok bool
-		tseq := TreeSeq{nil, channel, T}
+		tseq := TreeSeq{node(nil, nil), channel, T}
 		if tseq.node, ok = <-channel; !ok {
 			tseq.seq = nil
 		}
 		return tseq
 	}
 	var ok bool
-	var node *terex.GCons
+	var node TreeNode
 	tseq := TreeSeq{node, channel, T}
 	if tseq.node, ok = <-channel; !ok {
 		tseq.seq = nil
@@ -240,43 +257,43 @@ in TeREx pre-order format. A depth-first traversal will yield
 	(4 5 2 6 7 3 1)
 
 */
-func TreeIteratorCh(l *terex.GCons) <-chan *terex.GCons {
+func TreeIteratorCh(l *terex.GCons) <-chan TreeNode {
 	// 1.1 Create an empty stack
-	t := make([]*terex.GCons, 0, 32)
+	t := treeTraverser(make([]*terex.GCons, 0, 32))
 	if l == nil {
 		return nil
 	}
-	channel := make(chan *terex.GCons)
+	channel := make(chan TreeNode)
 	go func(l *terex.GCons) {
 		defer close(channel)
-		node := l // set root
+		root := l // set root
 		for {
 			// 2.1 Do following while root is not NULL
-			for node != nil {
-				left, right := children(node)
+			for root != nil {
+				left, right := children(root)
 				// a) Push root's right child and then root to stack.
 				if right != nil {
 					t = append(t, right) // push right child node
 				}
-				t = append(t, node) // push node
+				t = append(t, root) // push root
 				// b) Set root as root's left child.
-				node = left
-			} // now node == nil
+				root = left
+			} // now root == nil
 			// 2.2 Pop an item from stack and set it as root.
-			node, t = t[len(t)-1], t[:len(t)-1]
-			_, right := children(node)
+			root, t = t[len(t)-1], t[:len(t)-1]
+			_, right := children(root)
 			if len(t) > 0 && right != nil && right == t[len(t)-1] {
 				// a) If the popped item has a right child and the right child
 				// is at top of stack, then remove the right child from stack,
 				// push the root back and set root as root's right child.
 				t = t[:len(t)-1]    // pop right child
-				t = append(t, node) // push root
-				node = right        // root <- right child
+				t = append(t, root) // push root
+				root = right        // root <- right child
 			} else {
 				// b) Else print root's data and set root as NULL.
-				gtrace.SyntaxTracer.Debugf("Node=%s", node)
-				channel <- node
-				node = nil
+				gtrace.SyntaxTracer.Debugf("Node=%s, parent=%s", root, t.tos())
+				channel <- node(root, t.tos())
+				root = nil
 			}
 			// 2.3 Repeat steps 2.1 and 2.2 while stack is not empty.
 			if len(t) == 0 {
@@ -320,14 +337,14 @@ func (seq *TreeSeq) Done() bool {
 }
 
 // First returns the first node of a tree traversal.
-func (seq TreeSeq) First() (*terex.GCons, TreeSeq) {
+func (seq TreeSeq) First() (TreeNode, TreeSeq) {
 	return seq.node, seq
 }
 
 // Next returns the next node of a tree traversal.
-func (seq *TreeSeq) Next() *terex.GCons {
+func (seq *TreeSeq) Next() TreeNode {
 	if seq.Done() {
-		return nil
+		return node(nil, nil)
 	}
 	next := seq.seq()
 	node := next.node
@@ -343,12 +360,40 @@ func (seq TreeSeq) List() *terex.GCons {
 	var start, end *terex.GCons
 	for node, T := seq.First(); !T.Done(); node = T.Next() {
 		if start == nil {
-			start = terex.Cons(node.Car, nil)
+			start = terex.Cons(node.Node.Car, nil)
 			end = start
 		} else {
-			end.Cdr = terex.Cons(node.Car, nil)
+			end.Cdr = terex.Cons(node.Node.Car, nil)
 			end = end.Cdr
 		}
 	}
 	return start
+}
+
+// A NodeFilter filteres nodes from a sequence of tree traversal nodes.
+type NodeFilter func(node TreeNode) bool
+
+// Leaf is a filter for tree nodes which only accepts leaf nodes.
+func Leaf() NodeFilter {
+	return func(node TreeNode) bool {
+		l, r := children(node.Node)
+		return l == nil && r == nil
+	}
+}
+
+// Where applies a filter to a sequence of integers.
+func (seq TreeSeq) Where(filt NodeFilter) TreeSeq {
+	var T TreeGenerator
+	node, inner := seq.node, seq
+	T = func() TreeSeq {
+		node = inner.Next()
+		for !inner.Done() && !filt(node) {
+			node = inner.Next()
+		}
+		if inner.Done() {
+			return TreeSeq{node, nil, nil}
+		}
+		return TreeSeq{node, nil, T}
+	}
+	return TreeSeq{node, nil, T}
 }

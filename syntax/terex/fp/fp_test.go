@@ -107,8 +107,13 @@ func TestTreeTraverse1(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
+	i := 0
 	for node := range fp.TreeIteratorCh(makeTree()) {
 		t.Logf("node=%s", node)
+		i++
+	}
+	if i != 7 {
+		t.Errorf("Expected traversal to produce all 7 nodes, have %d", i)
 	}
 }
 
@@ -121,6 +126,21 @@ func TestTreeTraverse2(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	l := fp.Traverse(tree).List()
 	t.Logf("list = %s", l.ListString())
+	if l.ListString() != "(4 5 2 6 7 3 1)" {
+		t.Errorf("Depth-first traversal to result in (4 5 2 6 7 3 1), is %s", l.ListString())
+	}
+}
+
+func TestTreeFilter(t *testing.T) {
+	tree := makeTree()
+	t.Logf("tree = %s", tree.ListString())
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	l := fp.Traverse(tree).Where(fp.Leaf()).List()
+	t.Logf("list = %s", l.ListString())
+	t.Fail()
 }
 
 // ---------------------------------------------------------------------------

@@ -160,17 +160,15 @@ func EvenN() IntFilter {
 // Where applies a filter to a sequence of integers.
 func (iseq IntSeq) Where(filt IntFilter) IntSeq {
 	var F IntGenerator
-	//inner := seq
-	//n, inner := seq.First()
 	n, inner := iseq.n, iseq
 	F = func() IntSeq {
-		//fmt.Printf("F  called, n=%d\n", n)
 		n = inner.Next()
-		for !filt(n) {
-			//fmt.Printf("   skip n=%d\n", n)
+		for !inner.Done() && !filt(n) {
 			n = inner.Next()
 		}
-		//fmt.Printf("F' n=%d\n", n)
+		if inner.Done() {
+			return IntSeq{n, nil}
+		}
 		return IntSeq{n, F}
 	}
 	return IntSeq{n, F}
