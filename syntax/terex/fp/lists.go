@@ -1,10 +1,6 @@
+package fp
+
 /*
-Package fp provides utilities for kind-of functional programming on
-TeREx lists. It introduces sequence types, which wrap lists and other
-iteratable/enumeratable types, and Lisp-like operations on them.
-Sequences may be infinite, i.e. be generators.
-
-
 BSD License
 
 Copyright (c) 2019–20, Norbert Pillmayer
@@ -37,7 +33,6 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
-package fp
 
 import (
 	"fmt"
