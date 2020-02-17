@@ -138,10 +138,14 @@ func TestTreeFilter(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
-	l := fp.Traverse(tree).Where(fp.Leaf()).List()
+	count = 0
+	l := fp.Traverse(tree).Where(fp.IsLeaf()).Map(counter).List()
 	t.Logf("list = %s", l.ListString())
 	if l.Length() != 4 {
 		t.Errorf("Filtered list expected to be of length 4, is %s", l.ListString())
+	}
+	if count != 4 {
+		t.Errorf("Mapper did not count to 4, is %d", count)
 	}
 }
 
@@ -153,4 +157,10 @@ func makeTree() *terex.GCons {
 	l6 := terex.Atomize(terex.List(6))
 	root := terex.List(1, l2, 3, l6, 7)
 	return root
+}
+
+var count int
+var counter fp.NodeMapper = func(node fp.TreeNode) fp.TreeNode {
+	count++
+	return node
 }

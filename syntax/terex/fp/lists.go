@@ -400,8 +400,8 @@ func (seq TreeSeq) List() *terex.GCons {
 // A NodeFilter filteres nodes from a sequence of tree traversal nodes.
 type NodeFilter func(node TreeNode) bool
 
-// Leaf is a filter for tree nodes which only accepts leaf nodes.
-func Leaf() NodeFilter {
+// IsLeaf is a filter for tree nodes which only accepts leaf nodes.
+func IsLeaf() NodeFilter {
 	return func(node TreeNode) bool {
 		l, r := children(node.Node)
 		return l == nil && r == nil
@@ -439,12 +439,15 @@ func Print() NodeMapper {
 // Map applies a mapper to all elements of an integer sequence.
 func (seq TreeSeq) Map(mapper NodeMapper) TreeSeq {
 	var T TreeGenerator
-	n, inner := seq.node, seq
-	v := mapper(n)
+	node, inner := seq.node, seq
+	v := mapper(node)
 	T = func() TreeSeq {
-		n = inner.Next()
-		v = mapper(n)
-		return TreeSeq{v, nil, T}
+		node = inner.Next()
+		if !inner.Done() {
+			v = mapper(node)
+			return TreeSeq{v, nil, T}
+		}
+		return TreeSeq{node, nil, nil}
 	}
 	return TreeSeq{v, nil, T}
 }
