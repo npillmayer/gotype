@@ -140,7 +140,9 @@ func TestTreeFilter(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	l := fp.Traverse(tree).Where(fp.Leaf()).List()
 	t.Logf("list = %s", l.ListString())
-	t.Fail()
+	if l.Length() != 4 {
+		t.Errorf("Filtered list expected to be of length 4, is %s", l.ListString())
+	}
 }
 
 // ---------------------------------------------------------------------------

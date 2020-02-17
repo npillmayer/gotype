@@ -35,8 +35,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 
 import (
-	"fmt"
-
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/syntax/terex"
 )
@@ -144,13 +142,9 @@ func (seq ListSeq) List() *terex.GCons {
 		return nil
 	}
 	var start, end *terex.GCons
-	//atom, S := seq.First()
-	//fmt.Printf("first atom=%s\n", atom)
 	S := seq
-	// var atom terex.Atom
 	for atom := seq.Next(); !S.Done(); atom = S.Next() {
-		fmt.Printf("next atom=%s, S=%v\n", atom, S)
-		fmt.Printf("  done=%v\n", S.Done())
+		//fmt.Printf("next atom=%s, S=%v\n", atom, S)
 		if start == nil {
 			start = terex.Cons(atom, nil)
 			end = start
@@ -158,7 +152,7 @@ func (seq ListSeq) List() *terex.GCons {
 			end.Cdr = terex.Cons(atom, nil)
 			end = end.Cdr
 		}
-		fmt.Printf("result list = %s\n", start.ListString())
+		//fmt.Printf("result list = %s\n", start.ListString())
 	}
 	return start
 }
@@ -172,14 +166,47 @@ type TreeSeq struct {
 	seq     TreeGenerator
 }
 
-// A TreeNode represents a homogenous tree node, together with its parent node.
+// A TreeNode represents a homogenous tree node. Its parent node is available with a
+// call to Parent().
 type TreeNode struct {
 	Node   *terex.GCons
-	Parent *terex.GCons
+	parent *terex.GCons
 }
 
-func node(n *terex.GCons, p *terex.GCons) TreeNode {
-	return TreeNode{Node: n, Parent: p}
+// internal shortcut for creating a node
+func node(node *terex.GCons, parent *terex.GCons) TreeNode {
+	return TreeNode{Node: node, parent: parent}
+}
+
+// Parent returns the parent of a tree node
+func (n TreeNode) Parent() *terex.GCons {
+	return n.parent
+}
+
+// ReplaceWith replaces a node with a new node, altering the parent node (if present).
+func (n TreeNode) ReplaceWith(new *terex.GCons) TreeNode {
+	if n.Node == nil {
+		if n.parent == nil {
+			return node(new, nil)
+		}
+		panic("inconsistent parent-node combination; node is nil")
+	}
+	l, r := children(n.parent) // will return (nil,nil) for parent=nil
+	if l == n.Node {
+		n.parent.Car.Data = new // therefore this is safe
+	} else if r == n.Node {
+		n.parent.Cdr = new // and this, too
+	} else {
+		panic("inconsistent parent-node combination; node is no valid child")
+	}
+	return node(new, n.parent)
+}
+
+func (n TreeNode) String() string {
+	if n.Node == nil {
+		return "<nil>"
+	}
+	return n.Node.String()
 }
 
 // TreeGenerator is a generator function type to iterate over trees.
