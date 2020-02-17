@@ -4,11 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/npillmayer/gotype/core/config/tracing"
-
 	"github.com/npillmayer/gotype/core/config/gtrace"
+	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
-
 	"github.com/npillmayer/gotype/syntax/terex"
 	"github.com/npillmayer/gotype/syntax/terex/fp"
 )
@@ -48,7 +46,6 @@ func TestF(t *testing.T) {
 	t.Logf("n=%d, N.n=%d", n, N.N())
 	n = N.Next()
 	t.Logf("n=%d, N.n=%d", n, N.N())
-	t.Fail()
 }
 
 func TestIntFilter(t *testing.T) {
