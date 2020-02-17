@@ -424,3 +424,27 @@ func (seq TreeSeq) Where(filt NodeFilter) TreeSeq {
 	}
 	return TreeSeq{node, nil, T}
 }
+
+// NodeMapper is a function returning an integer from an input integer.
+type NodeMapper func(node TreeNode) TreeNode
+
+// Print prints a node to the syntax tracer and returns the input node.
+func Print() NodeMapper {
+	return func(node TreeNode) TreeNode {
+		gtrace.SyntaxTracer.Debugf("tree node = %s", node)
+		return node
+	}
+}
+
+// Map applies a mapper to all elements of an integer sequence.
+func (seq TreeSeq) Map(mapper NodeMapper) TreeSeq {
+	var T TreeGenerator
+	n, inner := seq.node, seq
+	v := mapper(n)
+	T = func() TreeSeq {
+		n = inner.Next()
+		v = mapper(n)
+		return TreeSeq{v, nil, T}
+	}
+	return TreeSeq{v, nil, T}
+}
