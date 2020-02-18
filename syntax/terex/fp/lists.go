@@ -453,14 +453,13 @@ func (seq TreeSeq) Map(mapper NodeMapper) TreeSeq {
 	return TreeSeq{v, nil, T}
 }
 
-func (seq TreeSeq) Range() (int, TreeNode) {
-	node := seq.node.Node
-	if pattern.Match(seq.node.Node, env) {
-		return NodeEnv{
-			node:   node,
-			parent: seq.node.Parent(),
-			env:    env,
+func (seq TreeSeq) Range() <-chan TreeNode {
+	channel := make(chan TreeNode)
+	go func() {
+		defer close(channel)
+		for node, T := seq.First(); !T.Done(); node = T.Next() {
+			channel <- node
 		}
-	}
-	return NodeEnv{}
+	}()
+	return channel
 }

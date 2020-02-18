@@ -131,6 +131,23 @@ func TestTreeTraverse2(t *testing.T) {
 	}
 }
 
+func TestTreeRange(t *testing.T) {
+	tree := makeTree()
+	t.Logf("tree = %s", tree.ListString())
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	nodes := make([]fp.TreeNode, 0, 7)
+	for node := range fp.Traverse(tree).Range() {
+		nodes = append(nodes, node)
+	}
+	t.Logf("nodes=%v", nodes)
+	if len(nodes) != 7 || nodes[6].Node.Car.Data != 1.0 {
+		t.Errorf("Expected nodes range to be [4 5 2 6 7 3 1], is %v", nodes)
+	}
+}
+
 func TestTreeFilter(t *testing.T) {
 	tree := makeTree()
 	t.Logf("tree = %s", tree.ListString())
