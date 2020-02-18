@@ -255,37 +255,42 @@ func Traverse(l *terex.GCons) TreeSeq {
 TreeIteratorCh creates a goroutine and a channel to produce a sequence of nodes from
 a depth-first tree walk.
 
-https://www.geeksforgeeks.org/iterative-postorder-traversal-using-stack/
-
-	1.1 Create an empty stack
-	2.1 Do following while root is not NULL
-		a) Push root's right child and then root to stack.
-		b) Set root as root's left child.
-	2.2 Pop an item from stack and set it as root.
-		a) If the popped item has a right child and the right child
-		is at top of stack, then remove the right child from stack,
-		push the root back and set root as root's right child.
-		b) Else print root's data and set root as NULL.
-	2.3 Repeat steps 2.1 and 2.2 while stack is not empty.
 
 For TeREx' pre-order, a node's content is Car, left child is Cdar, right child is Cddr.
-The tree from the above website's example
+The example tree from https://www.geeksforgeeks.org/iterative-postorder-traversal-using-stack/:
 
-    1---2---4
-    |   \---5
-    \---3---6
-	    \---7
+          1
+        /   \
+      2       3
+     / \     / \
+    4   5   6   7
 
-is
+is represented in TeREx pre-order format as:
 
 	(1 (2 (4) 5) 3 (6) 7)
 
-in TeREx pre-order format. A depth-first traversal will yield
+A depth-first traversal will yield
 
 	(4 5 2 6 7 3 1)
 
+Clients usually will not call this function directly, but rather get it wrapped
+in a call to Traverse(…).
 */
 func TreeIteratorCh(l *terex.GCons) <-chan TreeNode {
+	/*
+		https://www.geeksforgeeks.org/iterative-postorder-traversal-using-stack/
+
+		1.1 Create an empty stack
+		2.1 Do following while root is not NULL
+			a) Push root's right child and then root to stack.
+			b) Set root as root's left child.
+		2.2 Pop an item from stack and set it as root.
+			a) If the popped item has a right child and the right child
+			is at top of stack, then remove the right child from stack,
+			push the root back and set root as root's right child.
+			b) Else print root's data and set root as NULL.
+		2.3 Repeat steps 2.1 and 2.2 while stack is not empty.
+	*/
 	// 1.1 Create an empty stack
 	t := treeTraverser(make([]*terex.GCons, 0, 32))
 	if l == nil {

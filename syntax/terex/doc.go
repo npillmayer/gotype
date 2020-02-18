@@ -1,6 +1,6 @@
 /*
 Package terex provides term rewriting expressions as a basis for
-rewriting parse trees / abstract syntax tree. It provides types for
+rewriting parse trees / abstract syntax trees. It implements types for
 a homogenous abstract syntax tree in a Lisp-like fashion.
 
 

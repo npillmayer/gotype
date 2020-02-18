@@ -284,7 +284,7 @@ func (s *Set) FirstMatch(predicate func(interface{}) bool) interface{} {
 //
 //     var S iteratable.Set{...}
 //
-// we could write interator code something like this:
+// we could write iterator code something like this:
 //
 //     iter := S.Iterator()
 //     for iter.Next() {
@@ -293,10 +293,10 @@ func (s *Set) FirstMatch(predicate func(interface{}) bool) interface{} {
 //
 // but instead, we rather write
 //
-//     S.iterate(iteratable.Exhaustively)  S.iterate(iteratable.Once)
-//     for S.Next() {                      for S.Next() {
-//          item := S.Take()                    item := S.Item()
-//     }                                   }
+//     S.InterateOnce()                 S.Exhaust()
+//     for S.Next() {                   for S.Next() {
+//          item := S.Item()                 item := S.Take()
+//     }                                }
 //
 // This may seem like a neglectable difference, even violating established OO practice
 // (and in a certain way it is), but some algorithms are easier to follow without
@@ -372,7 +372,7 @@ func (s *Set) Take() interface{} {
 	return item
 }
 
-// Stagnates signals that every item in the set has been schedules at least once
+// Stagnates signals that every item in the set has been scheduled at least once
 // for re-consideration.
 func (s *Set) Stagnates() bool {
 	return s.stagnationCount == len(s.items)

@@ -25,7 +25,7 @@ func TestN(t *testing.T) {
 
 func TestR(t *testing.T) {
 	a := make([]float64, 0, 10)
-	for x, R := fp.R().First(); x < 10; x = R.Next() {
+	for x, R := fp.R(0.0, 1.0).First(); x < 10; x = R.Next() {
 		t.Logf("x=%.1f", x)
 		a = append(a, x)
 	}

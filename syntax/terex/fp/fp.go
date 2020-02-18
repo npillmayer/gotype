@@ -129,12 +129,13 @@ func (rseq *FloatSeq) Next() float64 {
 // a FloatSeq.
 type FloatGenerator func() FloatSeq
 
-// R is a sequence of floats.
-func R() FloatSeq {
-	var x float64
+// R is a generator for an infinite sequence of real numbers, given a start value
+// and an increment.
+func R(start float64, step float64) FloatSeq {
+	x := start
 	var R FloatGenerator
 	R = func() FloatSeq {
-		x += 1.0
+		x += step
 		return FloatSeq{x, R}
 	}
 	return FloatSeq{x, R}
