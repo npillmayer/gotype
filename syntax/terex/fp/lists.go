@@ -171,6 +171,7 @@ type TreeSeq struct {
 type TreeNode struct {
 	Node   *terex.GCons
 	parent *terex.GCons
+	UData  interface{}
 }
 
 // internal shortcut for creating a node
@@ -450,4 +451,16 @@ func (seq TreeSeq) Map(mapper NodeMapper) TreeSeq {
 		return TreeSeq{node, nil, nil}
 	}
 	return TreeSeq{v, nil, T}
+}
+
+func (seq TreeSeq) Range() (int, TreeNode) {
+	node := seq.node.Node
+	if pattern.Match(seq.node.Node, env) {
+		return NodeEnv{
+			node:   node,
+			parent: seq.node.Parent(),
+			env:    env,
+		}
+	}
+	return NodeEnv{}
 }

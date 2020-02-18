@@ -59,10 +59,6 @@ type ASTBuilder struct {
 	stack            []*terex.GCons
 }
 
-// TODO remove these
-// type ruleABEnter func(sym *lr.Symbol, rhs []*sppf.RuleNode) bool
-// type ruleABExit func(sym *lr.Symbol, rhs []*sppf.RuleNode) interface{}
-
 // NewASTBuilder creates an AST builder from a parse forest/tree.
 // It is initialized with the grammar, which has been used to create the parse tree.
 //
@@ -70,14 +66,11 @@ type ASTBuilder struct {
 // term rewriters and variables/symbols necessary, and finally call ASTBuilder.AST(…).
 func NewASTBuilder(g *lr.Grammar) *ASTBuilder {
 	ab := &ASTBuilder{
-		G:   g,
-		Env: terex.NewEnvironment("AST "+g.Name, terex.GlobalEnvironment),
-		//ast:       &terex.GCons{Car: terex.NilAtom, Cdr: nil}, // AST anchor
+		G:         g,
+		Env:       terex.NewEnvironment("AST "+g.Name, terex.GlobalEnvironment),
 		stack:     make([]*terex.GCons, 0, 256),
 		rewriters: make(map[string]TermR),
 	}
-	//ab.last = ab.ast
-	//ab.stack = append(ab.stack, ab.ast) // push as stopper
 	return ab
 }
 
@@ -245,7 +238,7 @@ func (ab *ASTBuilder) MakeAttrs(*lr.Symbol) interface{} {
 	return nil // TODO
 }
 
-// ---------------------------------------------------------------------------
+// --- Helpers ---------------------------------------------------------------
 
 func appendAtom(cons *terex.GCons, atom terex.Atom) *terex.GCons {
 	if atom == terex.NilAtom {
