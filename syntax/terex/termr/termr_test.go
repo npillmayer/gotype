@@ -56,12 +56,12 @@ func TestAST1(t *testing.T) {
 	// sppf.ToGraphViz(parser.ParseForest(), tmpfile)
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	builder := NewASTBuilder(G)
-	ast, _ := builder.AST(parser.ParseForest())
+	env := builder.AST(parser.ParseForest(), earleyTokenReceiver(parser))
 	expected := `(:a :+ :a :#eof)`
-	if ast.Cdr == nil {
+	if env == nil || env.AST.Cdr == nil {
 		t.Errorf("AST is empty")
-	} else if ast.ListString() != expected {
-		t.Errorf("AST should be %s, is %s", expected, ast.ListString())
+	} else if env.AST.ListString() != expected {
+		t.Errorf("AST should be %s, is %s", expected, env.AST.ListString())
 	}
 }
 
@@ -87,12 +87,18 @@ func TestAST2(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	builder := NewASTBuilder(G)
 	builder.AddTermR(makeOp("E"))
-	ast, _ := builder.AST(parser.ParseForest())
+	env := builder.AST(parser.ParseForest(), earleyTokenReceiver(parser))
 	expected := `((#E (#E :a) :+ :a) :#eof)`
-	if ast.Cdr == nil {
+	if env == nil || env.AST.Cdr == nil {
 		t.Errorf("AST is empty")
-	} else if ast.ListString() != expected {
-		t.Errorf("AST should be %s, is %s", expected, ast.ListString())
+	} else if env.AST.ListString() != expected {
+		t.Errorf("AST should be %s, is %s", expected, env.AST.ListString())
+	}
+}
+
+func earleyTokenReceiver(parser *earley.Parser) TokenRetriever {
+	return func(pos uint64) interface{} {
+		return parser.TokenAt(pos)
 	}
 }
 
@@ -102,9 +108,9 @@ type testOp struct {
 	name string
 }
 
-func (op *testOp) Rewrite(list *terex.GCons, env *terex.Environment) *terex.GCons {
+func (op *testOp) Rewrite(list *terex.GCons, env *terex.Environment) terex.Element {
 	T().Debugf(env.Dump())
-	return list
+	return terex.Elem(list)
 }
 
 func (op *testOp) Descend(sppf.RuleCtxt) bool {

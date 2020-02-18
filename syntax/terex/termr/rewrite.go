@@ -54,11 +54,6 @@ type RewriteRule struct {
 	Rewrite Rewriter
 }
 
-// env is an environment which holds an abstract syntax tree.
-func Rewrite(env *terex.Environment, rule RewriteRule) error {
-	return nil
-}
-
 // ---------------------------------------------------------------------------
 
 // Anything is a pattern matching any s-expr.
@@ -71,23 +66,45 @@ func AnySymbol() *terex.GCons {
 	return terex.Cons(terex.Atomize(terex.AnyType), nil)
 }
 
-type NodeEnv struct {
-	node   *terex.GCons
-	parent *terex.GCons
-	env    *terex.Environment
+// Match is a node mapper which checks incoming tree nodes for a match against
+// a pattern. If the match succeeds, a new environment is created, containing
+// symbols for the operator and for matches arguments. The newly created environment
+// is packed onto the tree node for later stages of the call sequence.
+func Match(pattern *terex.GCons, env *terex.Environment) fp.NodeMapper {
+	return func(node fp.TreeNode) fp.TreeNode {
+		if node.Node == nil {
+			panic("nil node as mapper input")
+		}
+		if node.Node.Car.Type() == terex.OperatorType {
+			op := node.Node.Car.Data.(terex.Operator)
+			env = EnvironmentForOperator(op, env)
+		}
+		if pattern.Match(node.Node, env) {
+			node.UData = env
+		}
+		return node
+	}
 }
 
-func (seq fp.TreeSeq) Match(pattern *terex.GCons, env *terex.Environment) NodeEnv {
-	node := seq.node.Node
-	if pattern.Match(seq.node.Node, env) {
-		return NodeEnv{
-			node:   node,
-			parent: seq.node.Parent(),
-			env:    env,
+// RewriteWith applies a term rewrite to an incoming tree node.
+func RewriteWith(rewrite Rewriter) fp.NodeMapper {
+	return func(node fp.TreeNode) fp.TreeNode {
+		if node.Node == nil {
+			panic("nil node as mapper input")
 		}
+		if node.UData == nil {
+			return node
+		}
+		env, ok := node.UData.(*terex.Environment)
+		if !ok {
+			return node
+		}
+		newNode := rewrite(node.Node, env).AsList()
+		return node.ReplaceWith(newNode)
 	}
-	return NodeEnv{}
 }
+
+// ---------------------------------------------------------------------------
 
 // EnvironmentForOperator creates an environment for an operator. The intention is for
 // op to be the head of a TeREx list. The environment will have the operatore pre-stored
