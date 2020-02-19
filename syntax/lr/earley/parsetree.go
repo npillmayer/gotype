@@ -115,6 +115,7 @@ func (p *Parser) walk(item lr.Item, pos uint64, listener Listener, level int) *R
 	T().Debugf("Walk from item=%s (%d…%d)", item, item.Origin, pos)
 	extent := lr.Span{item.Origin, pos}
 	ruleNodes := make([]*RuleNode, len(rhs)) // we will collect children nodes
+	end := pos
 	for n, B := range rhs {
 		T().Debugf("Next symbol in rev(RHS) is %s", B)
 		if B.IsTerminal() { // collect a terminal node
@@ -130,6 +131,7 @@ func (p *Parser) walk(item lr.Item, pos uint64, listener Listener, level int) *R
 		}
 		// for each symbol B, find an item [B→…A•, k] which has completed it
 		S := p.states[pos]
+		cleanupState(S)
 		T().Debugf("Looking for item which completed %s", B)
 		dumpState(p.states, pos)
 		T().Debugf("---------------------------------------------")
@@ -145,8 +147,27 @@ func (p *Parser) walk(item lr.Item, pos uint64, listener Listener, level int) *R
 			child := R.First().(lr.Item)
 			ruleNodes[l-n-1] = p.walk(child, pos, listener, level+1)
 			pos = child.Origin // k
-		default: // ambiguous  TODO
-			panic("ambiguous parse trees not yet supported")
+		default: // ambiguous: resolve by longest rule first, then by rule number
+			var longest lr.Item
+			R.IterateOnce()
+			for R.Next() {
+				rule := R.Item().(lr.Item)
+				if longest.Rule() == nil || len(rule.Prefix()) > len(longest.Prefix()) {
+					// avoid looping with parent-rule = child-rule
+					if !(item.Origin == rule.Origin && pos == end) {
+						longest = rule
+					}
+				} else if len(rule.Prefix()) == len(longest.Prefix()) {
+					if !(item.Origin == rule.Origin && pos == end) {
+						if rule.Rule().Serial < longest.Rule().Serial {
+							longest = rule
+						}
+					}
+				}
+			}
+			T().Debugf("Selected rule %s", longest)
+			ruleNodes[l-n-1] = p.walk(longest, pos, listener, level+1)
+			pos = longest.Origin // k
 		}
 	}
 	value := listener.Reduce(item.Rule().LHS, item.Rule().Serial, ruleNodes, extent, level)
@@ -159,9 +180,23 @@ func (p *Parser) walk(item lr.Item, pos uint64, listener Listener, level int) *R
 	return node
 }
 
+var loopCount int
+
+// Does item complete a rule with LHS B ?
 func itemCompletes(item lr.Item, B *lr.Symbol) bool {
 	return item.PeekSymbol() == nil &&
 		item.Rule().LHS.Value == B.Value
+}
+
+// Throw away non-completing items, as they are not needed for parse tree construction.
+func cleanupState(S *iteratable.Set) {
+	S.IterateOnce()
+	for S.Next() {
+		item := S.Item().(lr.Item)
+		if item.PeekSymbol() != nil {
+			S.Remove(item)
+		}
+	}
 }
 
 // --- Tree building listener -------------------------------------------
