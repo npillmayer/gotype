@@ -38,7 +38,7 @@ func (tf *ucdTestFile) Scan() bool {
 	done := false
 	for !done {
 		ok = tf.scanner.Scan()
-		if ok {
+		if ok && len(tf.scanner.Bytes()) > 0 {
 			if tf.scanner.Bytes()[0] == '#' {
 				continue
 			}
@@ -46,7 +46,11 @@ func (tf *ucdTestFile) Scan() bool {
 			text := tf.scanner.Text()
 			text = strings.TrimSpace(text)
 			parts := strings.Split(text, "#")
-			tf.text, tf.comment = parts[0], parts[1]
+			if len(parts) > 1 {
+				tf.text, tf.comment = parts[0], parts[1]
+			} else {
+				tf.text = parts[0]
+			}
 		} else {
 			done = true // with error
 		}

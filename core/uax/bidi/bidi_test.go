@@ -1,12 +1,19 @@
 package bidi
 
 import (
+	"bufio"
+	"bytes"
+	"io/ioutil"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/npillmayer/gotype/syntax/lr/sppf"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
+	"github.com/npillmayer/gotype/core/uax/ucd"
 	"github.com/npillmayer/gotype/syntax/lr/scanner"
 	"golang.org/x/text/unicode/bidi"
 )
@@ -31,19 +38,115 @@ func TestScanner(t *testing.T) {
 	}
 }
 
+var inputs = []string{
+	//"ab.",
+	"(ab.)",
+	//"12.453,45€",
+	//"sum 12453€",
+	//"hello w\u0302orld !",
+}
+
 func TestWeakTypes(t *testing.T) {
 	gtrace.CoreTracer = gologadapter.New()
 	T().SetTraceLevel(tracing.LevelDebug)
 	gtrace.SyntaxTracer = gologadapter.New()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
-	//input := "hell\u0302o"
-	input := "123,45"
-	scan := NewScanner(strings.NewReader(input), Testing(true))
-	accept, err := Parse(scan)
+	for i, input := range inputs {
+		scan := NewScanner(strings.NewReader(input), Testing(true))
+		accept, tree, err := Parse(scan)
+		if err != nil {
+			t.Error(err)
+		}
+		if !accept {
+			t.Fatalf("Test input #%d: not recognized as a valid Bidi run", i)
+		} else {
+			dotty(tree, t)
+		}
+	}
+}
+
+func TestCharacterTestfile(t *testing.T) {
+	// teardown := gotestingadapter.RedirectTracing(t)
+	// defer teardown()
+	gtrace.CoreTracer = gologadapter.New()
+	T().SetTraceLevel(tracing.LevelDebug)
+	tf := ucd.OpenTestFile("./BidiCharacterTest.txt", t)
+	defer tf.Close()
+	failcnt, i, from, to := 0, 1, 1, 2
+	for tf.Scan() {
+		if i >= from {
+			fields := strings.Split(tf.Text(), ";")
+			if len(fields) >= 2 {
+				s := readHex(fields[0])
+				if len(s) > 0 {
+					i++
+					levels := readLevels(fields[3])
+					T().Debugf("[%3d] Input = \"%v\", levels=%v | %d", i, s, levels, len(levels))
+					if !executeSingleTest(t, s, i) {
+						failcnt++
+					}
+				}
+			}
+		}
+		if i >= to {
+			break
+		}
+	}
+	if err := tf.Err(); err != nil {
+		t.Errorf("reading input: %s", err)
+	}
+	t.Logf("%d TEST CASES OUT of %d FAILED", failcnt, i-from+1)
+}
+
+func readHex(inp string) string {
+	sc := bufio.NewScanner(strings.NewReader(inp))
+	sc.Split(bufio.ScanWords)
+	run := bytes.NewBuffer(make([]byte, 0, 20))
+	for sc.Scan() {
+		token := sc.Text()
+		n, _ := strconv.ParseUint(token, 16, 64)
+		run.WriteRune(rune(n))
+	}
+	//fmt.Printf("input = '%s'\n", inp.String())
+	//fmt.Printf("output = %#v\n", out)
+	return run.String()
+}
+
+func readLevels(inp string) []int {
+	sc := bufio.NewScanner(strings.NewReader(inp))
+	sc.Split(bufio.ScanWords)
+	l := make([]int, 0, len(inp)/2+1)
+	for sc.Scan() {
+		i := sc.Text()
+		n, _ := strconv.ParseInt(i, 10, 64)
+		l = append(l, int(n))
+	}
+	return l
+}
+
+//func executeSingleTest(t *testing.T, seg *segment.Segmenter, tno int, in string, out []string) bool {
+func executeSingleTest(t *testing.T, inp string, i int) bool {
+	scan := NewScanner(strings.NewReader(inp), Testing(true))
+	accept, _, err := Parse(scan)
 	if err != nil {
 		t.Error(err)
 	}
 	if !accept {
-		t.Errorf("Input not recognized as a valid Bidi run")
+		t.Fatalf("Test input #%d: not recognized as a valid Bidi run", i)
+	} else {
+		//dotty(tree, t)
+	}
+	return accept
+}
+
+// ---------------------------------------------------------------------------
+
+func dotty(parsetree *sppf.Forest, t *testing.T) {
+	tmpfile, err := ioutil.TempFile(".", "bidi-*.dot")
+	if err != nil {
+		t.Errorf("cannot open tmp file")
+	} else {
+		sppf.ToGraphViz(parsetree, tmpfile)
+		t.Logf("Exported parse tree to %s", tmpfile.Name())
 	}
 }

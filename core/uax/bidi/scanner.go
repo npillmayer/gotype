@@ -7,7 +7,6 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/syntax/lr/scanner"
 	"golang.org/x/text/unicode/bidi"
 )
@@ -54,12 +53,13 @@ func (sc *Scanner) NextToken(expected []int) (int, interface{}, uint64, uint64) 
 	for sc.runeScanner.Scan() {
 		rune := sc.runeScanner.Bytes()
 		clz, sz := sc.bidic(rune)
-		gtrace.CoreTracer.Debugf("'%s' has class %s", string(rune), ClassString(clz))
+		//T().Debugf("'%s' has class %s", string(rune), ClassString(clz))
 		if clz != sc.currClz {
 			sc.lookahead = sc.lookahead[:0]
 			sc.lookahead = append(sc.lookahead, rune...)
 			r := sc.currClz  // tmp for returning current class
 			sc.currClz = clz // change current class to class of LA
+			T().Debugf("Token '%s' as :%s", string(sc.buffer), ClassString(r))
 			return int(r), sc.buffer, sc.pos, uint64(len(sc.buffer))
 		}
 		sc.buffer = append(sc.buffer, rune...)
@@ -68,10 +68,12 @@ func (sc *Scanner) NextToken(expected []int) (int, interface{}, uint64, uint64) 
 	if len(sc.lookahead) > 0 {
 		sc.prepareNewRun()
 		sc.lookahead = sc.lookahead[:0]
+		T().Debugf("Token '%s' as :%s", string(sc.buffer), ClassString(sc.currClz))
 		return int(sc.currClz), sc.buffer, sc.pos, uint64(len(sc.buffer))
 	}
 	if !sc.done {
 		sc.done = true
+		T().Debugf("Token :%s", ClassString(bidi.PDI))
 		return int(bidi.PDI), "", sc.pos, 0
 	}
 	return scanner.EOF, "", sc.pos, 0
@@ -96,7 +98,7 @@ func (sc *Scanner) bidic(rune []byte) (bidi.Class, int) {
 		}
 		props, sz := bidi.Lookup(rune)
 		clz := props.Class()
-		sc.strong = isStrong(clz)
+		sc.setStrong(clz)
 		switch clz { // do some pre-processing
 		case bidi.NSM: // rule W1, handle accents
 			switch sc.currClz {
@@ -112,8 +114,15 @@ func (sc *Scanner) bidic(rune []byte) (bidi.Class, int) {
 			switch sc.strong {
 			case bidi.AL:
 				return bidi.AN, sz
-			case bidi.L, bidi.LRI:
+			case bidi.L:
 				return LEN, sz
+			}
+		case bidi.ON:
+			if props.IsBracket() {
+				if props.IsOpeningBracket() {
+					return LPAREN, sz // TODO different kinds of brackets
+				}
+				return RPAREN, sz
 			}
 		case bidi.LRI, bidi.RLI:
 			sc.level++
@@ -125,6 +134,21 @@ func (sc *Scanner) bidic(rune []byte) (bidi.Class, int) {
 	return bidi.L, 0
 }
 
+func (sc *Scanner) setStrong(c bidi.Class) bidi.Class {
+	switch c {
+	case bidi.R, bidi.RLI:
+		sc.strong = bidi.R
+		return bidi.R
+	case bidi.L, bidi.LRI:
+		sc.strong = bidi.L
+		return bidi.L
+	case bidi.AL:
+		sc.strong = bidi.AL
+		return bidi.AL
+	}
+	return ILLEGAL
+}
+
 // --- Bidi_Class ------------------------------------------------------------
 
 // We use some additional Bidi_Classes, which reflects additional knowledge about
@@ -132,34 +156,28 @@ func (sc *Scanner) bidic(rune []byte) (bidi.Class, int) {
 // going to see the tokens.
 const (
 	LEN     bidi.Class = iota + 100 // left biased european number (EN)
+	LPAREN                          // opening bracket
+	RPAREN                          // closing bracket
 	LSOS                            // start of sequence with direction L
 	RSOS                            // start of sequence with direction R
 	ILLEGAL bidi.Class = 999        // in-band value denoting illegal class
 )
 
-func isStrong(c bidi.Class) bidi.Class {
-	switch c {
-	case bidi.R, RSOS:
-		return bidi.R
-	case bidi.L, LSOS:
-		return bidi.L
-	case bidi.AL:
-		return bidi.AL
-	}
-	return ILLEGAL
-}
-
 const claszname = "LRENESETANCSBSWSONBNNSMALControlNumLRORLOLRERLEPDFLRIRLIFSIPDI----------"
-const claszadd = "LENLSOSRSOS"
+const claszadd = "LENLPARENRPARENLSOSRSOS"
 
 var claszindex = [...]uint8{0, 1, 2, 4, 6, 8, 10, 12, 13, 14, 16, 18, 20, 23, 25, 32, 35, 38, 41, 44, 47, 50, 53, 56, 59, 62}
-var claszaddinx = [...]uint8{0, 3, 7}
+var claszaddinx = [...]uint8{0, 3, 9, 15, 19}
 
 // ClassString returns a bidi class as a string.
 func ClassString(i bidi.Class) string {
+	if i == ILLEGAL {
+		return "bidi_class(none)"
+	}
 	if i >= bidi.Class(len(claszindex)-1) {
 		if i >= LEN && i < LEN+bidi.Class(len(claszaddinx)) {
-			return claszadd[claszaddinx[i]:claszaddinx[i+1]]
+			j := i - LEN
+			return claszadd[claszaddinx[j]:claszaddinx[j+1]]
 		}
 		return "bidi_class(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
