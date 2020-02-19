@@ -148,24 +148,29 @@ func (p *Parser) walk(item lr.Item, pos uint64, listener Listener, level int) *R
 			ruleNodes[l-n-1] = p.walk(child, pos, listener, level+1)
 			pos = child.Origin // k
 		default: // ambiguous: resolve by longest rule first, then by rule number
+			loopCount++
 			var longest lr.Item
 			R.IterateOnce()
 			for R.Next() {
 				rule := R.Item().(lr.Item)
-				if longest.Rule() == nil || len(rule.Prefix()) > len(longest.Prefix()) {
-					// avoid looping with parent-rule = child-rule
-					if !(item.Origin == rule.Origin && pos == end) {
+				// interval(longest) < interval(item) ?
+				// avoid looping with parent-rule = child-rule
+				if item.Origin <= rule.Origin && !(item.Origin == rule.Origin && pos == end) {
+					if longest.Rule() == nil || len(rule.Prefix()) > len(longest.Prefix()) {
 						longest = rule
-					}
-				} else if len(rule.Prefix()) == len(longest.Prefix()) {
-					if !(item.Origin == rule.Origin && pos == end) {
-						if rule.Rule().Serial < longest.Rule().Serial {
+					} else if len(rule.Prefix()) == len(longest.Prefix()) {
+						if rule.Origin < longest.Origin {
+							longest = rule
+						} else if rule.Origin == longest.Origin && rule.Rule().Serial < longest.Rule().Serial {
 							longest = rule
 						}
 					}
 				}
 			}
 			T().Debugf("Selected rule %s", longest)
+			if loopCount > 6 {
+				panic("LOOP")
+			}
 			ruleNodes[l-n-1] = p.walk(longest, pos, listener, level+1)
 			pos = longest.Origin // k
 		}
