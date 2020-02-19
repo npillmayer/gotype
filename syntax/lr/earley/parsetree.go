@@ -148,7 +148,6 @@ func (p *Parser) walk(item lr.Item, pos uint64, listener Listener, level int) *R
 			ruleNodes[l-n-1] = p.walk(child, pos, listener, level+1)
 			pos = child.Origin // k
 		default: // ambiguous: resolve by longest rule first, then by rule number
-			loopCount++
 			var longest lr.Item
 			R.IterateOnce()
 			for R.Next() {
@@ -168,9 +167,6 @@ func (p *Parser) walk(item lr.Item, pos uint64, listener Listener, level int) *R
 				}
 			}
 			T().Debugf("Selected rule %s", longest)
-			if loopCount > 6 {
-				panic("LOOP")
-			}
 			ruleNodes[l-n-1] = p.walk(longest, pos, listener, level+1)
 			pos = longest.Origin // k
 		}
@@ -184,8 +180,6 @@ func (p *Parser) walk(item lr.Item, pos uint64, listener Listener, level int) *R
 	T().Infof("Tree node    %d|-----%s-----|%d", extent.From(), item.Rule().LHS.Name, extent.To())
 	return node
 }
-
-var loopCount int
 
 // Does item complete a rule with LHS B ?
 func itemCompletes(item lr.Item, B *lr.Symbol) bool {
