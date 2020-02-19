@@ -111,7 +111,7 @@ func (s *Set) Remove(item interface{}) interface{} {
 	copy(s.items[i:], s.items[i+1:])
 	s.items[len(s.items)-1] = nil
 	s.items = s.items[:len(s.items)-1]
-	if i < s.inx {
+	if i <= s.inx {
 		s.inx--
 	}
 	return m

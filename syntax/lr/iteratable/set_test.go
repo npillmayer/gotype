@@ -1,6 +1,7 @@
 package iteratable
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -231,6 +232,30 @@ func TestSetIteration5(t *testing.T) {
 	t.Logf("S stagnated, has %d elements, detected after %d iterations", S.Size(), i)
 	if S.Size() != 3 || i != 3 {
 		t.Error("Detection of stagnation did not work correctly")
+	}
+}
+
+func TestSetIteration6(t *testing.T) {
+	S := NewSet(-1)
+	S.Add("1")
+	S.Add("-1")
+	S.Add("4")
+	S.Add("-2")
+	t.Logf("S.items=%v", S.items)
+	S.IterateOnce()
+	out := ""
+	for S.Next() {
+		el := S.Item().(string)
+		t.Logf("el=%v", el)
+		if strings.HasPrefix(el, "-") {
+			S.Remove(el)
+			t.Logf("S.items=%v", S.items)
+		} else {
+			out = out + el
+		}
+	}
+	if out != "14" {
+		t.Errorf("output after iteration should be '14', is %s", out)
 	}
 }
 
