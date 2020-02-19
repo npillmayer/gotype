@@ -235,7 +235,7 @@ func (tb *TreeBuilder) Forest() *sppf.Forest {
 // Reduce is a listener method, called for Earley-completions.
 func (tb *TreeBuilder) Reduce(sym *lr.Symbol, rule int, rhs []*RuleNode, span lr.Span, level int) interface{} {
 	if len(rhs) == 0 {
-		tb.forest.AddEpsilonReduction(sym, rule, span.From())
+		return tb.forest.AddEpsilonReduction(sym, rule, span.From())
 	}
 	treenodes := make([]*sppf.SymbolNode, len(rhs))
 	for i, r := range rhs {

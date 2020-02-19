@@ -138,6 +138,7 @@ func (f *Forest) AddReduction(sym *lr.Symbol, rule int, rhs []*SymbolNode) *Symb
 	if len(rhs) == 0 {
 		return nil
 	}
+	T().Debugf("Reduction: %s → RHS = %v", sym.Name, rhs)
 	start := rhs[0].Extent.From()
 	end := rhs[len(rhs)-1].Extent.To()
 	rhsnode := f.addRHSNode(rule, rhs, rhs[0].Extent.From())
@@ -158,6 +159,9 @@ func (f *Forest) AddEpsilonReduction(sym *lr.Symbol, rule int, pos uint64) *Symb
 	rhsnode := f.addRHSNode(rule, []*SymbolNode{}, pos)
 	f.addOrEdge(sym, rhsnode, pos, pos)
 	symnode := f.findSymNode(sym, pos, pos)
+	eps := &lr.Symbol{Name: "ε", Value: -2}
+	e := f.addAndEdge(rhsnode, 0, eps, pos, pos)
+	f.parent[e.toSym] = symnode
 	if sym.Name == "S'" { // S' usually added as start symbol during grammar analysis
 		f.root = symnode
 	}
@@ -281,6 +285,7 @@ func rhsSignature(rhs []*SymbolNode, start uint64) int32 {
 		return int32(o[start%uint64(len(o))])
 	}
 	h := int64(817)
+	T().Debugf("calc signature of RHS=%v ----------------------", rhs)
 	for _, symnode := range rhs {
 		h *= abs(symnode.Symbol.Value)
 		h %= largePrime
@@ -367,10 +372,11 @@ type andEdge struct {
 // is found.
 //
 // If the edge already exists, nothing is done.
-func (f *Forest) addAndEdge(rhs *rhsNode, seq uint, sym *lr.Symbol, start, end uint64) {
+func (f *Forest) addAndEdge(rhs *rhsNode, seq uint, sym *lr.Symbol, start, end uint64) andEdge {
 	T().Debugf("Add AND-edge %v --(%d)--> %v", rhs.rule, seq, sym)
 	sn := f.addSymNode(sym, start, end)
-	if e := f.findAndEdge(rhs, sn); e.isNull() {
+	var e andEdge
+	if e = f.findAndEdge(rhs, sn); e.isNull() {
 		e = andEdge{rhs, sn, seq}
 		if _, ok := f.andEdges[rhs]; !ok {
 			f.andEdges[rhs] = iteratable.NewSet(0)
@@ -379,6 +385,7 @@ func (f *Forest) addAndEdge(rhs *rhsNode, seq uint, sym *lr.Symbol, start, end u
 	} else if e.sequence != seq {
 		panic(fmt.Sprintf("new edge with sequence=%d replaces sequence=%d", seq, e.sequence))
 	}
+	return e
 }
 
 // findAndEdge finds an and-edge starting from an RHS node and pointing to a
