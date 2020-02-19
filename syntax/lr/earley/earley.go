@@ -216,9 +216,10 @@ func (p *Parser) innerLoop(i uint64, x inputSymbol) {
 // Scanner:
 // If [A→…•a…, j] is in Si and a=xi+1, add [A→…a•…, j] to Si+1
 func (p *Parser) scan(S, S1 *iteratable.Set, item lr.Item, tokval int) {
-	//T().Debugf("scan: tokval=%d", tokval)
+	//T().Debugf("Earley scan: tokval=%d", tokval)
 	if a := item.PeekSymbol(); a != nil {
 		if a.Value == tokval {
+			//T().Debugf("Earley: scan %s", item)
 			S1.Add(item.Advance())
 		}
 	}
