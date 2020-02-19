@@ -148,6 +148,14 @@ func (p *Parser) walk(item lr.Item, pos uint64, listener Listener, level int) *R
 			ruleNodes[l-n-1] = p.walk(child, pos, listener, level+1)
 			pos = child.Origin // k
 		default: // ambiguous: resolve by longest rule first, then by rule number
+			/* TODO
+			Earley parse-tree generation: // ambiguous: resolve by longest rule first,
+			then by rule number
+
+			Let clients decide this via option. The implemented default works for many cases,
+			but automatically prefers a right-derivation. This may not be what clients want,
+			e.g. for left-associative operators.
+			*/
 			var longest lr.Item
 			R.IterateOnce()
 			for R.Next() {
