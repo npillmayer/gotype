@@ -287,7 +287,9 @@ func rhsSignature(rhs []*SymbolNode, start uint64) int32 {
 	h := int64(817)
 	T().Debugf("calc signature of RHS=%v ----------------------", rhs)
 	for _, symnode := range rhs {
-		h *= abs(symnode.Symbol.Value)
+		if v := abs(symnode.Symbol.Value); v != 0 {
+			h *= v
+		}
 		h %= largePrime
 		h *= o[symnode.Extent.From()%uint64(len(o))]
 		h %= largePrime
