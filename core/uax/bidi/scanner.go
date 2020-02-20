@@ -18,7 +18,7 @@ type Scanner struct {
 	currClz     bidi.Class     // the current Bidi_Class (of the last rune read)
 	lookahead   []byte         // lookahead rune
 	buffer      []byte         // character buffer for token lexeme
-	level       int            // embedding level
+	brackets    bracketStack   // stack for correlating bracket characters
 	strong      bidi.Class     // Bidi_Class of last strong character encountered
 	pos         uint64         // position in input string
 	length      uint64         // length of current lexeme
@@ -123,15 +123,13 @@ func (sc *Scanner) bidic(rune []byte) (bidi.Class, int) {
 			}
 		case bidi.ON:
 			if props.IsBracket() {
-				if props.IsOpeningBracket() {
-					return LPAREN, sz // TODO different kinds of brackets
+				var isbr bool
+				if isbr, sc.brackets = sc.brackets.pushIfBracket(r); isbr {
+					return LPAREN, sz
+				} else if isbr, sc.brackets = sc.brackets.popWith(r); isbr {
+					return RPAREN, sz
 				}
-				return RPAREN, sz
 			}
-		case bidi.LRI, bidi.RLI:
-			sc.level++
-		case bidi.PDI:
-			sc.level--
 		}
 		return props.Class(), sz
 	}
@@ -186,6 +184,42 @@ func ClassString(i bidi.Class) string {
 		return "bidi_class(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
 	return claszname[claszindex[i]:claszindex[i+1]]
+}
+
+// --- Bracket stack ---------------------------------------------------------
+
+type bracketStack []BracketPair
+
+func (bs bracketStack) push(b rune) bracketStack {
+	for _, pair := range UAX9BracketPairs {
+		if pair.o == b {
+			return append(bs, pair)
+		}
+	}
+	T().Errorf("Push of %c failed, not found as opening bracket")
+	return bs
+}
+
+func (bs bracketStack) pushIfBracket(b rune) (bool, bracketStack) {
+	props, _ := bidi.LookupRune(b)
+	if props.IsBracket() && props.IsOpeningBracket() {
+		return true, bs.push(b)
+	}
+	return false, bs
+}
+
+func (bs bracketStack) popWith(b rune) (bool, bracketStack) {
+	if len(bs) == 0 {
+		return false, bs
+	}
+	i := len(bs) - 1
+	for i >= 0 {
+		if bs[i].c == b {
+			bs = bs[:i]
+			return true, bs
+		}
+	}
+	return false, bs
 }
 
 // --- Scanner options -------------------------------------------------------
