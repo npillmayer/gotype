@@ -27,11 +27,7 @@ func getParser() *earley.Parser {
 	return parser
 }
 
-// NewBidiGrammar creates a new grammar for parsing Bidi runs in a paragraph. It is usually
-// not called by clients directly, but rather used transparently with a call to Parse.
-// It is included in the API for advanced usage, like extending or modifying the grammar.
-func NewBidiGrammar() *lr.LRAnalysis {
-	b := lr.NewGrammarBuilder("UAX#9")
+/*
 	b.LHS("Run").T(bc(bidi.LRI)).N("OptNI").N("L").N("OptNI").T(bc(bidi.PDI)).End()
 	//b.LHS("Run").T(bc(bidi.LRI)).N("L").T(bc(bidi.PDI)).End()
 	//b.LHS("Run").N("LRI").N("L").N("PDI").End()
@@ -74,6 +70,29 @@ func NewBidiGrammar() *lr.LRAnalysis {
 	b.LHS("L").N("L").N("L").End()           //
 	b.LHS("OptNI").N("NI").End()             //
 	b.LHS("OptNI").Epsilon()                 //
+*/
+
+// NewBidiGrammar creates a new grammar for parsing Bidi runs in a paragraph. It is usually
+// not called by clients directly, but rather used transparently with a call to Parse.
+// It is included in the API for advanced usage, like extending or modifying the grammar.
+func NewBidiGrammar() *lr.LRAnalysis {
+	b := lr.NewGrammarBuilder("UAX#9")
+	b.LHS("LSpan").N("LSpan").N("EOS").End()
+	b.LHS("LSpan").N("LSOS").N("R").N("EOS").End()
+	b.LHS("LSpan").N("LSOS").N("R").N("OptNI").N("L").End()
+	b.LHS("LSpan").N("LSOS").N("EOS").End()
+	b.LHS("LSOS").N("LSOS").N("NI").End()
+	b.LHS("LSOS").N("LSOS").N("L").End()
+	b.LHS("LSOS").T(bc(bidi.LRI)).N("L").End()
+	b.LHS("LSOS").T(bc(bidi.LRI)).N("NI").End()
+	b.LHS("EOS").N("NI").T(bc(bidi.PDI)).End()
+	b.LHS("EOS").T(bc(bidi.PDI)).End()
+	b.LHS("L").T(bc(bidi.L)).End()
+	b.LHS("R").T(bc(bidi.R)).End()
+	b.LHS("NI").T(bc(bidi.WS)).End()
+	b.LHS("NI").T(bc(bidi.ON)).End()
+	b.LHS("OptNI").N("NI").End() //
+	b.LHS("OptNI").Epsilon()     //
 	g, err := b.Grammar()
 	if err != nil {
 		panic(err)

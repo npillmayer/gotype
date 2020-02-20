@@ -66,8 +66,12 @@ func (sc *Scanner) NextToken(expected []int) (int, interface{}, uint64, uint64) 
 		sc.length += uint64(sz)
 	}
 	if len(sc.lookahead) > 0 {
-		sc.prepareNewRun()
+		// sc.prepareNewRun()
 		sc.lookahead = sc.lookahead[:0]
+		sc.pos += sc.length            // set new input position
+		clz, sz := sc.bidic(sc.buffer) // calculate current bidi class
+		sc.currClz = clz
+		sc.length += uint64(sz) // include len(LA) in run's length
 		T().Debugf("Token '%s' as :%s", string(sc.buffer), ClassString(sc.currClz))
 		return int(sc.currClz), sc.buffer, sc.pos, uint64(len(sc.buffer))
 	}

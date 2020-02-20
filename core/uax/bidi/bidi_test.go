@@ -39,14 +39,15 @@ func TestScanner(t *testing.T) {
 }
 
 var inputs = []string{
+	"car THECAR arabic!",
 	//"ab.",
-	"(ab.)",
+	//"(ab.)",
 	//"12.453,45€",
 	//"sum 12453€",
 	//"hello w\u0302orld !",
 }
 
-func TestWeakTypes(t *testing.T) {
+func TestSelected(t *testing.T) {
 	gtrace.CoreTracer = gologadapter.New()
 	T().SetTraceLevel(tracing.LevelDebug)
 	gtrace.SyntaxTracer = gologadapter.New()
