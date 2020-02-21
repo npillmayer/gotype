@@ -39,9 +39,10 @@ func TestScanner(t *testing.T) {
 }
 
 var inputs = []string{
-	"car THECAR arabic!",
-	//"ab.",
-	//"(ab.)",
+	//"car THECAR arabic!",
+	//"ab!",
+	"car THE CAR in ARABIC SCRIPT!",
+	//"(ab!)",
 	//"12.453,45€",
 	//"sum 12453€",
 	//"hello w\u0302orld !",

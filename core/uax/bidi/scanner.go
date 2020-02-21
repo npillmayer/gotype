@@ -35,6 +35,7 @@ func NewScanner(input io.Reader, opts ...ScannerOption) *Scanner {
 	sc.currClz = bidi.LRI
 	sc.buffer = make([]byte, 0, 4096)
 	sc.lookahead = make([]byte, 0, 32)
+	sc.brackets = make([]BracketPair, 0, 16)
 	for _, opt := range opts {
 		opt(sc)
 	}
@@ -122,7 +123,7 @@ func (sc *Scanner) bidic(rune []byte) (bidi.Class, int) {
 				return LEN, sz
 			}
 		case bidi.ON:
-			if props.IsBracket() {
+			if props.IsBracket() { // rule BD16
 				var isbr bool
 				if isbr, sc.brackets = sc.brackets.pushIfBracket(r); isbr {
 					return LPAREN, sz

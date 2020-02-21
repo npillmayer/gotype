@@ -77,22 +77,31 @@ func getParser() *earley.Parser {
 // It is included in the API for advanced usage, like extending or modifying the grammar.
 func NewBidiGrammar() *lr.LRAnalysis {
 	b := lr.NewGrammarBuilder("UAX#9")
-	b.LHS("LSpan").N("LSpan").N("EOS").End()
-	b.LHS("LSpan").N("LSOS").N("R").N("EOS").End()
-	b.LHS("LSpan").N("LSOS").N("R").N("OptNI").N("L").End()
-	b.LHS("LSpan").N("LSOS").N("EOS").End()
-	b.LHS("LSOS").N("LSOS").N("NI").End()
+	// LSpan is a run :LRI … :PDI, which may include mixed Ls and Rs
+	b.LHS("LSpan").N("LSOS").N("EOS").End()      // LSpan may be pure L
+	b.LHS("LSpan").N("LSpanFrag").N("EOS").End() // LSpan must include EOS(=PDI)
+	// LSpanFrag is a fragment :LRI …, which included at least one R
+	b.LHS("LSpanFrag").N("LSpanFrag").N("OptNI").N("L").End()
+	b.LHS("LSpanFrag").N("LSpanFrag").N("OptNI").N("R").End()
+	b.LHS("LSpanFrag").N("LSOS").N("R").N("OptNI").N("L").End() // bridge R
+	b.LHS("LSpanFrag").N("LSOS").N("R").End()
+	// LSOS is a fragment :LRI …, which does not include any Rs
+	b.LHS("LSOS").N("LSOS").N("NI").End() // LSOS gobbles up Ls and NIs (no Rs)
 	b.LHS("LSOS").N("LSOS").N("L").End()
-	b.LHS("LSOS").T(bc(bidi.LRI)).N("L").End()
-	b.LHS("LSOS").T(bc(bidi.LRI)).N("NI").End()
-	b.LHS("EOS").N("NI").T(bc(bidi.PDI)).End()
+	b.LHS("LSOS").T(bc(bidi.LRI)).N("L").End()  // LSOS starts at LRI
+	b.LHS("LSOS").T(bc(bidi.LRI)).N("NI").End() // TODO: EN, etc.
+	// EOS is a closing fragment [NI] :PDI
+	b.LHS("EOS").N("NI").T(bc(bidi.PDI)).End() // EOS collects trailing NIs
 	b.LHS("EOS").T(bc(bidi.PDI)).End()
+	//
 	b.LHS("L").T(bc(bidi.L)).End()
 	b.LHS("R").T(bc(bidi.R)).End()
 	b.LHS("NI").T(bc(bidi.WS)).End()
 	b.LHS("NI").T(bc(bidi.ON)).End()
-	b.LHS("OptNI").N("NI").End() //
-	b.LHS("OptNI").Epsilon()     //
+	b.LHS("L").N("L").N("NI").N("L").End() // N1
+	b.LHS("R").N("R").N("NI").N("R").End() // N1
+	b.LHS("OptNI").N("NI").End()           //
+	b.LHS("OptNI").Epsilon()               //
 	g, err := b.Grammar()
 	if err != nil {
 		panic(err)
