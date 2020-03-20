@@ -95,13 +95,13 @@ func (sc *Scanner) prepareNewRun() {
 
 // bidic returns the Bidi_Class for a rune. It will apply certain UAX#9 rules
 // immediately to relief the parser.
-func (sc *Scanner) bidic(rune []byte) (bidi.Class, int) {
-	r, sz := utf8.DecodeRune(rune)
+func (sc *Scanner) bidic(b []byte) (bidi.Class, int) {
+	r, sz := utf8.DecodeRune(b)
 	if sz > 0 {
 		if sc.hasMode(optionTesting) && unicode.IsUpper(r) {
 			return bidi.R, sz // during testing, UPPERCASE is R2L
 		}
-		props, sz := bidi.Lookup(rune)
+		props, sz := bidi.Lookup(b)
 		clz := props.Class()
 		sc.setStrong(clz)
 		switch clz { // do some pre-processing
@@ -124,11 +124,17 @@ func (sc *Scanner) bidic(rune []byte) (bidi.Class, int) {
 			}
 		case bidi.ON:
 			if props.IsBracket() { // rule BD16
+				T().Debugf("Bracket detected: %c", r)
 				var isbr bool
 				if isbr, sc.brackets = sc.brackets.pushIfBracket(r); isbr {
-					return LPAREN, sz
+					switch sc.strong {
+					case bidi.L:
+						return LBRACKO, sz
+					case bidi.R:
+						return RBRACKC, sz
+					}
 				} else if isbr, sc.brackets = sc.brackets.popWith(r); isbr {
-					return RPAREN, sz
+					return BRACKC, sz
 				}
 			}
 		}
@@ -159,18 +165,19 @@ func (sc *Scanner) setStrong(c bidi.Class) bidi.Class {
 // going to see the tokens.
 const (
 	LEN     bidi.Class = iota + 100 // left biased european number (EN)
-	LPAREN                          // opening bracket
-	RPAREN                          // closing bracket
-	LSOS                            // start of sequence with direction L
-	RSOS                            // start of sequence with direction R
+	LBRACKO                         // opening bracket in L context
+	RBRACKO                         // opening bracket in L context
+	LBRACKC                         // closing bracket in L context
+	RBRACKC                         // closing bracket in R context
+	BRACKC                          // closing bracket
 	ILLEGAL bidi.Class = 999        // in-band value denoting illegal class
 )
 
 const claszname = "LRENESETANCSBSWSONBNNSMALControlNumLRORLOLRERLEPDFLRIRLIFSIPDI----------"
-const claszadd = "LENLPARENRPARENLSOSRSOS"
+const claszadd = "LENLBRACKORBRACKOLBRACKCRBRACKCBRACKC-----------"
 
 var claszindex = [...]uint8{0, 1, 2, 4, 6, 8, 10, 12, 13, 14, 16, 18, 20, 23, 25, 32, 35, 38, 41, 44, 47, 50, 53, 56, 59, 62}
-var claszaddinx = [...]uint8{0, 3, 9, 15, 19}
+var claszaddinx = [...]uint8{0, 3, 10, 17, 24, 31, 37}
 
 // ClassString returns a bidi class as a string.
 func ClassString(i bidi.Class) string {

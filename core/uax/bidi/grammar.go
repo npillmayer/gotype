@@ -90,9 +90,24 @@ func NewBidiGrammar() *lr.LRAnalysis {
 	b.LHS("LSOS").N("LSOS").N("L").End()
 	b.LHS("LSOS").T(bc(bidi.LRI)).N("L").End()  // LSOS starts at LRI
 	b.LHS("LSOS").T(bc(bidi.LRI)).N("NI").End() // TODO: EN, etc.
-	// EOS is a closing fragment [NI] :PDI
+	// EOS is a closing fragment [NI] :PD
 	b.LHS("EOS").N("NI").T(bc(bidi.PDI)).End() // EOS collects trailing NIs
 	b.LHS("EOS").T(bc(bidi.PDI)).End()
+	//
+	b.LHS("L").N("LBrackFrag").N("BrackC").End() // an L run between matching brackets
+	b.LHS("L").N("LMixedFrag").N("BrackC").End()
+	//
+	b.LHS("LMixedFrag").N("LBrackFrag").N("NI").End()
+	b.LHS("LMixedFrag").N("LBrackFrag").N("L").End()
+	b.LHS("LMixedFrag").N("LBrackFrag").N("R").End()
+	//
+	b.LHS("LBrackFrag").N("LBrackFrag").N("NI").End() // LBrackFrag gobbles up Ls and NIs (no Rs)
+	b.LHS("LBrackFrag").N("LBrackFrag").N("L").End()
+	b.LHS("LBrackFrag").T(bc(LBRACKO)).N("L").End()  // LBrackFrag starts at :LBRACKO
+	b.LHS("LBrackFrag").T(bc(LBRACKO)).N("NI").End() // TODO: EN, etc.
+	// BrackC is a closing fragment [NI] :BRACKC
+	b.LHS("BrackC").N("NI").T(bc(BRACKC)).End() // BRACKC collects trailing NIs
+	b.LHS("BrackC").T(bc(BRACKC)).End()
 	//
 	b.LHS("L").T(bc(bidi.L)).End()
 	b.LHS("R").T(bc(bidi.R)).End()
