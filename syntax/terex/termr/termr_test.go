@@ -60,8 +60,10 @@ func TestAST1(t *testing.T) {
 	expected := `(:a :+ :a :#eof)`
 	if env == nil || env.AST.Cdr == nil {
 		t.Errorf("AST is empty")
-	} else if env.AST.ListString() != expected {
-		t.Errorf("AST should be %s, is %s", expected, env.AST.ListString())
+	} else {
+		if env.AST.ListString() != expected {
+			t.Errorf("AST should be %s, is %s", expected, env.AST.ListString())
+		}
 	}
 }
 

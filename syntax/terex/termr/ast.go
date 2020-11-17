@@ -47,12 +47,10 @@ import (
 
 // ASTBuilder is a parse tree listener for building ASTs.
 type ASTBuilder struct {
-	G      *lr.Grammar        // input grammar the parse forest stems from
-	Env    *terex.Environment // environment for the AST to create
-	forest *sppf.Forest       // input parse forest
-	toks   TokenRetriever     // retriever parse tree leafs
-	//ast    *terex.GCons       // root of the AST to construct
-	//last             *terex.GCons       // current last node to append conses
+	G                *lr.Grammar        // input grammar the parse forest stems from
+	Env              *terex.Environment // environment for the AST to create
+	forest           *sppf.Forest       // input parse forest
+	toks             TokenRetriever     // retriever parse tree leafs
 	rewriters        map[string]TermR
 	conflictStrategy sppf.Pruner
 	Error            func(error)
@@ -150,12 +148,11 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 			rhsList, end = growRHSList(rhsList, end, r, env)
 		}
 		T().Infof("%s: Rewrite of %s", sym.Name, rhsList.ListString())
-		rewritten := op.Rewrite(rhsList, env) // returns an terex.Element
+		rewritten := op.Rewrite(rhsList, env) // returns a terex.Element
 		ab.stack = ab.stack[:len(ab.stack)-1] // pop initial '(op ...'
 		T().Infof("%s returns %s", sym.Name, rewritten.String())
 		return rewritten
 	}
-	//var list, end *terex.GCons
 	var list, end *terex.GCons
 	for _, r := range rhs {
 		list, end = growRHSList(list, end, r, terex.GlobalEnvironment)
@@ -216,8 +213,14 @@ func (ab *ASTBuilder) Terminal(tokval int, token interface{}, ctxt sppf.RuleCtxt
 	t := ab.toks(tokpos) // opaque token type
 	atom := terex.Atomize(&terex.Token{Name: terminal.Name, TokType: tokval, Token: t})
 	if t != nil {
-		tt := t.(*lexmachine.Token)
-		s := string(tt.Lexeme)
+		s := ""
+		if tt, ok := t.(*lexmachine.Token); ok {
+			s = string(tt.Lexeme)
+		} else if tt, ok := t.(fmt.Stringer); ok {
+			s = tt.String()
+		} else {
+			s = t.(string)
+		}
 		T().Debugf("CONS(terminal=%s) = %v @%d [%s]", terminal.Name, atom, tokpos, s)
 	} else {
 		T().Debugf("CONS(terminal=%s) = %v @%d", terminal.Name, atom, tokpos)
