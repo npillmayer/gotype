@@ -50,21 +50,26 @@ func NewScanner(input io.Reader, opts ...ScannerOption) *Scanner {
 func (sc *Scanner) NextToken(expected []int) (int, interface{}, uint64, uint64) {
 	if len(sc.lookahead) > 0 {
 		sc.prepareNewRun()
+		//T().Debugf("re-reading '%s'", string(sc.buffer))
 	}
 	for sc.runeScanner.Scan() {
-		rune := sc.runeScanner.Bytes()
-		clz, sz := sc.bidic(rune)
-		//T().Debugf("'%s' has class %s", string(rune), ClassString(clz))
+		b := sc.runeScanner.Bytes()
+		//T().Debugf("--------------")
+		clz, sz := sc.bidic(b)
+		//T().Debugf("next char '%s' has class %s", string(b), ClassString(clz))
 		if clz != sc.currClz {
 			sc.lookahead = sc.lookahead[:0]
-			sc.lookahead = append(sc.lookahead, rune...)
+			sc.lookahead = append(sc.lookahead, b...)
 			r := sc.currClz  // tmp for returning current class
 			sc.currClz = clz // change current class to class of LA
-			T().Debugf("Token '%s' as :%s", string(sc.buffer), ClassString(r))
+			// TODO check with bracket stack !
+			//r = sc.replaceIfMatchingBrackets(b)
+			T().Debugf("scanned Token '%s' as :%s", string(sc.buffer), ClassString(r))
 			return int(r), sc.buffer, sc.pos, uint64(len(sc.buffer))
 		}
-		sc.buffer = append(sc.buffer, rune...)
+		sc.buffer = append(sc.buffer, b...)
 		sc.length += uint64(sz)
+		//T().Debugf("sc.buffer = '%s'", string(sc.buffer))
 	}
 	if len(sc.lookahead) > 0 {
 		// sc.prepareNewRun()
@@ -73,15 +78,20 @@ func (sc *Scanner) NextToken(expected []int) (int, interface{}, uint64, uint64) 
 		clz, sz := sc.bidic(sc.buffer) // calculate current bidi class
 		sc.currClz = clz
 		sc.length += uint64(sz) // include len(LA) in run's length
-		T().Debugf("Token '%s' as :%s", string(sc.buffer), ClassString(sc.currClz))
+		T().Debugf("final Token '%s' as :%s", string(sc.buffer), ClassString(sc.currClz))
 		return int(sc.currClz), sc.buffer, sc.pos, uint64(len(sc.buffer))
 	}
 	if !sc.done {
 		sc.done = true
-		T().Debugf("Token :%s", ClassString(bidi.PDI))
+		T().Debugf("final synthetic Token :%s", ClassString(bidi.PDI))
 		return int(bidi.PDI), "", sc.pos, 0
 	}
 	return scanner.EOF, "", sc.pos, 0
+}
+
+func (sc *Scanner) replaceIfMatchingBrackets(b rune) bidi.Class {
+	// if isbr, sc.brackets = sc.brackets.pushIfBracket(r); isbr {
+	return bidi.ON // TODO
 }
 
 func (sc *Scanner) prepareNewRun() {
@@ -95,6 +105,9 @@ func (sc *Scanner) prepareNewRun() {
 
 // bidic returns the Bidi_Class for a rune. It will apply certain UAX#9 rules
 // immediately to relief the parser.
+//
+// TODO Implement W1 on scanner level
+//
 func (sc *Scanner) bidic(b []byte) (bidi.Class, int) {
 	r, sz := utf8.DecodeRune(b)
 	if sz > 0 {
@@ -103,7 +116,7 @@ func (sc *Scanner) bidic(b []byte) (bidi.Class, int) {
 		}
 		props, sz := bidi.Lookup(b)
 		clz := props.Class()
-		sc.setStrong(clz)
+		sc.setIfStrong(clz)
 		switch clz { // do some pre-processing
 		case bidi.NSM: // rule W1, handle accents
 			switch sc.currClz {
@@ -116,26 +129,51 @@ func (sc *Scanner) bidic(b []byte) (bidi.Class, int) {
 			}
 			return sc.currClz, sz
 		case bidi.EN: // rule W2 and pretext to W7
+			if sc.currClz == bidi.L {
+				return bidi.L, sz
+			}
 			switch sc.strong {
 			case bidi.AL:
 				return bidi.AN, sz
 			case bidi.L:
 				return LEN, sz
 			}
+		case bidi.S:
+			fallthrough
+		case bidi.WS:
+			return NI, sz
 		case bidi.ON:
 			if props.IsBracket() { // rule BD16
-				T().Debugf("Bracket detected: %c", r)
-				var isbr bool
-				if isbr, sc.brackets = sc.brackets.pushIfBracket(r); isbr {
-					switch sc.strong {
-					case bidi.L:
+				//T().Debugf("Bracket detected: %c", r)
+				//T().Debugf("Bracket '%c' with sc.strong = %s", r, ClassString(sc.strong))
+				switch sc.strong {
+				case bidi.L:
+					if props.IsOpeningBracket() {
 						return LBRACKO, sz
-					case bidi.R:
-						return RBRACKC, sz
 					}
-				} else if isbr, sc.brackets = sc.brackets.popWith(r); isbr {
-					return BRACKC, sz
+					return LBRACKC, sz
+				case bidi.R:
+					if props.IsOpeningBracket() {
+						return LBRACKC, sz
+					}
+					return LBRACKO, sz
 				}
+				// var isbr bool
+				// if isbr, sc.brackets = sc.brackets.pushIfBracket(r); isbr {
+				// 	switch sc.strong {
+				// 	case bidi.L:
+				// 		T().Debugf("- detected an opening bracket")
+				// 		return LBRACKO, sz
+				// 	case bidi.R:
+				// 		return RBRACKC, sz
+				// 	}
+				// } else if isbr, sc.brackets = sc.brackets.popWith(r); isbr {
+				// 	T().Debugf("- detected a closing bracket")
+				// 	return BRACKC, sz
+				// }
+			}
+			if sc.currClz == NI {
+				return NI, sz
 			}
 		}
 		return props.Class(), sz
@@ -143,7 +181,7 @@ func (sc *Scanner) bidic(b []byte) (bidi.Class, int) {
 	return bidi.L, 0
 }
 
-func (sc *Scanner) setStrong(c bidi.Class) bidi.Class {
+func (sc *Scanner) setIfStrong(c bidi.Class) bidi.Class {
 	switch c {
 	case bidi.R, bidi.RLI:
 		sc.strong = bidi.R
@@ -170,14 +208,15 @@ const (
 	LBRACKC                         // closing bracket in L context
 	RBRACKC                         // closing bracket in R context
 	BRACKC                          // closing bracket
+	NI                              // neutral character
 	ILLEGAL bidi.Class = 999        // in-band value denoting illegal class
 )
 
 const claszname = "LRENESETANCSBSWSONBNNSMALControlNumLRORLOLRERLEPDFLRIRLIFSIPDI----------"
-const claszadd = "LENLBRACKORBRACKOLBRACKCRBRACKCBRACKC-----------"
+const claszadd = "LENLBRACKORBRACKOLBRACKCRBRACKCBRACKCNI-----------"
 
 var claszindex = [...]uint8{0, 1, 2, 4, 6, 8, 10, 12, 13, 14, 16, 18, 20, 23, 25, 32, 35, 38, 41, 44, 47, 50, 53, 56, 59, 62}
-var claszaddinx = [...]uint8{0, 3, 10, 17, 24, 31, 37}
+var claszaddinx = [...]uint8{0, 3, 10, 17, 24, 31, 37, 39}
 
 // ClassString returns a bidi class as a string.
 func ClassString(i bidi.Class) string {
@@ -194,7 +233,7 @@ func ClassString(i bidi.Class) string {
 	return claszname[claszindex[i]:claszindex[i+1]]
 }
 
-// --- Bracket stack ---------------------------------------------------------
+// --- Brackets and bracket stack --------------------------------------------
 
 type bracketStack []BracketPair
 

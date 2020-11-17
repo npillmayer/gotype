@@ -1,6 +1,12 @@
 package bidi
 
 /*
+Scanner:
+ ✓  L  EN → L                 // e.g., variable names: "var1"
+ ✓  WS    → NI                // whitespace to neutral
+ ✓  S     → NI                //
+ ✓  NI ON → NI                // except brackets
+
 W1.
  ✓  AL  NSM NSM → AL  AL  AL  // done by scanner
  ✓  sos NSM     → sos R       // done by scanner
@@ -21,7 +27,7 @@ W4.
 W5.
  ✓  ET ET EN → EN EN EN
  ✓  EN ET ET → EN EN EN
- ✓  AN ET EN → AN EN EN
+ -  AN ET EN → AN EN EN       // nothing to do
 
 W6.
  ✓  AN ET    → AN ON
@@ -30,8 +36,7 @@ W6.
  ✓  ET AN    → ON AN
 
 W7.
- ✓  L  NI EN → L  NI  L      // prepared by scanner as   L NI LEN  → L   (see N1)
-	R  NI EN → R  NI  EN
+ ✓  L  NI EN → L  NI  L      // prepared by scanner as   L NI LEN  → L   (= W7+N1)
 
 ---
 

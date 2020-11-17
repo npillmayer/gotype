@@ -22,6 +22,8 @@ func TestScanner(t *testing.T) {
 	gtrace.CoreTracer = gologadapter.New()
 	gtrace.CoreTracer.SetTraceLevel(tracing.LevelDebug)
 	input := "Hell\u0302o 吾輩は World!"
+	//input := " Hello 123.0 \u0633\u0644\u0627\u0645 89" // Arabic
+	//input := "sum = $12453.00"
 	reader := strings.NewReader(input)
 	sc := NewScanner(reader)
 	cnt := 0
@@ -39,12 +41,15 @@ func TestScanner(t *testing.T) {
 }
 
 var inputs = []string{
+	//"car wash!",
+	//"\u0633\u0644\u0627\u0645 89", // Arabic
 	//"car THECAR arabic!",
 	//"ab!",
 	//"car THE CAR in ARABIC SCRIPT!",
-	"(ab!)",
+	"aber (ab!)",
 	//"12.453,45€",
-	//"sum 12453€",
+	//"sum = 12453€",
+	//"sum = $12453.00",
 	//"hello w\u0302orld !",
 }
 
@@ -52,7 +57,8 @@ func TestSelected(t *testing.T) {
 	gtrace.CoreTracer = gologadapter.New()
 	T().SetTraceLevel(tracing.LevelDebug)
 	gtrace.SyntaxTracer = gologadapter.New()
-	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	//gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	for i, input := range inputs {
 		scan := NewScanner(strings.NewReader(input), Testing(true))
 		accept, tree, err := Parse(scan)
