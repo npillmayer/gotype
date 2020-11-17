@@ -8,7 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/npillmayer/gotype/syntax/lr/earley"
 	"github.com/npillmayer/gotype/syntax/lr/sppf"
+	"github.com/npillmayer/gotype/syntax/terex/termr"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
@@ -70,6 +72,39 @@ func TestSelected(t *testing.T) {
 		} else {
 			dotty(tree, t)
 		}
+	}
+}
+
+func TestTermR(t *testing.T) {
+	input := "hello world"
+	gtrace.CoreTracer = gologadapter.New()
+	T().SetTraceLevel(tracing.LevelDebug)
+	gtrace.SyntaxTracer = gologadapter.New()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
+	scan := NewScanner(strings.NewReader(input), Testing(true))
+	accept, tree, err := Parse(scan)
+	if err != nil {
+		t.Error(err)
+	}
+	if !accept {
+		t.Fatalf("Test input '%s': not recognized as a valid Bidi run", input)
+	} else {
+		T().Infof("OK, tree type is %T", tree)
+		ab := termr.NewASTBuilder(globalBidiGrammar.Grammar())
+		ab.AddTermR(newBidiTreeOp("L"))
+		env := ab.AST(tree, earleyTokenReceiver(getParser()))
+		expected := ""
+		if env == nil || env.AST.Cdr == nil {
+			t.Errorf("AST is empty")
+		} else if env.AST.ListString() != expected {
+			t.Errorf("AST should be %s, is %s", expected, env.AST.ListString())
+		}
+	}
+}
+
+func earleyTokenReceiver(parser *earley.Parser) termr.TokenRetriever {
+	return func(pos uint64) interface{} {
+		return parser.TokenAt(pos)
 	}
 }
 
