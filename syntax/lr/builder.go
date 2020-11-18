@@ -28,8 +28,10 @@ import (
 // A call to b.Grammar() returns the (completed) grammar.
 //
 type GrammarBuilder struct {
-	g       *Grammar // the grammar to build
-	initial *Rule    // the top-level rule we will wrap around the user's first rule
+	g                  *Grammar      // the grammar to build
+	initial            *Rule         // the top-level rule we will wrap around the user's first rule
+	tokenizerHook      TokenizerHook // tokenizer hook in the resuting grammar
+	tokenValueSequence int           // internal sequence for terminal token values
 }
 
 // NewGrammarBuilder gets a new grammar builder, given the name of the grammar to build.
@@ -39,6 +41,7 @@ func NewGrammarBuilder(gname string) *GrammarBuilder {
 	sym := g.resolveOrDefineNonTerminal("S'")
 	gb.initial.LHS = sym                        // LHS of wrapper rule S' -> S #eof
 	gb.g.rules = append(gb.g.rules, gb.initial) // RHS to be added later
+	gb.tokenValueSequence = NonTermType
 	return gb
 }
 
@@ -75,6 +78,18 @@ func (gb *GrammarBuilder) Grammar() (*Grammar, error) {
 	return gb.g, nil
 }
 
+// SetTokenizerHook sets a tokenizer hook, which will be called by the grammar
+// to produce terminal tokens.
+func (gb *GrammarBuilder) SetTokenizerHook(hook TokenizerHook) {
+	gb.tokenizerHook = hook
+}
+
+// TokenizerHook is an interface for a hook function, which will produce properties
+// for a valid terminal token for this grammar.
+type TokenizerHook interface {
+	NewToken(string) (string, int)
+}
+
 // RuleBuilder is a builder type for rules.
 type RuleBuilder struct {
 	gb   *GrammarBuilder
@@ -103,6 +118,31 @@ func (rb *RuleBuilder) T(s string, tokval int) *RuleBuilder {
 	if tokval <= NonTermType {
 		T().Errorf("illegal token value parameter (%d), must be > %d", tokval, NonTermType)
 		panic(fmt.Sprintf("illegal token value parameter (%d)", tokval))
+	}
+	sym := rb.gb.g.resolveOrDefineTerminal(s, tokval)
+	lrs := sym
+	rb.rule.rhs = append(rb.rule.rhs, lrs)
+	return rb
+}
+
+// L appends a terminal/lexeme to the builder.
+// This will create a symbol for a terminal, with a token value > -1000.
+// This is due to the convention of the stdlib-package text/parser, which
+// uses token values > 0 for single-rune tokens and token values < 0 for
+// common language elements like identifiers, strings, numbers, etc.
+// (it is assumed that no symbol set will require more than 1000 of such
+// language elements). The method call will panic if this restriction is
+// violated.
+//
+// The token value will either be generated from an internal sequence, or –
+// if a tokenizer-hook is set – by the hook.
+func (rb *RuleBuilder) L(s string) *RuleBuilder {
+	tokval := 0
+	if rb.gb.tokenizerHook != nil {
+		s, tokval = rb.gb.tokenizerHook.NewToken(s)
+	} else {
+		rb.gb.tokenValueSequence++
+		tokval = rb.gb.tokenValueSequence
 	}
 	sym := rb.gb.g.resolveOrDefineTerminal(s, tokval)
 	lrs := sym
