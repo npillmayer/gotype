@@ -17,6 +17,7 @@ type EBNFGrammar struct {
 	Name    string
 	Start   string
 	ebnf    ebnf.Grammar
+	hook    string
 }
 
 // LoadEBNFFromComment searches for an EBNF grammar in a comments section of
@@ -24,7 +25,7 @@ type EBNFGrammar struct {
 // of EBNFGrammar with the grammar parsed.
 // If no grammar has been found or parsing an existing grammar resulted in an
 // error, an error is returned.
-func LoadEBNFFromComment(grammarname string, pkgname string) (*EBNFGrammar, error) {
+func LoadEBNFFromComment(grammarname string, pkgname string, hook string) (*EBNFGrammar, error) {
 	cfg := &packages.Config{Mode: packages.NeedSyntax}
 	pkgs, err := packages.Load(cfg, pkgname)
 	if err != nil {
@@ -51,6 +52,7 @@ func LoadEBNFFromComment(grammarname string, pkgname string) (*EBNFGrammar, erro
 						Name:    gname,
 						Start:   startsym,
 						ebnf:    g,
+						hook:    hook,
 					}, nil
 				}
 			}

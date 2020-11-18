@@ -54,7 +54,7 @@ func (gen *generator) genRuleCode(r *rule) {
 	gen.Printf("    b.LHS(\"%s\")", r.lhs)
 	for _, sym := range r.symbols {
 		if sym.isterm {
-			gen.Printf(".T(\"%s\")", sym.name)
+			gen.Printf(".L(\"%s\")", sym.name)
 		} else {
 			gen.Printf(".N(\"%s\")", sym.name)
 		}
@@ -84,15 +84,24 @@ func GenerateBuilder(g *EBNFGrammar) (string, error) {
 	gen.Printf("import \"github.com/npillmayer/gotype/syntax/lr\"\n\n")
 	gen.Printf("func MakeGrammar%s() (*lr.Grammar, error) {\n", gen.g.Name)
 	gen.Printf("    b := lr.NewGrammarBuilder(\"%s\")\n", gen.g.Name)
+	gen.GenerateHookCode()
 	gen.GenerateRules()
 	gen.Printf("    return b.Grammar()\n")
 	gen.Printf("}\n")
 	return gen.buf.String(), nil
 }
 
+// Generate Go source code for setting a token-generator hook for the grammar builder.
+func (gen *generator) GenerateHookCode() {
+	if gen.g.hook != "-" {
+		gen.Printf("    b.SetTokenizerHook(%s)\n", gen.g.hook)
+	}
+}
+
 func (gen *generator) GenerateRules() {
 	fmt.Printf("// Grammar builder for %d productions\n", len(gen.g.ebnf))
-	for _, prod := range gen.g.ebnf {
+	for i, prod := range gen.g.ebnf {
+		fmt.Printf("// Code for production #%s\n", i)
 		switch expr := prod.Expr.(type) {
 		case ebnf.Alternative:
 			for _, alt := range expr {
@@ -102,12 +111,13 @@ func (gen *generator) GenerateRules() {
 			gen.RHS(prod.Name.String, expr)
 		}
 	}
+	fmt.Printf("// Grammar builder done\n")
 	gen.RulesCode()
 }
 
 func (gen *generator) RHS(lhs string, rhs ebnf.Expression) {
 	if lhs != "Term" {
-		return
+		//return
 	}
 	var r *rule
 	switch e := rhs.(type) {
