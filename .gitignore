@@ -7,3 +7,5 @@
 *.pdf
 *.code-workspace
 generator
+
+syntax/lr/grammy/grammy
