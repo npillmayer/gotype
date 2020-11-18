@@ -190,8 +190,6 @@ func Parse(scanner *Scanner) (bool, *sppf.Forest, error) {
 	return accept, parsetree, err
 }
 
-// --- Helpers ---------------------------------------------------------------
-
 func bc(tokval bidi.Class) (string, int) {
 	return ":" + ClassString(tokval), int(tokval)
 }

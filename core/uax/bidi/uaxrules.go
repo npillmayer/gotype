@@ -54,3 +54,23 @@ N1.
 
 
 */
+
+// --- EBNF Grammar ----------------------------------------------------------
+
+// This is code, please to not edit!
+
+//go:generate grammy -grammar BiDi -hook bidiToken -package github.com/npillmayer/gotype/core/uax/bidi
+// Run         = "(" name ")" .
+
+func bidiToken(t string) (string, int) {
+	// TOOD
+	return t, -100
+}
+
+// Production  = name "=" [ Expression ] "." .
+// Expression  = Alternative { "|" Alternative } .
+// Alternative = Term { Term } .
+// Term        = name | token [ "…" token ] | Group | Option | Repetition .
+// Group       = "(" Expression ")" .
+// Option      = "[" Expression "]" .
+// Repetition  = "{" Expression "}" .
