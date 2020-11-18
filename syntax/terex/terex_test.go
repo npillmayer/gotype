@@ -89,16 +89,16 @@ func TestMatch2(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
-	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	S := GlobalEnvironment.Intern("S", false)
 	l1 := QuotedList("a", S, 2)
-	l2 := List("a", 1, 2)
+	l2 := List("a", 7, 2)
 	t.Logf("l1 = %s, l2 = %s", l1.ListString(), l2.ListString())
 	if !l1.Match(l2, GlobalEnvironment) {
 		t.Errorf("l1 and l2 expected to match, don't")
 	}
 	t.Logf(GlobalEnvironment.Dump())
-	if S.Value.typ != NumType { // S expected to be bound to 1
+	if S.Value.typ != NumType { // S expected to be bound to 7
 		t.Errorf("Symbol a expected to be of number type now, is %s", S.Value.typ.String())
 	}
 }
