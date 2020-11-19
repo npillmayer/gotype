@@ -261,11 +261,19 @@ func (env *Environment) String() string {
 // Dump is a debugging helper, listing all known symbols in env.
 func (env *Environment) Dump() string {
 	var b bytes.Buffer
+	b = env.dumpEnv(b)
+	return b.String()
+}
+
+func (env *Environment) dumpEnv(b bytes.Buffer) bytes.Buffer {
 	b.WriteString(env.String())
 	b.WriteString(" {\n")
 	for k, v := range env.dict {
 		b.WriteString(fmt.Sprintf("    %s = %v\n", k, v))
 	}
 	b.WriteString("}\n")
-	return b.String()
+	if env.parent != nil {
+		b = env.parent.dumpEnv(b)
+	}
+	return b
 }
