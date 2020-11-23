@@ -1,11 +1,13 @@
 package terexlang
 
 import (
+	"io/ioutil"
 	"testing"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
 	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/config/tracing/gotestingadapter"
+	"github.com/npillmayer/gotype/syntax/lr/sppf"
 	"github.com/npillmayer/gotype/syntax/terex"
 	"github.com/npillmayer/gotype/syntax/terex/termr"
 )
@@ -83,7 +85,7 @@ func TestParse(t *testing.T) {
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	terex.InitGlobalEnvironment()
-	input := "(0 (1))"
+	input := `(0 'Hi 1)`
 	//input := "(Hello 'World 1)"
 	parser := createParser()
 	scan, _ := lexer.Scanner(input)
@@ -96,13 +98,13 @@ func TestParse(t *testing.T) {
 	if !accept {
 		t.Errorf("No accept. Not a valid TeREx expression")
 	}
-	// parsetree := parser.ParseForest()
-	// tmpfile, err := ioutil.TempFile(".", "eval-parsetree-*.dot")
-	// if err != nil {
-	// 	t.Error("cannot open tmp file for graphviz output")
-	// }
-	// sppf.ToGraphViz(parsetree, tmpfile)
-	// T().Infof("Exported parse tree to %s", tmpfile.Name())
+	parsetree := parser.ParseForest()
+	tmpfile, err := ioutil.TempFile(".", "eval-parsetree-*.dot")
+	if err != nil {
+		t.Error("cannot open tmp file for graphviz output")
+	}
+	sppf.ToGraphViz(parsetree, tmpfile)
+	T().Infof("Exported parse tree to %s", tmpfile.Name())
 }
 
 func TestAST(t *testing.T) {
@@ -111,8 +113,8 @@ func TestAST(t *testing.T) {
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	terex.InitGlobalEnvironment()
-	//input := `(0 (1))`
-	input := `(+ '(1 "Hi" 3) 4)`
+	input := `(0 'Hi 1)`
+	//input := `(+ '(1 "Hi" 3) 4)`
 	parsetree, retr, err := Parse(input)
 	if err != nil {
 		t.Error(err)
@@ -136,6 +138,28 @@ func TestAST(t *testing.T) {
 	t.Fail()
 }
 
+func TestQuoteAST(t *testing.T) {
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
+	terex.InitGlobalEnvironment()
+	input := `(Hello 'World (+ 1 2) "string")`
+	tree, retr, err := Parse(input)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+	ast, env, err := AST(tree, retr)
+	t.Logf("\n\n" + ast.Tee().IndentedListString())
+	q, err := QuoteAST(ast.Tee(), env)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+	t.Logf("\n\n" + q.IndentedListString())
+	t.Fail()
+}
+
+/*
 func TestQuote(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
@@ -153,6 +177,7 @@ func TestQuote(t *testing.T) {
 		}
 	}
 }
+*/
 
 func NoTestEval(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()

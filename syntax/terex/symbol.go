@@ -63,9 +63,19 @@ func (sym Symbol) String() string {
 	return fmt.Sprintf("%s:%s(%s)", sym.Name, sym.Value.Type().String(), sym.Value.String())
 }
 
+// ValueType returns the type of a symbols value
+func (sym Symbol) ValueType() AtomType {
+	return sym.Value.Type()
+}
+
 // IsAtom returns true if a symbol represents an atom (not a cons).
 func (sym Symbol) IsAtom() bool {
 	return sym.Value.Type() != ConsType
+}
+
+// IsOperatorType returns true if a symbol represents an atom (not a cons).
+func (sym Symbol) IsOperatorType() bool {
+	return sym.Value.Type() == OperatorType
 }
 
 // Get returns a property value for a given key.
@@ -158,59 +168,10 @@ var initOnce sync.Once // monitors one-time initialization of global environment
 // found in the symbol table.
 func InitGlobalEnvironment() {
 	initOnce.Do(func() {
-		Defun("+", _Add, nil, GlobalEnvironment)
-		Defun("quote", _Quote, nil, GlobalEnvironment)
-		Defun("list", _ErrorMapper(errors.New("list used as function call")), _Identity,
-			GlobalEnvironment)
+		GlobalEnvironment.Defun("quote", _Eval)
+		GlobalEnvironment.Defun("list", _ErrorMapper(errors.New("list used as function call")))
+		//Defun("+", _Add, nil, GlobalEnvironment)
 	})
-}
-
-// Defun defines a new operator and stores its symbol in the given environment.
-// funcBody is the operator function, called during eval().
-func Defun(opname string, funcBody Mapper, quoter Mapper, env *Environment) {
-	opsym := GlobalEnvironment.Intern(opname, false)
-	opsym.Value = Atomize(&internalOp{sym: opsym, caller: funcBody, quoter: quoter})
-	T().Debugf("new interal op %s = %v", opsym.Name, opsym.Value)
-}
-
-type internalOp struct {
-	sym    *Symbol
-	caller Mapper
-	quoter Mapper
-}
-
-func (iop *internalOp) Call(el Element, env *Environment) Element {
-	// TODO is env needed for internal ops?
-	T().Errorf("######## iop=%s #################", iop.String())
-	if iop.caller == nil {
-		return el
-	}
-	return iop.caller(el)
-}
-
-// Quote
-// TODO The whole quote-thing is unnecessary. Currently we use it to get rid
-// of the #list:op quoting, but this should be replaced by a term rewrite.
-// #list is used as a sentinel to stop sequences from flowing in parent nodes.
-// It is useful until the first AST is complete. Afterwards, instead of quoting,
-// we should rewrite AST nodes of type #list.
-//
-func (iop *internalOp) Quote(el Element, env *Environment) Element {
-	// TODO is env needed for internal ops?
-	if iop.quoter == nil {
-		if el.IsAtom() {
-			return Elem(Cons(Atomize(iop), Cons(el.AsAtom(), nil)))
-		}
-		return Elem(Cons(Atomize(iop), el.AsList()))
-	}
-	return iop.quoter(el)
-}
-
-func (iop *internalOp) String() string {
-	if iop.sym != nil {
-		return iop.sym.Name
-	}
-	return "internal"
 }
 
 // NewEnvironment creates a new environment.
@@ -220,6 +181,15 @@ func NewEnvironment(name string, parent *Environment) *Environment {
 		parent: parent,
 		dict:   make(map[string]*Symbol),
 	}
+}
+
+// Defun defines a new operator and stores its symbol in the given environment.
+// funcBody is the operator function, called during eval().
+func (env *Environment) Defun(opname string, funcBody Mapper) *Symbol {
+	opsym := GlobalEnvironment.Intern(opname, false)
+	opsym.Value = Atomize(&internalOp{sym: opsym, call: funcBody})
+	T().Debugf("new interal op %s = %v", opsym.Name, opsym.Value)
+	return opsym
 }
 
 // FindSymbol checks wether a symbol is defined in env and returns it, if found.
@@ -258,6 +228,16 @@ func (env *Environment) String() string {
 	return env.name
 }
 
+// Error sets an error occuring in this environment.
+func (env *Environment) Error(e error) {
+	env.lastError = e
+}
+
+// LastError returns the last error occuring in this environment.
+func (env *Environment) LastError() error {
+	return env.lastError
+}
+
 // Dump is a debugging helper, listing all known symbols in env.
 func (env *Environment) Dump() string {
 	var b bytes.Buffer
@@ -276,4 +256,44 @@ func (env *Environment) dumpEnv(b bytes.Buffer) bytes.Buffer {
 		b = env.parent.dumpEnv(b)
 	}
 	return b
+}
+
+// Operator is an interface to be implemented by every operator-symbol, i.e., one
+// being able to operate on an argument list.
+type Operator interface {
+	String() string                     // returns the string representation of this operator
+	Call(Element, *Environment) Element // takes and returns *GCons or Node
+	//Quote(Element, *Environment) Element // takes and returns *GCons or Node
+}
+
+// Internal operators implement the Operator interface.
+type internalOp struct {
+	sym  *Symbol
+	call Mapper
+	//quoter Mapper
+}
+
+func (iop *internalOp) Call(el Element, env *Environment) Element {
+	if iop.call == nil {
+		return el
+	}
+	return iop.call(el, env)
+}
+
+func (iop *internalOp) Quote(el Element, env *Environment) Element {
+	// TODO is env needed for internal ops?
+	if iop.call == nil {
+		if el.IsAtom() {
+			return Elem(Cons(Atomize(iop), Cons(el.AsAtom(), nil)))
+		}
+		return Elem(Cons(Atomize(iop), el.AsList()))
+	}
+	return iop.call(el, env)
+}
+
+func (iop *internalOp) String() string {
+	if iop.sym != nil {
+		return iop.sym.Name
+	}
+	return "internal"
 }

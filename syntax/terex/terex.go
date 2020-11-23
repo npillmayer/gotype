@@ -211,7 +211,7 @@ func (l GCons) String() string {
 // ListString returns a string representing a list (or cons).
 func (l *GCons) ListString() string {
 	if l == nil {
-		return "NIL"
+		return "<NIL>"
 	}
 	var b bytes.Buffer
 	b.WriteString("(")
@@ -229,12 +229,45 @@ func (l *GCons) ListString() string {
 	return b.String()
 }
 
+// IndentedListString returns a string representing a list (or cons).
+func (l *GCons) IndentedListString() string {
+	var bf bytes.Buffer
+	bf = l.indLString(bf, 0)
+	return bf.String()
+}
+
+func (l *GCons) indLString(bf bytes.Buffer, ind int) bytes.Buffer {
+	if l == nil {
+		bf.WriteString("<NIL>")
+	}
+	bf.WriteString("(")
+	first := true
+	for l != nil {
+		if first {
+			first = false
+		} else {
+			bf.WriteString("\n")
+			bf.WriteString(indentation[:(ind+1)*3])
+		}
+		if l.Car.typ == ConsType {
+			bf = l.Car.Data.(*GCons).indLString(bf, ind+1)
+		} else {
+			bf.WriteString(l.Car.String())
+		}
+		l = l.Cdr
+	}
+	bf.WriteString(")")
+	return bf
+}
+
+var indentation = "                                                                   "
+
 // IsAtom returns false, i.e. NIL.
 func (l *GCons) IsAtom() Atom {
 	return NilAtom
 }
 
-// IsLeaf returns true if this node das have neither a Cdr nor
+// IsLeaf returns true if this node does have neither a Cdr nor
 // a left child.
 func (l *GCons) IsLeaf() bool {
 	return l.Cdr == nil && (l.Car.typ != ConsType || l.Car.Data == nil)
@@ -345,6 +378,9 @@ func (l *GCons) Length() int {
 }
 
 func (l *GCons) copyCons() *GCons {
+	if l == nil {
+		return nil
+	}
 	node := l.Car
 	return Cons(node, nil)
 }
@@ -367,6 +403,7 @@ func (l *GCons) FirstN(n int) *GCons {
 	return start
 }
 
+// Last returns the last element of a list or nil.
 func (l *GCons) Last() *GCons {
 	if l == nil {
 		return nil
@@ -377,30 +414,46 @@ func (l *GCons) Last() *GCons {
 	return l
 }
 
+// Concat appends a list or element at the end of the copy of a list.
 func (l *GCons) Concat(other *GCons) *GCons {
+	if l == nil {
+		return other
+	}
 	infinity := 999999
 	cc := l.FirstN(infinity) // make a copy
 	cc.Last().Cdr = other
 	return cc
 }
 
+// Append destructively appends a list to a list.
+func (l *GCons) Append(other *GCons) *GCons {
+	if l == nil {
+		return other
+	}
+	l.Last().Cdr = other
+	return l
+}
+
+// Branch destructively appends a list as a sublist to l.
+func (l *GCons) Branch(other *GCons) *GCons {
+	tee := Cons(Atomize(other), nil)
+	if l == nil {
+		l = tee
+	} else {
+		l.Last().Cdr = tee
+	}
+	return l
+}
+
 // Map applies a mapping-function to every element of a list.
-func (l *GCons) Map(mapper Mapper) *GCons {
-	return _Map(mapper, Elem(l)).AsList()
+func (l *GCons) Map(mapper Mapper, env *Environment) *GCons {
+	return _Map(mapper, Elem(l), env).AsList()
 }
 
 // --- Internal Operations ---------------------------------------------------
 
-// Operator is an interface to be implemented by every node being able to
-// operate on an argument list.
-type Operator interface {
-	String() string                      // returns the string representation of this operator
-	Call(Element, *Environment) Element  // takes and returns *GCons or Node
-	Quote(Element, *Environment) Element // takes and returns *GCons or Node
-}
-
 // A Mapper takes an atom or list and maps it to an atom or list
-type Mapper func(Element) Element
+type Mapper func(Element, *Environment) Element
 
 type Element struct {
 	thing interface{}
@@ -434,6 +487,11 @@ func (el Element) IsAtom() bool {
 }
 
 func (el Element) IsNil() bool {
+	if t, ok := el.thing.(*GCons); ok {
+		if t == nil {
+			return true
+		}
+	}
 	return el.thing == nil
 }
 
@@ -449,6 +507,9 @@ func (el Element) AsAtom() Atom {
 }
 
 func (el Element) AsList() *GCons {
+	if el.IsNil() {
+		return nil
+	}
 	if el.IsAtom() {
 		return Cons(el.thing.(Atom), nil)
 	}
@@ -531,22 +592,22 @@ func _Inc(args Element) Element {
 // 	panic(fmt.Errorf("_Quote called with op=list %s", op))
 // }
 
-func _Quote(args Element) Element {
+func _Eval(args Element, env *Environment) Element {
 	if args.IsAtom() {
 		return args
 	}
-	return GlobalEnvironment.quoteList(args.AsList())
+	return evalList(args.AsList(), env)
 }
 
 func _ErrorMapper(err error) Mapper {
-	return func(Element) Element {
+	return func(Element, *Environment) Element {
 		return Elem(ErrorAtom(err.Error()))
 	}
 }
 
-func _Map(mapper Mapper, args Element) Element {
+func _Map(mapper Mapper, args Element, env *Environment) Element {
 	arglist := args.AsList()
-	r := mapper(Elem(arglist.Car))
+	r := mapper(Elem(arglist.Car), env)
 	//T().Debugf("Map: mapping(%s) = %s", arglist.Car, r)
 	if arglist.Cdr == nil {
 		return r
@@ -555,7 +616,7 @@ func _Map(mapper Mapper, args Element) Element {
 	iter := result
 	cons := arglist.Cdr
 	for cons != nil {
-		el := mapper(Elem(cons.Car))
+		el := mapper(Elem(cons.Car), env)
 		//T().Debugf("Map: mapping(%s) = %s", cons.Car, el)
 		if el.IsError() {
 			return el

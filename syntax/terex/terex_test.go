@@ -19,6 +19,15 @@ func TestAssignability(t *testing.T) {
 	}
 }
 
+func TestAtomizeOp(t *testing.T) {
+	op := GlobalEnvironment.Defun("Hello", nil)
+	a := Atomize(op)
+	t.Logf("atom = %v", a)
+	if op.Value.Type() != OperatorType {
+		t.Errorf("expected symbol to be of operator type")
+	}
+}
+
 func TestList1(t *testing.T) {
 	l1 := List(1, 4, 6, 8, 12)
 	if l1.Length() != 5 {
@@ -119,8 +128,33 @@ func TestString(t *testing.T) {
 	if s != `(1 2 ("+" 5 7 12) "Hello")` {
 		t.Errorf(`Expected list to be (1 2 ("+" 5 7 12) "Hello"), is "%s"`, s)
 	}
+	t.Logf("\n\n" + l.IndentedListString())
 }
 
+func TestListAPI(t *testing.T) {
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	l := List(1, 2, 3)
+	t.Logf("last = %s", l.Last())
+	l.Append(List(5))
+	t.Logf("l = %s", l.ListString())
+	//t.Fail()
+}
+
+func TestNilElement(t *testing.T) {
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	n := Elem(nil)
+	if !n.IsNil() {
+		t.Errorf("nil-element expected to be recognized with isNil()")
+	}
+}
+
+/*
 func TestMap(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
@@ -133,6 +167,7 @@ func TestMap(t *testing.T) {
 		t.Errorf("Expected first element of r to be 2, is %g", r.Car.Data)
 	}
 }
+*/
 
 func TestEvalAdd(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()

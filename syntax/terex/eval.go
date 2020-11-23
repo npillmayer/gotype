@@ -35,46 +35,46 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 
 func (env *Environment) Eval(list *GCons) *GCons {
-	r := env.eval(Elem(list))
+	r := eval(Elem(list), env)
 	T().Debugf("Eval => %s", r.String())
 	return r.AsList()
 }
 
-func (env *Environment) eval(el Element) Element {
+func eval(el Element, env *Environment) Element {
 	T().Debugf("eval of %v", el)
 	if el.IsAtom() {
 		if el.AsAtom().Type() == ConsType {
 			sublist := el.AsAtom().Data.(*GCons)
-			mapped := env.evalList(sublist)
+			mapped := evalList(sublist, env)
 			return mapped
 		}
-		return env.evalAtom(el.AsAtom())
+		return evalAtom(el.AsAtom(), env)
 	}
 	list := el.AsList()
-	l := env.evalList(list)
+	l := evalList(list, env)
 	return l
 }
 
-func (env *Environment) evalList(list *GCons) Element {
+func evalList(list *GCons, env *Environment) Element {
 	if list == nil || list.Car == NilAtom {
 		return Elem(list)
 	}
 	op := list.Car
 	if op.typ != OperatorType {
-		verblist := list.Map(env.eval)
+		verblist := list.Map(eval, env)
 		return Elem(verblist)
 	}
-	T().Infof("-------- op=%s -----------", op.String())
+	T().Debugf("-------- op=%s -----------", op.String())
 	operator := op.Data.(Operator)
-	args := list.Cdr.Map(env.eval)
-	T().Infof("-------- call ------------")
+	args := list.Cdr.Map(eval, env)
+	T().Debugf("-------- call ------------")
 	ev := operator.Call(Elem(args), env)
-	T().Infof("  eval result = %v", ev)
-	T().Infof("--------------------------")
+	T().Debugf("  eval result = %v", ev)
+	T().Debugf("--------------------------")
 	return ev
 }
 
-func (env *Environment) evalAtom(atom Atom) Element {
+func evalAtom(atom Atom, env *Environment) Element {
 	if atom.Type() == TokenType {
 		if sym := env.FindSymbol("!TokenEvaluator", true); sym != nil {
 			if sym.Value.typ == OperatorType { // then use it
@@ -89,6 +89,16 @@ func (env *Environment) evalAtom(atom Atom) Element {
 
 // --- Quote -----------------------------------------------------------------
 
+// Quote traverses an s-expr and returns it as pure list/tree data.
+// It gets rid of #list:op and #quote:op nodes.
+//
+// If the environment contains a symbol's value, quoting will replace the symbol
+// by its value. For example, if the s-expr contains a symbol 'str' with a value
+// of "this is a string", the resulting data structure will contain the string,
+// not the name of the symbol. If you do not have use for this kind of substitution,
+// simply call Quote(…) for the global environment.
+//
+/*
 func (env *Environment) Quote(list *GCons) *GCons {
 	r := env.quote(Elem(list))
 	T().Debugf("Quote => %s", r)
@@ -161,3 +171,4 @@ func (env *Environment) quoteList(list *GCons) Element {
 	T().Infof("----------------------------------------------")
 	return quoted
 }
+*/

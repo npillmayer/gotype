@@ -182,6 +182,26 @@ func Eval(sexpr string) (*terex.GCons, *terex.Environment) {
 	return evald, env
 }
 
+// QuoteAST returns an AST, which should be the result of parsing an s-expr, as
+// pure data.
+//
+// If the environment contains any symbol's value, quoting will replace the symbol
+// by its value. For example, if the s-expr contains a symbol 'str' with a value
+// of "this is a string", the resulting data structure will contain the string,
+// not the name of the symbol. If you do not have use for this kind of substitution,
+// simply call Quote(…) for the global environment.
+//
+func QuoteAST(ast *terex.GCons, env *terex.Environment) (*terex.GCons, error) {
+	if env == nil {
+		env = terex.GlobalEnvironment
+	}
+	quEnv := terex.NewEnvironment("quoting", env)
+	quEnv.Defun("list", listOp.quote)
+	quEnv.Defun("quote", quoteOp.quote)
+	q := quEnv.Eval(ast)
+	return q, quEnv.LastError()
+}
+
 // Quote quotes an s-expr (given in textual form), thus returning it as data.
 // It will parse the string, create an internal S-expr structure (AST) and quote it,
 // using the symbols in env,
@@ -202,9 +222,10 @@ func Quote(sexpr string) (*terex.GCons, *terex.Environment, error) {
 		return nil, nil, env.LastError()
 	}
 	T().Infof("AST: %s", env.AST.ListString())
-	r := env.Quote(env.AST)
-	T().Infof("quote(AST) = %s", r.ListString())
-	return r, env, nil
+	//r := env.Quote(env.AST)
+	//T().Infof("quote(AST) = %s", r.ListString())
+	//return r, env, nil
+	return nil, env, nil
 }
 
 // --- S-expr AST-builder listener -------------------------------------------
@@ -217,8 +238,8 @@ type sExprTermR struct {
 	name    string
 	opname  string
 	rewrite func(*terex.GCons, *terex.Environment) terex.Element
+	quote   func(terex.Element, *terex.Environment) terex.Element
 	// call   func(terex.Element, *terex.Environment) terex.Element
-	// quote  func(terex.Element, *terex.Environment) terex.Element
 }
 
 func makeASTTermR(name string, opname string) *sExprTermR {
@@ -299,15 +320,22 @@ func initDefaultPatterns() {
 		// (:quote ' atom) =>  (:quote atom)
 		return terex.Elem(terex.Cons(l.Car, l.Cddr()))
 	}
+	quoteOp.quote = func(e terex.Element, env *terex.Environment) terex.Element {
+		T().Errorf("Un-QUOTE of %v", e)
+		// :quote(atom) =>  atom
+		return e
+	}
 	seqOp = makeASTTermR("Sequence", "seq")
 	seqOp.rewrite = func(l *terex.GCons, env *terex.Environment) terex.Element {
-		if l == nil {
+		switch l.Length() {
+		case 0:
 			return terex.Elem(nil)
-		}
-		if l.Cdar().Type() == terex.ConsType {
-			seq := l.Cdr.Tee().Concat(l.Cddr())
-			return terex.Elem(seq)
-		} else if l.Cddr() == nil {
+		case 1:
+			return terex.Elem(nil)
+		case 2:
+			if l.Cdar().Type() == terex.ConsType {
+				return terex.Elem(l.Cdr.Tee())
+			}
 			return terex.Elem(l.Cdar())
 		}
 		return terex.Elem(l.Cdr)
@@ -322,6 +350,11 @@ func initDefaultPatterns() {
 		content = content.FirstN(content.Length() - 1) // strip ')'
 		T().Debugf("List content = %v", content)
 		return terex.Elem(terex.Cons(l.Car, content)) // (List:Op ...)
+	}
+	listOp.quote = func(e terex.Element, env *terex.Environment) terex.Element {
+		// (:list a b c) =>  (a b c)
+		T().Errorf("Un-LIST of %v", e)
+		return e
 	}
 }
 
@@ -362,7 +395,7 @@ func (op globalOpInEnv) Quote(term terex.Element, env *terex.Environment) terex.
 		T().Errorf("Cannot quote-call parsing operation %s", op.opname)
 		return term
 	}
-	return operator.Quote(term, env)
+	return operator.Call(term, env)
 }
 
 func convertTerminalToken(el terex.Element, env *terex.Environment) terex.Element {
@@ -393,6 +426,9 @@ func convertTerminalToken(el terex.Element, env *terex.Environment) terex.Elemen
 			//runes := []rune(string(token.Lexeme))  // unnecessary
 			t.Value = string(token.Lexeme[1 : len(token.Lexeme)-1])
 		}
+	case tokenIds["VAR"]:
+		panic("VAR type tokens not yet implemented")
+		fallthrough
 	case tokenIds["ID"]:
 		s := string(token.Lexeme)
 		//sym := terex.GlobalEnvironment.Intern(s, true)
@@ -400,8 +436,6 @@ func convertTerminalToken(el terex.Element, env *terex.Environment) terex.Elemen
 		if sym != nil {
 			return terex.Elem(terex.Atomize(sym))
 		}
-	case tokenIds["VAR"]:
-		panic("VAR type tokens not yet implemented")
 	default:
 	}
 	return el
