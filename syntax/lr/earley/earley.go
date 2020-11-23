@@ -165,10 +165,13 @@ func (p *Parser) Parse(scan scanner.Tokenizer, listener Listener) (accept bool, 
 	if p.scanner = scan; scan == nil {
 		return false, fmt.Errorf("Earley-parser needs a valid scanner, is void")
 	}
+	p.scanner.SetErrorHandler(func(e error) {
+		err = e
+	})
 	p.forest = nil
-	startItem, _ := lr.StartItem(p.ga.Grammar().Rule(0))
-	p.states[0] = iteratable.NewSet(0) // S0
-	p.states[0].Add(startItem)         // S0 = { [S′→•S, 0] }
+	startItem, _ := lr.StartItem(p.ga.Grammar().Rule(0)) // create S′→•S
+	p.states[0] = iteratable.NewSet(0)                   // S0
+	p.states[0].Add(startItem)                           // S0 = { [S′→•S, 0] }
 	tokval, token, start, len := p.scanner.NextToken(scanner.AnyToken)
 	for { // outer loop over Si per input token xi
 		T().Debugf("Scanner read '%v|%d' @ %d", token, tokval, start)

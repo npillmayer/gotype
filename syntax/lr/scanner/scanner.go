@@ -27,25 +27,42 @@ const (
 // Tokenizer is a scanner interface.
 type Tokenizer interface {
 	NextToken(expected []int) (tokval int, token interface{}, start, len uint64)
+	SetErrorHandler(func(error))
 }
 
 // DefaultTokenizer is a default implementation, backed by scanner.Scanner.
 // Create one with GoTokenizer.
 type DefaultTokenizer struct {
 	scanner.Scanner
-	lastToken    rune
-	unifyStrings bool
+	lastToken    rune        // last token this scanner has produced
+	Error        func(error) // error handler
+	unifyStrings bool        // convert single chars to strings
+}
+
+// Defailt error reporting function for scanners
+func logError(e error) {
+	gtrace.SyntaxTracer.Errorf(e.Error())
 }
 
 // GoTokenizer creates a scanner/tokenizer accepting tokens similar to the Go language.
 func GoTokenizer(sourceID string, input io.Reader, opts ...Option) *DefaultTokenizer {
 	t := &DefaultTokenizer{}
+	t.Error = logError
 	t.Init(input)
 	t.Filename = sourceID
 	for _, opt := range opts {
 		opt(t)
 	}
 	return t
+}
+
+// SetErrorHandler sets an error handler for the scanner.
+func (t *DefaultTokenizer) SetErrorHandler(h func(error)) {
+	if h == nil {
+		t.Error = logError
+		return
+	}
+	t.Error = h
 }
 
 // NextToken is part of the Tokenizer interface.

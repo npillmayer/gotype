@@ -27,7 +27,7 @@ func NewLMAdapter(init func(*lex.Lexer), literals []string, keywords []string, t
 	init(adapter.Lexer)
 	for _, lit := range literals {
 		r := "\\" + strings.Join(strings.Split(lit, ""), "\\")
-		gtrace.SyntaxTracer.Debugf("adding literal %s", r)
+		//gtrace.SyntaxTracer.Debugf("adding literal %s", r)
 		adapter.Lexer.Add([]byte(r), MakeToken(lit, tokenIds[lit]))
 	}
 	for _, name := range keywords {
@@ -42,27 +42,41 @@ func NewLMAdapter(init func(*lex.Lexer), literals []string, keywords []string, t
 
 // Scanner creates a scanner for a given input. The scanner will implement the
 // Tokenizer interface.
-func (lm *LMAdapter) Scanner(input string) (LMScanner, error) {
+func (lm *LMAdapter) Scanner(input string) (*LMScanner, error) {
 	s, err := lm.Lexer.Scanner([]byte(input))
 	if err != nil {
-		return LMScanner{}, err
+		return &LMScanner{}, err
 	}
-	return LMScanner{s}, nil
+	return &LMScanner{s, logError}, nil
 }
 
 // LMScanner is a scanner type for lexmachine scanners, implementing the
 // Tokenizer interface.
 type LMScanner struct {
 	scanner *lex.Scanner
+	Error   func(error)
+}
+
+// SetErrorHandler sets an error handler for the scanner.
+func (lms *LMScanner) SetErrorHandler(h func(error)) {
+	if h == nil {
+		lms.Error = logError
+		return
+	}
+	lms.Error = h
 }
 
 // NextToken is part of the Tokenizer interface.
 //
 // Warning: The current implementation will ignore the 'expected'-argument.
-func (lms LMScanner) NextToken(expected []int) (int, interface{}, uint64, uint64) {
+func (lms *LMScanner) NextToken(expected []int) (int, interface{}, uint64, uint64) {
 	tok, err, eof := lms.scanner.Next()
-	if err != nil {
-		gtrace.SyntaxTracer.Errorf(err.Error())
+	for err != nil {
+		lms.Error(err)
+		if ui, is := err.(*machines.UnconsumedInput); is {
+			lms.scanner.TC = ui.FailTC
+		}
+		tok, err, eof = lms.scanner.Next()
 	}
 	if eof {
 		return EOF, nil, 0, 0
