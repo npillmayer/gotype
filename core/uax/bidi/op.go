@@ -23,6 +23,15 @@ type bidiTreeOp struct {
 	quote  func(terex.Element, *terex.Environment) terex.Element
 }
 
+func (op *bidiTreeOp) AddRule(pattern *terex.GCons, rew *termr.Rewriter) {
+}
+
+// makePattern creates a pattern from a TeREx-lang string.
+// Returns a TeREx element to be used in a term rewriting rule.
+func makePattern(pattern string) *terex.GCons {
+	return nil
+}
+
 // Rewrite performs termin rewriting für an AST node of the BiDi parse tree.
 //
 func (op *bidiTreeOp) Rewrite(l *terex.GCons, env *terex.Environment) terex.Element {

@@ -10,6 +10,8 @@ import (
 
 	"github.com/npillmayer/gotype/syntax/lr/earley"
 	"github.com/npillmayer/gotype/syntax/lr/sppf"
+	"github.com/npillmayer/gotype/syntax/terex"
+	"github.com/npillmayer/gotype/syntax/terex/terexlang"
 	"github.com/npillmayer/gotype/syntax/terex/termr"
 
 	"github.com/npillmayer/gotype/core/config/gtrace"
@@ -106,6 +108,20 @@ func earleyTokenReceiver(parser *earley.Parser) termr.TokenRetriever {
 	return func(pos uint64) interface{} {
 		return parser.TokenAt(pos)
 	}
+}
+
+func TestRewriting(t *testing.T) {
+	gtrace.CoreTracer = gologadapter.New()
+	T().SetTraceLevel(tracing.LevelError)
+	gtrace.SyntaxTracer = gologadapter.New()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
+	terex.InitGlobalEnvironment()
+	_, env := terexlang.Quote("(1 a)")
+	if env != nil {
+		t.Logf("=== Environment ===")
+		t.Logf(env.Dump())
+	}
+	t.Fail()
 }
 
 func TestCharacterTestfile(t *testing.T) {
