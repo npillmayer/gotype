@@ -42,14 +42,16 @@ import (
 	"github.com/timtadh/lexmachine"
 )
 
-// The tokens representing literal strings
-var literals = []string{"'", "(", ")", "[", "]", "=", "+", "-", "*", "/"}
+// The tokens representing literal one-char lexemes
+var literals = []string{"'", "(", ")", "[", "]"}
+var ops = []string{"+", "-", "*", "/", "=", "=", "!", "$", "%", "&", "?",
+	"<", ">", "≤", "≥", "≠", ".", ",", "^"}
 
 // The keyword tokens
 var keywords = []string{"nil", "t"}
 
 // All of the tokens (including literals and keywords)
-var tokens = []string{"COMMENT", "ID", "NUM", "STRING"}
+var tokens = []string{"COMMENT", "ID", "NUM", "STRING", "VAR"}
 
 // tokenIds will be set in initTokens()
 var tokenIds map[string]int // A map from the token names to their int ids
@@ -57,17 +59,25 @@ var tokenIds map[string]int // A map from the token names to their int ids
 var initOnce sync.Once // monitors one-time initialization
 func initTokens() {
 	initOnce.Do(func() {
-		var toks []string
-		toks = append(toks, tokens...)
-		toks = append(toks, keywords...)
-		toks = append(toks, literals...)
+		// var toks []string
+		// toks = append(toks, tokens...)
+		// toks = append(toks, ops...)
+		// toks = append(toks, keywords...)
+		// toks = append(toks, literals...)
 		tokenIds = make(map[string]int)
 		tokenIds["COMMENT"] = scanner.Comment
 		tokenIds["ID"] = scanner.Ident
-		tokenIds["NUM"] = scanner.Int
+		tokenIds["NUM"] = scanner.Float
 		tokenIds["STRING"] = scanner.String
-		for i, tok := range toks[4:] {
-			tokenIds[tok] = i + 10
+		tokenIds["VAR"] = -9
+		tokenIds["nil"] = 1
+		tokenIds["t"] = 2
+		for _, lit := range literals {
+			r := lit[0]
+			tokenIds[lit] = int(r)
+		}
+		for _, op := range ops {
+			tokenIds[op] = scanner.Ident
 		}
 	})
 }
@@ -85,13 +95,15 @@ func Token(t string) (string, int) {
 func Lexer() (*scanner.LMAdapter, error) {
 	initTokens()
 	init := func(lexer *lexmachine.Lexer) {
-		lexer.Add([]byte(`//[^\n]*\n?`), scanner.Skip)
+		lexer.Add([]byte(`;[^\n]*\n?`), scanner.Skip) // skip comments
 		lexer.Add([]byte(`\"[^"]*\"`), makeToken("STRING"))
-		lexer.Add([]byte(`#?([a-z]|[A-Z])([a-z]|[A-Z]|[0-9]|_|-)*[!\?]?`), makeToken("ID"))
-		lexer.Add([]byte(`[1-9][0-9]*`), makeToken("NUM"))
+		lexer.Add([]byte(`([a-z]|[A-Z])([a-z]|[A-Z]|[0-9]|_|-)*[!\?]?`), makeToken("ID"))
+		lexer.Add([]byte(`#([a-z]|[A-Z])([a-z]|[A-Z]|[0-9]|_|-)*[!\?]?`), makeToken("VAR"))
+		lexer.Add([]byte(`[\+\-]?[0-9]+(\.[0-9]+)?`), makeToken("NUM"))
 		lexer.Add([]byte(`( |\,|\t|\n|\r)+`), scanner.Skip)
+		//lexer.Add([]byte(`.`), makeToken("ID"))
 	}
-	adapter, err := scanner.NewLMAdapter(init, literals, keywords, tokenIds)
+	adapter, err := scanner.NewLMAdapter(init, append(literals, ops...), keywords, tokenIds)
 	if err != nil {
 		return nil, err
 	}

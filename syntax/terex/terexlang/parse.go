@@ -50,37 +50,31 @@ import (
 
 // --- Grammar ---------------------------------------------------------------
 
-// Atom       ::=  '^' Atom   // currently un-ambiguated by QuoteOrAtom
-// Atom       ::=  ident
-// Atom       ::=  string
-// Atom       ::=  int
-// Atom       ::=  Op
-// Op         ::=  '+' | '-' | '*' | '/' | '='
+// Atom       ::=  '\'' Atom   // currently un-ambiguated by QuoteOrAtom
+// Atom       ::=  ident             // a
+// Atom       ::=  string            // "abc"
+// Atom       ::=  number            // 123.45
+// Atom       ::=  variable          // :a
 // Atom       ::=  List
 // List       ::=  '(' Sequence ')'
 // Sequence   ::=  Sequence Atom
-// Sequence   ::=  Sequence
+// Sequence   ::=  Atom
 //
-// Comments starting with // will be filtered by the scanner.
-// ',' counts as whitespace and is discarded as well.
+// Comments starting with ';' will be filtered by the scanner.
+//
 func makeTermRGrammar() (*lr.LRAnalysis, error) {
-	b := lr.NewGrammarBuilder("TermR")
+	b := lr.NewGrammarBuilder("TeREx S-Expr")
 	b.LHS("QuoteOrAtom").N("Quote").End()
 	b.LHS("QuoteOrAtom").N("Atom").End()
 	b.LHS("Quote").T(Token("'")).N("Atom").End()
 	b.LHS("Atom").T(Token("ID")).End()
 	b.LHS("Atom").T(Token("STRING")).End()
 	b.LHS("Atom").T(Token("NUM")).End()
-	b.LHS("Atom").N("Op").End()
-	b.LHS("Op").T(Token("+")).End()
-	b.LHS("Op").T(Token("-")).End()
-	b.LHS("Op").T(Token("*")).End()
-	b.LHS("Op").T(Token("/")).End()
-	b.LHS("Op").T(Token("=")).End()
+	b.LHS("Atom").T(Token("VAR")).End()
 	b.LHS("Atom").N("List").End()
 	b.LHS("List").T(Token("(")).N("Sequence").T(Token(")")).End()
-	b.LHS("Sequence").N("Sequence").N("QuoteOrAtom").End()
-	b.LHS("Sequence").N("QuoteOrAtom").End()
+	b.LHS("Sequence").N("QuoteOrAtom").N("Sequence").End()
+	b.LHS("Sequence").Epsilon()
 	g, err := b.Grammar()
 	if err != nil {
 		return nil, err
@@ -90,8 +84,8 @@ func makeTermRGrammar() (*lr.LRAnalysis, error) {
 
 var grammar *lr.LRAnalysis
 var lexer *scanner.LMAdapter
-var astBuilder *termr.ASTBuilder
-var startOnce sync.Once // monitors one-time creation of grammar, lexer and AST-builder
+
+var startOnce sync.Once // monitors one-time creation of grammar and lexer
 
 func createParser() *earley.Parser {
 	startOnce.Do(func() {
@@ -105,14 +99,30 @@ func createParser() *earley.Parser {
 			panic("Cannot create global grammar")
 		}
 		initDefaultPatterns()
-		astBuilder = termr.NewASTBuilder(grammar.Grammar())
-		astBuilder.AddTermR(atomOp)
-		astBuilder.AddTermR(opOp)
-		astBuilder.AddTermR(quoteOp)
-		astBuilder.AddTermR(seqOp)
-		astBuilder.AddTermR(listOp)
 	})
 	return earley.NewParser(grammar, earley.GenerateTree(true))
+}
+
+// NewASTBuilder returns a new AST builder for the TeREx language
+func newASTBuilder() *termr.ASTBuilder {
+	ab := termr.NewASTBuilder(grammar.Grammar())
+	//ab.AddTermR(opOp)
+	ab.AddTermR(quoteOp)
+	ab.AddTermR(seqOp)
+	ab.AddTermR(listOp)
+	atomOp := makeASTTermR("Atom", "atom")
+	atomOp.rewrite = func(l *terex.GCons, env *terex.Environment) terex.Element {
+		// rewrite: (:atom x)  => x
+		e := terex.Elem(l.Cdar())
+		// in (atom x), check if x is terminal
+		if l.Cdr.IsLeaf() {
+			e = convertTerminalToken(e, ab.Env)
+		}
+		T().Infof("atomOp.rewrite => %s", e.String())
+		return e
+	}
+	ab.AddTermR(atomOp)
+	return ab
 }
 
 // Parse parses an input string in TeREx language format. It returns the
@@ -141,13 +151,29 @@ func earleyTokenReceiver(parser *earley.Parser) termr.TokenRetriever {
 	}
 }
 
+// AST creates an abstract syntax tree from a parse tree/forest.
+//
+// Returns a homogenous AST, a TeREx-environment and an error status.
+func AST(parsetree *sppf.Forest, tokRetr termr.TokenRetriever) (*terex.GCons,
+	*terex.Environment, error) {
+	ab := newASTBuilder()
+	env := ab.AST(parsetree, tokRetr)
+	if env == nil {
+		T().Errorf("Cannot create AST from parsetree")
+		return nil, nil, fmt.Errorf("Error while creating AST")
+	}
+	ast := env.AST
+	T().Infof("AST: %s", env.AST.ListString())
+	return ast, env, nil
+}
+
 // ---------------------------------------------------------------------------
 
 // Eval evaluates an s-expr (given in textual form).
 // It will parse the string, create an internal S-expr structure and evaluate it,
 // using the symbols in env,
 func Eval(sexpr string) (*terex.GCons, *terex.Environment) {
-	quoted, env := Quote(sexpr)
+	quoted, env, _ := Quote(sexpr)
 	if quoted == nil {
 		return nil, env
 	}
@@ -156,52 +182,50 @@ func Eval(sexpr string) (*terex.GCons, *terex.Environment) {
 	return evald, env
 }
 
-// Quote qotes an s-expr (given in textual form).
-// It will parse the string, create an internal S-expr structure and quote it,
+// Quote quotes an s-expr (given in textual form), thus returning it as data.
+// It will parse the string, create an internal S-expr structure (AST) and quote it,
 // using the symbols in env,
-func Quote(sexpr string) (*terex.GCons, *terex.Environment) {
+func Quote(sexpr string) (*terex.GCons, *terex.Environment, error) {
 	parsetree, tokRetr, err := Parse(sexpr)
 	if err != nil {
-		//env.lastError = err
-		T().Errorf("Eval parsing error: %v", err)
-		return nil, nil
+		T().Errorf("Parsing error: %v", err)
+		return nil, nil, err
 	}
 	if parsetree == nil {
-		T().Errorf("Empty eval() parse tree")
-		return nil, nil
+		T().Errorf("Empty parse tree, no AST to create")
+		return nil, nil, fmt.Errorf("Empty parse tree, no AST to create")
 	}
+	astBuilder := newASTBuilder()
 	env := astBuilder.AST(parsetree, tokRetr)
 	if env == nil {
-		T().Errorf("Cannot create AST from parsetree")
-		return nil, nil
+		T().Errorf("Error creating AST from parsetree")
+		return nil, nil, env.LastError()
 	}
 	T().Infof("AST: %s", env.AST.ListString())
 	r := env.Quote(env.AST)
 	T().Infof("quote(AST) = %s", r.ListString())
-	return r, env
+	return r, env, nil
 }
 
-// --- S-expr AST builder listener -------------------------------------------
+// --- S-expr AST-builder listener -------------------------------------------
 
-var atomOp *sExprTermR  // for Atom -> ... productions
-var opOp *sExprTermR    // for Op -> ... productions
 var quoteOp *sExprTermR // for Quote -> ... productions
 var seqOp *sExprTermR   // for Sequence -> ... productions
 var listOp *sExprTermR  // for List -> ... productions
 
 type sExprTermR struct {
-	name   string
-	opname string
-	rules  []termr.RewriteRule
-	call   func(terex.Element, *terex.Environment) terex.Element
-	quote  func(terex.Element, *terex.Environment) terex.Element
+	name    string
+	opname  string
+	rewrite func(*terex.GCons, *terex.Environment) terex.Element
+	// call   func(terex.Element, *terex.Environment) terex.Element
+	// quote  func(terex.Element, *terex.Environment) terex.Element
 }
 
 func makeASTTermR(name string, opname string) *sExprTermR {
 	termr := &sExprTermR{
 		name:   name,
 		opname: opname,
-		rules:  make([]termr.RewriteRule, 0, 1),
+		//rules:  make([]termr.RewriteRule, 0, 1),
 	}
 	return termr
 }
@@ -215,68 +239,71 @@ func (op *sExprTermR) Operator() terex.Operator {
 }
 
 func (op *sExprTermR) Rewrite(l *terex.GCons, env *terex.Environment) terex.Element {
-	T().Debugf("%s:Op.Rewrite[%s] called, %d rules", op.Name(), l.ListString(), len(op.rules))
-	for _, rule := range op.rules {
-		T().Infof("match: trying %s %% %s ?", rule.Pattern.ListString(), l.ListString())
-		if rule.Pattern.Match(l, env) {
-			T().Infof("Op %s has a match", op.Name())
-			//T().Debugf("-> pre rewrite: %s", l.ListString())
-			v := rule.Rewrite(l, env)
-			//T().Debugf("<- post rewrite:")
-			terex.DumpElement(v)
-			T().Infof("Op %s rewrite -> %s", op.Name(), v.String())
-			//return rule.Rewrite(l, env)
-			return v
-		}
-	}
-	return terex.Elem(l)
+	T().Debugf("%s:Op.Rewrite[%s] called", op.Name(), l.ListString())
+	e := op.rewrite(l, env)
+	// T().Debugf("%s:Op.Rewrite[%s] called, %d rules", op.Name(), l.ListString(), len(op.rules))
+	// for _, rule := range op.rules {
+	// 	T().Infof("match: trying %s %% %s ?", rule.Pattern.ListString(), l.ListString())
+	// 	if rule.Pattern.Match(l, env) {
+	// 		T().Infof("Op %s has a match", op.Name())
+	// 		//T().Debugf("-> pre rewrite: %s", l.ListString())
+	// 		v := rule.Rewrite(l, env)
+	// 		//T().Debugf("<- post rewrite:")
+	// 		terex.DumpElement(v)
+	// 		T().Infof("Op %s rewrite -> %s", op.Name(), v.String())
+	// 		//return rule.Rewrite(l, env)
+	// 		return v
+	// 	}
+	// }
+	return e
+	//return terex.Elem(e)
 }
 
 func (op *sExprTermR) Descend(sppf.RuleCtxt) bool {
 	return true
 }
 
-func (op *sExprTermR) Rule(pattern *terex.GCons, rw termr.Rewriter) *sExprTermR {
-	r := termr.RewriteRule{
-		Pattern: pattern,
-		Rewrite: rw,
-	}
-	op.rules = append(op.rules, r)
-	return op
-}
+// func (op *sExprTermR) Rule(pattern *terex.GCons, rw termr.Rewriter) *sExprTermR {
+// 	r := termr.RewriteRule{
+// 		Pattern: pattern,
+// 		Rewrite: rw,
+// 	}
+// 	op.rules = append(op.rules, r)
+// 	return op
+// }
 
 // SingleTokenArg is a pattern matching an operator with a single arg of TokenType.
-var SingleTokenArg *terex.GCons
+// var SingleTokenArg *terex.GCons
 
 func initDefaultPatterns() {
-	SingleTokenArg = terex.Cons(terex.Atomize(terex.OperatorType), termr.AnySymbol())
-	atomOp = makeASTTermR("Atom", "").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) terex.Element {
-		// in (atom x), check if x is terminal
-		e := convertTerminalToken(terex.Elem(l.Cdar()))
-		// rewrite: (atom x)  => x
-		return e
-	})
-	opOp = makeASTTermR("Op", "").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) terex.Element {
-		if l.Length() <= 1 || l.Cdar().Type() != terex.TokenType {
-			return terex.Elem(l)
-		}
-		// (op "x") => x:op
-		tname := l.Cdar().Data.(*terex.Token).String()
-		if sym := terex.GlobalEnvironment.FindSymbol(tname, true); sym != nil {
-			if sym.Value.Type() == terex.OperatorType {
-				op := terex.Atomize(&globalOpInEnv{tname})
-				return terex.Elem(op)
-			}
-		}
-		return terex.Elem(l)
-	})
-	_, tokval := Token("'")
-	p := terex.Cons(terex.Atomize(terex.OperatorType),
-		terex.Cons(terex.Atomize(&terex.Token{Name: "'", TokType: tokval}), termr.AnySymbol()))
-	quoteOp = makeASTTermR("Quote", "quote").Rule(p, func(l *terex.GCons, env *terex.Environment) terex.Element {
+	// SingleTokenArg = terex.Cons(terex.Atomize(terex.OperatorType), termr.AnySymbol())
+	// opOp = makeASTTermR("Op", "").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) terex.Element {
+	// 	if l.Length() <= 1 || l.Cdar().Type() != terex.TokenType {
+	// 		return terex.Elem(l)
+	// 	}
+	// 	// (op "x") => x:op
+	// 	tname := l.Cdar().Data.(*terex.Token).String()
+	// 	if sym := terex.GlobalEnvironment.FindSymbol(tname, true); sym != nil {
+	// 		if sym.Value.Type() == terex.OperatorType {
+	// 			op := terex.Atomize(&globalOpInEnv{tname})
+	// 			return terex.Elem(op)
+	// 		}
+	// 	}
+	// 	return terex.Elem(l)
+	// })
+	// _, tokval := Token("'")
+	// p := terex.Cons(terex.Atomize(terex.OperatorType),
+	// 	terex.Cons(terex.Atomize(&terex.Token{Name: "'", TokType: tokval}), termr.AnySymbol()))
+	quoteOp = makeASTTermR("Quote", "quote")
+	quoteOp.rewrite = func(l *terex.GCons, env *terex.Environment) terex.Element {
+		// (:quote ' atom) =>  (:quote atom)
 		return terex.Elem(terex.Cons(l.Car, l.Cddr()))
-	})
-	seqOp = makeASTTermR("Sequence", "!seq").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) terex.Element {
+	}
+	seqOp = makeASTTermR("Sequence", "seq")
+	seqOp.rewrite = func(l *terex.GCons, env *terex.Environment) terex.Element {
+		if l == nil {
+			return terex.Elem(nil)
+		}
 		if l.Cdar().Type() == terex.ConsType {
 			seq := l.Cdr.Tee().Concat(l.Cddr())
 			return terex.Elem(seq)
@@ -284,16 +311,18 @@ func initDefaultPatterns() {
 			return terex.Elem(l.Cdar())
 		}
 		return terex.Elem(l.Cdr)
-	})
-	listOp = makeASTTermR("List", "list").Rule(termr.Anything(), func(l *terex.GCons, env *terex.Environment) terex.Element {
-		// list '(' x y ... ')'  => (#list x y ...)
-		if l.Length() <= 3 { // ( )
-			return terex.Elem(nil)
-		}
-		content := l.Cddr()                            // strip (
-		content = content.FirstN(content.Length() - 1) // strip )
-		return terex.Elem(terex.Cons(l.Car, content))  // (List:Op ...)
-	})
+	}
+	listOp = makeASTTermR("List", "list")
+	listOp.rewrite = func(l *terex.GCons, env *terex.Environment) terex.Element {
+		// list '(' x y ... ')'  => (:list x y ...)
+		// if l.Length() <= 3 { // ( )
+		// 	return terex.Elem(l.Car)
+		// }
+		content := l.Cddr()                            // strip '('
+		content = content.FirstN(content.Length() - 1) // strip ')'
+		T().Debugf("List content = %v", content)
+		return terex.Elem(terex.Cons(l.Car, content)) // (List:Op ...)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -336,7 +365,7 @@ func (op globalOpInEnv) Quote(term terex.Element, env *terex.Environment) terex.
 	return operator.Quote(term, env)
 }
 
-func convertTerminalToken(el terex.Element) terex.Element {
+func convertTerminalToken(el terex.Element, env *terex.Environment) terex.Element {
 	if !el.IsAtom() {
 		return el
 	}
@@ -358,14 +387,21 @@ func convertTerminalToken(el terex.Element) terex.Element {
 			return terex.Elem(terex.Atomize(err))
 		}
 	case tokenIds["STRING"]:
-		t.Value = string(token.Lexeme)
+		if (len(token.Lexeme)) <= 2 {
+			t.Value = ""
+		} else { // trim off "…"
+			//runes := []rune(string(token.Lexeme))  // unnecessary
+			t.Value = string(token.Lexeme[1 : len(token.Lexeme)-1])
+		}
 	case tokenIds["ID"]:
 		s := string(token.Lexeme)
-		//sym := terex.GlobalEnvironment.FindSymbol(s, true)
-		sym := terex.GlobalEnvironment.Intern(s, true)
+		//sym := terex.GlobalEnvironment.Intern(s, true)
+		sym := env.Intern(s, true)
 		if sym != nil {
 			return terex.Elem(terex.Atomize(sym))
 		}
+	case tokenIds["VAR"]:
+		panic("VAR type tokens not yet implemented")
 	default:
 	}
 	return el

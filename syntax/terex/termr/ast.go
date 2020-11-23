@@ -37,24 +37,32 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/npillmayer/gotype/syntax/lr"
-	"github.com/npillmayer/gotype/syntax/lr/iteratable"
 	"github.com/npillmayer/gotype/syntax/lr/sppf"
 	"github.com/npillmayer/gotype/syntax/terex"
 	"github.com/timtadh/lexmachine"
 )
 
-// ASTBuilder is a parse tree listener for building ASTs.
+// ASTBuilder is a parse tree listener for building ASTs. It will construct an
+// abstract syntax tree (AST) while walking the parse tree. As we may support
+// ambiguous grammars, the parse tree may happen to be a parse forest, containing
+// more than one derivation for a sentence.
 type ASTBuilder struct {
 	G                *lr.Grammar        // input grammar the parse forest stems from
-	Env              *terex.Environment // environment for the AST to create
-	forest           *sppf.Forest       // input parse forest
-	toks             TokenRetriever     // retriever parse tree leafs
-	rewriters        map[string]TermR
-	conflictStrategy sppf.Pruner
-	Error            func(error)
-	stack            []*terex.GCons
+	Env              *terex.Environment // environment for symbols of the AST to create
+	forest           *sppf.Forest       // input parse tree/forest
+	conflictStrategy sppf.Pruner        // how to deal with parse-forest ambiguities
+	toks             TokenRetriever     // retriever for parse tree leafs
+	rewriters        map[string]TermR   // term rewriters to apply
+	Error            func(error)        // user supplied handler for errors
+	stack            []*terex.GCons     // used for recursive operator walking
+}
+
+// ErrorHandler is an interface to process errors occuring during parsing.
+type ErrorHandler interface {
+	Error(error) bool
 }
 
 // NewASTBuilder creates an AST builder from a parse forest/tree.
@@ -80,7 +88,7 @@ type TermR interface {
 	Operator() terex.Operator                               // operator to place as sub-tree node
 }
 
-// AddTermR adds an AST rewriter for a grammar symbol to the builder.
+// AddTermR adds an AST rewriter for a non-terminal grammar symbol to the builder.
 func (ab *ASTBuilder) AddTermR(op TermR) {
 	if op != nil {
 		ab.rewriters[op.Name()] = op
@@ -117,11 +125,11 @@ func (ab *ASTBuilder) EnterRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.
 		if !rew.Descend(ctxt) {
 			return false
 		}
-		T().Errorf("enter operator symbol: %v", sym)
+		T().Debugf("-------> enter operator symbol: %v", sym)
 		opSymListStart := terex.Cons(terex.Atomize(rew.Operator()), nil)
 		ab.stack = append(ab.stack, opSymListStart) // put '(op ... ' on stack
 	} else {
-		T().Debugf("enter grammar symbol: %v", sym)
+		T().Debugf("-------> enter grammar symbol: %v", sym)
 	}
 	return true
 }
@@ -129,23 +137,25 @@ func (ab *ASTBuilder) EnterRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.
 // ExitRule is part of sppf.Listener interface.
 // Not intended for direct client use.
 func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.RuleCtxt) interface{} {
+	T().Debugf("<------- exit symbol: %v, now rewriting", sym)
 	if op, ok := ab.rewriters[sym.Name]; ok {
-		env, err := EnvironmentForGrammarSymbol(sym.Name, ab.G)
+		//env, err := ab.EnvironmentForGrammarSymbol(sym.Name)
+		env, err := ab.EnvironmentForGrammarRule(sym.Name, rhs)
 		if err != nil && ab.Error != nil {
 			ab.Error(err)
 		}
-		rhsList := ab.stack[len(ab.stack)-1]
-		end := rhsList
-		T().Infof("iterating over %d RHS elements", len(rhs))
-		for _, r := range rhs {
-			T().Infof("r = %v", r)
-			// TODO set value of RHS vars in Env
-			rhssym := env.Intern(r.Symbol().Name, true)
-			T().Infof("sym = %v", sym)
-			if !r.Symbol().IsTerminal() {
-				rhssym.Value.Data = r.Value
-			}
-			rhsList, end = growRHSList(rhsList, end, r, env)
+		rhsList := ab.stack[len(ab.stack)-1] // operator is TOS ⇒ first element of RHS list
+		//end := rhsList
+		for _, r := range rhs { // collect all the value of RHS symbols
+			// T().Infof("r = %v", r)
+			// // TODO set value of RHS vars in Env
+			// rhssym := env.Intern(r.Symbol().Name, true)
+			// T().Infof("sym = %v", sym)
+			// if !r.Symbol().IsTerminal() {
+			// 	rhssym.Value.Data = r.Value
+			// }
+			//rhsList, end = growRHSList(rhsList, end, r, env)
+			rhsList = appendRHSResult(rhsList, r)
 		}
 		T().Infof("%s: Rewrite of %s", sym.Name, rhsList.ListString())
 		rewritten := op.Rewrite(rhsList, env) // returns a terex.Element
@@ -153,25 +163,52 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 		T().Infof("%s returns %s", sym.Name, rewritten.String())
 		return rewritten
 	}
-	var list, end *terex.GCons
+	//var list, end *terex.GCons
+	var list *terex.GCons
+	T().Infof("%s will rewrite |rhs| = %d symbols", sym.Name, len(rhs))
 	for _, r := range rhs {
-		list, end = growRHSList(list, end, r, terex.GlobalEnvironment)
+		//list, end = growRHSList(list, end, r, terex.GlobalEnvironment)
+		list = appendRHSResult(list, r)
 	}
 	rew := noOpRewrite(list)
 	T().Infof("%s returns %s", sym.Name, rew.String())
-	T().Infof("exit grammar symbol: %v", sym)
+	T().Infof("done with rewriting grammar symbol: %v", sym)
 	return rew
 }
 
 func noOpRewrite(list *terex.GCons) terex.Element {
+	T().Debugf("no-op rewrite of %v", list)
 	if list != nil && list.Length() == 1 {
 		return terex.Elem(list.Car)
 	}
 	return terex.Elem(list)
 }
 
+func appendRHSResult(list *terex.GCons, r *sppf.RuleNode) *terex.GCons {
+	if _, ok := r.Value.(terex.Element); !ok {
+		T().Errorf("r.Value=%v", r.Value)
+		panic("RHS symbol is not of type Element")
+	}
+	e := r.Value.(terex.Element) // value of rule-node r is either atom or list
+	// T().Debugf("RHS-appending value = %s", e.String())
+	if e.IsNil() {
+		return list
+	}
+	if e.IsAtom() {
+		list = list.Append(terex.Cons(e.AsAtom(), nil))
+		return list
+	}
+	l := e.AsList()
+	if l.Car.Type() == terex.OperatorType {
+		list = list.Branch(l)
+	} else {
+		list = list.Append(l)
+	}
+	return list
+}
+
 //func growRHSList(start, end *terex.GCons, r *sppf.RuleNode, env *terex.Environment) (*terex.GCons, *terex.GCons) {
-func growRHSList(start, end *terex.GCons, r *sppf.RuleNode, env *terex.Environment) (*terex.GCons, *terex.GCons) {
+/* func growRHSList(start, end *terex.GCons, r *sppf.RuleNode, env *terex.Environment) (*terex.GCons, *terex.GCons) {
 	if _, ok := r.Value.(terex.Element); !ok {
 		T().Errorf("r.Value=%v", r.Value)
 		panic("RHS symbol is not of type Element")
@@ -203,11 +240,16 @@ func growRHSList(start, end *terex.GCons, r *sppf.RuleNode, env *terex.Environme
 		}
 	}
 	return start, end
-}
+} */
 
 // Terminal is part of sppf.Listener interface.
 // Not intended for direct client use.
 func (ab *ASTBuilder) Terminal(tokval int, token interface{}, ctxt sppf.RuleCtxt) interface{} {
+	// T().Errorf("TERMINAL TOKEN FOR %d ------------------", tokval)
+	// T().Errorf("SPAN = %d", ctxt.Span.Len())
+	if ctxt.Span.Len() == 0 { // RHS is epsilon
+		return terex.Elem(nil)
+	}
 	terminal := ab.G.Terminal(tokval)
 	tokpos := ctxt.Span.From()
 	t := ab.toks(tokpos) // opaque token type
@@ -241,8 +283,104 @@ func (ab *ASTBuilder) MakeAttrs(*lr.Symbol) interface{} {
 	return nil // TODO
 }
 
+// EnvironmentForGrammarSymbol creates an empty new environment, suitable for the
+// grammar symbols at a given tree node of a parse-tree or AST.
+func (ab *ASTBuilder) environmentForGrammarSymbol(symname string) (*terex.Environment, error) {
+	if ab.G == nil {
+		return terex.GlobalEnvironment, errors.New("Grammar is null")
+	}
+	envname := "#" + symname
+	//if env := terex.GlobalEnvironment.FindSymbol(envname, false); env != nil {
+	/* 	if env := ab.Env.FindSymbol(envname, false); env != nil {
+		if env.Value.Type() != terex.EnvironmentType {
+			panic(fmt.Errorf("Internal error, environment misconstructed: %s", envname))
+		}
+		return env.Value.Data.(*terex.Environment), nil
+	} */
+	env := terex.NewEnvironment(envname, ab.Env)
+	gsym := ab.G.SymbolByName(symname)
+	if gsym == nil || gsym.IsTerminal() {
+		//return terex.GlobalEnvironment, fmt.Errorf("Non-terminal not found in grammar: %s", symname)
+		return env, fmt.Errorf("Non-terminal not found in grammar: %s", symname)
+	}
+	/* 	rhsSyms := iteratable.NewSet(0)
+	   	rules := ab.G.FindNonTermRules(gsym, false)
+	   	rules.IterateOnce()
+	   	for rules.Next() {
+	   		rule := rules.Item().(lr.Item).Rule()
+	   		for _, s := range rule.RHS() {
+	   			rhsSyms.Add(s)
+	   		}
+	   	}
+	   	rhsSyms.IterateOnce()
+	   	for rhsSyms.Next() {
+	   		gsym := rhsSyms.Item().(*lr.Symbol)
+	   		sym := env.Intern(gsym.Name, false)
+	   		if gsym.IsTerminal() {
+	   			sym.Value = terex.Atomize(gsym.Value)
+	   		}
+	   	} */
+	// e := globalEnvironment.Intern(envname, false)
+	// e.atom.typ = EnvironmentType
+	// e.atom.Data = env
+	return env, nil
+}
+
+// EnvironmentForGrammarRule creates a new environment, suitable for the
+// grammar symbols at a given tree node of a parse-tree or AST.
+//
+// Given a grammar production
+//
+//     A -> B C D
+//
+// it will create an environment #A for A, with pre-interned (but empty) symbols
+// for A, B, C and D. If any of the right-hand-side symbols are terminals, they will
+// be created as nodes with an appropriate atom type.
+//
+// For recurring non-terminal RHS symbols, as in
+//
+//     A -> B + B
+//
+// sequence number suffixes will be created. The grammar rule above will produce an
+// environment containing
+//
+//     B, B.1   for the 1st B
+//     B.2      for the 2nd B
+//
+func (ab *ASTBuilder) EnvironmentForGrammarRule(symname string, rhs []*sppf.RuleNode) (*terex.Environment, error) {
+	env, err := ab.environmentForGrammarSymbol(symname)
+	if err != nil {
+		return env, err
+	}
+	symtrack := make(map[string]int)
+	for _, r := range rhs { // set value of RHS vars in Env
+		T().Debugf("RHS: r = %v", r)
+		symname := r.Symbol().Name
+		count := symtrack[symname]
+		envsym := env.Intern(symname+"."+strconv.Itoa(count), true)
+		setSymbolValue(envsym, r)
+		if count == 0 {
+			//envsym := env.Intern(r.Symbol().Name, true)
+			envsym = env.Intern(symname, true)
+			setSymbolValue(envsym, r)
+		}
+		symtrack[symname] = count + 1
+		T().Debugf("env sym = %v", envsym)
+	}
+	return env, nil
+}
+
 // --- Helpers ---------------------------------------------------------------
 
+func setSymbolValue(envsym *terex.Symbol, r *sppf.RuleNode) {
+	if r.Symbol().IsTerminal() {
+		envsym.Value.Data = r.Value
+	} else {
+		envsym.Value = terex.Atomize(r.Value)
+	}
+}
+
+/*
 func appendAtom(cons *terex.GCons, atom terex.Atom) *terex.GCons {
 	if atom == terex.NilAtom {
 		return cons
@@ -265,7 +403,7 @@ func appendList(cons *terex.GCons, list *terex.GCons) (*terex.GCons, *terex.GCon
 	for cons.Cdr != nil {
 		cons = cons.Cdr
 	}
-	T().Debugf("appendList: new list is %s", start.ListString())
+	//T().Debugf("appendList: new list is %s", start.ListString())
 	return start, cons
 }
 
@@ -278,53 +416,4 @@ func appendTee(cons *terex.GCons, list *terex.GCons) *terex.GCons {
 	}
 	return tee
 }
-
-// EnvironmentForGrammarSymbol creates a new environment, suitable for the
-// grammar symbols at a given tree node of a parse-tree or AST.
-//
-// Given a grammar production
-//
-//     A -> B C D
-//
-// it will create an environment #A for A, with pre-interned (but empty) symbols
-// for A, B, C and D. If any of the right-hand-side symbols are terminals, they will
-// be created as nodes with an appropriate atom type.
-//
-func EnvironmentForGrammarSymbol(symname string, G *lr.Grammar) (*terex.Environment, error) {
-	if G == nil {
-		return terex.GlobalEnvironment, errors.New("Grammar is null")
-	}
-	envname := "#" + symname
-	if env := terex.GlobalEnvironment.FindSymbol(envname, false); env != nil {
-		if env.Value.Type() != terex.EnvironmentType {
-			panic(fmt.Errorf("Internal error, environment misconstructed: %s", envname))
-		}
-		return env.Value.Data.(*terex.Environment), nil
-	}
-	gsym := G.SymbolByName(symname)
-	if gsym == nil || gsym.IsTerminal() {
-		return terex.GlobalEnvironment, fmt.Errorf("Non-terminal not found in grammar: %s", symname)
-	}
-	env := terex.NewEnvironment(envname, nil)
-	rhsSyms := iteratable.NewSet(0)
-	rules := G.FindNonTermRules(gsym, false)
-	rules.IterateOnce()
-	for rules.Next() {
-		rule := rules.Item().(lr.Item).Rule()
-		for _, s := range rule.RHS() {
-			rhsSyms.Add(s)
-		}
-	}
-	rhsSyms.IterateOnce()
-	for rhsSyms.Next() {
-		gsym := rhsSyms.Item().(*lr.Symbol)
-		sym := env.Intern(gsym.Name, false)
-		if gsym.IsTerminal() {
-			sym.Value = terex.Atomize(gsym.Value)
-		}
-	}
-	// e := globalEnvironment.Intern(envname, false)
-	// e.atom.typ = EnvironmentType
-	// e.atom.Data = env
-	return env, nil
-}
+*/

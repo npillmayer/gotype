@@ -10,6 +10,31 @@ import (
 	"github.com/npillmayer/gotype/syntax/terex/termr"
 )
 
+func TestScanner(t *testing.T) {
+	gtrace.SyntaxTracer = gotestingadapter.New()
+	teardown := gotestingadapter.RedirectTracing(t)
+	defer teardown()
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	lex, _ := Lexer()
+	input := "+ Hello '(1.2 world !) #var nil ;"
+	scan, err := lex.Scanner(input)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+	scan.SetErrorHandler(func(e error) {
+		t.Error(e)
+	})
+	done := false
+	for !done {
+		tokval, token, _, _ := scan.NextToken(nil)
+		if tokval == -1 {
+			done = true
+		} else {
+			t.Logf("token = %v with value = %d", token, tokval)
+		}
+	}
+}
+
 func TestAssignability(t *testing.T) {
 	var e interface{} = &sExprTermR{name: "Hello"}
 	switch x := e.(type) {
@@ -26,19 +51,19 @@ func TestAssignability(t *testing.T) {
 	}
 }
 
-func TestMatchAnyOp(t *testing.T) {
-	gtrace.SyntaxTracer = gotestingadapter.New()
-	teardown := gotestingadapter.RedirectTracing(t)
-	defer teardown()
-	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
-	initTokens()
-	initDefaultPatterns()
-	l1 := terex.List(makeASTTermR("S", "start").Operator(), 1)
-	t.Logf("l1 = %s, pattern = %s", l1.ListString(), SingleTokenArg.ListString())
-	if !SingleTokenArg.Match(l1, terex.GlobalEnvironment) {
-		t.Errorf("Expected l1 to match pattern (Op any)")
-	}
-}
+// func TestMatchAnyOp(t *testing.T) {
+// 	gtrace.SyntaxTracer = gotestingadapter.New()
+// 	teardown := gotestingadapter.RedirectTracing(t)
+// 	defer teardown()
+// 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+// 	initTokens()
+// 	initDefaultPatterns()
+// 	l1 := terex.List(makeASTTermR("S", "start").Operator(), 1)
+// 	t.Logf("l1 = %s, pattern = %s", l1.ListString(), SingleTokenArg.ListString())
+// 	if !SingleTokenArg.Match(l1, terex.GlobalEnvironment) {
+// 		t.Errorf("Expected l1 to match pattern (Op any)")
+// 	}
+// }
 
 func TestMatchAnything(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
@@ -58,7 +83,7 @@ func TestParse(t *testing.T) {
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	terex.InitGlobalEnvironment()
-	input := "(+ 1 2 3)"
+	input := "(0 (1))"
 	//input := "(Hello 'World 1)"
 	parser := createParser()
 	scan, _ := lexer.Scanner(input)
@@ -74,7 +99,7 @@ func TestParse(t *testing.T) {
 	// parsetree := parser.ParseForest()
 	// tmpfile, err := ioutil.TempFile(".", "eval-parsetree-*.dot")
 	// if err != nil {
-	// 	panic("cannot open tmp file")
+	// 	t.Error("cannot open tmp file for graphviz output")
 	// }
 	// sppf.ToGraphViz(parsetree, tmpfile)
 	// T().Infof("Exported parse tree to %s", tmpfile.Name())
@@ -86,7 +111,8 @@ func TestAST(t *testing.T) {
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	terex.InitGlobalEnvironment()
-	input := "(+ (+ 2 3) 4)"
+	//input := `(0 (1))`
+	input := `(+ '(1 "Hi" 3) 4)`
 	parsetree, retr, err := Parse(input)
 	if err != nil {
 		t.Error(err)
@@ -94,9 +120,10 @@ func TestAST(t *testing.T) {
 	if parsetree == nil || retr == nil {
 		t.Errorf("parse tree or  token retriever is nil")
 	}
-	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	T().Infof("####################################################")
-	env := astBuilder.AST(parsetree, retr)
+	ab := newASTBuilder()
+	env := ab.AST(parsetree, retr)
 	if env == nil {
 		t.Errorf("Cannot create AST from parsetree")
 	}
@@ -104,8 +131,9 @@ func TestAST(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
 	T().Infof("AST: %s", ast.ListString())
 	T().Infof("####################################################")
-	terseAst := terex.GlobalEnvironment.Quote(ast)
-	T().Infof("reduced AST: %s", terseAst.ListString())
+	// terseAst := terex.GlobalEnvironment.Quote(ast)
+	// T().Infof("reduced AST: %s", terseAst.ListString())
+	t.Fail()
 }
 
 func TestQuote(t *testing.T) {
@@ -126,7 +154,7 @@ func TestQuote(t *testing.T) {
 	}
 }
 
-func TestEval(t *testing.T) {
+func NoTestEval(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
