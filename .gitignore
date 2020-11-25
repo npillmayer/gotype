@@ -9,3 +9,7 @@
 generator
 
 syntax/lr/grammy/grammy
+
+syntax/terex/termr/termrl/termrl
+
+syntax/terex/terexlang/trepl/trepl
