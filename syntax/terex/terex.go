@@ -310,9 +310,9 @@ func makeList(quoted bool, things []interface{}) *GCons {
 
 // Cons creates a cons from a given Atom and a Cdr.
 func Cons(car Atom, cdr *GCons) *GCons {
-	if car == NilAtom {
-		return cdr
-	}
+	// if car == NilAtom {
+	// 	return cdr
+	// }
 	return &GCons{Car: car, Cdr: cdr}
 }
 
@@ -448,6 +448,23 @@ func (l *GCons) Branch(other *GCons) *GCons {
 // Map applies a mapping-function to every element of a list.
 func (l *GCons) Map(mapper Mapper, env *Environment) *GCons {
 	return _Map(mapper, Elem(l), env).AsList()
+}
+
+// Reduce applies a mapping-function to every element of a list.
+func (l *GCons) Reduce(f func(Atom, Atom) Atom, initial Atom, env *Environment) Atom {
+	if l.Length() == 0 {
+		return initial
+	}
+	result := f(initial, l.Car)
+	if l.Length() > 1 {
+		rest := l.Cdr
+		for rest != nil {
+			result = f(result, rest.Car)
+			rest = rest.Cdr
+		}
+	}
+	//T().Debugf("_Map result = %s", result.ListString())
+	return result
 }
 
 // --- Internal Operations ---------------------------------------------------
@@ -607,8 +624,11 @@ func _ErrorMapper(err error) Mapper {
 
 func _Map(mapper Mapper, args Element, env *Environment) Element {
 	arglist := args.AsList()
+	if arglist == nil {
+		return Elem(nil)
+	}
 	r := mapper(Elem(arglist.Car), env)
-	//T().Debugf("Map: mapping(%s) = %s", arglist.Car, r)
+	T().Debugf("Map: mapping(%s) = %s", arglist.Car, r)
 	if arglist.Cdr == nil {
 		return r
 	}
@@ -617,7 +637,7 @@ func _Map(mapper Mapper, args Element, env *Environment) Element {
 	cons := arglist.Cdr
 	for cons != nil {
 		el := mapper(Elem(cons.Car), env)
-		//T().Debugf("Map: mapping(%s) = %s", cons.Car, el)
+		T().Debugf("Map: mapping(%s) = %s", cons.Car, el)
 		if el.IsError() {
 			return el
 		}

@@ -23,8 +23,11 @@ func TestAtomizeOp(t *testing.T) {
 	op := GlobalEnvironment.Defun("Hello", nil)
 	a := Atomize(op)
 	t.Logf("atom = %v", a)
+	if a.Type() != VarType {
+		t.Errorf("expected symbol to be of var type")
+	}
 	if op.Value.Type() != OperatorType {
-		t.Errorf("expected symbol to be of operator type")
+		t.Errorf("expected symbol-value to be of operator type")
 	}
 }
 

@@ -44,7 +44,7 @@ import (
 
 // The tokens representing literal one-char lexemes
 var literals = []string{"'", "(", ")", "[", "]"}
-var ops = []string{"+", "-", "*", "/", "=", "=", "!", "$", "%", "&", "?",
+var ops = []string{"+", "-", "*", "/", "=", "=", "!", "%", "&", "?",
 	"<", ">", "≤", "≥", "≠", ".", ",", "^"}
 
 // The keyword tokens
@@ -98,7 +98,7 @@ func Lexer() (*scanner.LMAdapter, error) {
 		lexer.Add([]byte(`;[^\n]*\n?`), scanner.Skip) // skip comments
 		lexer.Add([]byte(`\"[^"]*\"`), makeToken("STRING"))
 		lexer.Add([]byte(`([a-z]|[A-Z])([a-z]|[A-Z]|[0-9]|_|-)*[!\?]?`), makeToken("ID"))
-		lexer.Add([]byte(`#([a-z]|[A-Z])([a-z]|[A-Z]|[0-9]|_|-)*[!\?]?`), makeToken("VAR"))
+		lexer.Add([]byte(`$([a-z]|[A-Z])([a-z]|[A-Z]|[0-9]|_|-)*[!\?]?`), makeToken("VAR"))
 		lexer.Add([]byte(`[\+\-]?[0-9]+(\.[0-9]+)?`), makeToken("NUM"))
 		lexer.Add([]byte(`( |\,|\t|\n|\r)+`), scanner.Skip)
 		//lexer.Add([]byte(`.`), makeToken("ID"))

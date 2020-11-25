@@ -36,7 +36,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"sync"
 )
@@ -66,6 +65,11 @@ func (sym Symbol) String() string {
 // ValueType returns the type of a symbols value
 func (sym Symbol) ValueType() AtomType {
 	return sym.Value.Type()
+}
+
+// IsNil returns true if the symbol's value is NilAtom
+func (sym Symbol) IsNil() bool {
+	return sym.Value.Data == nil
 }
 
 // IsAtom returns true if a symbol represents an atom (not a cons).
@@ -155,7 +159,12 @@ type Environment struct {
 	parent    *Environment
 	dict      map[string]*Symbol
 	lastError error
+	Resolver  SymbolResolver
 	AST       *GCons
+}
+
+type SymbolResolver interface {
+	Resolve(Atom, *Environment, bool) (Atom, error)
 }
 
 // GlobalEnvironment is the base environment all other environments stem from.
@@ -168,9 +177,18 @@ var initOnce sync.Once // monitors one-time initialization of global environment
 // found in the symbol table.
 func InitGlobalEnvironment() {
 	initOnce.Do(func() {
-		GlobalEnvironment.Defun("quote", _Eval)
-		GlobalEnvironment.Defun("list", _ErrorMapper(errors.New("list used as function call")))
-		//Defun("+", _Add, nil, GlobalEnvironment)
+		// GlobalEnvironment.Defn("quote", func(e Element, env *Environment) Element {
+		// 	return e
+		// })
+		GlobalEnvironment.Defn("list", func(e Element, env *Environment) Element {
+			// (:list a b c) =>  a.call(b c)
+			list := e.AsList()
+			if list.Length() == 0 { //  () => nil  [empty list is nil]
+				return Elem(nil)
+			}
+			e = Eval(Elem(list), env)
+			return e
+		})
 	})
 }
 
@@ -183,13 +201,21 @@ func NewEnvironment(name string, parent *Environment) *Environment {
 	}
 }
 
-// Defun defines a new operator and stores its symbol in the given environment.
+// Defn defines a new operator and stores its symbol in the given environment.
 // funcBody is the operator function, called during eval().
-func (env *Environment) Defun(opname string, funcBody Mapper) *Symbol {
-	opsym := GlobalEnvironment.Intern(opname, false)
+func (env *Environment) Defn(opname string, funcBody Mapper) *Symbol {
+	opsym := env.Intern(opname, false)
 	opsym.Value = Atomize(&internalOp{sym: opsym, call: funcBody})
 	T().Debugf("new interal op %s = %v", opsym.Name, opsym.Value)
 	return opsym
+}
+
+// Def defines a symbol and stores a value for it, if any.
+func (env *Environment) Def(symname string, value Atom) *Symbol {
+	sym := env.Intern(symname, false)
+	sym.Value = value
+	T().Debugf("new interal sym %s = %v", sym.Name, sym.Value)
+	return sym
 }
 
 // FindSymbol checks wether a symbol is defined in env and returns it, if found.
@@ -263,6 +289,7 @@ func (env *Environment) dumpEnv(b bytes.Buffer) bytes.Buffer {
 type Operator interface {
 	String() string                     // returns the string representation of this operator
 	Call(Element, *Environment) Element // takes and returns *GCons or Node
+	//IsQuoter() bool                     // does this operator prevent eval of arguments?
 	//Quote(Element, *Environment) Element // takes and returns *GCons or Node
 }
 
@@ -280,16 +307,16 @@ func (iop *internalOp) Call(el Element, env *Environment) Element {
 	return iop.call(el, env)
 }
 
-func (iop *internalOp) Quote(el Element, env *Environment) Element {
-	// TODO is env needed for internal ops?
-	if iop.call == nil {
-		if el.IsAtom() {
-			return Elem(Cons(Atomize(iop), Cons(el.AsAtom(), nil)))
-		}
-		return Elem(Cons(Atomize(iop), el.AsList()))
-	}
-	return iop.call(el, env)
-}
+// func (iop *internalOp) Quote(el Element, env *Environment) Element {
+// 	// TODO is env needed for internal ops?
+// 	if iop.call == nil {
+// 		if el.IsAtom() {
+// 			return Elem(Cons(Atomize(iop), Cons(el.AsAtom(), nil)))
+// 		}
+// 		return Elem(Cons(Atomize(iop), el.AsList()))
+// 	}
+// 	return iop.call(el, env)
+// }
 
 func (iop *internalOp) String() string {
 	if iop.sym != nil {

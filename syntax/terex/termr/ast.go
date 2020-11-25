@@ -82,16 +82,16 @@ func NewASTBuilder(g *lr.Grammar) *ASTBuilder {
 
 // TermR is a type for a rewriter for AST creation and transformation.
 type TermR interface {
-	Name() string                                           // printable name
+	String() string                                         // printable name
 	Rewrite(*terex.GCons, *terex.Environment) terex.Element // term rewriting
 	Descend(sppf.RuleCtxt) bool                             // predicate wether to descend to children nodes
 	Operator() terex.Operator                               // operator to place as sub-tree node
 }
 
 // AddTermR adds an AST rewriter for a non-terminal grammar symbol to the builder.
-func (ab *ASTBuilder) AddTermR(op TermR) {
-	if op != nil {
-		ab.rewriters[op.Name()] = op
+func (ab *ASTBuilder) AddTermR(trew TermR) {
+	if trew != nil {
+		ab.rewriters[trew.String()] = trew
 	}
 }
 

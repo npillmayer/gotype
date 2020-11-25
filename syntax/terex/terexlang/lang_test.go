@@ -72,7 +72,7 @@ func TestMatchAnything(t *testing.T) {
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
-	initDefaultPatterns()
+	initRewriters()
 	l := terex.List(1, 2, 3)
 	if !termr.Anything().Match(l, terex.GlobalEnvironment) {
 		t.Errorf("Expected !Anything to match (1 2 3)")
@@ -144,13 +144,15 @@ func TestQuoteAST(t *testing.T) {
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	terex.InitGlobalEnvironment()
-	input := `(Hello 'World (+ 1 2) "string")`
+	//input := `(Hello 'World (+ 1 2) "string")`
+	input := `(Hello 'World)`
 	tree, retr, err := Parse(input)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
 	ast, env, err := AST(tree, retr)
 	t.Logf("\n\n" + ast.Tee().IndentedListString())
+	env.Def("Hello", terex.Atomize(7))
 	q, err := QuoteAST(ast.Tee(), env)
 	if err != nil {
 		t.Errorf(err.Error())
