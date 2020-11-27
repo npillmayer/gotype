@@ -54,7 +54,7 @@ import (
 // Atom       ::=  ident             // a
 // Atom       ::=  string            // "abc"
 // Atom       ::=  number            // 123.45
-// Atom       ::=  variable          // :a
+// Atom       ::=  variable          // $a
 // Atom       ::=  List
 // List       ::=  '(' Sequence ')'
 // Sequence   ::=  Sequence Atom
@@ -115,6 +115,7 @@ func newASTBuilder() *termr.ASTBuilder {
 		// rewrite: (:atom x)  => x
 		e := terex.Elem(l.Cdar())
 		// in (atom x), check if x is terminal
+		T().Infof("atomOp.rewrite: l.Cdr = %v", e)
 		if l.Cdr.IsLeaf() {
 			e = convertTerminalToken(e, ab.Env)
 		}
@@ -192,7 +193,8 @@ func Eval(sexpr string) (*terex.GCons, *terex.Environment) {
 // not the name of the symbol. If you do not have use for this kind of substitution,
 // simply call Quote(…) for the global environment.
 //
-func QuoteAST(ast *terex.GCons, env *terex.Environment) (*terex.GCons, error) {
+func QuoteAST(ast terex.Element, env *terex.Environment) (terex.Element, error) {
+	// ast *terex.GCons
 	if env == nil {
 		env = terex.GlobalEnvironment
 	}
@@ -200,7 +202,7 @@ func QuoteAST(ast *terex.GCons, env *terex.Environment) (*terex.GCons, error) {
 	quEnv.Defn("list", listOp.call)
 	//quEnv.Defn("quote", quoteOp.call)
 	quEnv.Resolver = symbolPreservingResolver{}
-	q := quEnv.Eval(ast)
+	q := terex.Eval(ast, quEnv)
 	return q, quEnv.LastError()
 }
 
@@ -264,8 +266,8 @@ func (trew *sExprTermR) String() string {
 }
 
 func (trew *sExprTermR) Operator() terex.Operator {
-	//return trew
-	return listOp
+	return trew
+	//return listOp
 	//return &globalOpInEnv{op.opname}
 }
 
@@ -444,7 +446,6 @@ func convertTerminalToken(el terex.Element, env *terex.Environment) terex.Elemen
 	if atom.Type() != terex.TokenType {
 		return el
 	}
-	//T().Infof("token atom = %s", atom)
 	t := atom.Data.(*terex.Token)
 	token := t.Token.(*lexmachine.Token)
 	T().Infof("Convert terminal token: '%v'", string(token.Lexeme))
