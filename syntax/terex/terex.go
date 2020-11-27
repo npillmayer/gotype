@@ -644,7 +644,6 @@ func _Map(mapper Mapper, args Element, env *Environment) Element {
 	iter := result
 	cons := arglist.Cdr
 	for cons != nil {
-		T().Errorf("_MAP: cons = %v", cons)
 		el := mapper(Elem(cons.Car), env)
 		T().Debugf("Map: mapping(%s) = %s", cons.Car, el)
 		if el.IsError() {
