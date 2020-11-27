@@ -8,7 +8,7 @@ import (
 
 // TokenAt returns the input token at position pos.
 func (p *Parser) TokenAt(pos uint64) interface{} {
-	if pos > 0 && pos < uint64(len(p.tokens)) {
+	if pos >= 0 && pos < uint64(len(p.tokens)) {
 		return p.tokens[pos+1] // tokens start at index 1
 	}
 	return nil
