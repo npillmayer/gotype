@@ -528,6 +528,9 @@ func (el Element) AsAtom() Atom {
 	if el.IsAtom() {
 		return el.thing.(Atom)
 	}
+	if el.IsNil() {
+		return NilAtom
+	}
 	return Atomize(el.thing.(*GCons))
 }
 
