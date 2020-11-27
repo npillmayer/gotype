@@ -174,6 +174,11 @@ func (a Atom) String() string {
 		}
 		o := a.Data.(Operator)
 		return fmt.Sprintf("#%s", o.String())
+	case UserType:
+		if a.Data == nil {
+			return "<UType:nil>"
+		}
+		return "<UType>"
 	}
 	return fmt.Sprintf("%s[%v]", a.typ, a.Data)
 }
@@ -477,6 +482,9 @@ type Element struct {
 }
 
 func Elem(thing interface{}) Element {
+	if e, ok := thing.(Element); ok {
+		return e
+	}
 	return Element{thing: thing}
 }
 
@@ -636,6 +644,7 @@ func _Map(mapper Mapper, args Element, env *Environment) Element {
 	iter := result
 	cons := arglist.Cdr
 	for cons != nil {
+		T().Errorf("_MAP: cons = %v", cons)
 		el := mapper(Elem(cons.Car), env)
 		T().Debugf("Map: mapping(%s) = %s", cons.Car, el)
 		if el.IsError() {
