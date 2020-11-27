@@ -147,7 +147,7 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 		rhsList := ab.stack[len(ab.stack)-1] // operator is TOS ⇒ first element of RHS list
 		//end := rhsList
 		for _, r := range rhs { // collect all the value of RHS symbols
-			// T().Infof("r = %v", r)
+			T().Infof("r = %v", r)
 			// // TODO set value of RHS vars in Env
 			// rhssym := env.Intern(r.Symbol().Name, true)
 			// T().Infof("sym = %v", sym)
@@ -354,7 +354,7 @@ func (ab *ASTBuilder) EnvironmentForGrammarRule(symname string, rhs []*sppf.Rule
 	}
 	symtrack := make(map[string]int)
 	for _, r := range rhs { // set value of RHS vars in Env
-		T().Debugf("RHS: r = %v", r)
+		// T().Debugf("RHS: r = %v", r)
 		symname := r.Symbol().Name
 		count := symtrack[symname]
 		envsym := env.Intern(symname+"."+strconv.Itoa(count), true)
