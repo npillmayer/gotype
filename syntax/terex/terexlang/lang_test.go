@@ -18,7 +18,7 @@ func TestScanner(t *testing.T) {
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	lex, _ := Lexer()
-	input := "+ Hello '(1.2 world !) #var nil ;"
+	input := "a + '(1.2 world !) #var nil ;"
 	scan, err := lex.Scanner(input)
 	if err != nil {
 		t.Errorf(err.Error())
@@ -85,7 +85,7 @@ func TestParse(t *testing.T) {
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	terex.InitGlobalEnvironment()
-	input := `(0 'Hi 1)`
+	input := `a`
 	//input := "(Hello 'World 1)"
 	parser := createParser()
 	scan, _ := lexer.Scanner(input)
@@ -113,7 +113,7 @@ func TestAST(t *testing.T) {
 	defer teardown()
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	terex.InitGlobalEnvironment()
-	input := `(0 'Hi 1)`
+	input := `a`
 	//input := `(+ '(1 "Hi" 3) 4)`
 	parsetree, retr, err := Parse(input)
 	if err != nil {
@@ -122,7 +122,7 @@ func TestAST(t *testing.T) {
 	if parsetree == nil || retr == nil {
 		t.Errorf("parse tree or  token retriever is nil")
 	}
-	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelInfo)
+	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelDebug)
 	T().Infof("####################################################")
 	ab := newASTBuilder()
 	env := ab.AST(parsetree, retr)
@@ -135,7 +135,6 @@ func TestAST(t *testing.T) {
 	T().Infof("####################################################")
 	// terseAst := terex.GlobalEnvironment.Quote(ast)
 	// T().Infof("reduced AST: %s", terseAst.ListString())
-	t.Fail()
 }
 
 func TestQuoteAST(t *testing.T) {
@@ -145,20 +144,28 @@ func TestQuoteAST(t *testing.T) {
 	gtrace.SyntaxTracer.SetTraceLevel(tracing.LevelError)
 	terex.InitGlobalEnvironment()
 	//input := `(Hello 'World (+ 1 2) "string")`
-	input := `(Hello 'World)`
+	input := `a`
 	tree, retr, err := Parse(input)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
 	ast, env, err := AST(tree, retr)
-	t.Logf("\n\n" + ast.Tee().IndentedListString())
-	env.Def("Hello", terex.Atomize(7))
-	q, err := QuoteAST(ast.Tee(), env)
+	//t.Logf("\n\n" + debugString(terex.Elem(ast.Car)))
+	t.Logf("\n\n" + debugString(terex.Elem(ast)))
+	env.Def("a", terex.Atomize(7))
+	q, err := QuoteAST(terex.Elem(ast.Car), env)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
-	t.Logf("\n\n" + q.IndentedListString())
+	t.Logf("\n\n" + debugString(q))
 	t.Fail()
+}
+
+func debugString(e terex.Element) string {
+	if e.IsAtom() {
+		return e.String()
+	}
+	return e.AsList().IndentedListString()
 }
 
 /*

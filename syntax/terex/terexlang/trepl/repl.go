@@ -67,6 +67,7 @@ func main() {
 	input := strings.Join(flag.Args(), " ")
 	input = strings.TrimSpace(input)
 	T().Infof("Input argument is \"%s\"", input)
+	env := initSymbols(ga)
 	repl, err := readline.New("trepl> ")
 	if err != nil {
 		T().Errorf(err.Error())
@@ -76,6 +77,7 @@ func main() {
 		lastInput: input,
 		GA:        ga,
 		repl:      repl,
+		env:       env,
 	}
 	if input != "" {
 		intp.tree, intp.tretr, err = Parse(ga, input)
@@ -85,7 +87,6 @@ func main() {
 		}
 	}
 	T().Infof("Quit with <ctrl>D")
-	stdEnv = terexlang.LoadStandardLanguage()
 	intp.REPL()
 }
 
@@ -96,6 +97,15 @@ func initDisplay() {
 		Text:  "  Error",
 		Style: pterm.NewStyle(pterm.BgLightRed, pterm.FgBlack),
 	}
+}
+
+func initSymbols(ga *lr.LRAnalysis) *terex.Environment {
+	terex.InitGlobalEnvironment()
+	stdEnv = terexlang.LoadStandardLanguage()
+	env := terex.NewEnvironment("trepl", stdEnv)
+	// G is expression grammar (analyzed)
+	env.Def("G", terex.Atomize(ga))
+	return env
 }
 
 type Intp struct {
@@ -124,7 +134,7 @@ func (intp *Intp) REPL() {
 		// err, quit := intp.Execute(cmd, args)
 		err, quit := intp.Eval(line)
 		if err != nil {
-			T().Errorf(err.Error())
+			//T().Errorf(err.Error())
 			pterm.Error.Println(err.Error())
 			continue
 		}
@@ -138,7 +148,6 @@ func (intp *Intp) REPL() {
 func (intp *Intp) Eval(line string) (error, bool) {
 	level := T().GetTraceLevel()
 	T().SetTraceLevel(tracing.LevelError)
-	terex.InitGlobalEnvironment()
 	tree, retr, err := terexlang.Parse(line)
 	T().SetTraceLevel(level)
 	if err != nil {
@@ -150,20 +159,32 @@ func (intp *Intp) Eval(line string) (error, bool) {
 	T().SetTraceLevel(level)
 	T().Infof("\n\n" + ast.IndentedListString() + "\n\n")
 	T().Infof("------------------------------------------------------------------")
-	q, err := terexlang.QuoteAST(ast.Tee(), env)
+	q, err := terexlang.QuoteAST(terex.Elem(ast.Car), env)
 	T().SetTraceLevel(level)
 	if err != nil {
 		//T().Errorf(err.Error())
 		return err, false
 	}
-	T().Infof("\n\n" + q.IndentedListString() + "\n\n")
-	T().Infof(env.Dump())
+	T().Infof("\n\n" + q.String() + "\n\n")
+	//T().Infof(env.Dump())
 	T().Infof("==================================================================")
-	result := terex.Eval(terex.Elem(q), stdEnv)
+	T().Infof(intp.env.Dump())
+	result := terex.Eval(q, intp.env)
+	if result.IsNil() {
+		if stdEnv.LastError() != nil {
+			pterm.Info.Println(stdEnv.LastError())
+			return stdEnv.LastError(), false
+		}
+		T().Infof("result: nil")
+		pterm.Info.Println("nil")
+		return nil, false
+	}
 	if result.AsAtom().Type() == terex.ErrorType {
+		pterm.Error.Println(result.AsAtom().Data.(error).Error())
 		return fmt.Errorf(result.AsAtom().Data.(error).Error()), false
 	}
 	T().Infof(result.String())
+	pterm.Info.Println(result.String())
 	return nil, false
 }
 
