@@ -63,7 +63,7 @@ func evalList(list *GCons, env *Environment) Element {
 	}
 	carAtom, err := resolve(list.Car, env, true)
 	if err != nil {
-		return Elem(nil)
+		return Elem(ErrorAtom(err.Error()))
 	}
 	if carAtom.Type() != OperatorType { // Resolver gave us this
 		verblist := list.Map(Eval, env) // ⇒ accept it
@@ -107,20 +107,26 @@ func (dsr DefaultSymbolResolver) Resolve(atom Atom, env *Environment, asOp bool)
 		sym := env.FindSymbol(atomSym.Name, true)
 		if sym == nil {
 			T().Errorf("Unable to resolve symbol '%s' in environment", atomSym.Name)
-			return atom, fmt.Errorf("Unable to resolve symbol '%s' in environment", atomSym.Name)
+			err := fmt.Errorf("Unable to resolve symbol '%s' in environment", atomSym.Name)
+			env.Error(err)
+			return atom, err
 		}
 		valueAtom := sym.Value
 		if asOp && valueAtom.Type() != OperatorType {
 			env.lastError = fmt.Errorf("Symbol '%s' cannot be resolved as operator", sym.Name)
 			T().Errorf("Symbol '%s' cannot be resolved as operator", sym.Name)
-			return NilAtom, fmt.Errorf("Symbol '%s' cannot be resolved as operator", sym.Name)
+			err := fmt.Errorf("Symbol '%s' cannot be resolved as operator", sym.Name)
+			env.Error(err)
+			return NilAtom, err
 		}
 		return valueAtom, nil
 	}
 	if asOp { // atom is neither a symbol nor an operator, but operator expected
 		env.lastError = fmt.Errorf("Atom '%s' cannot be cast to operator ", atom)
 		T().Errorf("Atom '%s' cannot be cast to operator ", atom)
-		return NilAtom, fmt.Errorf("Atom '%s' cannot be cast to operator ", atom)
+		err := fmt.Errorf("Atom '%s' cannot be cast to operator ", atom)
+		env.Error(err)
+		return NilAtom, err
 	}
 	return atom, nil
 }
