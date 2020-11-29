@@ -71,6 +71,10 @@ type ErrorHandler interface {
 // Clients will first create an ASTBuilder, then initialize it with all the
 // term rewriters and variables/symbols necessary, and finally call ASTBuilder.AST(…).
 func NewASTBuilder(g *lr.Grammar) *ASTBuilder {
+	if g == nil {
+		T().Errorf("Grammar may not be nil")
+		return nil
+	}
 	ab := &ASTBuilder{
 		G:         g,
 		Env:       terex.NewEnvironment("AST "+g.Name, terex.GlobalEnvironment),
@@ -139,22 +143,13 @@ func (ab *ASTBuilder) EnterRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.
 func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.RuleCtxt) interface{} {
 	T().Debugf("<------- exit symbol: %v, now rewriting", sym)
 	if op, ok := ab.rewriters[sym.Name]; ok {
-		//env, err := ab.EnvironmentForGrammarSymbol(sym.Name)
 		env, err := ab.EnvironmentForGrammarRule(sym.Name, rhs)
 		if err != nil && ab.Error != nil {
 			ab.Error(err)
 		}
 		rhsList := ab.stack[len(ab.stack)-1] // operator is TOS ⇒ first element of RHS list
-		//end := rhsList
-		for _, r := range rhs { // collect all the value of RHS symbols
-			T().Infof("r = %v", r)
-			// // TODO set value of RHS vars in Env
-			// rhssym := env.Intern(r.Symbol().Name, true)
-			// T().Infof("sym = %v", sym)
-			// if !r.Symbol().IsTerminal() {
-			// 	rhssym.Value.Data = r.Value
-			// }
-			//rhsList, end = growRHSList(rhsList, end, r, env)
+		for _, r := range rhs {              // collect all the value of RHS symbols
+			T().Debugf("r = %v", r)
 			rhsList = appendRHSResult(rhsList, r)
 		}
 		T().Infof("%s: Rewrite of %s", sym.Name, rhsList.ListString())
@@ -163,11 +158,9 @@ func (ab *ASTBuilder) ExitRule(sym *lr.Symbol, rhs []*sppf.RuleNode, ctxt sppf.R
 		T().Infof("%s returns %s", sym.Name, rewritten.String())
 		return rewritten
 	}
-	//var list, end *terex.GCons
 	var list *terex.GCons
 	T().Infof("%s will rewrite |rhs| = %d symbols", sym.Name, len(rhs))
 	for _, r := range rhs {
-		//list, end = growRHSList(list, end, r, terex.GlobalEnvironment)
 		list = appendRHSResult(list, r)
 	}
 	rew := noOpRewrite(list)
