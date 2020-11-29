@@ -62,7 +62,7 @@ import (
 //
 // Comments starting with ';' will be filtered by the scanner.
 //
-func makeTermRGrammar() (*lr.LRAnalysis, error) {
+func makeTeRExGrammar() (*lr.LRAnalysis, error) {
 	b := lr.NewGrammarBuilder("TeREx S-Expr")
 	b.LHS("QuoteOrAtom").N("Quote").End()
 	b.LHS("QuoteOrAtom").N("Atom").End()
@@ -95,7 +95,7 @@ func createParser() *earley.Parser {
 			panic("Cannot create lexer")
 		}
 		T().Infof("Creating grammar")
-		if grammar, err = makeTermRGrammar(); err != nil {
+		if grammar, err = makeTeRExGrammar(); err != nil {
 			panic("Cannot create global grammar")
 		}
 		initRewriters()
@@ -174,7 +174,7 @@ func AST(parsetree *sppf.Forest, tokRetr termr.TokenRetriever) (*terex.GCons,
 // Eval evaluates an s-expr (given in textual form).
 // It will parse the string, create an internal S-expr structure and evaluate it,
 // using the symbols in env,
-func Eval(sexpr string) (*terex.GCons, *terex.Environment) {
+/* func Eval(sexpr string) (*terex.GCons, *terex.Environment) {
 	quoted, env, _ := Quote(sexpr)
 	if quoted == nil {
 		return nil, env
@@ -182,7 +182,7 @@ func Eval(sexpr string) (*terex.GCons, *terex.Environment) {
 	evald := env.Eval(quoted.Tee())
 	T().Infof("eval(AST) = %s", evald.ListString())
 	return evald, env
-}
+} */
 
 // QuoteAST returns an AST, which should be the result of parsing an s-expr, as
 // pure data.
@@ -209,7 +209,7 @@ func QuoteAST(ast terex.Element, env *terex.Environment) (terex.Element, error) 
 // Quote quotes an s-expr (given in textual form), thus returning it as data.
 // It will parse the string, create an internal S-expr structure (AST) and quote it,
 // using the symbols in env,
-func Quote(sexpr string) (*terex.GCons, *terex.Environment, error) {
+/* func Quote(sexpr string) (*terex.GCons, *terex.Environment, error) {
 	parsetree, tokRetr, err := Parse(sexpr)
 	if err != nil {
 		T().Errorf("Parsing error: %v", err)
@@ -230,7 +230,7 @@ func Quote(sexpr string) (*terex.GCons, *terex.Environment, error) {
 	//T().Infof("quote(AST) = %s", r.ListString())
 	//return r, env, nil
 	return nil, env, nil
-}
+} */
 
 // --- S-expr AST-builder listener -------------------------------------------
 
@@ -487,7 +487,7 @@ func (r symbolPreservingResolver) Resolve(atom terex.Atom, env *terex.Environmen
 	if atom.Type() == terex.TokenType {
 		t := atom.Data.(*terex.Token)
 		token := t.Token.(*lexmachine.Token)
-		T().Infof("Resolve terminal token: '%v'", string(token.Lexeme))
+		T().Debugf("Resolve terminal token: '%v'", string(token.Lexeme))
 		switch token.Type {
 		case tokenIds["NUM"]:
 			return terex.Atomize(t.Value.(float64)), nil

@@ -1,7 +1,10 @@
 package terexlang
 
 import (
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"os/exec"
 	"strings"
 
 	"github.com/npillmayer/gotype/core/config/tracing"
@@ -20,6 +23,7 @@ func LoadStandardLanguage() *terex.Environment {
 	env := terex.NewEnvironment("stdlang", nil)
 	makeLispOps(env)
 	makeArithmOps(env)
+	makeNamespaceOps(env)
 	makeParserOps(env)
 	return env
 }
@@ -64,6 +68,7 @@ func makeArithmOps(env *terex.Environment) {
 			if a.Type() == terex.ErrorType {
 				return a // propagate error
 			} else if b.Data.(float64) == 0 {
+				T().Debugf("Division by zero")
 				return terex.ErrorAtom("Division by zero")
 			}
 			return terex.Atomize(a.Data.(float64) / b.Data.(float64))
@@ -76,27 +81,99 @@ func makeArithmOps(env *terex.Environment) {
 func makeLispOps(env *terex.Environment) {
 	env.Defn("def", func(e terex.Element, env *terex.Environment) terex.Element {
 		args := e.AsList()
-		args = args.Map(terex.Eval, env)
+		//args = args.Map(terex.Eval, env)
 		if args.Length() != 2 {
-			return terex.Elem(terex.ErrorAtom("Wrong number of arguments for def"))
+			return ErrorPacker("Wrong number of arguments for def", env)
 		}
 		if args.Car.Type() != terex.VarType {
-			return terex.Elem(terex.ErrorAtom("Missing symbol for def"))
+			return ErrorPacker("Missing symbol for def", env)
 		}
+		arg := terex.Eval(terex.Elem(args.Cdar()), env)
 		sym := env.Intern(args.Car.Data.(*terex.Symbol).Name, true)
-		sym.Value = args.Cdar()
+		sym.Value = arg.AsAtom()
 		return terex.Elem(terex.Atomize(sym))
 	})
 	env.Defn("print", func(e terex.Element, env *terex.Environment) terex.Element {
 		args := e.AsList()
 		args = args.Map(terex.Eval, env)
 		args.Map(func(e terex.Element, env *terex.Environment) terex.Element {
-			T().Infof(e.String())
+			// T().Infof(e.String())
+			print(e)
 			return terex.Elem(nil)
 		}, env)
 		last := args.Last()
-		return terex.Elem(terex.Atomize(last))
+		if last == nil {
+			return terex.Elem(terex.NilAtom)
+		}
+		return terex.Elem(last.Car)
 	})
+	env.Defn("list", func(e terex.Element, env *terex.Environment) terex.Element {
+		args := e.AsList()
+		args = args.Map(terex.Eval, env)
+		return terex.Elem(args)
+	})
+	env.Defn("quote", func(e terex.Element, env *terex.Environment) terex.Element {
+		args := e.AsList()
+		if args.Length() != 1 {
+			return ErrorPacker("Wrong number of arguments for quote", env)
+		}
+		last := args.Last()
+		if last == nil {
+			return terex.Elem(terex.NilAtom)
+		}
+		return terex.Elem(last.Car)
+	})
+	env.Defn("assoc", func(e terex.Element, env *terex.Environment) terex.Element {
+		args := e.AsList()
+		if args.Length() != 3 {
+			return ErrorPacker("Wrong number of arguments for assoc", env)
+		}
+		if args.Car.Type() != terex.VarType {
+			return ErrorPacker("Missing dict symbol for assoc", env)
+		}
+		k := terex.Eval(terex.Elem(args.Cdar()), env)
+		if k.AsAtom().Type() != terex.StringType {
+			return ErrorPacker("Missing key (string) for assoc", env)
+		}
+		key := k.AsAtom().Data.(string)
+		value := terex.Eval(terex.Elem(args.Last().Car), env)
+		sym := env.Intern(args.Car.Data.(*terex.Symbol).Name, true)
+		if sym.Value.IsNil() {
+			sym.Value = terex.Atomize(make(Dict))
+		}
+		d := sym.Value.Data.(Dict)
+		d[key] = value.AsAtom()
+		return terex.Elem(terex.Atomize(sym))
+	})
+	env.Defn("get", func(e terex.Element, env *terex.Environment) terex.Element {
+		args := e.AsList()
+		if args.Length() != 2 {
+			return ErrorPacker("Wrong number of arguments for get", env)
+		}
+		if args.Car.Type() != terex.VarType {
+			return ErrorPacker("Missing dict symbol for get", env)
+		}
+		k := terex.Eval(terex.Elem(args.Cdar()), env)
+		if k.AsAtom().Type() != terex.StringType {
+			return ErrorPacker("Missing key (string) for get", env)
+		}
+		key := k.AsAtom().Data.(string)
+		sym := env.FindSymbol(args.Car.Data.(*terex.Symbol).Name, true)
+		if sym == nil {
+			return ErrorPacker("Unable to resolve symbol as dict", env)
+		}
+		d := sym.Value.Data.(Dict)
+		//return terex.Elem(d[key]) // TODO
+		return terex.Elem(terex.Atomize(d[key]))
+	})
+}
+
+type Dict map[string]terex.Atom
+
+func makeNamespaceOps(env *terex.Environment) {
+	//sym := env.Intern("#ns#", false)
+	//sym.Value =
+	env.Def("#ns#", terex.Atomize(env))
 }
 
 func makeParserOps(env *terex.Environment) {
@@ -105,21 +182,22 @@ func makeParserOps(env *terex.Environment) {
 		args := e.AsList()
 		args = args.Map(terex.Eval, env)
 		if args.Length() != 2 {
-			return terex.Elem(terex.ErrorAtom("Wrong number of arguments for parse"))
+			return ErrorPacker("Wrong number of arguments for parse", env)
 		}
 		if args.Car.Type() != terex.UserType || args.Cdar().Type() != terex.StringType {
-			return terex.Elem(terex.ErrorAtom("Wrong argument type for parse"))
+			return ErrorPacker("Wrong argument type for parse", env)
 		}
 		if args.Cdar().Data == nil {
-			return terex.Elem(terex.ErrorAtom("Cannot parse nil-input"))
+			return ErrorPacker("Cannot parse nil-input", env)
 		}
 		input := args.Cdar().Data.(string)
 		g := args.Car.Data.(*lr.LRAnalysis)
 		tree, retr, err := parseAny(g, input)
 		if err != nil {
-			return terex.Elem(terex.ErrorAtom(err.Error()))
+			return ErrorPacker(err.Error(), env)
 		}
 		result := &parsetree{
+			G:    g,
 			tree: tree,
 			retr: retr,
 		}
@@ -128,26 +206,33 @@ func makeParserOps(env *terex.Environment) {
 	ast := makeOp(terex.UserType, 1, func(args *terex.GCons, env *terex.Environment) terex.Element {
 		// (ast T) => AST
 		if tree, ok := args.Car.Data.(*parsetree); ok {
-			ast, env, err := AST(tree.tree, tree.retr)
-			//t.Logf("\n\n" + debugString(terex.Elem(ast.Car)))
-			T().Infof("\n\n" + terex.Elem(ast).String())
-			if err != nil {
-				T().Errorf(err.Error())
-				return terex.Elem(terex.ErrorAtom(err.Error()))
+			ab := termr.NewASTBuilder(tree.G.Grammar())
+			env := ab.AST(tree.tree, tree.retr)
+			if env == nil {
+				return ErrorPacker("Error while creating AST", env)
 			}
-			q, err := QuoteAST(terex.Elem(ast.Car), env)
-			if err != nil {
-				T().Errorf(err.Error())
-				return terex.Elem(terex.ErrorAtom(err.Error()))
-			}
-			return q
+			T().Infof("\n\n" + env.AST.IndentedListString())
+			return terex.Elem(env.AST)
 		}
-		return terex.Elem(terex.ErrorAtom("Argument for ast is not a parse tree"))
+		return ErrorPacker("Argument for ast is not a parse tree", env)
 	})
 	env.Defn("ast", ast)
+	rew := makeOp(terex.UserType, 1, func(args *terex.GCons, env *terex.Environment) terex.Element {
+		// (rewriters dict) => UType
+		//ab := termr.NewASTBuilder(&lr.Grammar{Name: "G"})
+		//T().Errorf("AB created")
+		if dict, ok := args.Car.Data.(Dict); ok {
+			T().Errorf("dict found")
+			rewriters := createASTRewritersFromDict(dict)
+			return terex.Elem(terex.Atomize(rewriters))
+		}
+		return ErrorPacker("Expected argument to be Dict", env)
+	})
+	env.Defn("rewriters", rew)
 }
 
 type parsetree struct {
+	G    *lr.LRAnalysis
 	tree *sppf.Forest
 	retr termr.TokenRetriever
 }
@@ -162,8 +247,10 @@ func makeOp(t terex.AtomType, a int, op func(*terex.GCons, *terex.Environment) t
 		args := e.AsList()
 		args = args.Map(terex.Eval, env)
 		if arity > 0 && args.Length() != arity {
+			env.Error(errors.New("Wrong number of arguments"))
 			return terex.Elem(terex.ErrorAtom("Wrong number of arguments"))
 		} else if arity < 0 && args.Length() < -arity {
+			env.Error(errors.New("Wrong number of arguments"))
 			return terex.Elem(terex.ErrorAtom("Wrong number of arguments"))
 		}
 		if typ != terex.NoType {
@@ -218,3 +305,201 @@ func cast(atom terex.Atom, typ terex.AtomType, env *terex.Environment, err error
 	}
 	return atom, nil
 }
+
+func ErrorPacker(emsg string, env *terex.Environment) terex.Element {
+	T().Errorf(emsg)
+	env.Error(errors.New(emsg))
+	return terex.Elem(terex.ErrorAtom(emsg))
+}
+
+func print(e terex.Element) {
+	if e.IsNil() {
+		T().Infof("nil")
+		return
+	}
+	if e.IsAtom() {
+		if e.AsAtom().Type() == terex.UserType {
+			if G, ok := e.AsAtom().Data.(*lr.LRAnalysis); ok {
+				level := T().GetTraceLevel()
+				T().SetTraceLevel(tracing.LevelDebug)
+				G.Grammar().Dump()
+				T().SetTraceLevel(level)
+				return
+			}
+			if t, ok := e.AsAtom().Data.(*parsetree); ok {
+				err := showTree(t.tree)
+				if err != nil {
+					T().Errorf(err.Error())
+				}
+				return
+			}
+			if d, ok := e.AsAtom().Data.(Dict); ok {
+				T().Infof("Dict {")
+				for k, v := range d {
+					T().Infof("\t%s => %v", k, v)
+				}
+				T().Infof("}")
+				return
+			}
+		}
+		if e.AsAtom().Type() == terex.ConsType {
+			T().Infof(e.AsList().ListString())
+			return
+		}
+		if e.AsAtom().Type() == terex.EnvironmentType {
+			if env, ok := e.AsAtom().Data.(*terex.Environment); ok {
+				T().Infof(env.Dump())
+				return
+			}
+		}
+		T().Infof(e.String())
+		return
+	}
+	T().Infof(e.AsList().ListString())
+}
+
+func showTree(tree *sppf.Forest) error {
+	tmpfile, err := ioutil.TempFile("", "parsetree-*.dot")
+	if err != nil {
+		T().Errorf("Cannot create temporary file in TMP directory")
+		return err
+	}
+	defer tmpfile.Close()
+	sppf.ToGraphViz(tree, tmpfile)
+	T().Infof("Exported parse tree to %s", tmpfile.Name())
+	svg := strings.Replace(tmpfile.Name(), ".dot", ".svg", 1)
+	cmd := exec.Command("dot", "-T", "svg", "-o", svg, tmpfile.Name())
+	// T().Infof("Executing %v", cmd.String())
+	err = cmd.Run()
+	if err != nil {
+		return err
+	}
+	T().Infof("Opening SVG output %s", svg)
+	cmd = exec.Command("open", svg)
+	err = cmd.Run()
+	return err
+}
+
+// --- Rewriter --------------------------------------------------------------
+
+func (d Dict) getMap() map[string]terex.Atom {
+	return map[string]terex.Atom(d)
+}
+
+func createASTRewritersFromDict(dict Dict) []*Rewriter {
+	var arr []*Rewriter
+	for k, v := range dict.getMap() {
+		T().Errorf("ADD REW[%s] = %v", k, v)
+		rew := NewRewriter(k)
+		switch v.Type() {
+		case terex.ConsType:
+			rew.SetRewriters(v.Data.(*terex.GCons))
+			arr = append(arr, rew)
+		default:
+			rew.SetRewriters(terex.Cons(terex.Atomize(terex.Cons(v, nil)), nil))
+			arr = append(arr, rew)
+		}
+	}
+	return arr
+}
+
+type rule struct {
+	pattern terex.Element
+	target  terex.Element
+}
+
+func (r rule) match(terex.Element) {
+	//
+	T().Errorf("MATCH? %v", r.pattern)
+}
+
+type Rewriter struct {
+	name  string
+	Op    terex.Operator
+	rules []rule
+}
+
+/*
+	String() string                                         // printable name
+	Rewrite(*terex.GCons, *terex.Environment) terex.Element // term rewriting
+	Descend(sppf.RuleCtxt) bool                             // predicate wether to descend to children nodes
+	Operator() terex.Operator                               // operator to place as sub-tree node
+*/
+
+func NewRewriter(symname string) *Rewriter {
+	rew := &Rewriter{
+		name:  "rewrite(" + symname + ")",
+		Op:    chameleonOp(symname),
+		rules: make([]rule, 3, 3),
+	}
+	return rew
+}
+
+func (rew *Rewriter) SetRewriters(rlist *terex.GCons) {
+	cons := rlist
+	T().Errorf("REW LIST len = %d, list = %s", rlist.Length(), rlist.ListString())
+	for cons != nil {
+		if !cons.Car.IsNil() {
+			atom := cons.Car
+			if atom.IsNil() {
+				continue
+			}
+			switch atom.Type() {
+			case terex.ConsType:
+				l := atom.Data.(*terex.GCons)
+				pattern := terex.Elem(l.Car)
+				target := terex.Elem(nil)
+				if l.Cdr != nil && !l.Cdar().IsNil() {
+					target = terex.Elem(l.Cdar())
+				}
+				T().Errorf("ADD RULE %s => %v", pattern, target.String())
+				rew.rules = append(rew.rules, rule{
+					pattern: pattern,
+					target:  target,
+				})
+			}
+		}
+		cons = cons.Cdr
+	}
+}
+
+func (rew Rewriter) String() string {
+	return rew.name
+}
+
+func (rew *Rewriter) Rewrite(l *terex.GCons, env *terex.Environment) terex.Element {
+	T().Errorf("REWRITE")
+	return terex.Elem(l)
+}
+
+func (rew Rewriter) Descend(sppf.RuleCtxt) bool {
+	return true
+}
+func (rew Rewriter) Operator() terex.Operator {
+	return rew.Op
+}
+
+var _ termr.TermR = &Rewriter{}
+
+// --- Chameleon operator ----------------------------------------------------
+
+type chameleonOp string
+
+func (chop chameleonOp) String() string {
+	return string(chop)
+}
+func (chop chameleonOp) Call(e terex.Element, env *terex.Environment) terex.Element {
+	opsym := env.FindSymbol(chop.String(), true)
+	if opsym == nil {
+		T().Errorf("Cannot find operator %v", chop)
+		return e
+	}
+	operator, ok := opsym.Value.Data.(terex.Operator)
+	if !ok {
+		T().Errorf("Cannot call operator %s", chop)
+		return e
+	}
+	return operator.Call(e, env)
+}
+
+var _ terex.Operator = chameleonOp("")

@@ -1,10 +1,8 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -59,7 +57,7 @@ func main() {
 	tlevel := flag.String("trace", "I", "Trace level")
 	flag.Parse()
 	T().SetTraceLevel(tracing.LevelInfo)
-	T().Infof("Welcome to TermRL")
+	pterm.Info.Println("Welcome to TREPL")
 	T().Infof("Trace level is %s", *tlevel)
 	ga := makeExprGrammar()
 	T().SetTraceLevel(traceLevel(*tlevel))
@@ -92,10 +90,13 @@ func main() {
 
 func initDisplay() {
 	pterm.EnableDebugMessages()
-	// Customize default error.
+	pterm.Info.Prefix = pterm.Prefix{
+		Text:  "  >>",
+		Style: pterm.NewStyle(pterm.BgCyan, pterm.FgBlack),
+	}
 	pterm.Error.Prefix = pterm.Prefix{
 		Text:  "  Error",
-		Style: pterm.NewStyle(pterm.BgLightRed, pterm.FgBlack),
+		Style: pterm.NewStyle(pterm.BgRed, pterm.FgBlack),
 	}
 }
 
@@ -104,7 +105,9 @@ func initSymbols(ga *lr.LRAnalysis) *terex.Environment {
 	stdEnv = terexlang.LoadStandardLanguage()
 	env := terex.NewEnvironment("trepl", stdEnv)
 	// G is expression grammar (analyzed)
+	env.Def("#ns#", terex.Atomize(env)) // TODO put this into "terex.NewEnvironment"
 	env.Def("G", terex.Atomize(ga))
+	makeTreeOps(env)
 	return env
 }
 
@@ -135,7 +138,7 @@ func (intp *Intp) REPL() {
 		err, quit := intp.Eval(line)
 		if err != nil {
 			//T().Errorf(err.Error())
-			pterm.Error.Println(err.Error())
+			//pterm.Error.Println(err.Error())
 			continue
 		}
 		if quit {
@@ -157,8 +160,8 @@ func (intp *Intp) Eval(line string) (error, bool) {
 	T().SetTraceLevel(tracing.LevelError)
 	ast, env, err := terexlang.AST(tree, retr)
 	T().SetTraceLevel(level)
-	T().Infof("\n\n" + ast.IndentedListString() + "\n\n")
-	T().Infof("------------------------------------------------------------------")
+	// T().Infof("\n\n" + ast.IndentedListString() + "\n\n")
+	// T().Infof("------------------------------------------------------------------")
 	q, err := terexlang.QuoteAST(terex.Elem(ast.Car), env)
 	T().SetTraceLevel(level)
 	if err != nil {
@@ -167,65 +170,34 @@ func (intp *Intp) Eval(line string) (error, bool) {
 	}
 	T().Infof("\n\n" + q.String() + "\n\n")
 	//T().Infof(env.Dump())
-	T().Infof("==================================================================")
-	T().Infof(intp.env.Dump())
+	T().Infof("-------------------------- Output --------------------------------")
+	//T().Infof(intp.env.Dump())
 	result := terex.Eval(q, intp.env)
+	intp.printResult(result, intp.env)
+	intp.env.Error(nil)
+	return nil, false
+}
+
+func (intp *Intp) printResult(result terex.Element, env *terex.Environment) error {
 	if result.IsNil() {
-		if stdEnv.LastError() != nil {
-			pterm.Info.Println(stdEnv.LastError())
-			return stdEnv.LastError(), false
+		if env.LastError() != nil {
+			pterm.Error.Println(stdEnv.LastError())
+			return env.LastError()
 		}
-		T().Infof("result: nil")
+		//T().Infof("result: nil")
 		pterm.Info.Println("nil")
-		return nil, false
+		return nil
 	}
 	if result.AsAtom().Type() == terex.ErrorType {
 		pterm.Error.Println(result.AsAtom().Data.(error).Error())
-		return fmt.Errorf(result.AsAtom().Data.(error).Error()), false
+		return fmt.Errorf(result.AsAtom().Data.(error).Error())
 	}
-	T().Infof(result.String())
+	//T().Infof(result.String())
+	if env.LastError() != nil {
+		pterm.Error.Println(env.LastError())
+		return env.LastError()
+	}
 	pterm.Info.Println(result.String())
-	return nil, false
-}
-
-func (intp *Intp) Execute(cmd string, args []string) (error, bool) {
-	switch cmd {
-	case "quit", "bye":
-		return nil, true
-	case "parse":
-		intp.ast = nil
-		intp.lastInput = strings.TrimSpace(strings.Join(args[1:], " "))
-		var err error
-		intp.tree, intp.tretr, err = Parse(intp.GA, intp.lastInput)
-		return err, false
-	case "dot":
-		if intp.tree == nil {
-			return errors.New("No parse tree present"), false
-		}
-		return ExportTree(intp.tree), false
-	case "ast":
-		if intp.ast == nil {
-			if intp.tree == nil {
-				return errors.New("No parse tree present"), false
-			}
-			astbuild := termr.NewASTBuilder(intp.GA.Grammar())
-			intp.env = astbuild.AST(intp.tree, intp.tretr)
-		}
-		out := intp.ast.ListString()
-		println(out)
-	}
-	return nil, false
-}
-
-func ExportTree(tree *sppf.Forest) error {
-	tmpfile, err := ioutil.TempFile(".", "tree-*.dot")
-	if err != nil {
-		T().Errorf("Cannot create tmp-fiile in local directory")
-		return err
-	}
-	defer tmpfile.Close()
-	sppf.ToGraphViz(tree, tmpfile)
-	T().Infof("Exported parse tree to %s", tmpfile.Name())
 	return nil
 }
 
@@ -245,6 +217,63 @@ func Parse(ga *lr.LRAnalysis, input string) (*sppf.Forest, termr.TokenRetriever,
 		return parser.TokenAt(pos)
 	}
 	return parser.ParseForest(), tokretr, nil
+}
+
+func makeTreeOps(env *terex.Environment) {
+	env.Defn("tree", func(e terex.Element, env *terex.Environment) terex.Element {
+		// (tree T) => print tree representation of T
+		T().Debugf("   e = %v", e.String())
+		args := e.AsList()
+		T().Debugf("args = %v", args.ListString())
+		if args.Length() != 1 {
+			return terexlang.ErrorPacker("Can only print tree for one symbol at a time", env)
+		}
+		T().Debugf("arg = %v", args.Car.String())
+		first := args.Car
+		label := "tree"
+		T().Debugf("Atom = %v", first.Type())
+		if args.Car.Type() == terex.VarType {
+			label = first.Data.(*terex.Symbol).Name
+		}
+		arg := terex.Eval(terex.Elem(first), env)
+		pterm.Println(label)
+		root := indentedListFrom(arg, env)
+		pterm.DefaultTree.WithRoot(root).Render()
+		return terex.Elem(args.Car)
+	})
+}
+
+func indentedListFrom(e terex.Element, env *terex.Environment) pterm.TreeNode {
+	ll := leveledElem(e.AsList(), pterm.LeveledList{}, 0)
+	T().Debugf("|ll| = %d, ll = %v", len(ll), ll)
+	root := pterm.NewTreeFromLeveledList(ll)
+	return root
+}
+
+func leveledElem(list *terex.GCons, ll pterm.LeveledList, level int) pterm.LeveledList {
+	if list == nil {
+		ll = append(ll, pterm.LeveledListItem{
+			Level: level,
+			Text:  "nil",
+		})
+		return ll
+	}
+	first := true
+	for list != nil {
+		if first {
+			first = false // TODO modify level
+		}
+		if list.Car.Type() == terex.ConsType {
+			ll = leveledElem(list.Car.Data.(*terex.GCons), ll, level+1)
+		} else {
+			ll = append(ll, pterm.LeveledListItem{
+				Level: level,
+				Text:  list.Car.String(),
+			})
+		}
+		list = list.Cdr
+	}
+	return ll
 }
 
 func traceLevel(l string) tracing.TraceLevel {

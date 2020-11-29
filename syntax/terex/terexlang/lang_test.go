@@ -188,7 +188,7 @@ func TestQuote(t *testing.T) {
 }
 */
 
-func NoTestEval(t *testing.T) {
+/* func NoTestEval(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
@@ -211,4 +211,4 @@ func NoTestEval(t *testing.T) {
 		}
 	}
 	t.Fail()
-}
+} */

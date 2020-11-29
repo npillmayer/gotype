@@ -97,7 +97,7 @@ func Lexer() (*scanner.LMAdapter, error) {
 	init := func(lexer *lexmachine.Lexer) {
 		lexer.Add([]byte(`;[^\n]*\n?`), scanner.Skip) // skip comments
 		lexer.Add([]byte(`\"[^"]*\"`), makeToken("STRING"))
-		lexer.Add([]byte(`([a-z]|[A-Z])([a-z]|[A-Z]|[0-9]|_|-)*[!\?]?`), makeToken("ID"))
+		lexer.Add([]byte(`\#?([a-z]|[A-Z])([a-z]|[A-Z]|[0-9]|_|-)*[!\?\#]?`), makeToken("ID"))
 		lexer.Add([]byte(`$([a-z]|[A-Z])([a-z]|[A-Z]|[0-9]|_|-)*[!\?]?`), makeToken("VAR"))
 		lexer.Add([]byte(`[\+\-]?[0-9]+(\.[0-9]+)?`), makeToken("NUM"))
 		lexer.Add([]byte(`( |\,|\t|\n|\r)+`), scanner.Skip)
