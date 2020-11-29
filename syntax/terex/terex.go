@@ -195,6 +195,10 @@ func (a Atom) ListString() string {
 	return a.String()
 }
 
+func (a Atom) IsNil() bool {
+	return a.Data == nil
+}
+
 // ---------------------------------------------------------------------------
 
 // GCons is a type for a list cons.
@@ -512,12 +516,18 @@ func (el Element) IsAtom() bool {
 }
 
 func (el Element) IsNil() bool {
+	if el.thing == nil {
+		return true
+	}
 	if t, ok := el.thing.(*GCons); ok {
 		if t == nil {
 			return true
 		}
 	}
-	return el.thing == nil
+	if a, ok := el.thing.(Atom); ok {
+		return a.IsNil()
+	}
+	return false
 }
 
 func (el Element) IsError() bool {
@@ -539,10 +549,11 @@ func (el Element) AsList() *GCons {
 		return nil
 	}
 	if el.IsAtom() {
+		a := el.AsAtom()
+		if a.Type() == ConsType {
+			return a.Data.(*GCons)
+		}
 		return Cons(el.thing.(Atom), nil)
-	}
-	if el.thing == nil {
-		return nil
 	}
 	return el.thing.(*GCons)
 }
