@@ -39,6 +39,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/lr"
 	"github.com/npillmayer/gotype/syntax/lr/earley"
 	"github.com/npillmayer/gotype/syntax/lr/scanner"
@@ -203,6 +204,8 @@ func QuoteAST(ast terex.Element, env *terex.Environment) (terex.Element, error) 
 	//quEnv.Defn("quote", quoteOp.call)
 	quEnv.Resolver = symbolPreservingResolver{}
 	q := terex.Eval(ast, quEnv)
+	T().Debugf("QuotAST returns Q = %v", q)
+	q.Dump(tracing.LevelDebug)
 	return q, quEnv.LastError()
 }
 
@@ -302,7 +305,7 @@ func (trew *sExprTermR) Call(e terex.Element, env *terex.Environment) terex.Elem
 		T().Errorf("Cannot find parsing operation %s", trew.opname)
 		return e
 	}
-	operator, ok := opsym.Value.Data.(terex.Operator)
+	operator, ok := opsym.Value.AsAtom().Data.(terex.Operator)
 	if !ok {
 		T().Errorf("Cannot call parsing operation %s", trew.opname)
 		return e
@@ -350,7 +353,11 @@ func initRewriters() {
 		// (:quote ' ⟨atom⟩) =>  (:list quote ⟨atom⟩)
 		q := env.Intern("quote", false)
 		qu := terex.Cons(terex.Atomize(q), l.Cddr())
-		return terex.Elem(terex.Cons(l.Car, qu))
+		//quotedList := terex.Elem(terex.Cons(l.Car, qu))
+		quotedList := terex.Elem(terex.Cons(terex.Atomize(listOp.Operator()), qu))
+		//quotedList := terex.Elem(terex.Cons(terex.Atomize(quoteOp.Operator()), qu))
+		//quotedList.Dump(tracing.LevelDebug)
+		return quotedList
 	}
 	// quoteOp.call = func(e terex.Element, env *terex.Environment) terex.Element {
 	// 	T().Debugf("Un-QUOTE of %v", e)
@@ -367,7 +374,7 @@ func initRewriters() {
 		case 2:
 			if l.Cdar().Type() == terex.ConsType {
 				return terex.Elem(l.Cdr.Tee())
-			}
+			} // TODO: keep or drop this? Unclear
 			return terex.Elem(l.Cdar())
 		}
 		return terex.Elem(l.Cdr)
@@ -385,14 +392,28 @@ func initRewriters() {
 	}
 	listOp.call = func(e terex.Element, env *terex.Environment) terex.Element {
 		// (:list a b c) =>  (a b c)
-		T().Debugf("Un-LIST of %v", e)
 		list := e.AsList()
+		T().Debugf("========= Un-LIST of %v  =  %s", e, list.ListString())
 		if list.Length() == 0 { //  () => nil  [empty list is nil]
 			return terex.Elem(nil)
 		}
+		// if list.Length() == 1 {
+		// 	mapped := terex.EvalAtom(terex.Elem(list.Car), env)
+		// 	T().Errorf("========= => %v", mapped)
+		// 	return mapped
+		// }
 		//list := args.Map(terex.Eval, env) // eval arguments
-		e = terex.Eval(terex.Elem(list), env)
-		return e
+		//e = terex.Eval(terex.Elem(list), env)
+		listElements := list.Map(terex.EvalAtom, env)
+		terex.Elem(listElements).Dump(tracing.LevelDebug)
+		// if e.IsAtom() {
+		// 	T().Errorf("========= type is atom %s", e.AsAtom().Type().String())
+		// 	return e
+		// }
+		// T().Errorf("========= type is list")
+		//ee := terex.Cons(terex.Atomize(e.AsList()), nil)
+		T().Debugf("========= => %v", terex.Elem(listElements))
+		return terex.Elem(listElements)
 	}
 }
 
@@ -483,19 +504,19 @@ func convertTerminalToken(el terex.Element, env *terex.Environment) terex.Elemen
 type symbolPreservingResolver struct{}
 
 func (r symbolPreservingResolver) Resolve(atom terex.Atom, env *terex.Environment, asOp bool) (
-	terex.Atom, error) {
+	terex.Element, error) {
 	if atom.Type() == terex.TokenType {
 		t := atom.Data.(*terex.Token)
 		token := t.Token.(*lexmachine.Token)
 		T().Debugf("Resolve terminal token: '%v'", string(token.Lexeme))
 		switch token.Type {
 		case tokenIds["NUM"]:
-			return terex.Atomize(t.Value.(float64)), nil
+			return terex.Elem(t.Value.(float64)), nil
 		case tokenIds["STRING"]:
-			return terex.Atomize(t.Value.(string)), nil
+			return terex.Elem(t.Value.(string)), nil
 		}
 	}
-	return atom, nil
+	return terex.Elem(atom), nil
 }
 
 var _ terex.SymbolResolver = symbolPreservingResolver{}
