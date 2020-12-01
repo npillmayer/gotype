@@ -20,7 +20,7 @@ func TestAssignability(t *testing.T) {
 }
 
 func TestAtomizeOp(t *testing.T) {
-	op := GlobalEnvironment.Defun("Hello", nil)
+	op := GlobalEnvironment.Defn("Hello", nil)
 	a := Atomize(op)
 	t.Logf("atom = %v", a)
 	if a.Type() != VarType {
@@ -42,10 +42,10 @@ func TestList1(t *testing.T) {
 }
 func TestList2(t *testing.T) {
 	InitGlobalEnvironment()
-	l := List(GlobalEnvironment.FindSymbol("+", false), 1, 2)
+	l := List(GlobalEnvironment.FindSymbol("list", false), 1, 2)
 	t.Logf("l=%s", l.ListString())
 	if l.Car.Type() != OperatorType {
-		t.Errorf("expected '+' to be retrieved as symbolf for _Add")
+		t.Errorf("expected 'list' to be retrieved as operator")
 	}
 }
 
@@ -110,8 +110,8 @@ func TestMatch2(t *testing.T) {
 		t.Errorf("l1 and l2 expected to match, don't")
 	}
 	t.Logf(GlobalEnvironment.Dump())
-	if S.Value.typ != NumType { // S expected to be bound to 7
-		t.Errorf("Symbol a expected to be of number type now, is %s", S.Value.typ.String())
+	if S.ValueType() != NumType { // S expected to be bound to 7
+		t.Errorf("Symbol a expected to be of number type now, is %s", S.ValueType().String())
 	}
 }
 
@@ -172,7 +172,7 @@ func TestMap(t *testing.T) {
 }
 */
 
-func TestEvalAdd(t *testing.T) {
+/* func TestEvalAdd(t *testing.T) {
 	gtrace.SyntaxTracer = gotestingadapter.New()
 	teardown := gotestingadapter.RedirectTracing(t)
 	defer teardown()
@@ -184,4 +184,4 @@ func TestEvalAdd(t *testing.T) {
 	if r == nil {
 		t.Errorf("Call to _Add failed")
 	}
-}
+} */
