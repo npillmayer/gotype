@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
@@ -54,7 +55,8 @@ func main() {
 	initDisplay()
 	gtrace.SyntaxTracer = gologadapter.New()
 	//grammarName := flag.String("grammar", "G", "Name of the grammar to load")
-	tlevel := flag.String("trace", "I", "Trace level")
+	tlevel := flag.String("trace", "Info", "Trace level [Debug|Info|Error]")
+	initf := flag.String("init", "", "Initial load")
 	flag.Parse()
 	T().SetTraceLevel(tracing.LevelInfo)
 	pterm.Info.Println("Welcome to TREPL")
@@ -85,6 +87,7 @@ func main() {
 		}
 	}
 	T().Infof("Quit with <ctrl>D")
+	intp.LoadInitFile(*initf)
 	intp.REPL()
 }
 
@@ -105,8 +108,8 @@ func initSymbols(ga *lr.LRAnalysis) *terex.Environment {
 	stdEnv = terexlang.LoadStandardLanguage()
 	env := terex.NewEnvironment("trepl", stdEnv)
 	// G is expression grammar (analyzed)
-	env.Def("#ns#", terex.Atomize(env)) // TODO put this into "terex.NewEnvironment"
-	env.Def("G", terex.Atomize(ga))
+	env.Def("#ns#", terex.Elem(env)) // TODO put this into "terex.NewEnvironment"
+	env.Def("G", terex.Elem(ga))
 	makeTreeOps(env)
 	return env
 }
@@ -120,6 +123,36 @@ type Intp struct {
 	ast       *terex.GCons
 	env       *terex.Environment
 	tretr     termr.TokenRetriever
+}
+
+func (intp *Intp) LoadInitFile(filename string) {
+	if filename == "" {
+		return
+	}
+	f, err := os.Open(filename)
+	if err != nil {
+		T().Errorf("Unable to open init file: %s", filename)
+		return
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	lineno := 1
+	for scanner.Scan() {
+		//fmt.Println(scanner.Text())
+		line := scanner.Text()
+		if line = strings.TrimSpace(line); line == "" {
+			continue
+		}
+		err, _ := intp.Eval(line)
+		if err != nil {
+			T().Errorf("Error line %d: "+err.Error(), lineno)
+		}
+		lineno++
+	}
+	if err := scanner.Err(); err != nil {
+		T().Errorf("Error while reading init file: " + err.Error())
+	}
 }
 
 func (intp *Intp) REPL() {
@@ -160,15 +193,20 @@ func (intp *Intp) Eval(line string) (error, bool) {
 	T().SetTraceLevel(tracing.LevelError)
 	ast, env, err := terexlang.AST(tree, retr)
 	T().SetTraceLevel(level)
-	// T().Infof("\n\n" + ast.IndentedListString() + "\n\n")
+	T().Infof("\n\n" + ast.IndentedListString() + "\n\n")
+	T().Infof("------------------------------------------------------------------")
+	//q, err := terexlang.QuoteAST(terex.Elem(ast.Car), env)
+	first := terex.Elem(ast).First()
+	// first.Dump(tracing.LevelInfo)
 	// T().Infof("------------------------------------------------------------------")
-	q, err := terexlang.QuoteAST(terex.Elem(ast.Car), env)
+	q, err := terexlang.QuoteAST(first, env)
 	T().SetTraceLevel(level)
 	if err != nil {
 		//T().Errorf(err.Error())
 		return err, false
 	}
-	T().Infof("\n\n" + q.String() + "\n\n")
+	//T().Infof("\n\n" + q.String() + "\n\n")
+	q.Dump(level)
 	//T().Infof(env.Dump())
 	T().Infof("-------------------------- Output --------------------------------")
 	//T().Infof(intp.env.Dump())
@@ -197,6 +235,7 @@ func (intp *Intp) printResult(result terex.Element, env *terex.Environment) erro
 		pterm.Error.Println(env.LastError())
 		return env.LastError()
 	}
+	result.Dump(tracing.LevelError)
 	pterm.Info.Println(result.String())
 	return nil
 }
@@ -277,13 +316,14 @@ func leveledElem(list *terex.GCons, ll pterm.LeveledList, level int) pterm.Level
 }
 
 func traceLevel(l string) tracing.TraceLevel {
-	switch l {
-	case "D":
-		return tracing.LevelDebug
-	case "I":
-		return tracing.LevelInfo
-	case "E":
-		return tracing.LevelError
-	}
-	return tracing.LevelDebug
+	return tracing.TraceLevelFromString(l)
+	// switch l {
+	// case "D":
+	// 	return tracing.LevelDebug
+	// case "I":
+	// 	return tracing.LevelInfo
+	// case "E":
+	// 	return tracing.LevelError
+	// }
+	// return tracing.LevelDebug
 }

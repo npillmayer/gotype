@@ -1,0 +1,3 @@
+(def x '((1 2) (3 4)))
+;;(assoc A "Term" '( ((Term ProdOp Factor) (Term Factor)) ) )
+;;(def R (rewriters A))

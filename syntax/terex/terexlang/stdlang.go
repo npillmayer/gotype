@@ -81,21 +81,22 @@ func makeArithmOps(env *terex.Environment) {
 func makeLispOps(env *terex.Environment) {
 	env.Defn("def", func(e terex.Element, env *terex.Environment) terex.Element {
 		args := e.AsList()
-		//args = args.Map(terex.Eval, env)
+		//args = args.Map(terex.EvalAtom, env)
 		if args.Length() != 2 {
 			return ErrorPacker("Wrong number of arguments for def", env)
 		}
 		if args.Car.Type() != terex.VarType {
 			return ErrorPacker("Missing symbol for def", env)
 		}
-		arg := terex.Eval(terex.Elem(args.Cdar()), env)
+		arg := terex.EvalAtom(terex.Elem(args.Cdar()), env)
 		sym := env.Intern(args.Car.Data.(*terex.Symbol).Name, true)
-		sym.Value = arg.AsAtom()
+		sym.Value = arg
 		return terex.Elem(terex.Atomize(sym))
 	})
 	env.Defn("print", func(e terex.Element, env *terex.Environment) terex.Element {
 		args := e.AsList()
-		args = args.Map(terex.Eval, env)
+		//args = args.Map(terex.EvalAtom, env)
+		args = args.Map(resolve, env)
 		args.Map(func(e terex.Element, env *terex.Environment) terex.Element {
 			// T().Infof(e.String())
 			print(e)
@@ -109,7 +110,7 @@ func makeLispOps(env *terex.Environment) {
 	})
 	env.Defn("list", func(e terex.Element, env *terex.Environment) terex.Element {
 		args := e.AsList()
-		args = args.Map(terex.Eval, env)
+		args = args.Map(terex.EvalAtom, env)
 		return terex.Elem(args)
 	})
 	env.Defn("quote", func(e terex.Element, env *terex.Environment) terex.Element {
@@ -121,7 +122,8 @@ func makeLispOps(env *terex.Environment) {
 		if last == nil {
 			return terex.Elem(terex.NilAtom)
 		}
-		return terex.Elem(last.Car)
+		//terex.Elem(last).First().Dump(tracing.LevelError)
+		return terex.Elem(last).First()
 	})
 	env.Defn("assoc", func(e terex.Element, env *terex.Environment) terex.Element {
 		args := e.AsList()
@@ -139,11 +141,11 @@ func makeLispOps(env *terex.Environment) {
 		value := terex.Eval(terex.Elem(args.Last().Car), env)
 		sym := env.Intern(args.Car.Data.(*terex.Symbol).Name, true)
 		if sym.Value.IsNil() {
-			sym.Value = terex.Atomize(make(Dict))
+			sym.Value = terex.Elem(make(Dict))
 		}
-		d := sym.Value.Data.(Dict)
+		d := sym.AtomValue().(Dict)
 		d[key] = value.AsAtom()
-		return terex.Elem(terex.Atomize(sym))
+		return terex.Elem(sym)
 	})
 	env.Defn("get", func(e terex.Element, env *terex.Environment) terex.Element {
 		args := e.AsList()
@@ -162,7 +164,8 @@ func makeLispOps(env *terex.Environment) {
 		if sym == nil {
 			return ErrorPacker("Unable to resolve symbol as dict", env)
 		}
-		d := sym.Value.Data.(Dict)
+		d := sym.AtomValue().(Dict)
+		T().Errorf("DICT GET = %v", terex.Elem(d[key]).AsList().ListString())
 		//return terex.Elem(d[key]) // TODO
 		return terex.Elem(terex.Atomize(d[key]))
 	})
@@ -170,17 +173,21 @@ func makeLispOps(env *terex.Environment) {
 
 type Dict map[string]terex.Atom
 
+func (d Dict) getMap() map[string]terex.Atom {
+	return map[string]terex.Atom(d)
+}
+
 func makeNamespaceOps(env *terex.Environment) {
-	//sym := env.Intern("#ns#", false)
-	//sym.Value =
-	env.Def("#ns#", terex.Atomize(env))
+	env.Def("#ns#", terex.Elem(env))
+	env.Def("t", terex.Elem(true))
+	env.Def("nil", terex.Elem(nil))
 }
 
 func makeParserOps(env *terex.Environment) {
 	env.Defn("parse", func(e terex.Element, env *terex.Environment) terex.Element {
 		// (parse G "input") => tree
 		args := e.AsList()
-		args = args.Map(terex.Eval, env)
+		args = args.Map(terex.EvalAtom, env)
 		if args.Length() != 2 {
 			return ErrorPacker("Wrong number of arguments for parse", env)
 		}
@@ -203,18 +210,24 @@ func makeParserOps(env *terex.Environment) {
 		}
 		return terex.Elem(terex.Atomize(result))
 	})
-	ast := makeOp(terex.UserType, 1, func(args *terex.GCons, env *terex.Environment) terex.Element {
-		// (ast T) => AST
-		if tree, ok := args.Car.Data.(*parsetree); ok {
-			ab := termr.NewASTBuilder(tree.G.Grammar())
-			env := ab.AST(tree.tree, tree.retr)
-			if env == nil {
-				return ErrorPacker("Error while creating AST", env)
+	ast := makeOp(terex.UserType, 2, func(args *terex.GCons, env *terex.Environment) terex.Element {
+		// (ast <rew> <T>) => AST
+		T().Errorf("AST ARGS = %s", args.ListString())
+		if rews, ok1 := args.Car.Data.([]*Rewriter); ok1 {
+			if tree, ok2 := args.Cdar().Data.(*parsetree); ok2 {
+				ab := termr.NewASTBuilder(tree.G.Grammar())
+				for _, r := range rews {
+					ab.AddTermR(r)
+				}
+				env := ab.AST(tree.tree, tree.retr)
+				if env == nil {
+					return ErrorPacker("Error while creating AST", env)
+				}
+				T().Infof("\n\n" + env.AST.IndentedListString())
+				return terex.Elem(env.AST)
 			}
-			T().Infof("\n\n" + env.AST.IndentedListString())
-			return terex.Elem(env.AST)
 		}
-		return ErrorPacker("Argument for ast is not a parse tree", env)
+		return ErrorPacker("Arguments for ast should be rewriters and parse tree", env)
 	})
 	env.Defn("ast", ast)
 	rew := makeOp(terex.UserType, 1, func(args *terex.GCons, env *terex.Environment) terex.Element {
@@ -229,6 +242,41 @@ func makeParserOps(env *terex.Environment) {
 		return ErrorPacker("Expected argument to be Dict", env)
 	})
 	env.Defn("rewriters", rew)
+	env.Defn("match?", func(e terex.Element, env *terex.Environment) terex.Element {
+		// (match? <rewriters> key cons) => cons
+		args := e.AsList()
+		args = args.Map(terex.EvalAtom, env)
+		if args.Length() != 3 {
+			return ErrorPacker("Wrong number of arguments for match", env)
+		}
+		if args.Car.Type() != terex.UserType {
+			return ErrorPacker("Expected a rewriter-set for match", env)
+		}
+		if args.Cdar().Type() != terex.StringType && args.Cdar().Type() != terex.VarType {
+			return ErrorPacker("Expected a string-like argument as key for match", env)
+		}
+		input := terex.Elem(args.Cddar())
+		key := ""
+		if args.Cdar().Type() == terex.StringType {
+			key = args.Cdar().Data.(string)
+		} else if args.Cdar().Type() == terex.VarType {
+			key = args.Cdar().Data.(*terex.Symbol).Name
+		}
+		T().Errorf("MATCH for key = '%s'", key)
+		e = terex.Elem(nil)
+		if rews, ok := args.Car.Data.([]*Rewriter); ok {
+			for _, rew := range rews {
+				if rew.String() == key {
+					m := rew.Match(input, env)
+					if !m.IsNil() {
+						e = m
+						break
+					}
+				}
+			}
+		}
+		return terex.Elem(e)
+	})
 }
 
 type parsetree struct {
@@ -239,13 +287,28 @@ type parsetree struct {
 
 // --- Helpers ---------------------------------------------------------------
 
+func resolve(el terex.Element, env *terex.Environment) terex.Element {
+	if el.IsNil() {
+		return el
+	}
+	if !el.IsAtom() {
+		return el
+	}
+	atom := el.AsAtom()
+	resolved, err := terex.DefaultSymbolResolver{}.Resolve(atom, env, false)
+	if err != nil {
+		return ErrorPacker(err.Error(), env)
+	}
+	return resolved
+}
+
 func makeOp(t terex.AtomType, a int, op func(*terex.GCons, *terex.Environment) terex.Element) func(
 	e terex.Element, env *terex.Environment) terex.Element {
 	arity := a
 	typ := t
 	call := func(e terex.Element, env *terex.Environment) terex.Element {
 		args := e.AsList()
-		args = args.Map(terex.Eval, env)
+		args = args.Map(terex.EvalAtom, env)
 		if arity > 0 && args.Length() != arity {
 			env.Error(errors.New("Wrong number of arguments"))
 			return terex.Elem(terex.ErrorAtom("Wrong number of arguments"))
@@ -336,16 +399,27 @@ func print(e terex.Element) {
 			if d, ok := e.AsAtom().Data.(Dict); ok {
 				T().Infof("Dict {")
 				for k, v := range d {
-					T().Infof("\t%s => %v", k, v)
+					T().Infof("\t%s => %v", k, terex.Elem(v))
+				}
+				T().Infof("}")
+				return
+			}
+			if rew, ok := e.AsAtom().Data.([]*Rewriter); ok {
+				T().Infof("Rewriter {")
+				for _, r := range rew {
+					T().Infof("\t%s:", r.String())
+					for i, rule := range r.rules {
+						T().Infof("\t   [%d] %s => %v", i, rule.pattern, rule.target)
+					}
 				}
 				T().Infof("}")
 				return
 			}
 		}
-		if e.AsAtom().Type() == terex.ConsType {
-			T().Infof(e.AsList().ListString())
-			return
-		}
+		// if e.AsAtom().Type() == terex.ConsType {
+		// 	T().Infof(e.AsList().ListString())
+		// 	return
+		// }
 		if e.AsAtom().Type() == terex.EnvironmentType {
 			if env, ok := e.AsAtom().Data.(*terex.Environment); ok {
 				T().Infof(env.Dump())
@@ -355,7 +429,8 @@ func print(e terex.Element) {
 		T().Infof(e.String())
 		return
 	}
-	T().Infof(e.AsList().ListString())
+	//T().Infof(e.AsList().ListString())
+	T().Infof(e.String())
 }
 
 func showTree(tree *sppf.Forest) error {
@@ -382,10 +457,6 @@ func showTree(tree *sppf.Forest) error {
 
 // --- Rewriter --------------------------------------------------------------
 
-func (d Dict) getMap() map[string]terex.Atom {
-	return map[string]terex.Atom(d)
-}
-
 func createASTRewritersFromDict(dict Dict) []*Rewriter {
 	var arr []*Rewriter
 	for k, v := range dict.getMap() {
@@ -408,9 +479,24 @@ type rule struct {
 	target  terex.Element
 }
 
-func (r rule) match(terex.Element) {
-	//
-	T().Errorf("MATCH? %v", r.pattern)
+func (r rule) match(e terex.Element, env *terex.Environment) terex.Element {
+	T().Errorf("MATCH? %s", r.pattern.AsList().ListString())
+	if r.pattern.IsAtom() {
+		a := r.pattern.AsAtom()
+		T().Errorf("MATCH? Atom = %s", a.String())
+		if a.Match(e.AsAtom(), env) {
+			T().Errorf("MATCHED !")
+			return terex.Element(r.target)
+		}
+	} else {
+		l := r.pattern.AsList()
+		T().Errorf("MATCH? List = %s", l.ListString())
+		if l.Match(e.AsList(), env) {
+			T().Errorf("MATCHED !")
+			return terex.Element(r.target)
+		}
+	}
+	return terex.Elem(nil)
 }
 
 type Rewriter struct {
@@ -428,9 +514,10 @@ type Rewriter struct {
 
 func NewRewriter(symname string) *Rewriter {
 	rew := &Rewriter{
-		name:  "rewrite(" + symname + ")",
+		//name:  "rewrite(" + symname + ")",
+		name:  symname,
 		Op:    chameleonOp(symname),
-		rules: make([]rule, 3, 3),
+		rules: make([]rule, 0, 3),
 	}
 	return rew
 }
@@ -444,13 +531,15 @@ func (rew *Rewriter) SetRewriters(rlist *terex.GCons) {
 			if atom.IsNil() {
 				continue
 			}
+			T().Errorf("CAR = %v", terex.Elem(atom).AsList().ListString())
 			switch atom.Type() {
 			case terex.ConsType:
 				l := atom.Data.(*terex.GCons)
 				pattern := terex.Elem(l.Car)
 				target := terex.Elem(nil)
-				if l.Cdr != nil && !l.Cdar().IsNil() {
-					target = terex.Elem(l.Cdar())
+				if cons.Cdr != nil && !cons.Cdar().IsNil() {
+					T().Errorf("CDR = %v", terex.Elem(cons.Cdar()).AsList().ListString())
+					target = terex.Elem(cons.Cdar())
 				}
 				T().Errorf("ADD RULE %s => %v", pattern, target.String())
 				rew.rules = append(rew.rules, rule{
@@ -469,6 +558,12 @@ func (rew Rewriter) String() string {
 
 func (rew *Rewriter) Rewrite(l *terex.GCons, env *terex.Environment) terex.Element {
 	T().Errorf("REWRITE")
+	if l.Length() > 1 {
+		m := rew.Match(terex.Elem(l.Cdr), env)
+		if !m.IsNil() {
+			return m
+		}
+	}
 	return terex.Elem(l)
 }
 
@@ -477,6 +572,18 @@ func (rew Rewriter) Descend(sppf.RuleCtxt) bool {
 }
 func (rew Rewriter) Operator() terex.Operator {
 	return rew.Op
+}
+
+func (rew *Rewriter) Match(e terex.Element, env *terex.Environment) terex.Element {
+	for i, r := range rew.rules {
+		t := r.match(e, env) // match target
+		if !t.AsAtom().IsNil() {
+			T().Errorf("OUTPUT TARGET[%d] = %s", i, t.AsList().ListString())
+			return t
+		}
+		//rules: make([]rule, 3, 3),
+	}
+	return terex.Elem(nil)
 }
 
 var _ termr.TermR = &Rewriter{}
@@ -494,7 +601,7 @@ func (chop chameleonOp) Call(e terex.Element, env *terex.Environment) terex.Elem
 		T().Errorf("Cannot find operator %v", chop)
 		return e
 	}
-	operator, ok := opsym.Value.Data.(terex.Operator)
+	operator, ok := opsym.AtomValue().(terex.Operator)
 	if !ok {
 		T().Errorf("Cannot call operator %s", chop)
 		return e
