@@ -1,6 +1,10 @@
 package terex
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/npillmayer/gotype/core/config/tracing"
+)
 
 /*
 BSD License
@@ -38,21 +42,29 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 
 func (env *Environment) Eval(list *GCons) *GCons {
 	r := Eval(Elem(list), env)
-	T().Debugf("Eval => %s", r.String())
+	//T().Errorf("############# Eval => %s", r.String())
 	return r.AsList()
 }
 
 func Eval(el Element, env *Environment) Element {
-	T().Debugf("eval of %v", el)
+	//T().Errorf("############# Eval => %s", el.String())
 	if el.IsAtom() {
-		if el.AsAtom().Type() == ConsType {
+		/* 		if el.AsAtom().Type() == ConsType {
+			T().Errorf("eval of sublist %v", el.AsList().ListString())
 			sublist := el.AsAtom().Data.(*GCons)
+			T().Errorf("eval of sublist %v", sublist.ListString())
 			mapped := evalList(sublist, env)
-			return mapped
-		}
+			T().Errorf("        sublist %v", mapped.String())
+			//return mapped
+			tee := Cons(Atomize(mapped.AsList()), nil)
+			T().Errorf("   reconstucted %v", tee.String())
+			return Elem(tee)
+		} */
+		T().Debugf("eval of atom %v", el.AsAtom())
 		return evalAtom(el.AsAtom(), env)
 	}
 	list := el.AsList()
+	T().Debugf("eval of list %v", list.ListString())
 	l := evalList(list, env)
 	return l
 }
@@ -61,33 +73,46 @@ func evalList(list *GCons, env *Environment) Element {
 	if list == nil || list.Car == NilAtom {
 		return Elem(list)
 	}
-	carAtom, err := resolve(list.Car, env, true)
+	car, err := resolve(list.Car, env, true)
 	if err != nil {
 		return Elem(ErrorAtom(err.Error()))
 	}
-	if carAtom.Type() != OperatorType { // Resolver gave us this
-		verblist := list.Map(Eval, env) // ⇒ accept it
-		return Elem(verblist)           // and return non-operated list
+	if car.Type() != OperatorType { // Resolver gave us this
+		verblist := list.Map(EvalAtom, env) // ⇒ accept it
+		return Elem(verblist)               // and return non-operated list
 	}
-	T().Debugf("-------- op=%s -----------", carAtom.String())
-	operator := carAtom.Data.(Operator)
-	T().Debugf("OP = %s", operator)
+	T().Debugf("-------- op=%s -----------", car.String())
+	operator := car.AsAtom().Data.(Operator)
+	//T().Debugf("OP = %s", operator)
 	//args := list.Cdr.Map(Eval, env)
 	args := Elem(list.Cdr)
-	T().Debugf("-------- call ------------")
+	T().Debugf("--- %s.call%v", operator.String(), args.String())
 	ev := operator.Call(args, env)
-	T().Debugf("  eval result = %v", ev)
+	T().Debugf("list eval result:")
+	ev.Dump(tracing.LevelDebug)
 	T().Debugf("--------------------------")
 	return ev
+}
+
+func EvalAtom(atom Element, env *Environment) Element {
+	return evalAtom(atom.AsAtom(), env)
 }
 
 func evalAtom(atom Atom, env *Environment) Element {
 	resolved, _ := resolve(atom, env, false)
 	T().Debugf("resolved -> %v", resolved)
-	return Elem(resolved)
+	if resolved.IsNil() || resolved.Type() != ConsType {
+		return resolved
+	}
+	// sublist
+	//T().Errorf("--------> sublist --------")
+	sublist := evalList(resolved.Sublist().AsList(), env)
+	//T().Errorf("--------< sublist --------")
+	//return Elem(Cons(sublist.AsAtom(), nil)) // wrap again in cons
+	return Elem(sublist) //, nil // wrap again in cons?
 }
 
-func resolve(atom Atom, env *Environment, asOp bool) (Atom, error) {
+func resolve(atom Atom, env *Environment, asOp bool) (Element, error) {
 	if env.Resolver == nil {
 		return DefaultSymbolResolver{}.Resolve(atom, env, asOp)
 	}
@@ -98,9 +123,9 @@ type DefaultSymbolResolver struct {
 	// TODO options
 }
 
-func (dsr DefaultSymbolResolver) Resolve(atom Atom, env *Environment, asOp bool) (Atom, error) {
+func (dsr DefaultSymbolResolver) Resolve(atom Atom, env *Environment, asOp bool) (Element, error) {
 	if atom.Type() == OperatorType {
-		return atom, nil // shortcut, not resolved in env
+		return Elem(atom), nil // shortcut, not resolved in env
 	}
 	if atom.Type() == VarType {
 		atomSym := atom.Data.(*Symbol)
@@ -109,26 +134,27 @@ func (dsr DefaultSymbolResolver) Resolve(atom Atom, env *Environment, asOp bool)
 			T().Errorf("Unable to resolve symbol '%s' in environment", atomSym.Name)
 			err := fmt.Errorf("Unable to resolve symbol '%s' in environment", atomSym.Name)
 			env.Error(err)
-			return atom, err
+			return Elem(atom), err
 		}
-		valueAtom := sym.Value
-		if asOp && valueAtom.Type() != OperatorType {
+		value := sym.Value
+		if asOp && sym.ValueType() != OperatorType {
 			env.lastError = fmt.Errorf("Symbol '%s' cannot be resolved as operator", sym.Name)
 			T().Errorf("Symbol '%s' cannot be resolved as operator", sym.Name)
 			err := fmt.Errorf("Symbol '%s' cannot be resolved as operator", sym.Name)
 			env.Error(err)
-			return NilAtom, err
+			return Elem(nil), err
 		}
-		return valueAtom, nil
+		return value, nil
 	}
 	if asOp { // atom is neither a symbol nor an operator, but operator expected
 		env.lastError = fmt.Errorf("Atom '%s' cannot be cast to operator ", atom)
 		T().Errorf("Atom '%s' cannot be cast to operator ", atom)
 		err := fmt.Errorf("Atom '%s' cannot be cast to operator ", atom)
 		env.Error(err)
-		return NilAtom, err
+		return Elem(nil), err
 	}
-	return atom, nil
+	//T().Errorf("Returning plain atom %v", Elem(atom))
+	return Elem(atom), nil
 }
 
 var _ SymbolResolver = &DefaultSymbolResolver{}

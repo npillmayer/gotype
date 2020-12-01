@@ -46,7 +46,7 @@ import (
 type Symbol struct {
 	Name  string
 	props properties
-	Value Atom
+	Value Element
 }
 
 // newSymbol creates a new symbol for a given initial value (which may be nil).
@@ -54,32 +54,54 @@ func newSymbol(name string, thing interface{}) *Symbol {
 	return &Symbol{
 		Name:  name,
 		props: makeProps(),
-		Value: Atomize(thing),
+		Value: Elem(thing),
 	}
 }
 
+var nilSymbol = newSymbol("<nil symbol>", nil)
+
 func (sym Symbol) String() string {
-	return fmt.Sprintf("%s:%s(%s)", sym.Name, sym.Value.Type().String(), sym.Value.String())
+	return fmt.Sprintf("%s:%s(%s)", sym.Name, sym.ValueType().String(), sym.Value.String())
 }
 
 // ValueType returns the type of a symbols value
 func (sym Symbol) ValueType() AtomType {
-	return sym.Value.Type()
+	if sym.Value.IsNil() {
+		return NoType
+	}
+	if sym.Value.IsAtom() {
+		return sym.Value.thing.(Atom).Type()
+	}
+	return ConsType
+}
+
+func (sym Symbol) AtomValue() interface{} {
+	if sym.Value.IsNil() {
+		return nil
+	}
+	if sym.ValueType() == ConsType {
+		return sym.Value.AsList()
+	}
+	return sym.Value.AsAtom().Data
 }
 
 // IsNil returns true if the symbol's value is NilAtom
 func (sym Symbol) IsNil() bool {
-	return sym.Value.Data == nil
+	return sym.Value.IsNil()
 }
 
 // IsAtom returns true if a symbol represents an atom (not a cons).
-func (sym Symbol) IsAtom() bool {
-	return sym.Value.Type() != ConsType
-}
+/* func (sym Symbol) IsAtom() bool {
+	return sym.Value.IsAtom()
+} */
 
 // IsOperatorType returns true if a symbol represents an atom (not a cons).
 func (sym Symbol) IsOperatorType() bool {
-	return sym.Value.Type() == OperatorType
+	if !sym.Value.IsAtom() {
+		return false
+	}
+	atom := sym.Value.AsAtom()
+	return atom.Type() == OperatorType
 }
 
 // Get returns a property value for a given key.
@@ -103,7 +125,7 @@ func makeProps() properties {
 
 func (p properties) Get(key string, sym *Symbol) interface{} {
 	if key == "type" {
-		return sym.Value.Type()
+		return sym.ValueType()
 	}
 	if key == "name" {
 		return sym.Name
@@ -164,7 +186,7 @@ type Environment struct {
 }
 
 type SymbolResolver interface {
-	Resolve(Atom, *Environment, bool) (Atom, error)
+	Resolve(Atom, *Environment, bool) (Element, error)
 }
 
 // GlobalEnvironment is the base environment all other environments stem from.
@@ -205,13 +227,13 @@ func NewEnvironment(name string, parent *Environment) *Environment {
 // funcBody is the operator function, called during eval().
 func (env *Environment) Defn(opname string, funcBody Mapper) *Symbol {
 	opsym := env.Intern(opname, false)
-	opsym.Value = Atomize(&internalOp{sym: opsym, call: funcBody})
+	opsym.Value = Elem(&internalOp{sym: opsym, call: funcBody})
 	T().Debugf("new interal op %s = %v", opsym.Name, opsym.Value)
 	return opsym
 }
 
 // Def defines a symbol and stores a value for it, if any.
-func (env *Environment) Def(symname string, value Atom) *Symbol {
+func (env *Environment) Def(symname string, value Element) *Symbol {
 	sym := env.Intern(symname, false)
 	sym.Value = value
 	T().Debugf("new interal sym %s = %v", sym.Name, sym.Value)

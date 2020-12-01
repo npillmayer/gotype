@@ -39,6 +39,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+
+	"github.com/npillmayer/gotype/core/config/tracing"
 )
 
 /*
@@ -147,7 +149,7 @@ func (a Atom) IsAtom() Atom {
 
 func (a Atom) String() string {
 	if a == NilAtom {
-		return "NIL"
+		return "nil"
 	}
 	if a.typ == ConsType {
 		if a.Data == nil {
@@ -179,6 +181,8 @@ func (a Atom) String() string {
 			return "<UType:nil>"
 		}
 		return "<UType>"
+	case VarType:
+		return fmt.Sprintf("Symbol[%v]", a.Data)
 	}
 	return fmt.Sprintf("%s[%v]", a.typ, a.Data)
 }
@@ -220,7 +224,7 @@ func (l GCons) String() string {
 // ListString returns a string representing a list (or cons).
 func (l *GCons) ListString() string {
 	if l == nil {
-		return "<NIL>"
+		return "nil"
 	}
 	var b bytes.Buffer
 	b.WriteString("(")
@@ -302,8 +306,16 @@ func makeList(quoted bool, things []interface{}) *GCons {
 		cons := &GCons{}
 		if quoted {
 			cons.Car = Atomize(e)
+		} else if e == nil {
+			cons.Car = NilAtom
 		} else if sym, ok := e.(*Symbol); ok {
-			cons.Car = Atomize(sym.Value)
+			if sym == nil || sym.Value.IsNil() {
+				cons.Car = NilAtom
+			} else if sym.Value.IsAtom() {
+				cons.Car = sym.Value.AsAtom()
+			} else {
+				cons.Car = Atomize(sym.Value.AsList()) // sublist
+			}
 		} else {
 			cons.Car = Atomize(e)
 		}
@@ -371,6 +383,14 @@ func (l *GCons) Cddr() *GCons {
 		return nil
 	}
 	return l.Cdr.Cdr
+}
+
+// Cddar returns Car(Cdr(Cdr(...))) of a list/node.
+func (l *GCons) Cddar() Atom {
+	if l == nil || l.Cdr == nil || l.Cdr.Cdr == nil {
+		return NilAtom
+	}
+	return l.Cdr.Cdr.Car
 }
 
 // Length returns the length of a list.
@@ -486,29 +506,79 @@ type Element struct {
 }
 
 func Elem(thing interface{}) Element {
+	if thing == nil {
+		return Element{thing: nil}
+	}
 	if e, ok := thing.(Element); ok {
 		return e
 	}
-	return Element{thing: thing}
+	atom := Atomize(thing)
+	if atom.Type() == ConsType {
+		return Element{thing: thing} // thing is a list
+	}
+	return Element{thing: atom}
 }
 
-func DumpElement(el Element) {
+// func ElemUnpacked(thing interface{}) Element {
+// 	if thing == nil {
+// 		return Element{thing: nil}
+// 	}
+// 	if e, ok := thing.(Element); ok {
+// 		return e
+// 	}
+// 	atom := Atomize(thing)
+// 	if atom.Type() == ConsType {
+// 		return Element{thing: thing} // thing is a list
+// 	}
+// 	return Element{thing: atom}
+// }
+
+func (el Element) Dump(L tracing.TraceLevel) {
+	if el.IsNil() {
+		trace(L)("nil")
+	}
 	if el.IsAtom() {
-		T().Debugf("Dump element: %v", el)
-	} else {
-		switch e := el.thing.(type) {
-		case Element:
-			T().Debugf("Dump element: recursive element:")
-			DumpElement(e)
-		case *GCons:
-			T().Debugf("Dump element: list = %s", e.ListString())
-		default:
-			T().Debugf("Dump element: unknown = %v", e)
+		if el.Type() == ConsType {
+			trace(L)("\nAtom ↦")
+			el.Sublist().Dump(L)
+			return
 		}
+		if el.Type() == VarType {
+			trace(L)("\n%s ↦", el.AsAtom())
+			el.AsSymbol().Value.Dump(L)
+			return
+		}
+		trace(L)(el.String())
+		return
+	}
+	switch e := el.thing.(type) {
+	case Element:
+		T().Errorf("Dump element: recursive element")
+		panic("recursive element")
+	case *GCons:
+		trace(L)("\nlist =\n%s", e.IndentedListString())
+	default:
+		T().Errorf("element of unknown type = %v", e)
+		panic("unknown element type")
 	}
 }
 
+func trace(level tracing.TraceLevel) func(string, ...interface{}) {
+	switch level {
+	case tracing.LevelDebug:
+		return T().Debugf
+	case tracing.LevelInfo:
+		return T().Infof
+	case tracing.LevelError:
+		return T().Errorf
+	}
+	return T().Debugf
+}
+
 func (el Element) IsAtom() bool {
+	if el.thing == nil {
+		return true
+	}
 	if _, ok := el.thing.(Atom); ok {
 		return true
 	}
@@ -519,13 +589,13 @@ func (el Element) IsNil() bool {
 	if el.thing == nil {
 		return true
 	}
+	if a, ok := el.thing.(Atom); ok {
+		return a.IsNil()
+	}
 	if t, ok := el.thing.(*GCons); ok {
 		if t == nil {
 			return true
 		}
-	}
-	if a, ok := el.thing.(Atom); ok {
-		return a.IsNil()
 	}
 	return false
 }
@@ -535,11 +605,11 @@ func (el Element) IsError() bool {
 }
 
 func (el Element) AsAtom() Atom {
-	if el.IsAtom() {
-		return el.thing.(Atom)
-	}
 	if el.IsNil() {
 		return NilAtom
+	}
+	if el.IsAtom() {
+		return el.thing.(Atom)
 	}
 	return Atomize(el.thing.(*GCons))
 }
@@ -549,30 +619,73 @@ func (el Element) AsList() *GCons {
 		return nil
 	}
 	if el.IsAtom() {
-		a := el.AsAtom()
-		if a.Type() == ConsType {
-			return a.Data.(*GCons)
-		}
+		// a := el.AsAtom()
+		// if a.Type() == ConsType {
+		// 	return a.Data.(*GCons)
+		// }
 		return Cons(el.thing.(Atom), nil)
 	}
 	return el.thing.(*GCons)
 }
 
-func (el Element) String() string {
-	if el.IsAtom() {
-		return el.AsAtom().String()
+func (el Element) AsSymbol() *Symbol {
+	atom := el.AsAtom()
+	if !atom.IsNil() && atom.Type() == VarType {
+		if sym, ok := atom.Data.(*Symbol); ok {
+			return sym
+		}
+		// this should never happen
+		panic("internal error: symbol inconsistency")
 	}
-	if el.thing == nil {
+	return nilSymbol
+}
+
+func (el Element) Sublist() Element {
+	//atom := el.AsAtom()
+	atom := el.AsList().Car
+	if !atom.IsNil() && atom.Type() == ConsType {
+		if cons, ok := atom.Data.(*GCons); ok {
+			return Elem(cons)
+		}
+		// this should never happen
+		panic("internal error: sublist inconsistency")
+	}
+	return Elem(nil)
+}
+
+func (el Element) Type() AtomType {
+	if el.IsNil() {
+		return NoType
+	}
+	if el.IsAtom() {
+		return el.AsAtom().Type()
+	}
+	return ConsType
+}
+
+func (el Element) String() string {
+	if el.IsNil() {
 		return "nil"
+	}
+	if el.IsAtom() {
+		if el.Type() == ConsType {
+			//return "(" + el.Sublist().AsList().ListString() + ")"
+			return el.Sublist().AsList().ListString()
+		}
+		return el.AsAtom().String()
 	}
 	return el.AsList().ListString()
 }
 
-func _First(args Element) Element {
-	if args.IsAtom() {
-		return args
+func (el Element) First() Element {
+	if el.Type() == ConsType {
+		car := el.AsList().Car
+		if car.typ == ConsType {
+			return el.Sublist()
+		}
+		return Elem(car)
 	}
-	return Elem(args.AsList().Car)
+	return el
 }
 
 func _Rest(args Element) Element {
@@ -583,7 +696,7 @@ func _Identity(args Element) Element {
 	return args
 }
 
-func _Add(args Element) Element {
+/* func _Add(args Element) Element {
 	T().Infof("_Add args=%s", args.String())
 	if args.IsAtom() {
 		if a := args.AsAtom(); a.typ == NumType {
@@ -619,7 +732,7 @@ func _Inc(args Element) Element {
 	}
 	return Elem(ErrorAtom)
 }
-
+*/
 // func _Quote(op Element, args Element) Element {
 // 	if args.IsAtom() {
 // 		return args
@@ -646,20 +759,25 @@ func _ErrorMapper(err error) Mapper {
 
 func _Map(mapper Mapper, args Element, env *Environment) Element {
 	arglist := args.AsList()
+	T().Debugf("~~~~~~~~~~~ _Map%v", arglist.ListString())
 	if arglist == nil {
 		return Elem(nil)
 	}
+	if args.IsAtom() {
+		panic("Argument to _Map is not a list")
+	}
 	r := mapper(Elem(arglist.Car), env)
 	T().Debugf("Map: mapping(%s) = %s", arglist.Car, r)
-	if arglist.Cdr == nil {
-		return r
-	}
 	result := Cons(r.AsAtom(), nil)
+	if arglist.Cdr == nil {
+		T().Debugf("~~~~~~~~~~: _Map => %v", result)
+		return Elem(result)
+	}
 	iter := result
 	cons := arglist.Cdr
 	for cons != nil {
 		el := mapper(Elem(cons.Car), env)
-		T().Debugf("Map: mapping(%s) = %s", cons.Car, el)
+		T().Debugf("Map: mapping %s = %s", cons.Car, el)
 		if el.IsError() {
 			return el
 		}
@@ -668,6 +786,7 @@ func _Map(mapper Mapper, args Element, env *Environment) Element {
 		cons = cons.Cdr
 	}
 	//T().Debugf("_Map result = %s", result.ListString())
+	T().Debugf("~~~~~~~~~~~ _Map => %v", result.ListString())
 	return Elem(result)
 }
 
@@ -743,6 +862,10 @@ func (l *GCons) Match(other *GCons, env *Environment) bool {
 // 	return matchAtom(car.atom, otherNode.atom)
 // }
 
+func (a Atom) Match(other Atom, env *Environment) bool {
+	return matchAtom(a, other, env)
+}
+
 func matchAtom(atom Atom, otherAtom Atom, env *Environment) bool {
 	T().Debugf("Match Atom: %v vs %v", atom, otherAtom)
 	if atom == NilAtom {
@@ -770,12 +893,15 @@ func bindSymbol(symatom Atom, value Atom, env *Environment) bool {
 		return false
 	}
 	T().Debugf("binding symbol %s to %s", sym.String(), value.String())
-	if sym.Value == NilAtom {
-		sym.Value = value // bind it
+	if sym.Value.IsNil() {
+		sym.Value = Elem(value) // bind it
 		T().Debugf("bound symbol %s", sym.String())
 		return true
 	}
-	return matchAtom(sym.Value, value, env)
+	if !sym.Value.IsAtom() {
+		return false
+	}
+	return matchAtom(sym.Value.AsAtom(), value, env)
 }
 
 // typeMatch returns (typesAreMatching, mustMatchValue)
