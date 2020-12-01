@@ -95,6 +95,7 @@ type TermR interface {
 // AddTermR adds an AST rewriter for a non-terminal grammar symbol to the builder.
 func (ab *ASTBuilder) AddTermR(trew TermR) {
 	if trew != nil {
+		T().Infof("Adding term rewriter for symbol %s", trew.String())
 		ab.rewriters[trew.String()] = trew
 	}
 }
@@ -366,11 +367,12 @@ func (ab *ASTBuilder) EnvironmentForGrammarRule(symname string, rhs []*sppf.Rule
 // --- Helpers ---------------------------------------------------------------
 
 func setSymbolValue(envsym *terex.Symbol, r *sppf.RuleNode) {
-	if r.Symbol().IsTerminal() {
-		envsym.Value.Data = r.Value
-	} else {
-		envsym.Value = terex.Atomize(r.Value)
-	}
+	envsym.Value = terex.Elem(r.Value)
+	// if r.Symbol().IsTerminal() {
+	// 	envsym.Value = terex.Elem(r.Value)
+	// } else {
+	// 	envsym.Value = terex.Atomize(r.Value)
+	// }
 }
 
 /*

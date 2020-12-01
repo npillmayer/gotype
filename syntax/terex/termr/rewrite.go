@@ -122,6 +122,6 @@ func EnvironmentForOperator(op terex.Operator, parent *terex.Environment) *terex
 	}
 	env := terex.NewEnvironment("#"+op.String(), parent)
 	sym := env.Intern(op.String(), false)
-	sym.Value = terex.Atomize(op)
+	sym.Value = terex.Elem(op)
 	return env
 }
