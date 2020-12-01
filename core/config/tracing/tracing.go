@@ -86,7 +86,7 @@ func TraceLevelFromString(sl string) TraceLevel {
 	case "Error":
 		return LevelError
 	}
-	return LevelDebug // default
+	return LevelInfo // default
 }
 
 // Trace is an interface to be implemented by a concrete tracing adapter.
