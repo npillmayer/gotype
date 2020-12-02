@@ -100,8 +100,8 @@ func EvalAtom(atom Element, env *Environment) Element {
 
 func evalAtom(atom Atom, env *Environment) Element {
 	resolved, _ := resolve(atom, env, false)
-	T().Debugf("resolved -> %v", resolved)
-	if resolved.IsNil() || resolved.Type() != ConsType {
+	T().Debugf("%s resolved -> %v", atom, resolved)
+	if resolved.IsNil() || atom.typ == VarType || resolved.Type() != ConsType {
 		return resolved
 	}
 	// sublist
@@ -124,6 +124,7 @@ type DefaultSymbolResolver struct {
 }
 
 func (dsr DefaultSymbolResolver) Resolve(atom Atom, env *Environment, asOp bool) (Element, error) {
+	//T().Errorf("### Default Symbol Resolver")
 	if atom.Type() == OperatorType {
 		return Elem(atom), nil // shortcut, not resolved in env
 	}
