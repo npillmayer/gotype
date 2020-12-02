@@ -23,12 +23,52 @@ import (
 	"github.com/npillmayer/gotype/syntax/lr/scanner"
 )
 
-func T() tracing.Trace {
-	return gtrace.SyntaxTracer
-}
+/*
+BSD License
+
+Copyright (c) 2019–21, Norbert Pillmayer
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+3. Neither the name of this software nor the names of its contributors
+may be used to endorse or promote products derived from this software
+without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  */
 
 var stdEnv *terex.Environment
 
+// We provide a simple expression grammar as a default for AST generation
+// and rewriting experiments.
+//
+//  S'     ➞ Expr #eof
+//  Expr   ➞ Expr SumOp Term  |  Term
+//  Term   ➞ Term ProdOp Factor  |   Factor
+//  Factor ➞ number  |   ( Expr )
+//  SumOp  ➞ +  |  -
+//  ProdOp ➞ *  |  /
+//
 func makeExprGrammar() *lr.LRAnalysis {
 	level := T().GetTraceLevel()
 	T().SetTraceLevel(tracing.LevelError)
@@ -51,23 +91,36 @@ func makeExprGrammar() *lr.LRAnalysis {
 	return lr.Analysis(g)
 }
 
+// main() starts an interactive CLI ("T.REPL"), where users may enter TeREx
+// s-expressions. T.REPL will evaluate the s-expr and print out the result.
+// T.REPL is intended as a sandbox for experiments during the early phase of
+// parser/compiler/interpreter development, with a focus on term rewriting.
+// It will allow users to test rewriting-expression for parser runs or for
+// AST walking (AST = abstract syntax tree).
+//
+// Please refer to modules "terex" and "terexlang".
+//
 func main() {
+	// set up logging
 	initDisplay()
 	gtrace.SyntaxTracer = gologadapter.New()
-	//grammarName := flag.String("grammar", "G", "Name of the grammar to load")
 	tlevel := flag.String("trace", "Info", "Trace level [Debug|Info|Error]")
 	initf := flag.String("init", "", "Initial load")
 	flag.Parse()
-	T().SetTraceLevel(tracing.LevelInfo)
-	pterm.Info.Println("Welcome to TREPL")
+	T().SetTraceLevel(tracing.LevelInfo)   // will set the correct level later
+	pterm.Info.Println("Welcome to TREPL") // colored welcome message
 	T().Infof("Trace level is %s", *tlevel)
+	//
+	// set up grammar and symbol-environment
 	ga := makeExprGrammar()
-	T().SetTraceLevel(traceLevel(*tlevel))
-	ga.Grammar().Dump()
+	T().SetTraceLevel(traceLevel(*tlevel)) // now set the user supplied level
+	ga.Grammar().Dump()                    // only visible in debug mode
 	input := strings.Join(flag.Args(), " ")
 	input = strings.TrimSpace(input)
 	T().Infof("Input argument is \"%s\"", input)
 	env := initSymbols(ga)
+	//
+	// set up REPL
 	repl, err := readline.New("trepl> ")
 	if err != nil {
 		T().Errorf(err.Error())
@@ -86,11 +139,14 @@ func main() {
 			os.Exit(2)
 		}
 	}
-	T().Infof("Quit with <ctrl>D")
-	intp.LoadInitFile(*initf)
-	intp.REPL()
+	//
+	// load an init file and start receiving commands / s-expressions
+	T().Infof("Quit with <ctrl>D") // inform user how to stop the CLI
+	intp.loadInitFile(*initf)      // init file name provided by flag
+	intp.REPL()                    // go into interactive mode
 }
 
+// We use pterm for moderately fancy output.
 func initDisplay() {
 	pterm.EnableDebugMessages()
 	pterm.Info.Prefix = pterm.Prefix{
@@ -103,17 +159,22 @@ func initDisplay() {
 	}
 }
 
+// Pre-load some symbols:
+// G    = grammar information for demo expression grammar (see above)
+// tree = a print-like tree command
+//
 func initSymbols(ga *lr.LRAnalysis) *terex.Environment {
 	terex.InitGlobalEnvironment()
 	stdEnv = terexlang.LoadStandardLanguage()
 	env := terex.NewEnvironment("trepl", stdEnv)
-	// G is expression grammar (analyzed)
 	env.Def("#ns#", terex.Elem(env)) // TODO put this into "terex.NewEnvironment"
+	// G is expression grammar (analyzed)
 	env.Def("G", terex.Elem(ga))
 	makeTreeOps(env)
 	return env
 }
 
+// Intp is our interpreter object
 type Intp struct {
 	lastInput string
 	lastValue interface{}
@@ -125,7 +186,7 @@ type Intp struct {
 	tretr     termr.TokenRetriever
 }
 
-func (intp *Intp) LoadInitFile(filename string) {
+func (intp *Intp) loadInitFile(filename string) {
 	if filename == "" {
 		return
 	}
@@ -144,7 +205,7 @@ func (intp *Intp) LoadInitFile(filename string) {
 		if line = strings.TrimSpace(line); line == "" {
 			continue
 		}
-		err, _ := intp.Eval(line)
+		_, err := intp.Eval(line)
 		if err != nil {
 			T().Errorf("Error line %d: "+err.Error(), lineno)
 		}
@@ -155,7 +216,11 @@ func (intp *Intp) LoadInitFile(filename string) {
 	}
 }
 
+// REPL starts interactive mode.
 func (intp *Intp) REPL() {
+	intp.env.Def("a", terex.Elem(7)) // pre-set for debugging purposes
+	intp.env.Def("b", terex.Elem(terex.Cons(terex.Atomize(1), terex.Cons(terex.Atomize(2), nil))))
+	intp.env.Def("c", terex.Elem("c")) // pre-set for debugging purposes
 	for {
 		line, err := intp.repl.Readline()
 		if err != nil { // io.EOF
@@ -168,7 +233,7 @@ func (intp *Intp) REPL() {
 		// args := strings.Split(line, " ")
 		// cmd := args[0]
 		// err, quit := intp.Execute(cmd, args)
-		err, quit := intp.Eval(line)
+		quit, err := intp.Eval(line)
 		if err != nil {
 			//T().Errorf(err.Error())
 			//pterm.Error.Println(err.Error())
@@ -181,29 +246,32 @@ func (intp *Intp) REPL() {
 	println("Good bye!")
 }
 
-func (intp *Intp) Eval(line string) (error, bool) {
+// Eval evaluates a TeREx s-expr, given on a line by itself.
+//
+func (intp *Intp) Eval(line string) (bool, error) {
+	T().Infof("----------------------- Parse & AST ------------------------------")
 	level := T().GetTraceLevel()
 	T().SetTraceLevel(tracing.LevelError)
 	tree, retr, err := terexlang.Parse(line)
 	T().SetTraceLevel(level)
 	if err != nil {
 		//T().Errorf(err.Error())
-		return err, false
+		return false, err
 	}
 	T().SetTraceLevel(tracing.LevelError)
 	ast, env, err := terexlang.AST(tree, retr)
 	T().SetTraceLevel(level)
-	T().Infof("\n\n" + ast.IndentedListString() + "\n\n")
-	T().Infof("------------------------------------------------------------------")
+	//T().Infof("\n\n" + ast.IndentedListString() + "\n\n")
+	terex.Elem(ast).Dump(level)
+	T().Infof("----------------------- Quoted AST -------------------------------")
 	//q, err := terexlang.QuoteAST(terex.Elem(ast.Car), env)
 	first := terex.Elem(ast).First()
 	// first.Dump(tracing.LevelInfo)
-	// T().Infof("------------------------------------------------------------------")
 	q, err := terexlang.QuoteAST(first, env)
 	T().SetTraceLevel(level)
 	if err != nil {
 		//T().Errorf(err.Error())
-		return err, false
+		return false, err
 	}
 	//T().Infof("\n\n" + q.String() + "\n\n")
 	q.Dump(level)
@@ -213,7 +281,7 @@ func (intp *Intp) Eval(line string) (error, bool) {
 	result := terex.Eval(q, intp.env)
 	intp.printResult(result, intp.env)
 	intp.env.Error(nil)
-	return nil, false
+	return false, nil
 }
 
 func (intp *Intp) printResult(result terex.Element, env *terex.Environment) error {
@@ -235,11 +303,13 @@ func (intp *Intp) printResult(result terex.Element, env *terex.Environment) erro
 		pterm.Error.Println(env.LastError())
 		return env.LastError()
 	}
-	result.Dump(tracing.LevelError)
+	result.Dump(tracing.LevelInfo)
 	pterm.Info.Println(result.String())
 	return nil
 }
 
+// Parse parses input for a given experimental grammar and returns a parse forest.
+//
 func Parse(ga *lr.LRAnalysis, input string) (*sppf.Forest, termr.TokenRetriever, error) {
 	level := T().GetTraceLevel()
 	T().SetTraceLevel(tracing.LevelError)
@@ -259,6 +329,8 @@ func Parse(ga *lr.LRAnalysis, input string) (*sppf.Forest, termr.TokenRetriever,
 }
 
 func makeTreeOps(env *terex.Environment) {
+	// tree is a helper command to display an AST (abstract syntax tree) as a tree
+	// on a terminal
 	env.Defn("tree", func(e terex.Element, env *terex.Environment) terex.Element {
 		// (tree T) => print tree representation of T
 		T().Debugf("   e = %v", e.String())
@@ -317,13 +389,4 @@ func leveledElem(list *terex.GCons, ll pterm.LeveledList, level int) pterm.Level
 
 func traceLevel(l string) tracing.TraceLevel {
 	return tracing.TraceLevelFromString(l)
-	// switch l {
-	// case "D":
-	// 	return tracing.LevelDebug
-	// case "I":
-	// 	return tracing.LevelInfo
-	// case "E":
-	// 	return tracing.LevelError
-	// }
-	// return tracing.LevelDebug
 }
