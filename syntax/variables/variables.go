@@ -85,8 +85,8 @@ import (
 	"strings"
 
 	"github.com/npillmayer/gotype/core/arithmetic"
-	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/runtime"
+	"github.com/npillmayer/schuko/tracing"
 	dec "github.com/shopspring/decimal"
 )
 

@@ -57,7 +57,7 @@ package corelang
 
 //go:generate antlr -Dlanguage=Go -o grammar -lib . -package grammar -Werror CoreLang.g4
 
-import "github.com/npillmayer/gotype/core/config/tracing"
+import "github.com/npillmayer/schuko/tracing"
 
 // Trace to the InterpreterTracer
 func T() tracing.Trace {

@@ -43,13 +43,13 @@ import (
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"github.com/npillmayer/gotype/backend/gfx"
 	"github.com/npillmayer/gotype/core/arithmetic"
-	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/path"
 	"github.com/npillmayer/gotype/syntax/corelang"
 	"github.com/npillmayer/gotype/syntax/pmmpost/listener"
 	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables"
 	"github.com/npillmayer/gotype/syntax/variables/varparse"
+	"github.com/npillmayer/schuko/tracing"
 	"github.com/shopspring/decimal"
 )
 

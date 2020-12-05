@@ -78,8 +78,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. */
 package runtime
 
 import (
-	"github.com/npillmayer/gotype/core/config/gtrace"
-	"github.com/npillmayer/gotype/core/config/tracing"
+	"github.com/npillmayer/schuko/gtrace"
+	"github.com/npillmayer/schuko/tracing"
 )
 
 // Configurable trace; tracing to the SyntaxTracer

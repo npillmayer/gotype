@@ -7,11 +7,11 @@ import (
 	"testing"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
-	"github.com/npillmayer/gotype/core/config/tracing"
-	"github.com/npillmayer/gotype/core/config/tracing/gologadapter"
 	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables"
-	"github.com/npillmayer/gotype/syntax/variables/listener"
+	"github.com/npillmayer/gotype/syntax/variables/varparse"
+	"github.com/npillmayer/schuko/tracing"
+	"github.com/npillmayer/schuko/tracing/gologadapter"
 	"github.com/shopspring/decimal"
 )
 

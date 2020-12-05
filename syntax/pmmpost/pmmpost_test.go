@@ -7,10 +7,9 @@ import (
 
 	"github.com/npillmayer/gotype/backend/gfx"
 	"github.com/npillmayer/gotype/core/arithmetic"
-	"github.com/npillmayer/gotype/core/config"
-	"github.com/npillmayer/gotype/core/config/testadapter"
-	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/path"
+	"github.com/npillmayer/schuko/testadapter"
+	"github.com/npillmayer/schuko/tracing"
 )
 
 func TestInit0(t *testing.T) {

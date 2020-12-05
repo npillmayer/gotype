@@ -76,13 +76,13 @@ import (
 	"github.com/npillmayer/gotype/backend/gfx"
 	"github.com/npillmayer/gotype/backend/gfx/vectorcanvas"
 	arithm "github.com/npillmayer/gotype/core/arithmetic"
-	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/core/path"
 	"github.com/npillmayer/gotype/core/polygon"
 	"github.com/npillmayer/gotype/syntax/corelang"
 	"github.com/npillmayer/gotype/syntax/pmmpost/grammar"
 	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables"
+	"github.com/npillmayer/schuko/tracing"
 	dec "github.com/shopspring/decimal"
 )
 

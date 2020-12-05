@@ -46,10 +46,10 @@ import (
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	sll "github.com/emirpasic/gods/lists/singlylinkedlist"
-	"github.com/npillmayer/gotype/core/config/tracing"
 	"github.com/npillmayer/gotype/syntax/runtime"
 	"github.com/npillmayer/gotype/syntax/variables"
 	"github.com/npillmayer/gotype/syntax/variables/grammar"
+	"github.com/npillmayer/schuko/tracing"
 	dec "github.com/shopspring/decimal"
 )
 
