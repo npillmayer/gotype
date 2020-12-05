@@ -1,2 +1,0 @@
-(assoc A "Term" '( ((Term ProdOp Factor) (Term Factor)) ) )
-(def R (rewriters A))
