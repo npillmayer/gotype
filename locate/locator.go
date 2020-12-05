@@ -13,7 +13,7 @@ https://www.freedesktop.org/wiki/Software/fontconfig/
 
 - use some webfont library interface
 */
-package gtlocate
+package locate
 
 import (
 	"fmt"
